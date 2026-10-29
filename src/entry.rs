@@ -12,6 +12,9 @@ pub struct Entry {
     pub notes: String,
     /// Kept as a separate field so TOTP can later move to its own vault file.
     pub totp: Option<Totp>,
+    /// Icon chosen by hand (a Simple Icons slug); `None` picks one from the URL.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
 }
 
 impl Entry {

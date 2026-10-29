@@ -1,0 +1,20 @@
+# Domains whose name differs from the icon slug: `slug domain…`.
+# A domain also covers its subdomains; a more specific entry wins
+# (mail.google.com → gmail, everything else under google.com → google).
+# Domains named like the slug (gitlab.com → gitlab) are matched without an entry.
+# After editing: python3 -I tools/build_icons.py <unpacked simple-icons package>
+
+google        google.com google.ru
+gmail         mail.google.com
+googledrive   drive.google.com
+googlecloud   cloud.google.com console.cloud.google.com
+youtube       youtu.be
+steam         steampowered.com steamcommunity.com
+x             twitter.com
+telegram      t.me
+maildotru     mail.ru
+vk            vk.ru vkontakte.ru
+facebook      fb.com
+discord       discord.gg
+protonmail    mail.proton.me
+yandexcloud   yandex.cloud cloud.yandex.ru cloud.yandex.com

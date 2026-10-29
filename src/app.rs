@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     path::PathBuf,
     sync::{
         Arc,
@@ -16,7 +17,9 @@ use crate::{
     clipboard::{Guard, SystemBoard},
     config::Config,
     entry::{Entry, Totp, TotpAlgorithm},
-    generator, totp,
+    generator,
+    icons::{self, Icon},
+    totp,
     touchid::{self, Biometrics, TouchIdError},
     vault::{KdfParams, Vault},
 };
@@ -57,6 +60,80 @@ pub struct LockboxApp {
     screen: Screen,
     clipboard: Guard,
     biometrics: Arc<dyn Biometrics>,
+    icons: IconCache,
+}
+
+/// Rasterised brand glyphs, one texture per icon, size and glyph colour.
+#[derive(Default)]
+struct IconCache(HashMap<(String, u32, bool), egui::TextureHandle>);
+
+impl IconCache {
+    fn texture(
+        &mut self,
+        ctx: &egui::Context,
+        icon: &Icon,
+        px: u32,
+        dark: bool,
+    ) -> Option<egui::TextureId> {
+        let key = (icon.slug.clone(), px, dark);
+        if let Some(texture) = self.0.get(&key) {
+            return Some(texture.id());
+        }
+        let pixels = icons::render(icon, px, dark)?;
+        let image = egui::ColorImage::from_rgba_premultiplied([px as usize, px as usize], &pixels);
+        let texture = ctx.load_texture(
+            format!("icon-{}-{px}-{dark}", icon.slug),
+            image,
+            egui::TextureOptions::LINEAR,
+        );
+        let id = texture.id();
+        self.0.insert(key, texture);
+        Some(id)
+    }
+}
+
+/// A rounded square: the brand glyph on its colour, or the first letter of the title.
+fn icon_tile(
+    ui: &mut egui::Ui,
+    cache: &mut IconCache,
+    icon: Option<&Icon>,
+    title: &str,
+    size: f32,
+    sense: egui::Sense,
+) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(egui::Vec2::splat(size), sense);
+    let radius = egui::CornerRadius::same((size * 0.22) as u8);
+    let painter = ui.painter();
+    match icon {
+        Some(icon) => {
+            let [r, g, b] = icons::rgb(&icon.hex);
+            let dark = icons::glyph_is_dark([r, g, b]);
+            painter.rect_filled(rect, radius, egui::Color32::from_rgb(r, g, b));
+            let glyph = size * 0.66;
+            let px = (glyph * ui.ctx().pixels_per_point()).ceil() as u32;
+            if let Some(texture) = cache.texture(ui.ctx(), icon, px.max(1), dark) {
+                painter.image(
+                    texture,
+                    egui::Rect::from_center_size(rect.center(), egui::Vec2::splat(glyph)),
+                    egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                    egui::Color32::WHITE,
+                );
+            }
+            response.on_hover_text(&icon.title)
+        }
+        None => {
+            let [r, g, b] = icons::letter_colour(title);
+            painter.rect_filled(rect, radius, egui::Color32::from_rgb(r, g, b));
+            painter.text(
+                rect.center(),
+                egui::Align2::CENTER_CENTER,
+                icons::letter(title),
+                egui::FontId::proportional(size * 0.55),
+                egui::Color32::WHITE,
+            );
+            response
+        }
+    }
 }
 
 enum Screen {
@@ -202,6 +279,8 @@ struct Draft {
     totp_error: Option<String>,
     generator_open: bool,
     generator_error: Option<String>,
+    icon_picker_open: bool,
+    icon_query: String,
 }
 
 impl Draft {
@@ -295,6 +374,8 @@ impl Unlocked {
             totp_error: None,
             generator_open: false,
             generator_error: None,
+            icon_picker_open: false,
+            icon_query: String::new(),
         });
         self.confirm_delete = false;
         self.error = None;
@@ -378,6 +459,7 @@ impl LockboxApp {
             screen,
             clipboard: Guard::new(Box::new(SystemBoard::new())),
             biometrics,
+            icons: IconCache::default(),
         }
     }
 
@@ -661,9 +743,20 @@ impl LockboxApp {
                             } else {
                                 &entry.title
                             };
-                            if ui.selectable_label(selected, title).clicked() {
-                                clicked = Some(entry.id.clone());
-                            }
+                            ui.horizontal(|ui| {
+                                let icon = icons::catalog().for_entry(entry);
+                                icon_tile(
+                                    ui,
+                                    &mut self.icons,
+                                    icon,
+                                    title,
+                                    18.0,
+                                    egui::Sense::hover(),
+                                );
+                                if ui.selectable_label(selected, title).clicked() {
+                                    clicked = Some(entry.id.clone());
+                                }
+                            });
                         }
                     });
                 });
@@ -688,10 +781,10 @@ impl LockboxApp {
                     ui.add_space(8.0);
                 }
                 if unlocked.draft.is_some() {
-                    draft_ui(ui, unlocked);
+                    draft_ui(ui, unlocked, &mut self.icons);
                     None
                 } else if unlocked.selected_entry().is_some() {
-                    entry_ui(ui, unlocked)
+                    entry_ui(ui, unlocked, &mut self.icons)
                 } else {
                     ui.label("Выберите запись слева или создайте новую.");
                     None
@@ -764,7 +857,11 @@ impl eframe::App for LockboxApp {
 }
 
 /// Shows the selected entry; returns text the user asked to copy.
-fn entry_ui(ui: &mut egui::Ui, unlocked: &mut Unlocked) -> Option<Zeroizing<String>> {
+fn entry_ui(
+    ui: &mut egui::Ui,
+    unlocked: &mut Unlocked,
+    cache: &mut IconCache,
+) -> Option<Zeroizing<String>> {
     let entry = unlocked.selected_entry()?;
     let mut copy = None;
     let title = entry.title.clone();
@@ -772,7 +869,11 @@ fn entry_ui(ui: &mut egui::Ui, unlocked: &mut Unlocked) -> Option<Zeroizing<Stri
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default();
-    ui.heading(&entry.title);
+    ui.horizontal(|ui| {
+        let icon = icons::catalog().for_entry(entry);
+        icon_tile(ui, cache, icon, &entry.title, 32.0, egui::Sense::hover());
+        ui.heading(&entry.title);
+    });
     ui.add_space(8.0);
     egui::Grid::new("entry")
         .num_columns(2)
@@ -875,6 +976,51 @@ fn entry_ui(ui: &mut egui::Ui, unlocked: &mut Unlocked) -> Option<Zeroizing<Stri
     copy
 }
 
+fn icon_picker_ui(ui: &mut egui::Ui, draft: &mut Draft, cache: &mut IconCache) {
+    ui.group(|ui| {
+        ui.horizontal(|ui| {
+            ui.add(
+                egui::TextEdit::singleline(&mut draft.icon_query)
+                    .hint_text("Название сервиса")
+                    .desired_width(240.0),
+            );
+            if ui.button("Закрыть").clicked() {
+                draft.icon_picker_open = false;
+            }
+        });
+        let found = icons::catalog().search(&draft.icon_query, 60);
+        if draft.icon_query.trim().is_empty() {
+            ui.label(format!(
+                "Начните вводить название — в наборе {} иконок.",
+                icons::catalog().len()
+            ));
+        } else if found.is_empty() {
+            ui.label("Ничего не найдено — останется буква.");
+        }
+        let mut chosen = None;
+        ui.horizontal_wrapped(|ui| {
+            for icon in found {
+                if icon_tile(
+                    ui,
+                    cache,
+                    Some(icon),
+                    &icon.title,
+                    32.0,
+                    egui::Sense::click(),
+                )
+                .clicked()
+                {
+                    chosen = Some(icon.slug.clone());
+                }
+            }
+        });
+        if let Some(slug) = chosen {
+            draft.entry.icon = Some(slug);
+            draft.icon_picker_open = false;
+        }
+    });
+}
+
 fn generator_ui(ui: &mut egui::Ui, draft: &mut Draft, options: &mut generator::Options) {
     ui.group(|ui| {
         ui.add(egui::Slider::new(&mut options.length, generator::LENGTH).text("символов"));
@@ -930,7 +1076,7 @@ fn wide(edit: egui::TextEdit<'_>) -> egui::TextEdit<'_> {
     edit.desired_width(f32::INFINITY)
 }
 
-fn draft_ui(ui: &mut egui::Ui, unlocked: &mut Unlocked) {
+fn draft_ui(ui: &mut egui::Ui, unlocked: &mut Unlocked, cache: &mut IconCache) {
     let Some(draft) = &mut unlocked.draft else {
         return;
     };
@@ -970,10 +1116,40 @@ fn draft_ui(ui: &mut egui::Ui, unlocked: &mut Unlocked) {
             ui.add(wide(egui::TextEdit::singleline(&mut draft.entry.url)));
             ui.end_row();
 
+            ui.label("Иконка");
+            ui.horizontal(|ui| {
+                let icon = icons::catalog().for_entry(&draft.entry);
+                icon_tile(
+                    ui,
+                    cache,
+                    icon,
+                    &draft.entry.title,
+                    20.0,
+                    egui::Sense::hover(),
+                );
+                ui.label(match (&draft.entry.icon, icon) {
+                    (Some(_), Some(icon)) => icon.title.clone(),
+                    (None, Some(icon)) => format!("авто: {}", icon.title),
+                    _ => "авто: буква".to_owned(),
+                });
+                if ui.button("Выбрать…").clicked() {
+                    draft.icon_picker_open = !draft.icon_picker_open;
+                }
+                if draft.entry.icon.is_some() && ui.button("Авто").clicked() {
+                    draft.entry.icon = None;
+                }
+            });
+            ui.end_row();
+
             ui.label("Заметка");
             ui.add(wide(egui::TextEdit::multiline(&mut draft.entry.notes)));
             ui.end_row();
         });
+
+    if draft.icon_picker_open {
+        ui.add_space(8.0);
+        icon_picker_ui(ui, draft, cache);
+    }
 
     if draft.generator_open {
         ui.add_space(8.0);
@@ -1187,6 +1363,7 @@ mod tests {
             screen: Screen::Unlocked(Box::new(unlocked)),
             clipboard: Guard::new(Box::new(board.clone())),
             biometrics: Arc::new(FakeBiometrics::default()),
+            icons: IconCache::default(),
         };
         app.clipboard.copy("s3cret", Instant::now()).unwrap();
         app.lock();
@@ -1311,6 +1488,7 @@ mod tests {
             screen: Screen::Locked(Locked::new(None)),
             clipboard: Guard::new(Box::new(crate::clipboard::tests::FakeBoard::default())),
             biometrics: fake.clone(),
+            icons: IconCache::default(),
         };
         app.open(Opened {
             vault: unlocked.vault,

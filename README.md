@@ -28,6 +28,27 @@ cargo run --release
 - Скопированный пароль или код помечается для менеджеров буфера как скрытый
   и стирается из буфера через 20 с — если там всё ещё он.
 
+## Иконки
+
+Логотипы сервисов — из [Simple Icons](https://simpleicons.org) (версия в
+`assets/SIMPLE_ICONS_VERSION`), вшиты в приложение: lockbox их не скачивает.
+Иконка подбирается по домену URL записи (`mail.google.com` → Gmail,
+остальное под `google.com` → Google, `gitlab.com` → GitLab); если не нашлась —
+первая буква названия на цветном квадрате. В правке записи можно выбрать любую
+иконку из набора.
+
+Домены, которые не совпадают с названием иконки, лежат в
+`assets/icon_domains.txt`. После правки или для новой версии набора:
+
+```sh
+curl -fsSO https://registry.npmjs.org/simple-icons/-/simple-icons-<версия>.tgz
+tar -xzf simple-icons-<версия>.tgz
+python3 -I tools/build_icons.py package
+```
+
+Набор распространяется под CC0, но сами логотипы — товарные знаки их
+владельцев: см. `assets/DISCLAIMER-simple-icons.md`.
+
 ## Touch ID
 
 Включается флажком «Touch ID» в открытом хранилище. Мастер-пароль всё равно
