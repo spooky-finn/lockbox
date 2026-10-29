@@ -1,0 +1,5 @@
+/target/
+# Vault files and their backups never belong in Git.
+*.lbx
+*.lbx.bak
+*.lbx.tmp
