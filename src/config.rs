@@ -1,4 +1,5 @@
-//! Remembers which vault was opened last. Holds only the path, never secrets.
+//! Remembers which vault was opened last and where Touch ID is turned on.
+//! Holds only paths and vault identifiers, never secrets.
 
 use std::{
     fs::{self, OpenOptions},
@@ -11,6 +12,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Config {
     pub last_vault: Option<PathBuf>,
+    /// Vaults (by `Vault::id`) whose owner turned Touch ID on.
+    #[serde(default)]
+    pub touch_id: Vec<String>,
 }
 
 impl Config {
@@ -66,9 +70,23 @@ mod tests {
         let path = dir.path().join("lockbox").join("config.json");
         let config = Config {
             last_vault: Some("/tmp/vault.lbx".into()),
+            touch_id: vec!["00ff".into()],
         };
         config.save(&path).unwrap();
         assert_eq!(Config::load(&path), config);
+    }
+
+    #[test]
+    fn config_from_before_touch_id_still_loads() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        fs::write(&path, br#"{"last_vault":"/tmp/vault.lbx"}"#).unwrap();
+        let config = Config::load(&path);
+        assert_eq!(
+            config.last_vault.as_deref(),
+            Some(Path::new("/tmp/vault.lbx"))
+        );
+        assert!(config.touch_id.is_empty());
     }
 
     #[test]

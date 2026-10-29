@@ -1,6 +1,9 @@
 use std::{
     path::PathBuf,
-    sync::mpsc::{self, Receiver, TryRecvError},
+    sync::{
+        Arc,
+        mpsc::{self, Receiver, TryRecvError},
+    },
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
@@ -14,7 +17,8 @@ use crate::{
     config::Config,
     entry::{Entry, Totp, TotpAlgorithm},
     totp,
-    vault::{KdfParams, Vault, VaultError},
+    touchid::{self, Biometrics, TouchIdError},
+    vault::{KdfParams, Vault},
 };
 
 const MIN_PASSWORD_CHARS: usize = 12;
@@ -25,11 +29,34 @@ fn secret_buffer() -> Zeroizing<String> {
     Zeroizing::new(String::with_capacity(SECRET_CAPACITY))
 }
 
+fn unix_now() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+}
+
+fn save_config(config: &Config, path: &Option<PathBuf>) -> Result<(), String> {
+    match path {
+        Some(path) => config
+            .save(path)
+            .map_err(|error| format!("Не удалось сохранить настройки: {error}")),
+        None => Ok(()),
+    }
+}
+
+/// A vault unlocked on a worker thread.
+struct Opened {
+    vault: Vault,
+    with_password: bool,
+}
+
 pub struct LockboxApp {
     config: Config,
     config_path: Option<PathBuf>,
     screen: Screen,
     clipboard: Guard,
+    biometrics: Arc<dyn Biometrics>,
 }
 
 enum Screen {
@@ -49,8 +76,13 @@ struct Locked {
     password: Zeroizing<String>,
     repeat: Zeroizing<String>,
     error: Option<String>,
-    /// Argon2id runs on a worker thread so the window keeps repainting.
-    pending: Option<Receiver<Result<Vault, VaultError>>>,
+    /// Argon2id and Touch ID run on a worker thread so the window keeps repainting.
+    pending: Option<Receiver<Result<Opened, String>>>,
+    /// Vault identifier when Touch ID can open this file.
+    touch_id: Option<String>,
+    /// Ask for the finger right away: only when the app starts.
+    auto_touch_id: bool,
+    waiting_touch_id: bool,
 }
 
 impl Locked {
@@ -66,7 +98,45 @@ impl Locked {
             repeat: secret_buffer(),
             error,
             pending: None,
+            touch_id: None,
+            auto_touch_id: false,
+            waiting_touch_id: false,
         }
+    }
+
+    /// Offers Touch ID when it was turned on for this file and the sensor is available.
+    fn offer_touch_id(mut self, config: &Config, biometrics: &dyn Biometrics, auto: bool) -> Self {
+        self.touch_id = self
+            .path
+            .as_ref()
+            .filter(|path| path.exists())
+            .and_then(|path| Vault::peek_id(path).ok())
+            .filter(|id| config.touch_id.contains(id))
+            .filter(|_| touchid::available(biometrics));
+        self.auto_touch_id = auto && self.touch_id.is_some();
+        self
+    }
+
+    fn start_touch_id(&mut self, ctx: &egui::Context, biometrics: Arc<dyn Biometrics>) {
+        let (Some(path), Some(id)) = (self.path.clone(), self.touch_id.clone()) else {
+            return;
+        };
+        self.error = None;
+        self.waiting_touch_id = true;
+        let (sender, receiver) = mpsc::channel();
+        let ctx = ctx.clone();
+        thread::spawn(move || {
+            let result = touchid::unlock(&*biometrics, &id, unix_now())
+                .map_err(|error| error.to_string())
+                .and_then(|key| Vault::open_with_key(&path, &key).map_err(|e| e.to_string()))
+                .map(|vault| Opened {
+                    vault,
+                    with_password: false,
+                });
+            let _ = sender.send(result);
+            ctx.request_repaint();
+        });
+        self.pending = Some(receiver);
     }
 
     fn submit(&mut self, ctx: &egui::Context) {
@@ -88,6 +158,7 @@ impl Locked {
         ));
         self.repeat.zeroize();
         self.error = None;
+        self.waiting_touch_id = false;
         let mode = self.mode;
         let (sender, receiver) = mpsc::channel();
         let ctx = ctx.clone();
@@ -95,7 +166,12 @@ impl Locked {
             let result = match mode {
                 Mode::Open => Vault::open(&path, &password),
                 Mode::Create => Vault::create(&path, &password, KdfParams::default()),
-            };
+            }
+            .map(|vault| Opened {
+                vault,
+                with_password: true,
+            })
+            .map_err(|error| error.to_string());
             let _ = sender.send(result);
             ctx.request_repaint();
         });
@@ -111,6 +187,9 @@ struct Unlocked {
     show_password: bool,
     confirm_delete: bool,
     error: Option<String>,
+    touch_id_available: bool,
+    touch_id_enabled: bool,
+    touch_id_pending: Option<Receiver<Result<(), String>>>,
 }
 
 struct Draft {
@@ -162,6 +241,9 @@ impl Unlocked {
             show_password: false,
             confirm_delete: false,
             error: None,
+            touch_id_available: false,
+            touch_id_enabled: false,
+            touch_id_pending: None,
         }
     }
 
@@ -277,12 +359,18 @@ impl LockboxApp {
     pub fn new() -> Self {
         let config_path = Config::default_path();
         let config = config_path.as_deref().map(Config::load).unwrap_or_default();
-        let screen = Screen::Locked(Locked::new(config.last_vault.clone()));
+        let biometrics = touchid::system();
+        let screen = Screen::Locked(Locked::new(config.last_vault.clone()).offer_touch_id(
+            &config,
+            &*biometrics,
+            true,
+        ));
         Self {
             config,
             config_path,
             screen,
             clipboard: Guard::new(Box::new(SystemBoard::new())),
+            biometrics,
         }
     }
 
@@ -291,19 +379,42 @@ impl LockboxApp {
         self.clipboard.clear_now();
         if let Screen::Unlocked(unlocked) = &self.screen {
             let path = unlocked.vault.path().to_path_buf();
-            self.screen = Screen::Locked(Locked::new(Some(path)));
+            self.screen = Screen::Locked(Locked::new(Some(path)).offer_touch_id(
+                &self.config,
+                &*self.biometrics,
+                false,
+            ));
         }
     }
 
     fn remember(&mut self, path: Option<PathBuf>) -> Result<(), String> {
         self.config.last_vault = path;
-        match &self.config_path {
-            Some(config_path) => self
-                .config
-                .save(config_path)
-                .map_err(|error| format!("Не удалось запомнить путь: {error}")),
-            None => Ok(()),
+        save_config(&self.config, &self.config_path)
+    }
+
+    fn open(&mut self, opened: Opened) {
+        let path = opened.vault.path().to_path_buf();
+        let id = opened.vault.id();
+        let enabled = self.config.touch_id.contains(&id);
+        let mut errors = Vec::new();
+        // Typing the password restarts the Touch ID period (and restores a dropped key).
+        if opened.with_password && enabled {
+            match touchid::refresh(
+                &*self.biometrics,
+                &id,
+                &opened.vault.export_key(),
+                unix_now(),
+            ) {
+                Ok(()) | Err(TouchIdError::Unavailable) => {}
+                Err(error) => errors.push(error.to_string()),
+            }
         }
+        let mut unlocked = Unlocked::new(opened.vault);
+        unlocked.touch_id_available = touchid::available(&*self.biometrics);
+        unlocked.touch_id_enabled = enabled;
+        errors.extend(self.remember(Some(path)).err());
+        unlocked.error = (!errors.is_empty()).then(|| errors.join("; "));
+        self.screen = Screen::Unlocked(Box::new(unlocked));
     }
 
     fn locked_ui(&mut self, ui: &mut egui::Ui) {
@@ -313,16 +424,14 @@ impl LockboxApp {
 
         if let Some(receiver) = &locked.pending {
             match receiver.try_recv() {
-                Ok(Ok(vault)) => {
-                    let path = vault.path().to_path_buf();
-                    let mut unlocked = Unlocked::new(vault);
-                    unlocked.error = self.remember(Some(path)).err();
-                    self.screen = Screen::Unlocked(Box::new(unlocked));
+                Ok(Ok(opened)) => {
+                    self.open(opened);
                     return;
                 }
                 Ok(Err(error)) => {
-                    locked.error = Some(error.to_string());
+                    locked.error = Some(error);
                     locked.pending = None;
+                    locked.waiting_touch_id = false;
                 }
                 Err(TryRecvError::Empty) => {}
                 Err(TryRecvError::Disconnected) => {
@@ -332,6 +441,11 @@ impl LockboxApp {
             }
         }
 
+        let biometrics = self.biometrics.clone();
+        if locked.auto_touch_id && locked.pending.is_none() {
+            locked.auto_touch_id = false;
+            locked.start_touch_id(ui.ctx(), biometrics.clone());
+        }
         let busy = locked.pending.is_some();
         let mut forget = false;
         egui::CentralPanel::default().show(ui, |ui| {
@@ -354,7 +468,11 @@ impl LockboxApp {
                                 .add_filter("lockbox", &["lbx"])
                                 .pick_file()
                         {
-                            *locked = Locked::new(Some(path));
+                            *locked = Locked::new(Some(path)).offer_touch_id(
+                                &self.config,
+                                &*biometrics,
+                                false,
+                            );
                         }
                         if ui.button("Создать хранилище…").clicked()
                             && let Some(path) = rfd::FileDialog::new()
@@ -376,6 +494,15 @@ impl LockboxApp {
                 let ready = locked.path.as_ref().is_some_and(|path| {
                     locked.mode == Mode::Create || path.exists()
                 });
+                if ready && locked.mode == Mode::Open && locked.touch_id.is_some() {
+                    if ui
+                        .add_enabled(!busy, egui::Button::new("Открыть по Touch ID"))
+                        .clicked()
+                    {
+                        locked.start_touch_id(ui.ctx(), biometrics.clone());
+                    }
+                    ui.add_space(8.0);
+                }
                 if ready {
                     let mut submit = false;
                     ui.add_enabled_ui(!busy, |ui| {
@@ -424,6 +551,7 @@ impl LockboxApp {
                     ui.horizontal(|ui| {
                         ui.spinner();
                         ui.label(match locked.mode {
+                            Mode::Open if locked.waiting_touch_id => "Жду Touch ID…",
                             Mode::Open => "Проверяю пароль…",
                             Mode::Create => "Создаю хранилище…",
                         });
@@ -449,7 +577,29 @@ impl LockboxApp {
             return;
         };
         let mut lock = false;
+        let mut touch_id_wanted = None;
         let editing = unlocked.draft.is_some();
+
+        if let Some(receiver) = &unlocked.touch_id_pending {
+            match receiver.try_recv() {
+                Ok(result) => {
+                    unlocked.touch_id_pending = None;
+                    match result {
+                        Ok(()) => {
+                            let id = unlocked.vault.id();
+                            if !self.config.touch_id.contains(&id) {
+                                self.config.touch_id.push(id);
+                            }
+                            unlocked.touch_id_enabled = true;
+                            unlocked.error = save_config(&self.config, &self.config_path).err();
+                        }
+                        Err(error) => unlocked.error = Some(error),
+                    }
+                }
+                Err(TryRecvError::Empty) => {}
+                Err(TryRecvError::Disconnected) => unlocked.touch_id_pending = None,
+            }
+        }
 
         egui::Panel::top("toolbar").show(ui, |ui| {
             ui.horizontal(|ui| {
@@ -463,6 +613,17 @@ impl LockboxApp {
                 ui.label(name);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     lock = ui.button("Заблокировать").clicked();
+                    if unlocked.touch_id_available {
+                        let mut wanted = unlocked.touch_id_enabled;
+                        let checkbox = egui::Checkbox::new(&mut wanted, "Touch ID");
+                        if ui
+                            .add_enabled(unlocked.touch_id_pending.is_none(), checkbox)
+                            .on_hover_text("Открывать это хранилище отпечатком пальца")
+                            .changed()
+                        {
+                            touch_id_wanted = Some(wanted);
+                        }
+                    }
                     if ui
                         .add_enabled(!editing, egui::Button::new("Новая запись"))
                         .clicked()
@@ -530,6 +691,31 @@ impl LockboxApp {
                 }
             })
             .inner;
+        match touch_id_wanted {
+            Some(true) => {
+                let (sender, receiver) = mpsc::channel();
+                let biometrics = self.biometrics.clone();
+                let id = unlocked.vault.id();
+                let key = unlocked.vault.export_key();
+                let ctx = ui.ctx().clone();
+                thread::spawn(move || {
+                    let result = touchid::enable(&*biometrics, &id, &key, unix_now())
+                        .map_err(|error| format!("Не удалось включить Touch ID: {error}"));
+                    let _ = sender.send(result);
+                    ctx.request_repaint();
+                });
+                unlocked.touch_id_pending = Some(receiver);
+            }
+            Some(false) => {
+                let id = unlocked.vault.id();
+                touchid::disable(&*self.biometrics, &id);
+                self.config.touch_id.retain(|known| known != &id);
+                unlocked.touch_id_enabled = false;
+                unlocked.error = save_config(&self.config, &self.config_path).err();
+            }
+            None => {}
+        }
+
         if let Some(text) = copy {
             unlocked.error = self
                 .clipboard
@@ -819,6 +1005,7 @@ fn draft_ui(ui: &mut egui::Ui, unlocked: &mut Unlocked) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::touchid::tests::FakeBiometrics;
 
     const FAST: KdfParams = KdfParams {
         memory_kib: 8 * 1024,
@@ -941,6 +1128,7 @@ mod tests {
             config_path: None,
             screen: Screen::Unlocked(Box::new(unlocked)),
             clipboard: Guard::new(Box::new(board.clone())),
+            biometrics: Arc::new(FakeBiometrics::default()),
         };
         app.clipboard.copy("s3cret", Instant::now()).unwrap();
         app.lock();
@@ -1026,6 +1214,55 @@ mod tests {
             saved.entries[0].totp.as_ref().unwrap().secret,
             "JBSWY3DPEHPK3PXP"
         );
+    }
+
+    #[test]
+    fn touch_id_is_offered_only_where_it_was_turned_on() {
+        let dir = tempfile::tempdir().unwrap();
+        let unlocked = unlocked(&dir);
+        let path = unlocked.vault.path().to_path_buf();
+        let mut config = Config::default();
+        let fake = FakeBiometrics::default();
+
+        let locked = Locked::new(Some(path.clone())).offer_touch_id(&config, &fake, true);
+        assert!(locked.touch_id.is_none());
+        assert!(!locked.auto_touch_id);
+
+        config.touch_id.push(unlocked.vault.id());
+        let locked = Locked::new(Some(path.clone())).offer_touch_id(&config, &fake, true);
+        assert_eq!(locked.touch_id, Some(unlocked.vault.id()));
+        assert!(locked.auto_touch_id);
+
+        *fake.fingers.lock().unwrap() = None;
+        let locked = Locked::new(Some(path)).offer_touch_id(&config, &fake, true);
+        assert!(locked.touch_id.is_none(), "no sensor, no Touch ID button");
+    }
+
+    #[test]
+    fn typing_the_password_restores_the_touch_id_key() {
+        let dir = tempfile::tempdir().unwrap();
+        let unlocked = unlocked(&dir);
+        let id = unlocked.vault.id();
+        let fake = Arc::new(FakeBiometrics::default());
+        let mut app = LockboxApp {
+            config: Config {
+                last_vault: None,
+                touch_id: vec![id.clone()],
+            },
+            config_path: None,
+            screen: Screen::Locked(Locked::new(None)),
+            clipboard: Guard::new(Box::new(crate::clipboard::tests::FakeBoard::default())),
+            biometrics: fake.clone(),
+        };
+        app.open(Opened {
+            vault: unlocked.vault,
+            with_password: true,
+        });
+        assert!(fake.items.lock().unwrap().contains_key(&id));
+        let Screen::Unlocked(unlocked) = &app.screen else {
+            panic!("vault did not open");
+        };
+        assert!(unlocked.touch_id_enabled);
     }
 
     #[test]

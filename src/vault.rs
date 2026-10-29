@@ -60,6 +60,8 @@ pub enum VaultError {
     WrongPassword,
     #[error("файл хранилища повреждён")]
     Corrupted,
+    #[error("сохранённый ключ не подходит к этому файлу — откройте хранилище мастер-паролем")]
+    KeyMismatch,
 }
 
 pub type Result<T> = std::result::Result<T, VaultError>;
@@ -135,50 +137,40 @@ impl Vault {
     pub fn open(path: impl AsRef<Path>, password: &SecretString) -> Result<Self> {
         let path = path.as_ref().to_path_buf();
         let data = fs::read(&path)?;
-        if data.len() < HEADER_LEN || &data[..4] != MAGIC {
-            return Err(VaultError::NotAVault);
-        }
-        let (header, ciphertext) = data.split_at(HEADER_LEN);
-        let version = u16::from_le_bytes([header[4], header[5]]);
-        if version != VERSION {
-            return Err(VaultError::UnsupportedVersion(version));
-        }
-        let kdf = KdfParams {
-            memory_kib: u32_at(header, 6),
-            passes: u32_at(header, 10),
-            lanes: u32_at(header, 14),
-        }
-        .validate()?;
-        let salt: [u8; SALT_LEN] = header[18..34].try_into().unwrap();
-        let stored_check: [u8; CHECK_LEN] = header[34..66].try_into().unwrap();
-        let nonce = XNonce::from_slice(&header[66..HEADER_LEN]);
-
-        let (key, check) = derive(password, &salt, kdf)?;
+        let header = Header::parse(&data)?;
+        let (key, check) = derive(password, &header.salt, header.kdf)?;
         // The check value tells a mistyped password apart from a damaged file.
-        if !bool::from(check.ct_eq(&stored_check)) {
+        if !bool::from(check.ct_eq(&header.check)) {
             return Err(VaultError::WrongPassword);
         }
-        let plaintext = Zeroizing::new(
-            cipher(&key)
-                .decrypt(
-                    nonce,
-                    Payload {
-                        msg: ciphertext,
-                        aad: header,
-                    },
-                )
-                .map_err(|_| VaultError::Corrupted)?,
-        );
-        let contents: Contents =
-            serde_json::from_slice(&plaintext).map_err(|_| VaultError::Corrupted)?;
-        Ok(Self {
-            path,
-            kdf,
-            salt,
-            check,
-            key,
-            entries: contents.entries,
-        })
+        let entries = decrypt(&data, &key).ok_or(VaultError::Corrupted)?;
+        Ok(header.into_vault(path, key, entries))
+    }
+
+    /// Opens with a key exported earlier, skipping Argon2id (used for Touch ID).
+    pub fn open_with_key(path: impl AsRef<Path>, key: &[u8; 32]) -> Result<Self> {
+        let path = path.as_ref().to_path_buf();
+        let data = fs::read(&path)?;
+        let header = Header::parse(&data)?;
+        let key = Zeroizing::new(*key);
+        let entries = decrypt(&data, &key).ok_or(VaultError::KeyMismatch)?;
+        Ok(header.into_vault(path, key, entries))
+    }
+
+    /// Stable identifier of the vault file: its random salt, which never changes.
+    pub fn id(&self) -> String {
+        hex(&self.salt)
+    }
+
+    /// Reads the identifier without the password, to find a saved Touch ID key.
+    pub fn peek_id(path: impl AsRef<Path>) -> Result<String> {
+        let data = fs::read(path)?;
+        Ok(hex(&Header::parse(&data)?.salt))
+    }
+
+    /// The derived encryption key, for storing behind Touch ID.
+    pub fn export_key(&self) -> Zeroizing<[u8; 32]> {
+        self.key.clone()
     }
 
     /// Encrypts with a fresh nonce and replaces the file atomically,
@@ -236,6 +228,71 @@ impl Vault {
         header[66..].copy_from_slice(nonce);
         header
     }
+}
+
+/// Header fields needed to unlock and later re-save a vault.
+struct Header {
+    kdf: KdfParams,
+    salt: [u8; SALT_LEN],
+    check: [u8; CHECK_LEN],
+}
+
+impl Header {
+    fn parse(data: &[u8]) -> Result<Self> {
+        if data.len() < HEADER_LEN || &data[..4] != MAGIC {
+            return Err(VaultError::NotAVault);
+        }
+        let version = u16::from_le_bytes([data[4], data[5]]);
+        if version != VERSION {
+            return Err(VaultError::UnsupportedVersion(version));
+        }
+        let kdf = KdfParams {
+            memory_kib: u32_at(data, 6),
+            passes: u32_at(data, 10),
+            lanes: u32_at(data, 14),
+        }
+        .validate()?;
+        Ok(Self {
+            kdf,
+            salt: data[18..34].try_into().unwrap(),
+            check: data[34..66].try_into().unwrap(),
+        })
+    }
+
+    fn into_vault(self, path: PathBuf, key: Zeroizing<[u8; 32]>, entries: Vec<Entry>) -> Vault {
+        Vault {
+            path,
+            kdf: self.kdf,
+            salt: self.salt,
+            check: self.check,
+            key,
+            entries,
+        }
+    }
+}
+
+/// Authenticated decryption of the whole file; `None` if the key or data is wrong.
+fn decrypt(data: &[u8], key: &[u8; 32]) -> Option<Vec<Entry>> {
+    let (header, ciphertext) = data.split_at(HEADER_LEN);
+    let nonce = XNonce::from_slice(&header[66..HEADER_LEN]);
+    let plaintext = Zeroizing::new(
+        cipher(key)
+            .decrypt(
+                nonce,
+                Payload {
+                    msg: ciphertext,
+                    aad: header,
+                },
+            )
+            .ok()?,
+    );
+    serde_json::from_slice::<Contents>(&plaintext)
+        .ok()
+        .map(|contents| contents.entries)
+}
+
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 #[derive(Serialize)]
@@ -467,6 +524,47 @@ mod tests {
                 .len(),
             1
         );
+    }
+
+    #[test]
+    fn exported_key_opens_the_vault_without_the_password() {
+        let dir = tempfile::tempdir().unwrap();
+        let (path, mut vault) = new_vault(&dir);
+        let key = vault.export_key();
+        let opened = Vault::open_with_key(&path, &key).unwrap();
+        assert_eq!(opened.entries, vault.entries);
+        // A vault opened by key saves a file the password still opens.
+        vault.entries.clear();
+        drop(vault);
+        opened.save().unwrap();
+        assert_eq!(
+            Vault::open(&path, &password("master"))
+                .unwrap()
+                .entries
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn foreign_key_is_reported_as_a_mismatch() {
+        let dir = tempfile::tempdir().unwrap();
+        let (path, _) = new_vault(&dir);
+        assert!(matches!(
+            Vault::open_with_key(&path, &[7u8; 32]),
+            Err(VaultError::KeyMismatch)
+        ));
+    }
+
+    #[test]
+    fn id_is_readable_without_the_password_and_survives_saves() {
+        let dir = tempfile::tempdir().unwrap();
+        let (path, vault) = new_vault(&dir);
+        assert_eq!(Vault::peek_id(&path).unwrap(), vault.id());
+        vault.save().unwrap();
+        assert_eq!(Vault::peek_id(&path).unwrap(), vault.id());
+        let other = Vault::create(dir.path().join("other.lbx"), &password("master"), FAST).unwrap();
+        assert_ne!(other.id(), vault.id());
     }
 
     #[cfg(unix)]
