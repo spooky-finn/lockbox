@@ -16,7 +16,7 @@ use crate::{
     clipboard::{Guard, SystemBoard},
     config::Config,
     entry::{Entry, Totp, TotpAlgorithm},
-    totp,
+    generator, totp,
     touchid::{self, Biometrics, TouchIdError},
     vault::{KdfParams, Vault},
 };
@@ -190,6 +190,8 @@ struct Unlocked {
     touch_id_available: bool,
     touch_id_enabled: bool,
     touch_id_pending: Option<Receiver<Result<(), String>>>,
+    /// Generator settings last until the window closes; they are never saved.
+    generator: generator::Options,
 }
 
 struct Draft {
@@ -198,6 +200,8 @@ struct Draft {
     show_password: bool,
     show_totp: bool,
     totp_error: Option<String>,
+    generator_open: bool,
+    generator_error: Option<String>,
 }
 
 impl Draft {
@@ -244,6 +248,7 @@ impl Unlocked {
             touch_id_available: false,
             touch_id_enabled: false,
             touch_id_pending: None,
+            generator: generator::Options::default(),
         }
     }
 
@@ -288,6 +293,8 @@ impl Unlocked {
             show_password: false,
             show_totp: false,
             totp_error: None,
+            generator_open: false,
+            generator_error: None,
         });
         self.confirm_delete = false;
         self.error = None;
@@ -868,6 +875,49 @@ fn entry_ui(ui: &mut egui::Ui, unlocked: &mut Unlocked) -> Option<Zeroizing<Stri
     copy
 }
 
+fn generator_ui(ui: &mut egui::Ui, draft: &mut Draft, options: &mut generator::Options) {
+    ui.group(|ui| {
+        ui.add(egui::Slider::new(&mut options.length, generator::LENGTH).text("символов"));
+        ui.horizontal(|ui| {
+            ui.checkbox(&mut options.lower, "a–z");
+            ui.checkbox(&mut options.upper, "A–Z");
+            ui.checkbox(&mut options.digits, "0–9");
+            ui.checkbox(&mut options.symbols, "!#$%…");
+        });
+        ui.checkbox(
+            &mut options.avoid_ambiguous,
+            format!("без похожих символов ({})", generator::AMBIGUOUS),
+        );
+        let bits = options.entropy_bits();
+        let verdict = match bits {
+            b if b < 64.0 => "слабый",
+            b if b < 100.0 => "нормальный",
+            _ => "сильный",
+        };
+        ui.label(format!("Стойкость: ≈ {bits:.0} бит — {verdict}"));
+        ui.horizontal(|ui| {
+            if ui.button("Подставить").clicked() {
+                match generator::generate(options) {
+                    Ok(password) => {
+                        // Overwrite in place so the old password does not linger.
+                        draft.entry.password.zeroize();
+                        draft.entry.password.push_str(&password);
+                        draft.generator_error = None;
+                        draft.generator_open = false;
+                    }
+                    Err(error) => draft.generator_error = Some(error.to_string()),
+                }
+            }
+            if ui.button("Закрыть").clicked() {
+                draft.generator_open = false;
+            }
+        });
+        if let Some(error) = &draft.generator_error {
+            ui.colored_label(ui.visuals().error_fg_color, error);
+        }
+    });
+}
+
 fn algorithm_name(algorithm: TotpAlgorithm) -> &'static str {
     match algorithm {
         TotpAlgorithm::Sha1 => "SHA1",
@@ -910,6 +960,9 @@ fn draft_ui(ui: &mut egui::Ui, unlocked: &mut Unlocked) {
                         .desired_width(240.0),
                 );
                 ui.checkbox(&mut draft.show_password, "показать");
+                if ui.button("Сгенерировать…").clicked() {
+                    draft.generator_open = !draft.generator_open;
+                }
             });
             ui.end_row();
 
@@ -921,6 +974,11 @@ fn draft_ui(ui: &mut egui::Ui, unlocked: &mut Unlocked) {
             ui.add(wide(egui::TextEdit::multiline(&mut draft.entry.notes)));
             ui.end_row();
         });
+
+    if draft.generator_open {
+        ui.add_space(8.0);
+        generator_ui(ui, draft, &mut unlocked.generator);
+    }
 
     ui.add_space(12.0);
     ui.separator();
