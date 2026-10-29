@@ -9,8 +9,11 @@ description = "Local password manager with TOTP"
 [dependencies]
 argon2 = "0.5"
 chacha20poly1305 = "0.10"
+dirs = "6"
+eframe = { version = "0.37", default-features = false, features = ["default_fonts", "glow", "clipboard", "wayland", "x11"] }
 getrandom = "0.3"
 hkdf = "0.12"
+rfd = "0.17"
 secrecy = "0.10"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
