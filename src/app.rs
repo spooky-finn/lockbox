@@ -2,7 +2,7 @@ use std::{
     path::PathBuf,
     sync::mpsc::{self, Receiver, TryRecvError},
     thread,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use eframe::egui;
@@ -10,6 +10,7 @@ use secrecy::SecretString;
 use zeroize::{Zeroize, Zeroizing};
 
 use crate::{
+    clipboard::{Guard, SystemBoard},
     config::Config,
     entry::{Entry, Totp, TotpAlgorithm},
     totp,
@@ -28,6 +29,7 @@ pub struct LockboxApp {
     config: Config,
     config_path: Option<PathBuf>,
     screen: Screen,
+    clipboard: Guard,
 }
 
 enum Screen {
@@ -280,11 +282,13 @@ impl LockboxApp {
             config,
             config_path,
             screen,
+            clipboard: Guard::new(Box::new(SystemBoard::new())),
         }
     }
 
     /// Drops the unlocked vault, wiping its key and entries from memory.
     fn lock(&mut self) {
+        self.clipboard.clear_now();
         if let Screen::Unlocked(unlocked) = &self.screen {
             let path = unlocked.vault.path().to_path_buf();
             self.screen = Screen::Locked(Locked::new(Some(path)));
@@ -500,19 +504,39 @@ impl LockboxApp {
                 }
             });
 
-        egui::CentralPanel::default().show(ui, |ui| {
-            if let Some(error) = &unlocked.error {
-                ui.colored_label(ui.visuals().error_fg_color, error);
-                ui.add_space(8.0);
-            }
-            if unlocked.draft.is_some() {
-                draft_ui(ui, unlocked);
-            } else if unlocked.selected_entry().is_some() {
-                entry_ui(ui, unlocked);
-            } else {
-                ui.label("Выберите запись слева или создайте новую.");
-            }
-        });
+        if let Some(left) = self.clipboard.remaining(Instant::now()) {
+            egui::Panel::bottom("status").show(ui, |ui| {
+                ui.label(format!(
+                    "Скопировано · буфер очистится через {} с",
+                    left.as_secs() + 1
+                ));
+            });
+        }
+
+        let copy = egui::CentralPanel::default()
+            .show(ui, |ui| {
+                if let Some(error) = &unlocked.error {
+                    ui.colored_label(ui.visuals().error_fg_color, error);
+                    ui.add_space(8.0);
+                }
+                if unlocked.draft.is_some() {
+                    draft_ui(ui, unlocked);
+                    None
+                } else if unlocked.selected_entry().is_some() {
+                    entry_ui(ui, unlocked)
+                } else {
+                    ui.label("Выберите запись слева или создайте новую.");
+                    None
+                }
+            })
+            .inner;
+        if let Some(text) = copy {
+            unlocked.error = self
+                .clipboard
+                .copy(&text, Instant::now())
+                .err()
+                .map(|error| format!("Не удалось скопировать: {error}"));
+        }
 
         if lock {
             self.lock();
@@ -528,17 +552,28 @@ impl Default for LockboxApp {
 
 impl eframe::App for LockboxApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let now = Instant::now();
+        self.clipboard.tick(now);
+        if let Some(left) = self.clipboard.remaining(now) {
+            // Wake up for the countdown and for the wipe itself, even when idle.
+            ui.ctx()
+                .request_repaint_after(left.min(Duration::from_secs(1)));
+        }
         match self.screen {
             Screen::Locked(_) => self.locked_ui(ui),
             Screen::Unlocked(_) => self.unlocked_ui(ui),
         }
     }
+
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        self.clipboard.clear_now();
+    }
 }
 
-fn entry_ui(ui: &mut egui::Ui, unlocked: &mut Unlocked) {
-    let Some(entry) = unlocked.selected_entry() else {
-        return;
-    };
+/// Shows the selected entry; returns text the user asked to copy.
+fn entry_ui(ui: &mut egui::Ui, unlocked: &mut Unlocked) -> Option<Zeroizing<String>> {
+    let entry = unlocked.selected_entry()?;
+    let mut copy = None;
     let title = entry.title.clone();
     let mut toggle_password = false;
     let now = SystemTime::now()
@@ -551,7 +586,13 @@ fn entry_ui(ui: &mut egui::Ui, unlocked: &mut Unlocked) {
         .spacing([16.0, 8.0])
         .show(ui, |ui| {
             ui.label("Логин");
-            ui.label(&entry.username);
+            ui.horizontal(|ui| {
+                ui.label(&entry.username);
+                if !entry.username.is_empty() && ui.small_button("Скопировать").clicked()
+                {
+                    copy = Some(Zeroizing::new(entry.username.clone()));
+                }
+            });
             ui.end_row();
 
             ui.label("Пароль");
@@ -567,6 +608,10 @@ fn entry_ui(ui: &mut egui::Ui, unlocked: &mut Unlocked) {
                     "Показать"
                 };
                 toggle_password = ui.small_button(label).clicked();
+                if !entry.password.is_empty() && ui.small_button("Скопировать").clicked()
+                {
+                    copy = Some(Zeroizing::new(entry.password.clone()));
+                }
             });
             ui.end_row();
 
@@ -589,6 +634,9 @@ fn entry_ui(ui: &mut egui::Ui, unlocked: &mut Unlocked) {
                                 .desired_width(120.0)
                                 .text(format!("{left} с")),
                         );
+                        if ui.small_button("Скопировать").clicked() {
+                            copy = Some(Zeroizing::new(code));
+                        }
                     }
                     Err(error) => {
                         ui.colored_label(ui.visuals().error_fg_color, error.to_string());
@@ -631,6 +679,7 @@ fn entry_ui(ui: &mut egui::Ui, unlocked: &mut Unlocked) {
             }
         });
     }
+    copy
 }
 
 fn algorithm_name(algorithm: TotpAlgorithm) -> &'static str {
@@ -886,12 +935,16 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let unlocked = unlocked(&dir);
         let path = unlocked.vault.path().to_path_buf();
+        let board = crate::clipboard::tests::FakeBoard::default();
         let mut app = LockboxApp {
             config: Config::default(),
             config_path: None,
             screen: Screen::Unlocked(Box::new(unlocked)),
+            clipboard: Guard::new(Box::new(board.clone())),
         };
+        app.clipboard.copy("s3cret", Instant::now()).unwrap();
         app.lock();
+        assert_eq!(*board.0.borrow(), None, "locking wipes the clipboard");
         let Screen::Locked(locked) = &app.screen else {
             panic!("vault is still unlocked");
         };
