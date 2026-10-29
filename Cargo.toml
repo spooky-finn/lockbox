@@ -13,10 +13,12 @@ dirs = "6"
 eframe = { version = "0.37", default-features = false, features = ["default_fonts", "glow", "clipboard", "wayland", "x11"] }
 getrandom = "0.3"
 hkdf = "0.12"
+hmac = "0.12"
 rfd = "0.17"
 secrecy = "0.10"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha1 = "0.10"
 sha2 = "0.10"
 subtle = "2.6"
 thiserror = "2"

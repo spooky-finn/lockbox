@@ -2,6 +2,7 @@ use std::{
     path::PathBuf,
     sync::mpsc::{self, Receiver, TryRecvError},
     thread,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use eframe::egui;
@@ -10,7 +11,8 @@ use zeroize::{Zeroize, Zeroizing};
 
 use crate::{
     config::Config,
-    entry::Entry,
+    entry::{Entry, Totp, TotpAlgorithm},
+    totp,
     vault::{KdfParams, Vault, VaultError},
 };
 
@@ -113,6 +115,39 @@ struct Draft {
     entry: Entry,
     is_new: bool,
     show_password: bool,
+    show_totp: bool,
+    totp_error: Option<String>,
+}
+
+impl Draft {
+    /// A pasted otpauth:// link replaces the TOTP settings and fills an empty title and login.
+    fn apply_link(&mut self) {
+        let Some(totp) = &self.entry.totp else {
+            return;
+        };
+        if !totp::is_link(&totp.secret) {
+            self.totp_error = None;
+            return;
+        }
+        let text = Zeroizing::new(totp.secret.clone());
+        match totp::parse_link(&text) {
+            Ok(link) => {
+                if self.entry.title.trim().is_empty()
+                    && let Some(issuer) = &link.issuer
+                {
+                    self.entry.title = issuer.clone();
+                }
+                if self.entry.username.trim().is_empty()
+                    && let Some(account) = &link.account
+                {
+                    self.entry.username = account.clone();
+                }
+                self.entry.totp = Some(link.totp);
+                self.totp_error = None;
+            }
+            Err(error) => self.totp_error = Some(error.to_string()),
+        }
+    }
 }
 
 impl Unlocked {
@@ -167,6 +202,8 @@ impl Unlocked {
             entry,
             is_new,
             show_password: false,
+            show_totp: false,
+            totp_error: None,
         });
         self.confirm_delete = false;
         self.error = None;
@@ -180,7 +217,13 @@ impl Unlocked {
         if draft.entry.title.trim().is_empty() {
             return Err("Укажите название записи".into());
         }
-        let entry = draft.entry.clone();
+        if let Some(totp) = &draft.entry.totp {
+            totp::validate(totp).map_err(|error| format!("TOTP: {error}"))?;
+        }
+        let mut entry = draft.entry.clone();
+        if let Some(totp) = &mut entry.totp {
+            totp.secret = totp::normalize_secret(&totp.secret);
+        }
         let id = entry.id.clone();
         let previous = self.vault.entries.clone();
         match self.vault.entries.iter_mut().find(|e| e.id == id) {
@@ -498,6 +541,9 @@ fn entry_ui(ui: &mut egui::Ui, unlocked: &mut Unlocked) {
     };
     let title = entry.title.clone();
     let mut toggle_password = false;
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
     ui.heading(&entry.title);
     ui.add_space(8.0);
     egui::Grid::new("entry")
@@ -528,6 +574,34 @@ fn entry_ui(ui: &mut egui::Ui, unlocked: &mut Unlocked) {
             ui.label(&entry.url);
             ui.end_row();
 
+            if let Some(totp) = &entry.totp {
+                ui.label("Код");
+                ui.horizontal(|ui| match totp::code(totp, now.as_secs()) {
+                    Ok(code) => {
+                        ui.label(
+                            egui::RichText::new(totp::group(&code))
+                                .monospace()
+                                .size(22.0),
+                        );
+                        let left = totp::seconds_left(totp, now.as_secs());
+                        ui.add(
+                            egui::ProgressBar::new(left as f32 / totp.period as f32)
+                                .desired_width(120.0)
+                                .text(format!("{left} с")),
+                        );
+                    }
+                    Err(error) => {
+                        ui.colored_label(ui.visuals().error_fg_color, error.to_string());
+                    }
+                });
+                ui.end_row();
+                // Repaint exactly when the next second starts, only while a code is shown.
+                ui.ctx()
+                    .request_repaint_after(Duration::from_millis(u64::from(
+                        1000 - now.subsec_millis(),
+                    )));
+            }
+
             ui.label("Заметка");
             ui.label(&entry.notes);
             ui.end_row();
@@ -556,6 +630,14 @@ fn entry_ui(ui: &mut egui::Ui, unlocked: &mut Unlocked) {
                 unlocked.confirm_delete = true;
             }
         });
+    }
+}
+
+fn algorithm_name(algorithm: TotpAlgorithm) -> &'static str {
+    match algorithm {
+        TotpAlgorithm::Sha1 => "SHA1",
+        TotpAlgorithm::Sha256 => "SHA256",
+        TotpAlgorithm::Sha512 => "SHA512",
     }
 }
 
@@ -604,6 +686,75 @@ fn draft_ui(ui: &mut egui::Ui, unlocked: &mut Unlocked) {
             ui.add(wide(egui::TextEdit::multiline(&mut draft.entry.notes)));
             ui.end_row();
         });
+
+    ui.add_space(12.0);
+    ui.separator();
+    ui.strong("TOTP");
+    if draft.entry.totp.is_none() {
+        if ui.button("Добавить TOTP").clicked() {
+            draft.entry.totp = Some(Totp {
+                secret: String::new(),
+                algorithm: TotpAlgorithm::Sha1,
+                digits: 6,
+                period: 30,
+            });
+        }
+    } else {
+        let mut remove = false;
+        let mut changed = false;
+        if let Some(totp) = &mut draft.entry.totp {
+            ui.horizontal(|ui| {
+                changed = ui
+                    .add(
+                        egui::TextEdit::singleline(&mut totp.secret)
+                            .password(!draft.show_totp)
+                            .hint_text("Секрет или ссылка otpauth://")
+                            .desired_width(320.0),
+                    )
+                    .changed();
+                ui.checkbox(&mut draft.show_totp, "показать");
+            });
+            egui::CollapsingHeader::new("Дополнительно").show(ui, |ui| {
+                egui::ComboBox::from_label("Алгоритм")
+                    .selected_text(algorithm_name(totp.algorithm))
+                    .show_ui(ui, |ui| {
+                        for algorithm in [
+                            TotpAlgorithm::Sha1,
+                            TotpAlgorithm::Sha256,
+                            TotpAlgorithm::Sha512,
+                        ] {
+                            ui.selectable_value(
+                                &mut totp.algorithm,
+                                algorithm,
+                                algorithm_name(algorithm),
+                            );
+                        }
+                    });
+                ui.add(
+                    egui::DragValue::new(&mut totp.digits)
+                        .range(totp::DIGITS)
+                        .prefix("Цифр: "),
+                );
+                ui.add(
+                    egui::DragValue::new(&mut totp.period)
+                        .range(totp::PERIOD)
+                        .prefix("Период: ")
+                        .suffix(" с"),
+                );
+            });
+            remove = ui.button("Убрать TOTP").clicked();
+        }
+        if changed {
+            draft.apply_link();
+        }
+        if remove {
+            draft.entry.totp = None;
+            draft.totp_error = None;
+        }
+        if let Some(error) = &draft.totp_error {
+            ui.colored_label(ui.visuals().error_fg_color, error);
+        }
+    }
     ui.add_space(16.0);
     ui.horizontal(|ui| {
         if ui.button("Сохранить").clicked() {
@@ -747,6 +898,81 @@ mod tests {
         assert_eq!(locked.path.as_deref(), Some(path.as_path()));
         assert!(locked.error.is_none());
         assert!(locked.password.is_empty());
+    }
+
+    fn totp_with(secret: &str) -> Totp {
+        Totp {
+            secret: secret.into(),
+            algorithm: TotpAlgorithm::Sha1,
+            digits: 6,
+            period: 30,
+        }
+    }
+
+    #[test]
+    fn pasted_link_fills_totp_and_empty_fields_only() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut unlocked = unlocked(&dir);
+        unlocked.start_new();
+        let draft = unlocked.draft.as_mut().unwrap();
+        draft.entry.username = "kept".into();
+        draft.entry.totp = Some(totp_with(
+            "otpauth://totp/GitLab:a8ee?secret=jbsw%20y3dpehpk3pxp&digits=8",
+        ));
+        draft.apply_link();
+        assert_eq!(draft.totp_error, None);
+        assert_eq!(draft.entry.title, "GitLab");
+        assert_eq!(draft.entry.username, "kept");
+        let totp = draft.entry.totp.as_ref().unwrap();
+        assert_eq!((totp.secret.as_str(), totp.digits), ("JBSWY3DPEHPK3PXP", 8));
+    }
+
+    #[test]
+    fn broken_link_is_reported_and_left_for_correction() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut unlocked = unlocked(&dir);
+        unlocked.start_new();
+        let draft = unlocked.draft.as_mut().unwrap();
+        draft.entry.totp = Some(totp_with("otpauth://hotp/x?secret=JBSWY3DPEHPK3PXP"));
+        draft.apply_link();
+        assert!(draft.totp_error.as_deref().unwrap().contains("hotp"));
+        assert!(
+            draft
+                .entry
+                .totp
+                .as_ref()
+                .unwrap()
+                .secret
+                .starts_with("otpauth://")
+        );
+    }
+
+    #[test]
+    fn invalid_totp_secret_is_not_saved() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut unlocked = unlocked(&dir);
+        unlocked.start_new();
+        let draft = unlocked.draft.as_mut().unwrap();
+        draft.entry.title = "GitLab".into();
+        draft.entry.totp = Some(totp_with("not base32!"));
+        assert!(unlocked.save_draft().unwrap_err().starts_with("TOTP:"));
+        assert!(reopen(&unlocked).entries.is_empty());
+    }
+
+    #[test]
+    fn totp_secret_is_saved_normalized() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut unlocked = unlocked(&dir);
+        unlocked.start_new();
+        let draft = unlocked.draft.as_mut().unwrap();
+        draft.entry.title = "GitLab".into();
+        draft.entry.totp = Some(totp_with("jbsw y3dp ehpk 3pxp"));
+        unlocked.save_draft().unwrap();
+        let saved = reopen(&unlocked);
+        assert_eq!(
+            saved.entries[0].totp.as_ref().unwrap().secret,
+            "JBSWY3DPEHPK3PXP"
+        );
     }
 
     #[test]
