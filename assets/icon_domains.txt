@@ -2,7 +2,7 @@
 # A domain also covers its subdomains; a more specific entry wins
 # (mail.google.com → gmail, everything else under google.com → google).
 # Domains named like the slug (gitlab.com → gitlab) are matched without an entry.
-# After editing: python3 -I tools/build_icons.py <unpacked simple-icons package>
+# After editing: cargo run --bin build-icons -- <unpacked simple-icons package>
 
 google        google.com google.ru
 gmail         mail.google.com

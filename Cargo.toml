@@ -3,6 +3,8 @@ name = "lockbox"
 version = "0.1.0"
 edition = "2024"
 publish = false
+# `cargo run` starts the app; `build-icons` regenerates assets/icons.jsonl.
+default-run = "lockbox"
 description = "Local password manager with TOTP"
 
 # No networking crates: lockbox never talks to the network.

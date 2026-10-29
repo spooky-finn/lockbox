@@ -43,7 +43,7 @@ cargo run --release
 ```sh
 curl -fsSO https://registry.npmjs.org/simple-icons/-/simple-icons-<версия>.tgz
 tar -xzf simple-icons-<версия>.tgz
-python3 -I tools/build_icons.py package
+cargo run --bin build-icons -- package
 ```
 
 Набор распространяется под CC0, но сами логотипы — товарные знаки их

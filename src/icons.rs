@@ -11,7 +11,6 @@ use crate::entry::Entry;
 static DATA: &str = include_str!("../assets/icons.jsonl");
 
 /// Suffixes under which names are registered one level deeper (example.co.uk).
-/// Keep in sync with `tools/build_icons.py`.
 const TWO_LEVEL: &[&str] = &[
     "co.uk", "org.uk", "ac.uk", "com.au", "net.au", "co.jp", "ne.jp", "com.br", "com.cn", "com.tr",
     "co.kr", "co.in", "com.mx", "co.za", "com.ru", "net.ru", "org.ru", "msk.ru", "spb.ru",
@@ -121,7 +120,8 @@ impl Catalog {
 }
 
 /// Lower-case host of a URL typed by hand: scheme, user, port and path are optional.
-fn host(url: &str) -> Option<String> {
+/// Shared with `build-icons`, which reads the icons' source URLs the same way.
+pub fn host(url: &str) -> Option<String> {
     let url = url.trim();
     let rest = url.split_once("://").map_or(url, |(_, rest)| rest);
     let authority = rest.split(['/', '?', '#']).next()?;
@@ -131,7 +131,8 @@ fn host(url: &str) -> Option<String> {
     (host.contains('.') && !host.starts_with('.')).then_some(host)
 }
 
-fn registrable(host: &str) -> String {
+/// The registered site of a host: `mail.google.com` → `google.com`.
+pub fn registrable(host: &str) -> String {
     let labels: Vec<&str> = host.split('.').collect();
     let last_two = labels[labels.len().saturating_sub(2)..].join(".");
     let keep = if TWO_LEVEL.contains(&last_two.as_str()) {
@@ -142,10 +143,11 @@ fn registrable(host: &str) -> String {
     labels[labels.len().saturating_sub(keep)..].join(".")
 }
 
-fn normalized(text: &str) -> String {
-    text.chars()
-        .filter(char::is_ascii_alphanumeric)
-        .map(|c| c.to_ascii_lowercase())
+/// Lower-case Latin letters and digits only: `Mail.Ru` → `mailru`.
+pub fn normalized(text: &str) -> String {
+    text.to_lowercase()
+        .chars()
+        .filter(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
         .collect()
 }
 
