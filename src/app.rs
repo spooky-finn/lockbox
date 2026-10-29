@@ -14,6 +14,7 @@ use secrecy::SecretString;
 use zeroize::{Zeroize, Zeroizing};
 
 use crate::{
+    autolock::{self, AutoLock, ScreenWatch},
     clipboard::{Guard, SystemBoard},
     config::Config,
     entry::{Entry, Totp, TotpAlgorithm},
@@ -61,6 +62,8 @@ pub struct LockboxApp {
     clipboard: Guard,
     biometrics: Arc<dyn Biometrics>,
     icons: IconCache,
+    auto_lock: AutoLock,
+    screen_watch: ScreenWatch,
 }
 
 /// Rasterised brand glyphs, one texture per icon, size and glyph colour.
@@ -160,6 +163,8 @@ struct Locked {
     /// Ask for the finger right away: only when the app starts.
     auto_touch_id: bool,
     waiting_touch_id: bool,
+    /// Why the vault was locked without the user asking.
+    notice: Option<String>,
 }
 
 impl Locked {
@@ -178,6 +183,7 @@ impl Locked {
             touch_id: None,
             auto_touch_id: false,
             waiting_touch_id: false,
+            notice: None,
         }
     }
 
@@ -454,12 +460,51 @@ impl LockboxApp {
             true,
         ));
         Self {
+            auto_lock: AutoLock::new(config.auto_lock_minutes, Instant::now(), SystemTime::now()),
             config,
             config_path,
             screen,
             clipboard: Guard::new(Box::new(SystemBoard::new())),
             biometrics,
             icons: IconCache::default(),
+            screen_watch: ScreenWatch::default(),
+        }
+    }
+
+    /// Locks the vault when macOS locks the screen.
+    pub fn watch_screen_lock(&mut self, ctx: &egui::Context) {
+        let ctx = ctx.clone();
+        self.screen_watch = ScreenWatch::start(move || ctx.request_repaint());
+    }
+
+    /// Locking nobody asked for: the reason is shown on the lock screen.
+    fn auto_lock(&mut self, reason: &str) {
+        self.lock();
+        if let Screen::Locked(locked) = &mut self.screen {
+            locked.notice = Some(format!("Хранилище заблокировано: {reason}"));
+        }
+    }
+
+    /// Checked every frame, also while the window is minimised.
+    fn check_auto_lock(&mut self, ctx: &egui::Context) {
+        let screen_locked = self.screen_watch.take();
+        if !matches!(self.screen, Screen::Unlocked(_)) {
+            return;
+        }
+        if screen_locked {
+            return self.auto_lock("экран мака заблокирован");
+        }
+        let (now, wall) = (Instant::now(), SystemTime::now());
+        if ctx.input(|input| !input.events.is_empty()) {
+            self.auto_lock.activity(now, wall);
+        }
+        match self.auto_lock.check(now, wall) {
+            autolock::State::Lock => self.auto_lock("долго не было действий"),
+            autolock::State::Warning(_) => ctx.request_repaint_after(Duration::from_secs(1)),
+            autolock::State::Idle(left) => {
+                ctx.request_repaint_after(left.saturating_sub(autolock::WARNING))
+            }
+            autolock::State::Off => {}
         }
     }
 
@@ -504,6 +549,7 @@ impl LockboxApp {
         errors.extend(self.remember(Some(path)).err());
         unlocked.error = (!errors.is_empty()).then(|| errors.join("; "));
         self.screen = Screen::Unlocked(Box::new(unlocked));
+        self.auto_lock.activity(Instant::now(), SystemTime::now());
     }
 
     fn locked_ui(&mut self, ui: &mut egui::Ui) {
@@ -543,6 +589,10 @@ impl LockboxApp {
                 ui.add_space(48.0);
                 ui.heading("lockbox");
                 ui.add_space(16.0);
+                if let Some(notice) = &locked.notice {
+                    ui.label(notice);
+                    ui.add_space(8.0);
+                }
 
                 match &locked.path {
                     Some(path) => ui.label(format!("Хранилище: {}", path.display())),
@@ -667,6 +717,7 @@ impl LockboxApp {
         };
         let mut lock = false;
         let mut touch_id_wanted = None;
+        let mut auto_lock_minutes = self.config.auto_lock_minutes;
         let editing = unlocked.draft.is_some();
 
         if let Some(receiver) = &unlocked.touch_id_pending {
@@ -702,6 +753,17 @@ impl LockboxApp {
                 ui.label(name);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     lock = ui.button("Заблокировать").clicked();
+                    egui::ComboBox::from_id_salt("auto_lock")
+                        .selected_text(format!("Автоблок: {}", minutes_label(auto_lock_minutes)))
+                        .show_ui(ui, |ui| {
+                            for minutes in autolock::CHOICES {
+                                ui.selectable_value(
+                                    &mut auto_lock_minutes,
+                                    minutes,
+                                    minutes_label(minutes),
+                                );
+                            }
+                        });
                     if unlocked.touch_id_available {
                         let mut wanted = unlocked.touch_id_enabled;
                         let checkbox = egui::Checkbox::new(&mut wanted, "Touch ID");
@@ -765,12 +827,34 @@ impl LockboxApp {
                 }
             });
 
+        if auto_lock_minutes != self.config.auto_lock_minutes {
+            self.config.auto_lock_minutes = auto_lock_minutes;
+            self.auto_lock
+                .set_minutes(auto_lock_minutes, Instant::now(), SystemTime::now());
+            unlocked.error = save_config(&self.config, &self.config_path).err();
+        }
+
+        let mut status = Vec::new();
+        if let autolock::State::Warning(left) =
+            self.auto_lock.check(Instant::now(), SystemTime::now())
+        {
+            let mut warning = format!("Автоблокировка через {} с", left.as_secs() + 1);
+            if editing {
+                warning.push_str(" — несохранённая правка будет сброшена");
+            }
+            status.push(warning);
+        }
         if let Some(left) = self.clipboard.remaining(Instant::now()) {
+            status.push(format!(
+                "Скопировано · буфер очистится через {} с",
+                left.as_secs() + 1
+            ));
+        }
+        if !status.is_empty() {
             egui::Panel::bottom("status").show(ui, |ui| {
-                ui.label(format!(
-                    "Скопировано · буфер очистится через {} с",
-                    left.as_secs() + 1
-                ));
+                for line in &status {
+                    ui.label(line);
+                }
             });
         }
 
@@ -837,6 +921,10 @@ impl Default for LockboxApp {
 }
 
 impl eframe::App for LockboxApp {
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.check_auto_lock(ctx);
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let now = Instant::now();
         self.clipboard.tick(now);
@@ -1062,6 +1150,13 @@ fn generator_ui(ui: &mut egui::Ui, draft: &mut Draft, options: &mut generator::O
             ui.colored_label(ui.visuals().error_fg_color, error);
         }
     });
+}
+
+fn minutes_label(minutes: u32) -> String {
+    match minutes {
+        0 => "никогда".to_owned(),
+        minutes => format!("{minutes} мин"),
+    }
 }
 
 fn algorithm_name(algorithm: TotpAlgorithm) -> &'static str {
@@ -1364,6 +1459,8 @@ mod tests {
             clipboard: Guard::new(Box::new(board.clone())),
             biometrics: Arc::new(FakeBiometrics::default()),
             icons: IconCache::default(),
+            auto_lock: AutoLock::new(5, Instant::now(), SystemTime::now()),
+            screen_watch: ScreenWatch::default(),
         };
         app.clipboard.copy("s3cret", Instant::now()).unwrap();
         app.lock();
@@ -1452,6 +1549,45 @@ mod tests {
     }
 
     #[test]
+    fn auto_lock_drops_the_draft_and_explains_why() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut unlocked = unlocked(&dir);
+        unlocked.start_new();
+        unlocked.draft.as_mut().unwrap().entry.title = "unsaved".into();
+        let mut app = LockboxApp {
+            config: Config::default(),
+            config_path: None,
+            screen: Screen::Unlocked(Box::new(unlocked)),
+            clipboard: Guard::new(Box::new(crate::clipboard::tests::FakeBoard::default())),
+            biometrics: Arc::new(FakeBiometrics::default()),
+            icons: IconCache::default(),
+            auto_lock: AutoLock::new(5, Instant::now(), SystemTime::now()),
+            screen_watch: ScreenWatch::default(),
+        };
+        app.auto_lock("долго не было действий");
+        let Screen::Locked(locked) = &app.screen else {
+            panic!("vault is still unlocked");
+        };
+        assert!(
+            locked
+                .notice
+                .as_deref()
+                .unwrap()
+                .contains("долго не было действий")
+        );
+        assert!(
+            !locked.auto_touch_id,
+            "no Touch ID prompt after an automatic lock"
+        );
+        let reopened = Vault::open(
+            locked.path.as_ref().unwrap(),
+            &SecretString::from("master".to_owned()),
+        )
+        .unwrap();
+        assert!(reopened.entries.is_empty(), "the draft was never saved");
+    }
+
+    #[test]
     fn touch_id_is_offered_only_where_it_was_turned_on() {
         let dir = tempfile::tempdir().unwrap();
         let unlocked = unlocked(&dir);
@@ -1481,14 +1617,16 @@ mod tests {
         let fake = Arc::new(FakeBiometrics::default());
         let mut app = LockboxApp {
             config: Config {
-                last_vault: None,
                 touch_id: vec![id.clone()],
+                ..Config::default()
             },
             config_path: None,
             screen: Screen::Locked(Locked::new(None)),
             clipboard: Guard::new(Box::new(crate::clipboard::tests::FakeBoard::default())),
             biometrics: fake.clone(),
             icons: IconCache::default(),
+            auto_lock: AutoLock::new(5, Instant::now(), SystemTime::now()),
+            screen_watch: ScreenWatch::default(),
         };
         app.open(Opened {
             vault: unlocked.vault,

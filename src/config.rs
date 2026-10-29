@@ -9,12 +9,29 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Config {
     pub last_vault: Option<PathBuf>,
     /// Vaults (by `Vault::id`) whose owner turned Touch ID on.
     #[serde(default)]
     pub touch_id: Vec<String>,
+    /// Lock after this many minutes without input; 0 means never.
+    #[serde(default = "default_auto_lock")]
+    pub auto_lock_minutes: u32,
+}
+
+fn default_auto_lock() -> u32 {
+    crate::autolock::DEFAULT_MINUTES
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            last_vault: None,
+            touch_id: Vec::new(),
+            auto_lock_minutes: default_auto_lock(),
+        }
+    }
 }
 
 impl Config {
@@ -71,6 +88,7 @@ mod tests {
         let config = Config {
             last_vault: Some("/tmp/vault.lbx".into()),
             touch_id: vec!["00ff".into()],
+            auto_lock_minutes: 15,
         };
         config.save(&path).unwrap();
         assert_eq!(Config::load(&path), config);
@@ -87,6 +105,7 @@ mod tests {
             Some(Path::new("/tmp/vault.lbx"))
         );
         assert!(config.touch_id.is_empty());
+        assert_eq!(config.auto_lock_minutes, crate::autolock::DEFAULT_MINUTES);
     }
 
     #[test]

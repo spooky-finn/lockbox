@@ -1,4 +1,5 @@
 pub mod app;
+pub mod autolock;
 pub mod clipboard;
 pub mod config;
 pub mod entry;

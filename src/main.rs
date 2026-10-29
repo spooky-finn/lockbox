@@ -11,6 +11,10 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "lockbox",
         options,
-        Box::new(|_| Ok(Box::new(lockbox::app::LockboxApp::new()))),
+        Box::new(|creation| {
+            let mut app = lockbox::app::LockboxApp::new();
+            app.watch_screen_lock(&creation.egui_ctx);
+            Ok(Box::new(app))
+        }),
     )
 }
