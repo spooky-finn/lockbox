@@ -1,0 +1,216 @@
+//! Dioxus lifecycle and the few actions that coordinate independent domains.
+use super::{
+    auth::{Locked, Mode, with_vault_extension},
+    context::{BiometricProvider, Clock, SecurityHandle, Session},
+    security::{CopyField, Security, Status},
+    session::Screen,
+    settings::Settings,
+    time::unix_now,
+};
+use crate::{autolock, touchid};
+use dioxus::prelude::*;
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    time::{Duration, Instant, SystemTime},
+};
+
+pub(super) fn use_runtime() -> Session {
+    let settings = use_signal(Settings::load);
+    let hardware = use_hook(|| BiometricProvider(touchid::system()));
+    let native = use_hook(|| {
+        Rc::new(RefCell::new(Security::new(
+            settings.peek().config.auto_lock_minutes,
+        )))
+    });
+    let state = use_signal(|| Screen::locked(&settings.peek(), &*hardware.0));
+    let clock = use_signal(unix_now);
+    let status = use_signal(Status::default);
+    use_context_provider(|| settings);
+    use_context_provider(|| hardware.clone());
+    use_context_provider(|| native.clone());
+    use_context_provider(|| state);
+    use_context_provider(|| Clock(clock));
+    use_context_provider(|| status);
+
+    dioxus::desktop::use_wry_event_handler(move |event, _| {
+        use dioxus::desktop::tao::event::{Event, WindowEvent};
+        if matches!(
+            event,
+            Event::WindowEvent {
+                event: WindowEvent::CloseRequested,
+                ..
+            } | Event::LoopDestroyed
+        ) {
+            lock(None);
+        }
+    });
+    use_future(move || async move {
+        loop {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            tick();
+        }
+    });
+    state
+}
+
+pub(super) fn tick() {
+    let mut clock = consume_context::<Clock>().0;
+    check_lock();
+    consume_context::<SecurityHandle>()
+        .borrow_mut()
+        .clipboard
+        .tick(Instant::now());
+    let pending = match &*consume_context::<Session>().peek() {
+        Screen::Locked(form) => form.pending.is_some() || form.auto_touch_id,
+        Screen::Unlocked(workspace) => workspace.touch_id.pending.is_some(),
+    };
+    if pending {
+        poll_workers();
+    }
+    publish_status();
+    let now = unix_now();
+    if *clock.peek() != now {
+        clock.set(now);
+    }
+}
+
+pub(super) fn lock(reason: Option<&str>) {
+    let mut state = consume_context::<Session>();
+    let settings = consume_context::<Signal<Settings>>();
+    let hardware = consume_context::<BiometricProvider>();
+    let native = consume_context::<SecurityHandle>();
+    state.write().lock(
+        &settings.peek(),
+        &*hardware.0,
+        &mut native.borrow_mut(),
+        reason,
+    );
+    publish_status();
+}
+
+fn check_lock() {
+    let state = consume_context::<Session>();
+    let native = consume_context::<SecurityHandle>();
+    let reason = native.borrow().lock_reason();
+    if matches!(&*state.peek(), Screen::Unlocked(_))
+        && let Some(reason) = reason
+    {
+        lock(Some(reason));
+    }
+}
+
+pub(super) fn record_activity() {
+    // Expired sessions must lock before the first input after sleep resets activity.
+    check_lock();
+    consume_context::<SecurityHandle>().borrow_mut().activity();
+}
+
+pub(super) fn publish_status() {
+    let native = consume_context::<SecurityHandle>();
+    let mut status = consume_context::<Signal<Status>>();
+    let next = native.borrow().status();
+    if *status.peek() != next {
+        status.set(next);
+    }
+}
+
+pub(super) fn poll_workers() {
+    let mut state = consume_context::<Session>();
+    let mut settings = consume_context::<Signal<Settings>>();
+    let hardware = consume_context::<BiometricProvider>();
+    let native = consume_context::<SecurityHandle>();
+    let mut screen = state.write();
+    match &mut *screen {
+        Screen::Locked(form) => {
+            if let Some(opened) = form.poll(hardware.0.clone()) {
+                screen.open(
+                    opened,
+                    &mut settings.write(),
+                    &*hardware.0,
+                    &mut native.borrow_mut(),
+                );
+            }
+        }
+        Screen::Unlocked(workspace) => {
+            if let Some(result) = workspace
+                .touch_id
+                .poll(&workspace.vault, &mut settings.write())
+            {
+                workspace.error = result.err();
+            }
+        }
+    }
+}
+
+pub(super) fn pick_vault(create: bool) {
+    let dialog = rfd::FileDialog::new().add_filter("lockbox", &["lbx"]);
+    let path = if create {
+        dialog.set_file_name("vault.lbx").save_file()
+    } else {
+        dialog.pick_file()
+    };
+    if let Some(path) = path {
+        let mut state = consume_context::<Session>();
+        let settings = consume_context::<Signal<Settings>>();
+        let hardware = consume_context::<BiometricProvider>();
+        let mut form = if create {
+            Locked::new(Some(with_vault_extension(path)))
+        } else {
+            Locked::new(Some(path)).offer_touch_id(&settings.peek().config, &*hardware.0, false)
+        };
+        if create {
+            form.mode = Mode::Create;
+        }
+        *state.write() = Screen::Locked(form);
+    }
+}
+
+pub(super) fn forget_path() {
+    let mut settings = consume_context::<Signal<Settings>>();
+    let mut state = consume_context::<Session>();
+    let mut form = Locked::new(None);
+    form.error = settings.write().remember(None).err();
+    *state.write() = Screen::Locked(form);
+}
+
+pub(super) fn set_touch_id(wanted: bool) {
+    let mut state = consume_context::<Session>();
+    let mut settings = consume_context::<Signal<Settings>>();
+    let hardware = consume_context::<BiometricProvider>();
+    if let Screen::Unlocked(workspace) = &mut *state.write() {
+        workspace.error =
+            workspace
+                .touch_id
+                .set(&workspace.vault, &mut settings.write(), hardware.0, wanted);
+    }
+}
+
+pub(super) fn set_auto_lock(minutes: u32) {
+    if !autolock::CHOICES.contains(&minutes) {
+        return;
+    }
+    let mut settings = consume_context::<Signal<Settings>>();
+    let mut state = consume_context::<Session>();
+    let native = consume_context::<SecurityHandle>();
+    settings.write().config.auto_lock_minutes = minutes;
+    native
+        .borrow_mut()
+        .auto_lock
+        .set_minutes(minutes, Instant::now(), SystemTime::now());
+    if let Screen::Unlocked(workspace) = &mut *state.write() {
+        workspace.error = settings.peek().save().err();
+    }
+    publish_status();
+}
+
+pub(super) fn copy(field: CopyField) {
+    let mut state = consume_context::<Session>();
+    let native = consume_context::<SecurityHandle>();
+    if let Screen::Unlocked(workspace) = &mut *state.write()
+        && let Some(entry) = workspace.selected_entry()
+    {
+        workspace.error = native.borrow_mut().copy(entry, field).err();
+    }
+    publish_status();
+}
