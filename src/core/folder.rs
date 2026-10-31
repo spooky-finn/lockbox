@@ -1,5 +1,5 @@
 //! Encrypted folder metadata and hierarchy invariants.
-use crate::entry::Entry;
+use crate::core::entry::Entry;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use zeroize::{Zeroize, ZeroizeOnDrop};
@@ -18,7 +18,7 @@ pub struct Folder {
 impl Folder {
     pub fn new(name: String, parent_id: Option<String>) -> Self {
         Self {
-            id: crate::id::new(),
+            id: crate::core::id::new(),
             name,
             parent_id,
         }

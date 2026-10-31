@@ -1,10 +1,12 @@
 use super::button::IconButton;
 use super::icons::EntryIcon;
 use super::symbol::Icon;
-use crate::app::context::{Clock, Session, edit_unlocked};
+use crate::ui::context::{Clock, Session, edit_unlocked};
+use crate::ui::runtime;
 use crate::{
-    app::{runtime, security::CopyField, session::Screen},
-    icons, totp,
+    app::{security::CopyField, session::Screen},
+    core::totp,
+    ui::icons,
 };
 use dioxus::prelude::*;
 

@@ -1,8 +1,6 @@
 use super::*;
-use crate::app::context::{
-    BiometricProvider, Clock, Session, edit_draft, edit_unlocked, set_field,
-};
-use crate::touchid::tests::FakeBiometrics;
+use crate::infra::touchid::tests::FakeBiometrics;
+use crate::ui::context::{BiometricProvider, Clock, Session, edit_draft, edit_unlocked, set_field};
 use crate::{
     app::{
         editor::Field,
@@ -10,10 +8,10 @@ use crate::{
         settings::Settings,
         time::unix_now,
     },
-    autolock::{AutoLock, ScreenWatch},
-    clipboard::Guard,
-    config::Config,
-    entry::{Entry, Totp, TotpAlgorithm},
+    core::entry::{Entry, Totp, TotpAlgorithm},
+    infra::autolock::{AutoLock, ScreenWatch},
+    infra::clipboard::Guard,
+    infra::config::Config,
 };
 use std::{
     cell::RefCell,
@@ -71,7 +69,9 @@ fn fixture() -> Element {
     let clock = use_signal(unix_now);
     let native = use_hook(|| {
         Rc::new(RefCell::new(Security {
-            clipboard: Guard::new(Box::new(crate::clipboard::tests::FakeBoard::default())),
+            clipboard: Guard::new(Box::new(
+                crate::infra::clipboard::tests::FakeBoard::default(),
+            )),
             auto_lock: AutoLock::new(5, Instant::now(), SystemTime::now()),
             screen_watch: ScreenWatch::default(),
         }))
@@ -260,7 +260,7 @@ fn worker_results_open_the_vault_and_report_failure_or_disconnect() {
     update(&mut dom, |_| runtime::lock(None));
     update(&mut dom, |state| {
         let (sender, receiver) = mpsc::channel();
-        crate::app::context::edit_locked(state, |form| form.pending = Some(receiver));
+        crate::ui::context::edit_locked(state, |form| form.pending = Some(receiver));
         runtime::poll_workers();
         assert!(matches!(&*state.peek(), Screen::Locked(_)));
         sender
@@ -275,7 +275,7 @@ fn worker_results_open_the_vault_and_report_failure_or_disconnect() {
     update(&mut dom, |_| runtime::lock(None));
     update(&mut dom, |state| {
         let (sender, receiver) = mpsc::channel();
-        crate::app::context::edit_locked(state, |form| form.pending = Some(receiver));
+        crate::ui::context::edit_locked(state, |form| form.pending = Some(receiver));
         sender
             .send(Err("wrong password".into()))
             .unwrap_or_else(|_| panic!("receiver dropped"));
@@ -289,7 +289,7 @@ fn worker_results_open_the_vault_and_report_failure_or_disconnect() {
     });
     update(&mut dom, |state| {
         let (sender, receiver) = mpsc::channel();
-        crate::app::context::edit_locked(state, |form| form.pending = Some(receiver));
+        crate::ui::context::edit_locked(state, |form| form.pending = Some(receiver));
         drop(sender);
         runtime::poll_workers();
         let screen = state.peek();
@@ -303,7 +303,7 @@ fn worker_results_open_the_vault_and_report_failure_or_disconnect() {
 
 #[test]
 fn background_tick_clears_clipboard_and_locks_without_input() {
-    use crate::app::context::SecurityHandle;
+    use crate::ui::context::SecurityHandle;
     use std::time::Duration;
     let mut dom = mounted();
     update(&mut dom, |_| {
@@ -335,7 +335,7 @@ fn background_tick_clears_clipboard_and_locks_without_input() {
 
 #[test]
 fn first_input_after_sleep_locks_before_resetting_activity() {
-    use crate::app::context::SecurityHandle;
+    use crate::ui::context::SecurityHandle;
     use std::time::Duration;
     let mut dom = mounted();
     update(&mut dom, |state| {
@@ -355,7 +355,7 @@ fn first_input_after_sleep_locks_before_resetting_activity() {
 
 #[test]
 fn clock_status_and_activity_do_not_rerender_session_subscribers() {
-    use crate::app::context::SecurityHandle;
+    use crate::ui::context::SecurityHandle;
     let mut dom = mounted();
     let counts = dom.in_scope(ScopeId::APP, consume_context::<RenderCounts>);
     let before = (counts.0.get(), counts.1.get());
@@ -386,8 +386,8 @@ fn tree_records_show_only_titles_and_search_reveals_collapsed_ancestors() {
     let mut dom = mounted();
     update(&mut dom, |state| {
         edit_unlocked(state, |u| {
-            let parent = crate::folder::Folder::new("Работа".into(), None);
-            let child = crate::folder::Folder::new("Сервисы".into(), Some(parent.id.clone()));
+            let parent = crate::core::folder::Folder::new("Работа".into(), None);
+            let child = crate::core::folder::Folder::new("Сервисы".into(), Some(parent.id.clone()));
             u.vault.entries[0].folder_id = Some(child.id.clone());
             u.directories.collapsed.insert(parent.id.clone());
             u.directories.collapsed.insert(child.id.clone());

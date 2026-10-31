@@ -1,8 +1,6 @@
 use super::symbol::{Icon, Symbol};
-use crate::{
-    app::{context::Session, session::Screen},
-    folder,
-};
+use crate::ui::context::Session;
+use crate::{app::session::Screen, core::folder};
 use dioxus::prelude::*;
 
 #[component]

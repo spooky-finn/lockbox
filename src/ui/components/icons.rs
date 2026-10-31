@@ -1,6 +1,6 @@
 use super::{button::IconButton, symbol::Icon};
-use crate::app::context::{Session, edit_draft};
-use crate::{app::session::Screen, icons};
+use crate::ui::context::{Session, edit_draft};
+use crate::{app::session::Screen, ui::icons};
 use dioxus::prelude::*;
 
 #[component]

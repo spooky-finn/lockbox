@@ -6,9 +6,9 @@ use std::{collections::HashMap, sync::OnceLock};
 use resvg::{tiny_skia, usvg};
 use serde::Deserialize;
 
-use crate::entry::Entry;
+use crate::core::entry::Entry;
 
-static DATA: &str = include_str!("../assets/icons.jsonl");
+static DATA: &str = include_str!("../../assets/icons.jsonl");
 
 /// Suffixes under which names are registered one level deeper (example.co.uk).
 const TWO_LEVEL: &[&str] = &[

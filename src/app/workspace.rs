@@ -1,23 +1,23 @@
 //! Entry collection, selection and transactional save/delete.
 use super::{biometrics::TouchId, directories::Directories, editor::Draft};
-use crate::{entry::Entry, generator, totp, vault::Vault};
+use crate::{core::entry::Entry, core::generator, core::totp, infra::vault::Vault};
 
-pub(super) struct Unlocked {
-    pub(super) vault: Vault,
-    pub(super) touch_id: TouchId,
-    pub(super) search: String,
-    pub(super) selected: Option<String>,
-    pub(super) draft: Option<Draft>,
-    pub(super) directories: Directories,
-    pub(super) show_password: bool,
-    pub(super) confirm_delete: bool,
-    pub(super) error: Option<String>,
+pub(crate) struct Unlocked {
+    pub(crate) vault: Vault,
+    pub(crate) touch_id: TouchId,
+    pub(crate) search: String,
+    pub(crate) selected: Option<String>,
+    pub(crate) draft: Option<Draft>,
+    pub(crate) directories: Directories,
+    pub(crate) show_password: bool,
+    pub(crate) confirm_delete: bool,
+    pub(crate) error: Option<String>,
     /// Generator settings last until the window closes; they are never saved.
-    pub(super) generator: generator::Options,
+    pub(crate) generator: generator::Options,
 }
 
 impl Unlocked {
-    pub(super) fn new(vault: Vault) -> Self {
+    pub(crate) fn new(vault: Vault) -> Self {
         Self {
             vault,
             touch_id: TouchId::default(),
@@ -32,12 +32,12 @@ impl Unlocked {
         }
     }
 
-    pub(super) fn selected_entry(&self) -> Option<&Entry> {
+    pub(crate) fn selected_entry(&self) -> Option<&Entry> {
         let id = self.selected.as_ref()?;
         self.vault.entries.iter().find(|entry| &entry.id == id)
     }
 
-    pub(super) fn select(&mut self, id: String) {
+    pub(crate) fn select(&mut self, id: String) {
         if let Some(entry) = self.vault.entries.iter().find(|entry| entry.id == id) {
             self.directories.selected = entry.folder_id.clone();
             self.directories.reveal(&self.vault);
@@ -49,7 +49,7 @@ impl Unlocked {
         self.error = None;
     }
 
-    pub(super) fn start_new(&mut self) {
+    pub(crate) fn start_new(&mut self) {
         if self.is_editing() {
             return;
         }
@@ -58,17 +58,17 @@ impl Unlocked {
         self.start_draft(entry, true);
     }
 
-    pub(super) fn is_editing(&self) -> bool {
+    pub(crate) fn is_editing(&self) -> bool {
         self.draft.is_some() || self.directories.draft.is_some()
     }
 
-    pub(super) fn start_edit(&mut self) {
+    pub(crate) fn start_edit(&mut self) {
         if let Some(entry) = self.selected_entry().cloned() {
             self.start_draft(entry, false);
         }
     }
 
-    pub(super) fn start_draft(&mut self, entry: Entry, is_new: bool) {
+    pub(crate) fn start_draft(&mut self, entry: Entry, is_new: bool) {
         self.draft = Some(Draft {
             entry,
             is_new,
@@ -85,7 +85,7 @@ impl Unlocked {
     }
 
     /// Writes the draft to disk. On failure the vault is unchanged and the draft is kept.
-    pub(super) fn save_draft(&mut self) -> Result<(), String> {
+    pub(crate) fn save_draft(&mut self) -> Result<(), String> {
         let Some(draft) = &self.draft else {
             return Ok(());
         };
@@ -115,7 +115,7 @@ impl Unlocked {
         Ok(())
     }
 
-    pub(super) fn delete_selected(&mut self) -> Result<(), String> {
+    pub(crate) fn delete_selected(&mut self) -> Result<(), String> {
         let Some(id) = self.selected.clone() else {
             return Ok(());
         };
@@ -131,7 +131,7 @@ impl Unlocked {
     }
 }
 
-pub(super) fn matches(entry: &Entry, query: &str) -> bool {
+pub(crate) fn matches(entry: &Entry, query: &str) -> bool {
     let query = query.trim().to_lowercase();
     query.is_empty()
         || [&entry.title, &entry.username, &entry.url]

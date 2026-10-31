@@ -21,7 +21,7 @@ pub struct Config {
 }
 
 fn default_auto_lock() -> u32 {
-    crate::autolock::DEFAULT_MINUTES
+    crate::infra::autolock::DEFAULT_MINUTES
 }
 
 impl Default for Config {
@@ -105,7 +105,10 @@ mod tests {
             Some(Path::new("/tmp/vault.lbx"))
         );
         assert!(config.touch_id.is_empty());
-        assert_eq!(config.auto_lock_minutes, crate::autolock::DEFAULT_MINUTES);
+        assert_eq!(
+            config.auto_lock_minutes,
+            crate::infra::autolock::DEFAULT_MINUTES
+        );
     }
 
     #[test]

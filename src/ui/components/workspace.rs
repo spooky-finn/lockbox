@@ -6,8 +6,8 @@ use super::{
     directories::DirectoryView, directory_editor::DirectoryEditor, editor::DraftView,
     entry::EntryView, sidebar::Sidebar, status::StatusBar, toolbar::Toolbar,
 };
-use crate::app::context::{Session, edit_unlocked};
 use crate::app::session::Screen;
+use crate::ui::context::{Session, edit_unlocked};
 use dioxus::prelude::*;
 
 #[component]

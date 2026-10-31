@@ -1,28 +1,28 @@
 //! Native clipboard and inactivity monitoring. No dependency on Dioxus.
 use super::time::unix_now;
 use crate::{
-    autolock::{self, AutoLock, ScreenWatch},
-    clipboard::{Guard, SystemBoard},
-    entry::Entry,
-    totp,
+    core::entry::Entry,
+    core::totp,
+    infra::autolock::{self, AutoLock, ScreenWatch},
+    infra::clipboard::{Guard, SystemBoard},
 };
 use std::time::{Instant, SystemTime};
 use zeroize::Zeroizing;
 
-pub(super) struct Security {
+pub(crate) struct Security {
     pub clipboard: Guard,
     pub auto_lock: AutoLock,
     pub screen_watch: ScreenWatch,
 }
 
 #[derive(Clone, Default, PartialEq)]
-pub(super) struct Status {
+pub(crate) struct Status {
     pub lock_seconds: Option<u64>,
     pub clipboard_seconds: Option<u64>,
 }
 
 #[derive(Clone, Copy)]
-pub(super) enum CopyField {
+pub(crate) enum CopyField {
     Username,
     Password,
     Totp,

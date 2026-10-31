@@ -1,14 +1,14 @@
 //! Folder navigation and transactional hierarchy changes; no UI dependencies.
 use super::workspace::Unlocked;
 use crate::{
-    folder::{self, Folder},
-    vault::Vault,
+    core::folder::{self, Folder},
+    infra::vault::Vault,
 };
 use std::collections::BTreeSet;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 #[derive(Default)]
-pub(super) struct Directories {
+pub(crate) struct Directories {
     pub selected: Option<String>,
     pub collapsed: BTreeSet<String>,
     pub draft: Option<DirectoryDraft>,
@@ -16,7 +16,7 @@ pub(super) struct Directories {
 }
 
 #[derive(Zeroize, ZeroizeOnDrop)]
-pub(super) struct DirectoryDraft {
+pub(crate) struct DirectoryDraft {
     pub id: Option<String>,
     pub name: String,
     pub parent_id: Option<String>,
@@ -41,7 +41,7 @@ impl Directories {
         let Some(draft) = &self.draft else {
             return Ok(());
         };
-        let id = draft.id.clone().unwrap_or_else(crate::id::new);
+        let id = draft.id.clone().unwrap_or_else(crate::core::id::new);
         let folder = Folder {
             id: id.clone(),
             name: draft.name.trim().to_owned(),
@@ -111,13 +111,13 @@ impl Directories {
 }
 
 impl Unlocked {
-    pub(super) fn save_directory(&mut self) -> Result<(), String> {
+    pub(crate) fn save_directory(&mut self) -> Result<(), String> {
         self.directories.save(&mut self.vault)?;
         self.search.clear();
         Ok(())
     }
 
-    pub(super) fn select_directory(&mut self, id: Option<String>) {
+    pub(crate) fn select_directory(&mut self, id: Option<String>) {
         if self.is_editing() {
             return;
         }
@@ -130,7 +130,7 @@ impl Unlocked {
         self.error = None;
     }
 
-    pub(super) fn start_directory(&mut self) {
+    pub(crate) fn start_directory(&mut self) {
         if self.is_editing() {
             return;
         }
@@ -145,7 +145,7 @@ impl Unlocked {
         self.error = None;
     }
 
-    pub(super) fn edit_directory(&mut self) {
+    pub(crate) fn edit_directory(&mut self) {
         if self.is_editing() {
             return;
         }

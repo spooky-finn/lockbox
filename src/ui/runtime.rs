@@ -1,13 +1,13 @@
 //! Dioxus lifecycle and the few actions that coordinate independent domains.
-use super::{
+use super::context::{BiometricProvider, Clock, SecurityHandle, Session};
+use crate::app::{
     auth::{Locked, Mode, with_vault_extension},
-    context::{BiometricProvider, Clock, SecurityHandle, Session},
     security::{CopyField, Security, Status},
     session::Screen,
     settings::Settings,
     time::unix_now,
 };
-use crate::{autolock, touchid};
+use crate::{infra::autolock, infra::touchid};
 use dioxus::prelude::*;
 use std::{
     cell::RefCell,

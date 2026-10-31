@@ -1,9 +1,9 @@
 //! Unlock/create form and its background worker; no UI or system-service ownership.
 use super::time::unix_now;
 use crate::{
-    config::Config,
-    touchid::{self, Biometrics},
-    vault::{KdfParams, Vault},
+    infra::config::Config,
+    infra::touchid::{self, Biometrics},
+    infra::vault::{KdfParams, Vault},
 };
 use secrecy::SecretString;
 use std::{
@@ -16,43 +16,43 @@ use std::{
 };
 use zeroize::{Zeroize, Zeroizing};
 
-pub(super) const MIN_PASSWORD_CHARS: usize = 12;
+pub(crate) const MIN_PASSWORD_CHARS: usize = 12;
 const SECRET_CAPACITY: usize = 256;
 fn secret_buffer() -> Zeroizing<String> {
     Zeroizing::new(String::with_capacity(SECRET_CAPACITY))
 }
 
 /// A vault unlocked on a worker thread.
-pub(super) struct Opened {
-    pub(super) vault: Vault,
-    pub(super) with_password: bool,
+pub(crate) struct Opened {
+    pub(crate) vault: Vault,
+    pub(crate) with_password: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum Mode {
+pub(crate) enum Mode {
     Open,
     Create,
 }
 
-pub(super) struct Locked {
-    pub(super) path: Option<PathBuf>,
-    pub(super) mode: Mode,
-    pub(super) password: Zeroizing<String>,
-    pub(super) repeat: Zeroizing<String>,
-    pub(super) error: Option<String>,
+pub(crate) struct Locked {
+    pub(crate) path: Option<PathBuf>,
+    pub(crate) mode: Mode,
+    pub(crate) password: Zeroizing<String>,
+    pub(crate) repeat: Zeroizing<String>,
+    pub(crate) error: Option<String>,
     /// Argon2id and Touch ID run on a worker thread so the window keeps repainting.
-    pub(super) pending: Option<Receiver<Result<Opened, String>>>,
+    pub(crate) pending: Option<Receiver<Result<Opened, String>>>,
     /// Vault identifier when Touch ID can open this file.
-    pub(super) touch_id: Option<String>,
+    pub(crate) touch_id: Option<String>,
     /// Ask for the finger right away: only when the app starts.
-    pub(super) auto_touch_id: bool,
-    pub(super) waiting_touch_id: bool,
+    pub(crate) auto_touch_id: bool,
+    pub(crate) waiting_touch_id: bool,
     /// Why the vault was locked without the user asking.
-    pub(super) notice: Option<String>,
+    pub(crate) notice: Option<String>,
 }
 
 impl Locked {
-    pub(super) fn new(path: Option<PathBuf>) -> Self {
+    pub(crate) fn new(path: Option<PathBuf>) -> Self {
         let error = path
             .as_ref()
             .filter(|path| !path.exists())
@@ -72,7 +72,7 @@ impl Locked {
     }
 
     /// Offers Touch ID when it was turned on for this file and the sensor is available.
-    pub(super) fn offer_touch_id(
+    pub(crate) fn offer_touch_id(
         mut self,
         config: &Config,
         biometrics: &dyn Biometrics,
@@ -89,7 +89,7 @@ impl Locked {
         self
     }
 
-    pub(super) fn start_touch_id(&mut self, biometrics: Arc<dyn Biometrics>) {
+    pub(crate) fn start_touch_id(&mut self, biometrics: Arc<dyn Biometrics>) {
         let (Some(path), Some(id)) = (self.path.clone(), self.touch_id.clone()) else {
             return;
         };
@@ -109,7 +109,7 @@ impl Locked {
         self.pending = Some(receiver);
     }
 
-    pub(super) fn submit(&mut self) {
+    pub(crate) fn submit(&mut self) {
         let Some(path) = self.path.clone() else {
             return;
         };
@@ -148,7 +148,7 @@ impl Locked {
 }
 
 impl Locked {
-    pub(super) fn poll(&mut self, biometrics: Arc<dyn Biometrics>) -> Option<Opened> {
+    pub(crate) fn poll(&mut self, biometrics: Arc<dyn Biometrics>) -> Option<Opened> {
         if let Some(receiver) = &self.pending {
             match receiver.try_recv() {
                 Ok(Ok(opened)) => return Some(opened),
@@ -173,7 +173,7 @@ impl Locked {
     }
 }
 /// Picked files get the `.lbx` extension, so `.gitignore` always covers them.
-pub(super) fn with_vault_extension(mut path: PathBuf) -> PathBuf {
+pub(crate) fn with_vault_extension(mut path: PathBuf) -> PathBuf {
     if path.extension().is_none() {
         path.set_extension("lbx");
     }

@@ -2,14 +2,14 @@ use super::{
     button::IconButton,
     symbol::{Icon, Symbol},
 };
-use crate::app::context::{Session, edit_draft, set_field};
+use crate::ui::context::{Session, edit_draft, set_field};
 use crate::{
     app::{
         editor::{Field, algorithm_name},
         session::Screen,
     },
-    entry::{Totp, TotpAlgorithm},
-    totp,
+    core::entry::{Totp, TotpAlgorithm},
+    core::totp,
 };
 use dioxus::prelude::*;
 

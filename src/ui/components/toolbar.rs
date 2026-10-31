@@ -1,13 +1,13 @@
 use super::button::IconButton;
 use super::symbol::{Icon, Symbol};
-use crate::app::context::{Session, edit_unlocked};
+use crate::ui::context::{Session, edit_unlocked};
+use crate::ui::runtime;
 use crate::{
     app::{
-        runtime,
         session::Screen,
         settings::{Settings, minutes_label},
     },
-    autolock,
+    infra::autolock,
 };
 use dioxus::prelude::*;
 

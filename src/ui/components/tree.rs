@@ -1,9 +1,6 @@
 use super::symbol::{Icon, Symbol};
-use crate::app::{
-    context::{Session, edit_unlocked},
-    tree::Node,
-    workspace::Unlocked,
-};
+use crate::app::{tree::Node, workspace::Unlocked};
+use crate::ui::context::{Session, edit_unlocked};
 use dioxus::prelude::*;
 
 pub(super) fn nodes_ui(nodes: &[Node<'_>], workspace: &Unlocked, state: Session) -> Element {

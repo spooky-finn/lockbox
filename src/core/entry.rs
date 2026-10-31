@@ -24,7 +24,7 @@ impl Entry {
     /// A new empty entry with a random identifier.
     pub fn new() -> Self {
         let mut entry = Self::default();
-        entry.id = crate::id::new();
+        entry.id = crate::core::id::new();
         entry
     }
 }

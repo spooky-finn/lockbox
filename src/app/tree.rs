@@ -1,17 +1,17 @@
 //! A filtered hierarchy for presentation. Nodes borrow titles, never copy secrets.
 use super::workspace::matches;
 use crate::{
-    entry::Entry,
-    folder::{Folder, MAX_DEPTH},
-    vault::Vault,
+    core::entry::Entry,
+    core::folder::{Folder, MAX_DEPTH},
+    infra::vault::Vault,
 };
 
-pub(super) enum Node<'a> {
+pub(crate) enum Node<'a> {
     Folder(&'a Folder, Vec<Node<'a>>),
     Record(&'a Entry),
 }
 
-pub(super) fn project<'a>(vault: &'a Vault, query: &str) -> Vec<Node<'a>> {
+pub(crate) fn project<'a>(vault: &'a Vault, query: &str) -> Vec<Node<'a>> {
     branch(vault, None, &query.trim().to_lowercase(), false, 0)
 }
 

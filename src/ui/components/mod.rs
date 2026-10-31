@@ -18,7 +18,8 @@ mod totp;
 mod tree;
 mod workspace;
 
-use crate::app::{runtime, session::Screen};
+use crate::app::session::Screen;
+use crate::ui::runtime;
 use dioxus::prelude::*;
 use locked::LockedView;
 use workspace::UnlockedView;

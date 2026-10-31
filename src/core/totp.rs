@@ -5,7 +5,7 @@ use sha1::Sha1;
 use sha2::{Sha256, Sha512};
 use zeroize::{Zeroize, Zeroizing};
 
-use crate::entry::{Totp, TotpAlgorithm};
+use crate::core::entry::{Totp, TotpAlgorithm};
 
 pub const DIGITS: std::ops::RangeInclusive<u8> = 6..=8;
 pub const PERIOD: std::ops::RangeInclusive<u32> = 1..=300;

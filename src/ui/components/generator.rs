@@ -1,6 +1,6 @@
 use super::{button::IconButton, symbol::Icon};
-use crate::app::context::{Session, edit_draft, edit_unlocked};
-use crate::{app::session::Screen, generator};
+use crate::ui::context::{Session, edit_draft, edit_unlocked};
+use crate::{app::session::Screen, core::generator};
 use dioxus::prelude::*;
 
 #[component]

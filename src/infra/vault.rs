@@ -33,8 +33,8 @@ use subtle::ConstantTimeEq;
 use zeroize::Zeroizing;
 
 use crate::{
-    entry::Entry,
-    folder::{self, Folder},
+    core::entry::Entry,
+    core::folder::{self, Folder},
 };
 
 const MAGIC: &[u8; 4] = b"LBX1";
@@ -402,9 +402,9 @@ mod tests {
         entry.password = "correct horse battery staple".into();
         entry.url = "https://gitlab.example".into();
         entry.notes = "work".into();
-        entry.totp = Some(crate::entry::Totp {
+        entry.totp = Some(crate::core::entry::Totp {
             secret: "JBSWY3DPEHPK3PXP".into(),
-            algorithm: crate::entry::TotpAlgorithm::Sha1,
+            algorithm: crate::core::entry::TotpAlgorithm::Sha1,
             digits: 6,
             period: 30,
         });

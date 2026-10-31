@@ -3,14 +3,14 @@ use super::{
     lock_mark::LockMark,
     symbol::{Icon, Symbol},
 };
-use crate::app::context::{BiometricProvider, Session, edit_locked};
 use crate::app::{
     auth::{MIN_PASSWORD_CHARS, Mode},
     editor::replace_secret,
-    runtime,
     session::Screen,
     settings::Settings,
 };
+use crate::ui::context::{BiometricProvider, Session, edit_locked};
+use crate::ui::runtime;
 use dioxus::prelude::*;
 use zeroize::Zeroizing;
 

@@ -1,8 +1,8 @@
 //! Preference persistence. Contains no vault, editor or native handles.
-use crate::config::Config;
+use crate::infra::config::Config;
 use std::path::PathBuf;
 
-pub(super) struct Settings {
+pub(crate) struct Settings {
     pub config: Config,
     pub path: Option<PathBuf>,
 }
@@ -36,7 +36,7 @@ impl Settings {
     }
 }
 
-pub(super) fn minutes_label(minutes: u32) -> String {
+pub(crate) fn minutes_label(minutes: u32) -> String {
     match minutes {
         0 => "никогда".to_owned(),
         minutes => format!("{minutes} мин"),

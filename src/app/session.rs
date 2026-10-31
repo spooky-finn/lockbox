@@ -6,9 +6,9 @@ use super::{
     settings::Settings,
     workspace::Unlocked,
 };
-use crate::touchid::Biometrics;
+use crate::infra::touchid::Biometrics;
 
-pub(super) enum Screen {
+pub(crate) enum Screen {
     Locked(Locked),
     Unlocked(Box<Unlocked>),
 }
@@ -68,7 +68,7 @@ impl Screen {
 mod tests {
     use super::*;
     use crate::app::tests::{security, unlocked};
-    use crate::{config::Config, touchid::tests::FakeBiometrics};
+    use crate::{infra::config::Config, infra::touchid::tests::FakeBiometrics};
 
     #[test]
     fn locking_wipes_clipboard_discards_the_draft_and_keeps_the_path() {
@@ -106,9 +106,11 @@ mod tests {
         assert!(form.password.is_empty());
         assert!(form.notice.as_deref().unwrap().contains("timeout"));
         assert!(!form.auto_touch_id);
-        let reopened =
-            crate::vault::Vault::open(&path, &secrecy::SecretString::from("master".to_owned()))
-                .unwrap();
+        let reopened = crate::infra::vault::Vault::open(
+            &path,
+            &secrecy::SecretString::from("master".to_owned()),
+        )
+        .unwrap();
         assert!(reopened.entries.is_empty());
     }
 

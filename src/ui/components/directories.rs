@@ -2,13 +2,8 @@ use super::{
     button::IconButton,
     symbol::{Icon, Symbol},
 };
-use crate::{
-    app::{
-        context::{Session, edit_unlocked},
-        session::Screen,
-    },
-    folder,
-};
+use crate::ui::context::{Session, edit_unlocked};
+use crate::{app::session::Screen, core::folder};
 use dioxus::prelude::*;
 
 #[component]

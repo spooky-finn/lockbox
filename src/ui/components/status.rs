@@ -1,5 +1,5 @@
-use crate::app::context::Session;
 use crate::app::{security::Status, session::Screen};
+use crate::ui::context::Session;
 use dioxus::prelude::*;
 
 #[component]

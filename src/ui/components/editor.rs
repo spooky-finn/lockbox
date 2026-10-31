@@ -6,10 +6,10 @@ use super::{
     icons::{EntryIcon, IconPicker},
     totp::TotpEditor,
 };
-use crate::app::context::{Session, edit_draft, edit_unlocked, set_field};
+use crate::ui::context::{Session, edit_draft, edit_unlocked, set_field};
 use crate::{
     app::{editor::Field, session::Screen},
-    icons,
+    ui::icons,
 };
 use dioxus::prelude::*;
 

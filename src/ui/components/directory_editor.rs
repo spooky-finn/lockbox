@@ -3,11 +3,8 @@ use super::{
     folder_select::FolderSelect,
     symbol::{Icon, Symbol},
 };
-use crate::app::{
-    context::{Session, edit_unlocked},
-    editor::replace_secret,
-    session::Screen,
-};
+use crate::app::{editor::replace_secret, session::Screen};
+use crate::ui::context::{Session, edit_unlocked};
 use dioxus::prelude::*;
 use zeroize::Zeroizing;
 

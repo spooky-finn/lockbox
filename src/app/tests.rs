@@ -2,11 +2,11 @@ use super::{
     auth::{Locked, with_vault_extension},
     workspace::Unlocked,
 };
-use crate::touchid::tests::FakeBiometrics;
+use crate::infra::touchid::tests::FakeBiometrics;
 use crate::{
-    config::Config,
-    entry::{Totp, TotpAlgorithm},
-    vault::{KdfParams, Vault},
+    core::entry::{Totp, TotpAlgorithm},
+    infra::config::Config,
+    infra::vault::{KdfParams, Vault},
 };
 use secrecy::SecretString;
 use std::path::PathBuf;
@@ -17,13 +17,13 @@ const FAST: KdfParams = KdfParams {
     lanes: 1,
 };
 
-pub(super) fn unlocked(dir: &tempfile::TempDir) -> Unlocked {
+pub(crate) fn unlocked(dir: &tempfile::TempDir) -> Unlocked {
     let path = dir.path().join("test.lbx");
     let password = SecretString::from("master".to_owned());
     Unlocked::new(Vault::create(path, &password, FAST).unwrap())
 }
 
-pub(super) fn reopen(unlocked: &Unlocked) -> Vault {
+pub(crate) fn reopen(unlocked: &Unlocked) -> Vault {
     Vault::open(
         unlocked.vault.path(),
         &SecretString::from("master".to_owned()),
@@ -238,13 +238,13 @@ fn picked_files_get_the_vault_extension() {
     );
 }
 
-pub(super) fn security() -> super::security::Security {
+pub(crate) fn security() -> super::security::Security {
     use std::time::{Instant, SystemTime};
     super::security::Security {
-        clipboard: crate::clipboard::Guard::new(Box::new(
-            crate::clipboard::tests::FakeBoard::default(),
+        clipboard: crate::infra::clipboard::Guard::new(Box::new(
+            crate::infra::clipboard::tests::FakeBoard::default(),
         )),
-        auto_lock: crate::autolock::AutoLock::new(5, Instant::now(), SystemTime::now()),
-        screen_watch: crate::autolock::ScreenWatch::default(),
+        auto_lock: crate::infra::autolock::AutoLock::new(5, Instant::now(), SystemTime::now()),
+        screen_watch: crate::infra::autolock::ScreenWatch::default(),
     }
 }

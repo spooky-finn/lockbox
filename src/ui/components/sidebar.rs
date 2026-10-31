@@ -3,11 +3,8 @@ use super::{
     symbol::{Icon, Symbol},
     tree::nodes_ui,
 };
-use crate::app::{
-    context::{Session, edit_unlocked},
-    session::Screen,
-    tree,
-};
+use crate::app::{session::Screen, tree};
+use crate::ui::context::{Session, edit_unlocked};
 use dioxus::prelude::*;
 
 #[component]

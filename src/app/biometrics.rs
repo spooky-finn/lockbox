@@ -1,8 +1,8 @@
 //! Biometric preference and worker lifecycle, scoped to one unlocked vault.
 use super::{settings::Settings, time::unix_now};
 use crate::{
-    touchid::{self, Biometrics, TouchIdError},
-    vault::Vault,
+    infra::touchid::{self, Biometrics, TouchIdError},
+    infra::vault::Vault,
 };
 use std::{
     sync::{
@@ -13,7 +13,7 @@ use std::{
 };
 
 #[derive(Default)]
-pub(super) struct TouchId {
+pub(crate) struct TouchId {
     pub available: bool,
     pub enabled: bool,
     pub pending: Option<Receiver<Result<(), String>>>,
