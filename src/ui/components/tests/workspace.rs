@@ -28,3 +28,57 @@ fn search_reacts_and_failed_save_preserves_the_form() {
     assert!(html.contains("TOTP:"));
     assert!(html.contains("Сохранить"));
 }
+
+#[test]
+fn profile_shows_full_public_fingerprints_and_lock_removes_identity() {
+    use crate::app::session::Screen;
+    use crate::app::workspace::Unlocked;
+    use crate::core::identity::hex;
+    use crate::infra::profile::{BootstrapProfile, ProviderConfiguration};
+    use crate::infra::vault::{KdfParams, Vault};
+    use dioxus::prelude::WritableExt;
+    use secrecy::SecretString;
+    let dir = tempfile::tempdir().unwrap();
+    let fast = KdfParams {
+        memory_kib: 8192,
+        passes: 1,
+        lanes: 1,
+    };
+    let profile = BootstrapProfile::generate(
+        "Alice Profile".into(),
+        "Team Profile".into(),
+        ProviderConfiguration {
+            base_url: "https://gateway.storjshare.io".into(),
+            bucket: "team-vault".into(),
+            access_key: "private-access-key".into(),
+            secret_key: "private-secret-key".into(),
+        },
+        &SecretString::from("recovery password".to_owned()),
+        fast,
+    )
+    .unwrap();
+    let fingerprint = hex(&profile.identity.user_id);
+    let device = hex(&profile.identity.device_id);
+    let vault = Vault::create_profile(
+        dir.path().join("profile.lbx"),
+        &SecretString::from("master password".to_owned()),
+        fast,
+        profile,
+    )
+    .unwrap();
+    let mut dom = mounted();
+    update(&mut dom, |mut state| {
+        state.set(Screen::Unlocked(Box::new(Unlocked::new(vault))))
+    });
+    let html = dioxus_ssr::render(&dom);
+    for value in ["Alice Profile", "Team Profile", &fingerprint, &device] {
+        assert!(html.contains(value));
+    }
+    assert!(!html.contains("private-access-key"));
+    assert!(!html.contains("private-secret-key"));
+    update(&mut dom, |_| crate::ui::runtime::lock(None));
+    let html = dioxus_ssr::render(&dom);
+    assert!(!html.contains(&fingerprint));
+    assert!(!html.contains(&device));
+    assert!(!html.contains("Alice Profile"));
+}

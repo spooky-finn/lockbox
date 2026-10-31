@@ -150,6 +150,29 @@ pub(super) fn begin_create() {
     *state.write() = Screen::Locked(form);
 }
 
+pub(super) fn create_cloud_profile() {
+    let mut state = consume_context::<Session>();
+    {
+        let mut screen = state.write();
+        let Screen::Locked(form) = &mut *screen else {
+            return;
+        };
+        if form.pending.is_some() || !form.validate_creation() {
+            return;
+        }
+    }
+    let path = rfd::FileDialog::new()
+        .add_filter("lockbox", &["lbx"])
+        .set_file_name("profile.lbx")
+        .save_file();
+    if let Some(path) = path {
+        if let Screen::Locked(form) = &mut *state.write() {
+            form.path = Some(with_vault_extension(path));
+            form.submit();
+        }
+    }
+}
+
 pub(super) fn pick_vault(create: bool) {
     let dialog = rfd::FileDialog::new().add_filter("lockbox", &["lbx"]);
     let path = if create {

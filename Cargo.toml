@@ -13,6 +13,8 @@ arboard = "3.7.0"
 argon2 = "0.5"
 chacha20poly1305 = "0.10"
 dirs = "6"
+ed25519-dalek = { version = "=2.2.0", default-features = false, features = ["std", "zeroize"] }
+hpke = { version = "=0.13.0", default-features = false, features = ["alloc", "x25519"] }
 dioxus = { version = "0.7", features = ["desktop"] }
 tokio = { version = "1", features = ["time"] }
 getrandom = "0.3"
@@ -27,8 +29,10 @@ sha1 = "0.10"
 sha2 = "0.10"
 subtle = "2.6"
 thiserror = "2"
+# hpke disables dalek defaults; explicitly retain private-key wiping.
+x25519-dalek = { version = "=2.0.1", default-features = false, features = ["static_secrets", "zeroize"] }
 url = "2"
-zeroize = { version = "1.8", features = ["derive"] }
+zeroize = { version = "1.8", features = ["derive", "serde"] }
 rmcp = { version = "3.8.0", features = ["server"] }
 
 [dev-dependencies]

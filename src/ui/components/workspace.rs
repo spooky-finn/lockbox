@@ -35,7 +35,22 @@ pub(super) fn UnlockedView() -> Element {
                 else if unlocked.directories.selected.is_some() { DirectoryView {} }
                 else { div { class: "empty-state",
                     div { class: "empty-icon", Symbol { icon: Icon::Key } }
-                    h2 { "Всё важное — под замком" }
+                    if let Some(profile) = &unlocked.vault.profile {
+                        div { class: "profile-summary",
+                            h2 { "{profile.space_name}" }
+                            p { "Пользователь: {profile.username}" }
+                            p { class: "notice", "Профиль и ключи созданы на этом устройстве. Синхронизация со Storj ещё не подключена." }
+                            details {
+                                summary { "Идентичность и ключи" }
+                                p { "Отпечаток пользователя" }
+                                code { "{crate::core::identity::hex(&profile.identity.user_id)}" }
+                                p { "Отпечаток устройства" }
+                                code { "{crate::core::identity::hex(&profile.identity.device_id)}" }
+                                p { "ID хранилища" }
+                                code { "{crate::core::identity::hex(&profile.space.space_id)}" }
+                            }
+                        }
+                    } else { h2 { "Всё важное — под замком" } }
                     p { "Выберите запись слева или создайте новую." }
                     div { class: "actions",
                         IconButton { class: "primary", icon: Icon::Plus, label: "Новая запись", onclick: move |_| edit_unlocked(state, |u| u.start_new()) }

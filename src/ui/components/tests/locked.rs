@@ -30,7 +30,7 @@ fn creation_starts_with_storage_choice_and_cloud_has_separate_fields() {
 }
 
 #[test]
-fn cloud_submit_validates_then_shows_password_without_enabling_creation() {
+fn cloud_submit_validates_then_offers_identity_creation() {
     use crate::app::auth::StorageKind;
     use crate::ui::context::{Session, edit_locked};
     use dioxus::dioxus_core::Mutation;
@@ -82,15 +82,7 @@ fn cloud_submit_validates_then_shows_password_without_enabling_creation() {
     assert!(html.contains("Назад к подключению"));
     assert!(!html.contains("test-secret"));
     assert!(!html.contains("test-access"));
-    let create_button = html
-        .split("<button")
-        .find(|button| button.contains("aria-label=\"Создать хранилище\""))
-        .expect("create action exists");
-    assert!(
-        create_button
-            .split('>')
-            .next()
-            .unwrap()
-            .contains("disabled")
-    );
+    assert!(html.contains("id=\"recovery-password\""));
+    assert!(html.contains("id=\"recovery-repeat\""));
+    assert!(html.contains("Создать профиль и ключи…"));
 }

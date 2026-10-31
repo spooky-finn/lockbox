@@ -48,6 +48,10 @@ pub(super) fn LockedView() -> Element {
         && locked.password.chars().count() < MIN_PASSWORD_CHARS;
     let submit = move |event: FormEvent| {
         event.prevent_default();
+        if cloud_password {
+            runtime::create_cloud_profile();
+            return;
+        }
         edit_locked(state, |locked| {
             if locked.pending.is_none() {
                 locked.submit();
@@ -103,8 +107,8 @@ pub(super) fn LockedView() -> Element {
                     }
                 }
                 if cloud_password {
-                    p { class: "notice", "Создание профиля и ключей ещё в разработке. Подключение к Storj не проверено; данные не сохранены." }
-                    button { r#type: "button", class: "setup-button", onclick: move |_| edit_locked(state, |locked| locked.edit_cloud_connection()), "Назад к подключению" }
+                    p { class: "notice", "Профиль и ключи будут сохранены на этом устройстве. Подключение к Storj ещё не выполняется." }
+                    button { r#type: "button", class: "setup-button", disabled: busy, onclick: move |_| edit_locked(state, |locked| locked.edit_cloud_connection()), "Назад к подключению" }
                 }
                 if ready {
                     form { class: "unlock-form", onsubmit: submit,
@@ -132,8 +136,34 @@ pub(super) fn LockedView() -> Element {
                                         edit_locked(state, |locked| replace_secret(&mut locked.repeat, &value));
                                     },
                                 }
-                                IconButton { class: "unlock-submit quiet", kind: "submit", icon: Icon::ArrowRight, label: "Создать хранилище", disabled: busy || cloud_password }
+                                if !cloud_password {
+                                    IconButton { class: "unlock-submit quiet", kind: "submit", icon: Icon::ArrowRight, label: "Создать хранилище", disabled: busy }
+                                }
                             }
+                        }
+                        if cloud_password {
+                            p { class: "notice", "Отдельный пароль восстановления защищает корневой ключ пользователя. Сохраните его в надёжном месте." }
+                            label { r#for: "recovery-password", "Пароль восстановления" }
+                            div { class: "unlock-input",
+                                input { id: "recovery-password", r#type: "password", autocomplete: "off", disabled: busy,
+                                    value: locked.recovery_password.as_str(),
+                                    oninput: move |event| {
+                                        let value = Zeroizing::new(event.value());
+                                        edit_locked(state, |locked| replace_secret(&mut locked.recovery_password, &value));
+                                    },
+                                }
+                            }
+                            label { r#for: "recovery-repeat", "Повторите пароль восстановления" }
+                            div { class: "unlock-input",
+                                input { id: "recovery-repeat", r#type: "password", autocomplete: "off", disabled: busy,
+                                    value: locked.recovery_repeat.as_str(),
+                                    oninput: move |event| {
+                                        let value = Zeroizing::new(event.value());
+                                        edit_locked(state, |locked| replace_secret(&mut locked.recovery_repeat, &value));
+                                    },
+                                }
+                            }
+                            button { r#type: "submit", class: "setup-button", disabled: busy, "Создать профиль и ключи…" }
                         }
                     }
                 }

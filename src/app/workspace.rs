@@ -3,6 +3,8 @@ use super::{biometrics::TouchId, directories::Directories, editor::Draft};
 use crate::{core::entry::Entry, core::generator, core::totp, infra::vault::Vault};
 
 pub(crate) struct Unlocked {
+    /// Derived once on unlock; wiped together with the session.
+    _space_content_keys: Option<crate::core::identity::ContentKeys>,
     pub(crate) vault: Vault,
     pub(crate) touch_id: TouchId,
     pub(crate) search: String,
@@ -18,7 +20,12 @@ pub(crate) struct Unlocked {
 
 impl Unlocked {
     pub(crate) fn new(vault: Vault) -> Self {
+        let space_content_keys = vault
+            .profile
+            .as_ref()
+            .map(|profile| profile.space.content_keys());
         Self {
+            _space_content_keys: space_content_keys,
             vault,
             touch_id: TouchId::default(),
             search: String::new(),

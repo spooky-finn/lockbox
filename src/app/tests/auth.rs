@@ -60,3 +60,91 @@ fn cloud_or_unselected_creation_cannot_write_a_legacy_vault() {
         assert!(!path.exists());
     }
 }
+
+#[test]
+fn identity_creation_requires_distinct_confirmed_recovery_password() {
+    let mut form = Locked::new(None);
+    form.mode = Mode::Create;
+    form.storage_kind = Some(StorageKind::Cloud);
+    form.cloud_password_step = true;
+    form.cloud.username = "Alice".into();
+    form.cloud.space_name = "Team".into();
+    form.cloud.base_url = "https://gateway.storjshare.io".into();
+    form.cloud.bucket = "team-vault".into();
+    form.cloud.access_key.push_str("test-access");
+    form.cloud.secret_key.push_str("test-secret");
+    form.password.push_str("local master password");
+    form.repeat.push_str("local master password");
+    assert!(!form.validate_creation());
+    form.recovery_password.push_str("local master password");
+    form.recovery_repeat.push_str("local master password");
+    assert!(!form.validate_creation());
+    form.recovery_password.clear();
+    form.recovery_password
+        .push_str("independent recovery password");
+    assert!(!form.validate_creation());
+    form.recovery_repeat.clear();
+    form.recovery_repeat
+        .push_str("independent recovery password");
+    assert!(form.validate_creation());
+    form.path = Some("/tmp/failed-profile.lbx".into());
+    form.edit_cloud_connection();
+    assert!(form.path.is_none());
+    assert!(form.password.is_empty());
+    assert!(form.recovery_password.is_empty());
+    assert!(form.recovery_repeat.is_empty());
+}
+
+#[test]
+fn application_worker_creates_and_reopens_identity_profile() {
+    use crate::infra::vault::Vault;
+    use secrecy::SecretString;
+    use std::time::Duration;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("profile.lbx");
+    let mut form = Locked::new(Some(path.clone()));
+    form.mode = Mode::Create;
+    form.storage_kind = Some(StorageKind::Cloud);
+    form.cloud_password_step = true;
+    form.cloud.username = "Alice".into();
+    form.cloud.space_name = "Team".into();
+    form.cloud.base_url = "https://gateway.storjshare.io".into();
+    form.cloud.bucket = "team-vault".into();
+    form.cloud.access_key.push_str("test-access");
+    form.cloud.secret_key.push_str("test-secret");
+    form.password.push_str("local master password");
+    form.repeat.push_str("local master password");
+    form.recovery_password
+        .push_str("independent recovery password");
+    form.recovery_repeat
+        .push_str("independent recovery password");
+    form.submit();
+    assert!(form.error.is_none());
+    assert!(form.password.is_empty());
+    assert!(form.repeat.is_empty());
+    assert!(form.recovery_password.is_empty());
+    assert!(form.recovery_repeat.is_empty());
+    let opened = form
+        .pending
+        .take()
+        .unwrap()
+        .recv_timeout(Duration::from_secs(30))
+        .unwrap()
+        .unwrap();
+    let profile = opened.vault.profile.as_ref().unwrap();
+    assert_eq!(profile.username, "Alice");
+    assert_eq!(profile.space_name, "Team");
+    let id = profile.identity.user_id;
+    let device = profile.identity.device_id;
+    drop(opened);
+    let reopened = Vault::open(
+        &path,
+        &SecretString::from("local master password".to_owned()),
+    )
+    .unwrap();
+    assert_eq!(reopened.profile.as_ref().unwrap().identity.user_id, id);
+    assert_eq!(
+        reopened.profile.as_ref().unwrap().identity.device_id,
+        device
+    );
+}

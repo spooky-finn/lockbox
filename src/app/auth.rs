@@ -1,5 +1,6 @@
 //! Unlock/create form and its background worker; no UI or system-service ownership.
 use super::time::unix_now;
+use crate::infra::profile::{BootstrapProfile, ProviderConfiguration};
 use crate::{
     infra::config::Config,
     infra::touchid::{self, Biometrics},
@@ -50,6 +51,8 @@ pub(crate) struct Locked {
     pub(crate) cloud_password_step: bool,
     pub(crate) password: Zeroizing<String>,
     pub(crate) repeat: Zeroizing<String>,
+    pub(crate) recovery_password: Zeroizing<String>,
+    pub(crate) recovery_repeat: Zeroizing<String>,
     pub(crate) error: Option<String>,
     /// Argon2id and Touch ID run on a worker thread so the window keeps repainting.
     pub(crate) pending: Option<Receiver<Result<Opened, String>>>,
@@ -76,6 +79,8 @@ impl Locked {
             cloud_password_step: false,
             password: secret_buffer(),
             repeat: secret_buffer(),
+            recovery_password: secret_buffer(),
+            recovery_repeat: secret_buffer(),
             error,
             pending: None,
             touch_id: None,
@@ -137,16 +142,55 @@ impl Locked {
     }
 
     pub(crate) fn edit_cloud_connection(&mut self) {
+        self.path = None;
         self.cloud_password_step = false;
         self.password.zeroize();
         self.repeat.zeroize();
+        self.recovery_password.zeroize();
+        self.recovery_repeat.zeroize();
         self.error = None;
     }
 
+    pub(crate) fn validate_creation(&mut self) -> bool {
+        if self.mode != Mode::Create
+            || self.storage_kind != Some(StorageKind::Cloud)
+            || !self.cloud_password_step
+        {
+            return false;
+        }
+        let error = self.cloud.validate().err().map(str::to_owned).or_else(|| {
+            if self.password.chars().count() < MIN_PASSWORD_CHARS {
+                Some(format!(
+                    "Мастер-пароль: не менее {MIN_PASSWORD_CHARS} символов"
+                ))
+            } else if *self.password != *self.repeat {
+                Some("Пароли не совпадают".into())
+            } else if self.recovery_password.chars().count() < MIN_PASSWORD_CHARS {
+                Some(format!(
+                    "Пароль восстановления: не менее {MIN_PASSWORD_CHARS} символов"
+                ))
+            } else if *self.recovery_password != *self.recovery_repeat {
+                Some("Пароли восстановления не совпадают".into())
+            } else if *self.password == *self.recovery_password {
+                Some("Пароль восстановления должен отличаться от мастер-пароля".into())
+            } else {
+                None
+            }
+        });
+        self.error = error;
+        self.error.is_none()
+    }
+
     pub(crate) fn submit(&mut self) {
-        // Cloud setup cannot enter the legacy local-file creation path.
-        if self.mode == Mode::Create && self.storage_kind != Some(StorageKind::Local) {
-            self.error = Some("Облачное создание будет доступно после реализации профиля и ключей общего хранилища".into());
+        if self.pending.is_some() {
+            return;
+        }
+        let cloud = self.mode == Mode::Create && self.storage_kind == Some(StorageKind::Cloud);
+        if self.mode == Mode::Create && self.storage_kind.is_none() {
+            self.error = Some("Выберите тип хранилища".into());
+            return;
+        }
+        if cloud && !self.validate_creation() {
             return;
         }
         let Some(path) = self.path.clone() else {
@@ -169,11 +213,41 @@ impl Locked {
         self.error = None;
         self.waiting_touch_id = false;
         let mode = self.mode;
+        let cloud_creation = cloud.then(|| {
+            let recovery = SecretString::from(std::mem::take(&mut *self.recovery_password));
+            self.recovery_repeat.zeroize();
+            (
+                self.cloud.username.trim().to_owned(),
+                self.cloud.space_name.trim().to_owned(),
+                ProviderConfiguration {
+                    base_url: self.cloud.base_url.clone(),
+                    bucket: self.cloud.bucket.clone(),
+                    access_key: self.cloud.access_key.to_string(),
+                    secret_key: self.cloud.secret_key.to_string(),
+                },
+                recovery,
+            )
+        });
         let (sender, receiver) = mpsc::channel();
         thread::spawn(move || {
             let result = match mode {
                 Mode::Open => Vault::open(&path, &password),
-                Mode::Create => Vault::create(&path, &password, KdfParams::default()),
+                Mode::Create => {
+                    if let Some((username, space_name, provider, recovery)) = cloud_creation {
+                        BootstrapProfile::generate(
+                            username,
+                            space_name,
+                            provider,
+                            &recovery,
+                            KdfParams::default(),
+                        )
+                        .and_then(|profile| {
+                            Vault::create_profile(&path, &password, KdfParams::default(), profile)
+                        })
+                    } else {
+                        Vault::create(&path, &password, KdfParams::default())
+                    }
+                }
             }
             .map(|vault| Opened {
                 vault,
