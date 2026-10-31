@@ -1,7 +1,7 @@
 //! Dioxus lifecycle and the few actions that coordinate independent domains.
 use super::context::{BiometricProvider, Clock, SecurityHandle, Session};
 use crate::app::{
-    auth::{Locked, Mode, with_vault_extension},
+    auth::{Locked, Mode, StorageKind, with_vault_extension},
     security::{CopyField, Security, Status},
     session::Screen,
     settings::Settings,
@@ -143,6 +143,13 @@ pub(super) fn poll_workers() {
     }
 }
 
+pub(super) fn begin_create() {
+    let mut state = consume_context::<Session>();
+    let mut form = Locked::new(None);
+    form.mode = Mode::Create;
+    *state.write() = Screen::Locked(form);
+}
+
 pub(super) fn pick_vault(create: bool) {
     let dialog = rfd::FileDialog::new().add_filter("lockbox", &["lbx"]);
     let path = if create {
@@ -161,6 +168,7 @@ pub(super) fn pick_vault(create: bool) {
         };
         if create {
             form.mode = Mode::Create;
+            form.storage_kind = Some(StorageKind::Local);
             form.error = None;
         }
         *state.write() = Screen::Locked(form);

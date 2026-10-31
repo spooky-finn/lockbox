@@ -34,9 +34,26 @@ pub(crate) enum Mode {
     Create,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum StorageKind {
+    Local,
+    Cloud,
+}
+
+#[derive(Default)]
+pub(crate) struct CloudSetup {
+    pub(crate) username: String,
+    pub(crate) space_name: String,
+    pub(crate) base_url: String,
+    pub(crate) access_key: Zeroizing<String>,
+    pub(crate) secret_key: Zeroizing<String>,
+}
+
 pub(crate) struct Locked {
     pub(crate) path: Option<PathBuf>,
     pub(crate) mode: Mode,
+    pub(crate) storage_kind: Option<StorageKind>,
+    pub(crate) cloud: CloudSetup,
     pub(crate) password: Zeroizing<String>,
     pub(crate) repeat: Zeroizing<String>,
     pub(crate) error: Option<String>,
@@ -60,6 +77,8 @@ impl Locked {
         Self {
             path,
             mode: Mode::Open,
+            storage_kind: None,
+            cloud: CloudSetup::default(),
             password: secret_buffer(),
             repeat: secret_buffer(),
             error,
@@ -110,6 +129,11 @@ impl Locked {
     }
 
     pub(crate) fn submit(&mut self) {
+        // Cloud setup cannot enter the legacy local-file creation path.
+        if self.mode == Mode::Create && self.storage_kind != Some(StorageKind::Local) {
+            self.error = Some("Облачное создание будет доступно после реализации профиля и ключей общего хранилища".into());
+            return;
+        }
         let Some(path) = self.path.clone() else {
             return;
         };

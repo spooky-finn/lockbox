@@ -410,3 +410,12 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 99px; }
     .unlock-content { flex: 0 0 auto; }
     .lock-actions { position: static; transform: none; flex: 0 0 auto; margin: 0 auto; }
 }
+
+.storage-choices { display: flex; flex-direction: column; gap: 12px; width: 100%; margin-top: 24px; }
+.storage-choice { display: flex; flex-direction: column; gap: 6px; text-align: left; padding: 16px; border: 1px solid var(--lock-secondary); border-radius: 12px; background: var(--control); color: var(--lock-ink); cursor: pointer; }
+.storage-choice[aria-pressed="true"] { outline: 2px solid var(--lock-ink); }
+.storage-choice span { font-size: 13px; }
+.cloud-setup { display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 20px; text-align: left; }
+.cloud-setup input { width: 100%; padding: 10px 12px; border: 1px solid var(--lock-secondary); border-radius: 8px; background: var(--control); color: var(--lock-ink); }
+.lock-screen:has(.cloud-setup) { overflow-y: auto; }
+.lock-screen:has(.cloud-setup) .lock-actions { position: static; transform: none; margin-top: 24px; }

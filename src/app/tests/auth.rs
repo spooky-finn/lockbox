@@ -1,4 +1,4 @@
-use super::{Locked, with_vault_extension};
+use super::{Locked, Mode, StorageKind, with_vault_extension};
 use crate::app::test_support::unlocked;
 use crate::infra::config::Config;
 use crate::infra::touchid::tests::FakeBiometrics;
@@ -42,4 +42,21 @@ fn picked_files_get_the_vault_extension() {
         with_vault_extension("/tmp/vault.lbx".into()),
         PathBuf::from("/tmp/vault.lbx")
     );
+}
+
+#[test]
+fn cloud_or_unselected_creation_cannot_write_a_legacy_vault() {
+    let dir = tempfile::tempdir().unwrap();
+    for kind in [None, Some(StorageKind::Cloud)] {
+        let path = dir.path().join("cloud.lbx");
+        let mut form = Locked::new(Some(path.clone()));
+        form.mode = Mode::Create;
+        form.storage_kind = kind;
+        form.password.push_str("a long master password");
+        form.repeat.push_str("a long master password");
+        form.submit();
+        assert!(form.error.is_some());
+        assert!(form.pending.is_none());
+        assert!(!path.exists());
+    }
 }
