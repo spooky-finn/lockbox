@@ -1,3 +1,4 @@
+use super::{button::IconButton, symbol::Icon};
 use crate::app::context::{Session, edit_draft};
 use crate::{app::session::Screen, icons};
 use dioxus::prelude::*;
@@ -46,7 +47,7 @@ pub(super) fn IconPicker() -> Element {
         section { class: "subpanel stack", aria_label: "Выбор иконки",
             div { class: "input-actions",
                 input { aria_label: "Название сервиса", placeholder: "Название сервиса", value: "{draft.icon_query}", oninput: move |e| edit_draft(state, |d| d.icon_query = e.value()) }
-                button { r#type: "button", onclick: move |_| edit_draft(state, |d| d.icon_picker_open = false), "Закрыть" }
+                IconButton { icon: Icon::Close, label: "Закрыть выбор иконки", onclick: move |_| edit_draft(state, |d| d.icon_picker_open = false) }
             }
             if draft.icon_query.trim().is_empty() { p { class: "muted", "Начните вводить название — в наборе {icons::catalog().len()} иконок." } }
             else if found.is_empty() { p { class: "muted", "Ничего не найдено" } }

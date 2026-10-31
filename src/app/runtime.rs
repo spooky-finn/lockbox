@@ -161,6 +161,7 @@ pub(super) fn pick_vault(create: bool) {
         };
         if create {
             form.mode = Mode::Create;
+            form.error = None;
         }
         *state.write() = Screen::Locked(form);
     }

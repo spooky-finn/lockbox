@@ -380,3 +380,88 @@ fn clock_status_and_activity_do_not_rerender_session_subscribers() {
     assert!(counts.1.get() > before.1, "clock subscriber did not update");
     assert!(dioxus_ssr::render(&dom).contains("буфер очистится через"));
 }
+
+#[test]
+fn tree_records_show_only_titles_and_search_reveals_collapsed_ancestors() {
+    let mut dom = mounted();
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| {
+            let parent = crate::folder::Folder::new("Работа".into(), None);
+            let child = crate::folder::Folder::new("Сервисы".into(), Some(parent.id.clone()));
+            u.vault.entries[0].folder_id = Some(child.id.clone());
+            u.directories.collapsed.insert(parent.id.clone());
+            u.directories.collapsed.insert(child.id.clone());
+            u.vault.folders = vec![parent, child];
+            u.search = "alice".into();
+        })
+    });
+    let html = dioxus_ssr::render(&dom);
+    let tree = html
+        .split("aria-label=\"Записи и папки\"")
+        .nth(1)
+        .unwrap()
+        .split("</nav>")
+        .next()
+        .unwrap();
+    for title in ["Работа", "Сервисы", "GitLab"] {
+        assert!(tree.contains(title), "missing {title}");
+    }
+    assert!(
+        !tree.contains("alice"),
+        "usernames should not appear in record rows"
+    );
+    assert!(
+        !tree.contains("entry-icon"),
+        "record rows should not have icons"
+    );
+    assert!(!tree.contains("<small"));
+    update(&mut dom, |state| edit_unlocked(state, |u| u.search.clear()));
+    let html = dioxus_ssr::render(&dom);
+    let tree = html
+        .split("aria-label=\"Записи и папки\"")
+        .nth(1)
+        .unwrap()
+        .split("</nav>")
+        .next()
+        .unwrap();
+    assert!(
+        !tree.contains("GitLab"),
+        "clearing search should preserve collapsed state"
+    );
+}
+
+#[test]
+fn folder_editor_saves_and_record_editor_uses_the_selected_folder() {
+    let mut dom = mounted();
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| u.start_directory())
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("directory-name"));
+    assert!(html.contains("directory-parent"));
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| {
+            u.directories.draft.as_mut().unwrap().name = "Работа".into();
+            u.save_directory().unwrap();
+        })
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("directory-detail"));
+    assert!(html.contains("Изменить папку"));
+    update(&mut dom, |state| edit_unlocked(state, |u| u.start_new()));
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("entry-folder"));
+    assert!(html.contains("Работа"));
+    dom.in_scope(ScopeId::APP, || {
+        let state = consume_context::<Session>();
+        let screen = state.read();
+        let Screen::Unlocked(u) = &*screen else {
+            panic!("locked")
+        };
+        assert_eq!(
+            u.draft.as_ref().unwrap().entry.folder_id,
+            u.directories.selected
+        );
+        assert_eq!(crate::app::tests::reopen(u).folders[0].name, "Работа");
+    });
+}

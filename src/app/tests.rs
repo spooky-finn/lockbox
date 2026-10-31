@@ -50,10 +50,12 @@ fn search_matches_title_username_and_url_ignoring_case() {
     add(&mut unlocked, "Почта", "inbox", "https://mail.example");
     add(&mut unlocked, "банк", "client", "https://bank.example");
     let titles = |unlocked: &Unlocked| {
-        unlocked
-            .visible()
-            .iter()
-            .map(|entry| entry.title.clone())
+        super::tree::project(&unlocked.vault, &unlocked.search)
+            .into_iter()
+            .filter_map(|node| match node {
+                super::tree::Node::Record(entry) => Some(entry.title.clone()),
+                super::tree::Node::Folder(_, _) => None,
+            })
             .collect::<Vec<_>>()
     };
     assert_eq!(titles(&unlocked), ["GitLab", "банк", "Почта"]);

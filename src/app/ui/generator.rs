@@ -1,3 +1,4 @@
+use super::{button::IconButton, symbol::Icon};
 use crate::app::context::{Session, edit_draft, edit_unlocked};
 use crate::{app::session::Screen, generator};
 use dioxus::prelude::*;
@@ -35,10 +36,10 @@ pub(super) fn GeneratorView() -> Element {
             label { class: "inline", input { r#type: "checkbox", checked: options.avoid_ambiguous, onchange: move |e| edit_unlocked(state, |u| u.generator.avoid_ambiguous = e.checked()) } "Без похожих символов ({generator::AMBIGUOUS})" }
             p { class: "muted", "Стойкость: ≈ {bits:.0} бит — {verdict}" }
             div { class: "actions",
-                button { r#type: "button", onclick: move |_| edit_unlocked(state, |u| {
+                IconButton { class: "primary", icon: Icon::Check, label: "Подставить", onclick: move |_| edit_unlocked(state, |u| {
                     if let Some(draft) = &mut u.draft { draft.generate(&u.generator); }
-                }), "Подставить" }
-                button { r#type: "button", onclick: move |_| edit_draft(state, |d| d.generator_open = false), "Закрыть" }
+                }) }
+                IconButton { icon: Icon::Close, label: "Закрыть генератор", onclick: move |_| edit_draft(state, |d| d.generator_open = false) }
             }
             if let Some(error) = &draft.generator_error { p { class: "error", role: "alert", "{error}" } }
         }

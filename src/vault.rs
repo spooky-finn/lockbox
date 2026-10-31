@@ -32,10 +32,15 @@ use sha2::Sha256;
 use subtle::ConstantTimeEq;
 use zeroize::Zeroizing;
 
-use crate::entry::Entry;
+use crate::{
+    entry::Entry,
+    folder::{self, Folder},
+};
 
 const MAGIC: &[u8; 4] = b"LBX1";
-const VERSION: u16 = 1;
+// v2 adds folders. Accept v1 on read, but keep old clients from silently
+// discarding folder metadata when they re-save a new vault.
+const VERSION: u16 = 2;
 const SALT_LEN: usize = 16;
 const CHECK_LEN: usize = 32;
 const NONCE_LEN: usize = 24;
@@ -62,6 +67,8 @@ pub enum VaultError {
     Corrupted,
     #[error("сохранённый ключ не подходит к этому файлу — откройте хранилище мастер-паролем")]
     KeyMismatch,
+    #[error("неверная структура папок: {0}")]
+    InvalidFolders(&'static str),
 }
 
 pub type Result<T> = std::result::Result<T, VaultError>;
@@ -99,6 +106,8 @@ impl KdfParams {
 #[derive(Default, Serialize, Deserialize)]
 struct Contents {
     entries: Vec<Entry>,
+    #[serde(default)]
+    folders: Vec<Folder>,
 }
 
 /// An unlocked vault. The derived key and all entries are wiped when it is dropped.
@@ -109,6 +118,7 @@ pub struct Vault {
     check: [u8; CHECK_LEN],
     key: Zeroizing<[u8; 32]>,
     pub entries: Vec<Entry>,
+    pub folders: Vec<Folder>,
 }
 
 impl Vault {
@@ -129,6 +139,7 @@ impl Vault {
             check,
             key,
             entries: Vec::new(),
+            folders: Vec::new(),
         };
         vault.save()?;
         Ok(vault)
@@ -143,8 +154,8 @@ impl Vault {
         if !bool::from(check.ct_eq(&header.check)) {
             return Err(VaultError::WrongPassword);
         }
-        let entries = decrypt(&data, &key).ok_or(VaultError::Corrupted)?;
-        Ok(header.into_vault(path, key, entries))
+        let contents = decrypt(&data, &key).ok_or(VaultError::Corrupted)?;
+        Ok(header.into_vault(path, key, contents))
     }
 
     /// Opens with a key exported earlier, skipping Argon2id (used for Touch ID).
@@ -153,8 +164,8 @@ impl Vault {
         let data = fs::read(&path)?;
         let header = Header::parse(&data)?;
         let key = Zeroizing::new(*key);
-        let entries = decrypt(&data, &key).ok_or(VaultError::KeyMismatch)?;
-        Ok(header.into_vault(path, key, entries))
+        let contents = decrypt(&data, &key).ok_or(VaultError::KeyMismatch)?;
+        Ok(header.into_vault(path, key, contents))
     }
 
     /// Stable identifier of the vault file: its random salt, which never changes.
@@ -176,12 +187,14 @@ impl Vault {
     /// Encrypts with a fresh nonce and replaces the file atomically,
     /// keeping the previous version next to it as `<name>.bak`.
     pub fn save(&self) -> Result<()> {
+        folder::validate(&self.folders, &self.entries).map_err(VaultError::InvalidFolders)?;
         let mut nonce = [0u8; NONCE_LEN];
         random(&mut nonce);
         let header = self.header(&nonce);
         let plaintext = Zeroizing::new(
             serde_json::to_vec(&ContentsRef {
                 entries: &self.entries,
+                folders: &self.folders,
             })
             .expect("vault entries always serialize"),
         );
@@ -243,7 +256,7 @@ impl Header {
             return Err(VaultError::NotAVault);
         }
         let version = u16::from_le_bytes([data[4], data[5]]);
-        if version != VERSION {
+        if version != 1 && version != VERSION {
             return Err(VaultError::UnsupportedVersion(version));
         }
         let kdf = KdfParams {
@@ -259,20 +272,21 @@ impl Header {
         })
     }
 
-    fn into_vault(self, path: PathBuf, key: Zeroizing<[u8; 32]>, entries: Vec<Entry>) -> Vault {
+    fn into_vault(self, path: PathBuf, key: Zeroizing<[u8; 32]>, contents: Contents) -> Vault {
         Vault {
             path,
             kdf: self.kdf,
             salt: self.salt,
             check: self.check,
             key,
-            entries,
+            entries: contents.entries,
+            folders: contents.folders,
         }
     }
 }
 
 /// Authenticated decryption of the whole file; `None` if the key or data is wrong.
-fn decrypt(data: &[u8], key: &[u8; 32]) -> Option<Vec<Entry>> {
+fn decrypt(data: &[u8], key: &[u8; 32]) -> Option<Contents> {
     let (header, ciphertext) = data.split_at(HEADER_LEN);
     let nonce = XNonce::from_slice(&header[66..HEADER_LEN]);
     let plaintext = Zeroizing::new(
@@ -286,9 +300,9 @@ fn decrypt(data: &[u8], key: &[u8; 32]) -> Option<Vec<Entry>> {
             )
             .ok()?,
     );
-    serde_json::from_slice::<Contents>(&plaintext)
-        .ok()
-        .map(|contents| contents.entries)
+    let contents: Contents = serde_json::from_slice(&plaintext).ok()?;
+    folder::validate(&contents.folders, &contents.entries).ok()?;
+    Some(contents)
 }
 
 fn hex(bytes: &[u8]) -> String {
@@ -298,6 +312,8 @@ fn hex(bytes: &[u8]) -> String {
 #[derive(Serialize)]
 struct ContentsRef<'a> {
     entries: &'a [Entry],
+    #[serde(skip_serializing_if = "<[Folder]>::is_empty")]
+    folders: &'a [Folder],
 }
 
 /// Argon2id stretches the password; HKDF splits the result into the
@@ -416,6 +432,45 @@ mod tests {
         let opened = Vault::open(&path, &password("master")).unwrap();
         assert_eq!(opened.entries, vault.entries);
         assert_eq!(opened.kdf, FAST);
+    }
+
+    #[test]
+    fn vaults_written_before_folders_open_without_migration() {
+        let dir = tempfile::tempdir().unwrap();
+        let (path, vault) = new_vault(&dir);
+        let legacy = serde_json::json!({"entries": [{
+            "id": "legacy-id", "title": "Legacy", "username": "alice",
+            "password": "preserved", "url": "", "notes": "", "totp": null
+        }]});
+        let nonce = [3u8; NONCE_LEN];
+        let mut header = vault.header(&nonce);
+        header[4..6].copy_from_slice(&1u16.to_le_bytes());
+        let plaintext = Zeroizing::new(serde_json::to_vec(&legacy).unwrap());
+        let encrypted = cipher(&vault.key)
+            .encrypt(
+                XNonce::from_slice(&nonce),
+                Payload {
+                    msg: &plaintext,
+                    aad: &header,
+                },
+            )
+            .unwrap();
+        let mut data = header.to_vec();
+        data.extend(encrypted);
+        fs::write(&path, data).unwrap();
+        let opened = Vault::open(&path, &password("master")).unwrap();
+        assert!(opened.folders.is_empty());
+        assert!(opened.entries[0].folder_id.is_none());
+        assert_eq!(opened.entries[0].password, "preserved");
+        opened.save().unwrap();
+        let upgraded = fs::read(&path).unwrap();
+        assert_eq!(u16::from_le_bytes([upgraded[4], upgraded[5]]), VERSION);
+        assert_eq!(
+            Vault::open_with_key(&path, &opened.export_key())
+                .unwrap()
+                .entries,
+            opened.entries
+        );
     }
 
     #[test]

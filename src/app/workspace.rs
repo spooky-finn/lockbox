@@ -1,5 +1,5 @@
 //! Entry collection, selection and transactional save/delete.
-use super::{biometrics::TouchId, editor::Draft};
+use super::{biometrics::TouchId, directories::Directories, editor::Draft};
 use crate::{entry::Entry, generator, totp, vault::Vault};
 
 pub(super) struct Unlocked {
@@ -8,6 +8,7 @@ pub(super) struct Unlocked {
     pub(super) search: String,
     pub(super) selected: Option<String>,
     pub(super) draft: Option<Draft>,
+    pub(super) directories: Directories,
     pub(super) show_password: bool,
     pub(super) confirm_delete: bool,
     pub(super) error: Option<String>,
@@ -23,23 +24,12 @@ impl Unlocked {
             search: String::new(),
             selected: None,
             draft: None,
+            directories: Directories::default(),
             show_password: false,
             confirm_delete: false,
             error: None,
             generator: generator::Options::default(),
         }
-    }
-
-    /// Entries matching the search, sorted by title.
-    pub(super) fn visible(&self) -> Vec<&Entry> {
-        let mut entries: Vec<&Entry> = self
-            .vault
-            .entries
-            .iter()
-            .filter(|entry| matches(entry, &self.search))
-            .collect();
-        entries.sort_by_key(|entry| entry.title.to_lowercase());
-        entries
     }
 
     pub(super) fn selected_entry(&self) -> Option<&Entry> {
@@ -48,6 +38,11 @@ impl Unlocked {
     }
 
     pub(super) fn select(&mut self, id: String) {
+        if let Some(entry) = self.vault.entries.iter().find(|entry| entry.id == id) {
+            self.directories.selected = entry.folder_id.clone();
+            self.directories.reveal(&self.vault);
+        }
+        self.directories.confirm_delete = false;
         self.selected = Some(id);
         self.show_password = false;
         self.confirm_delete = false;
@@ -55,7 +50,16 @@ impl Unlocked {
     }
 
     pub(super) fn start_new(&mut self) {
-        self.start_draft(Entry::new(), true);
+        if self.is_editing() {
+            return;
+        }
+        let mut entry = Entry::new();
+        entry.folder_id = self.directories.selected.clone();
+        self.start_draft(entry, true);
+    }
+
+    pub(super) fn is_editing(&self) -> bool {
+        self.draft.is_some() || self.directories.draft.is_some()
     }
 
     pub(super) fn start_edit(&mut self) {
@@ -106,6 +110,7 @@ impl Unlocked {
             return Err(format!("Не удалось сохранить: {error}"));
         }
         self.draft = None;
+        self.search.clear();
         self.select(id);
         Ok(())
     }
@@ -126,7 +131,7 @@ impl Unlocked {
     }
 }
 
-fn matches(entry: &Entry, query: &str) -> bool {
+pub(super) fn matches(entry: &Entry, query: &str) -> bool {
     let query = query.trim().to_lowercase();
     query.is_empty()
         || [&entry.title, &entry.username, &entry.url]

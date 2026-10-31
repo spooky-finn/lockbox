@@ -2,12 +2,14 @@
 mod auth;
 mod biometrics;
 mod context;
+mod directories;
 mod editor;
 mod runtime;
 mod security;
 mod session;
 mod settings;
 mod time;
+mod tree;
 mod ui;
 mod workspace;
 

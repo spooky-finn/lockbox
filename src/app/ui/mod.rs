@@ -1,13 +1,21 @@
 //! Dioxus presentation. Each component subscribes to its own reactive inputs.
+mod button;
+mod directories;
+mod directory_editor;
 mod editor;
 mod entry;
+mod folder_select;
 mod generator;
 mod icons;
+mod lock_mark;
 mod locked;
 mod sidebar;
 mod status;
+mod symbol;
+mod theme;
 mod toolbar;
 mod totp;
+mod tree;
 mod workspace;
 
 use crate::app::{runtime, session::Screen};
@@ -18,6 +26,7 @@ const CSS: &str = include_str!("../../../assets/app.css");
 
 #[component]
 pub fn App() -> Element {
+    let theme = theme::use_system_theme();
     let state = runtime::use_runtime();
     let last_motion =
         use_hook(|| std::rc::Rc::new(std::cell::Cell::new(std::time::Instant::now())));
@@ -25,7 +34,8 @@ pub fn App() -> Element {
     rsx! {
         style { "{CSS}" }
         main {
-            class: "app",
+            class: format!("app{}{}", if cfg!(target_os = "macos") { " macos" } else { "" }, if locked { " is-locked" } else { "" }),
+            "data-theme": theme,
             onpointerdown: move |_| runtime::record_activity(),
             onkeydown: move |_| runtime::record_activity(),
             onwheel: move |_| runtime::record_activity(),
@@ -35,6 +45,11 @@ pub fn App() -> Element {
                     runtime::record_activity();
                 }
             },
+            if cfg!(target_os = "macos") {
+                div { class: "window-drag-region", aria_hidden: "true",
+                    onmousedown: move |_| dioxus::desktop::window().drag(),
+                }
+            }
             if locked { LockedView {} } else { UnlockedView {} }
         }
     }

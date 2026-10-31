@@ -15,15 +15,16 @@ pub struct Entry {
     /// Icon chosen by hand (a Simple Icons slug); `None` picks one from the URL.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub icon: Option<String>,
+    /// Stable folder identifier; older vaults and unfiled records use the root.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub folder_id: Option<String>,
 }
 
 impl Entry {
     /// A new empty entry with a random identifier.
     pub fn new() -> Self {
-        let mut id = [0u8; 16];
-        getrandom::fill(&mut id).expect("operating system random generator");
         let mut entry = Self::default();
-        entry.id = id.iter().map(|byte| format!("{byte:02x}")).collect();
+        entry.id = crate::id::new();
         entry
     }
 }

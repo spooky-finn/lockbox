@@ -1,3 +1,7 @@
+use super::{
+    button::IconButton,
+    symbol::{Icon, Symbol},
+};
 use crate::app::context::{Session, edit_draft, set_field};
 use crate::{
     app::{
@@ -20,16 +24,19 @@ pub(super) fn TotpEditor() -> Element {
         return rsx! {};
     };
     rsx! {
-        section { class: "totp-editor stack",
+        section { class: if draft.entry.totp.is_some() { "totp-editor stack" } else { "totp-editor stack is-empty" },
             h2 { "TOTP" }
             if let Some(settings) = &draft.entry.totp {
                 label { r#for: "totp-secret", "Секрет или ссылка otpauth://" }
                 div { class: "input-actions",
                     input { id: "totp-secret", r#type: if draft.show_totp { "text" } else { "password" }, autocomplete: "off",
                         value: "{settings.secret}", oninput: move |e| set_field(state, Field::Totp, e.value()) }
-                    button { r#type: "button", onclick: move |_| edit_draft(state, |d| d.show_totp = !d.show_totp), if draft.show_totp { "Скрыть" } else { "Показать" } }
+                    IconButton { icon: if draft.show_totp { Icon::EyeOff } else { Icon::Eye },
+                        label: if draft.show_totp { "Скрыть секрет TOTP" } else { "Показать секрет TOTP" }, pressed: Some(draft.show_totp),
+                        onclick: move |_| edit_draft(state, |d| d.show_totp = !d.show_totp),
+                    }
                 }
-                details { summary { "Дополнительно" }
+                details { summary { class: "icon-button", title: "Настройки TOTP", aria_label: "Настройки TOTP", Symbol { icon: Icon::Settings } }
                     div { class: "totp-options",
                         label { "Алгоритм"
                             select { value: algorithm_name(settings.algorithm), onchange: move |e| edit_draft(state, |d| {
@@ -52,9 +59,9 @@ pub(super) fn TotpEditor() -> Element {
                         }
                     }
                 }
-                button { class: "quiet", r#type: "button", onclick: move |_| edit_draft(state, |d| { d.entry.totp = None; d.totp_error = None; }), "Убрать TOTP" }
+                IconButton { class: "danger quiet", icon: Icon::Trash, label: "Убрать TOTP", onclick: move |_| edit_draft(state, |d| { d.entry.totp = None; d.totp_error = None; }) }
             } else {
-                button { r#type: "button", onclick: move |_| edit_draft(state, |d| d.entry.totp = Some(Totp { secret: String::new(), algorithm: TotpAlgorithm::Sha1, digits: 6, period: 30 })), "Добавить TOTP" }
+                IconButton { icon: Icon::Clock, label: "Добавить TOTP", onclick: move |_| edit_draft(state, |d| d.entry.totp = Some(Totp { secret: String::new(), algorithm: TotpAlgorithm::Sha1, digits: 6, period: 30 })) }
             }
             if let Some(error) = &draft.totp_error { p { class: "error", role: "alert", "{error}" } }
         }
