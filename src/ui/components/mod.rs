@@ -57,4 +57,5 @@ pub fn App() -> Element {
 }
 
 #[cfg(test)]
-mod tests;
+#[path = "tests/support.rs"]
+pub(crate) mod test_support;

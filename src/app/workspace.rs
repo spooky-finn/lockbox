@@ -138,3 +138,7 @@ pub(crate) fn matches(entry: &Entry, query: &str) -> bool {
             .iter()
             .any(|field| field.to_lowercase().contains(&query))
 }
+
+#[cfg(test)]
+#[path = "tests/workspace.rs"]
+mod tests;

@@ -102,3 +102,7 @@ pub(crate) fn algorithm_name(algorithm: TotpAlgorithm) -> &'static str {
         TotpAlgorithm::Sha512 => "SHA512",
     }
 }
+
+#[cfg(test)]
+#[path = "tests/editor.rs"]
+mod tests;

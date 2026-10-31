@@ -49,3 +49,7 @@ pub(super) fn DirectoryEditor() -> Element {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/directory_editor.rs"]
+mod tests;

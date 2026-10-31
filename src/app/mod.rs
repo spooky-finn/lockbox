@@ -11,7 +11,8 @@ pub(crate) mod tree;
 pub(crate) mod workspace;
 
 #[cfg(test)]
-pub(crate) mod tests;
+#[path = "tests/support.rs"]
+pub(crate) mod test_support;
 
 // Preserve the desktop entry point.
 pub use crate::ui::App;

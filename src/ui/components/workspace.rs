@@ -47,3 +47,7 @@ pub(super) fn UnlockedView() -> Element {
         StatusBar {}
     }
 }
+
+#[cfg(test)]
+#[path = "tests/workspace.rs"]
+mod tests;

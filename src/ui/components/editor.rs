@@ -73,3 +73,7 @@ pub(super) fn DraftView() -> Element {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/editor.rs"]
+mod tests;

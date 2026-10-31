@@ -215,3 +215,7 @@ pub(super) fn copy(field: CopyField) {
     }
     publish_status();
 }
+
+#[cfg(test)]
+#[path = "tests/runtime.rs"]
+mod tests;

@@ -68,3 +68,7 @@ pub(super) fn nodes_ui(nodes: &[Node<'_>], workspace: &Unlocked, state: Session)
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/tree.rs"]
+mod tests;

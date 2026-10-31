@@ -103,3 +103,7 @@ pub(super) fn EntryView() -> Element {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/entry.rs"]
+mod tests;

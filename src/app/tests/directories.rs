@@ -1,6 +1,6 @@
 use super::*;
 use crate::app::{
-    tests::{reopen, unlocked},
+    test_support::{reopen, unlocked},
     tree::{self, Node},
 };
 

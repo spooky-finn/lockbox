@@ -50,3 +50,7 @@ fn branch<'a>(
     nodes.extend(entries.into_iter().map(Node::Record));
     nodes
 }
+
+#[cfg(test)]
+#[path = "tests/tree.rs"]
+mod tests;

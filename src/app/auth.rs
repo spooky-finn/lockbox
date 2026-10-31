@@ -179,3 +179,7 @@ pub(crate) fn with_vault_extension(mut path: PathBuf) -> PathBuf {
     }
     path
 }
+
+#[cfg(test)]
+#[path = "tests/auth.rs"]
+mod tests;

@@ -167,4 +167,5 @@ impl Unlocked {
 }
 
 #[cfg(test)]
+#[path = "tests/directories.rs"]
 mod tests;
