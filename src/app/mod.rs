@@ -1,6 +1,7 @@
 //! Framework-independent application state and workflows.
 pub(crate) mod auth;
 pub(crate) mod biometrics;
+pub(crate) mod cloud_setup;
 pub(crate) mod directories;
 pub(crate) mod editor;
 pub(crate) mod security;

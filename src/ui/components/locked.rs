@@ -25,10 +25,12 @@ pub(super) fn LockedView() -> Element {
     };
     let busy = locked.pending.is_some();
     let create = locked.mode == Mode::Create;
-    let ready = locked
-        .path
-        .as_ref()
-        .is_some_and(|path| create || path.exists());
+    let cloud_password = create && locked.cloud_password_step;
+    let ready = cloud_password
+        || locked
+            .path
+            .as_ref()
+            .is_some_and(|path| create || path.exists());
     let touch_id = ready && !create && locked.touch_id.is_some();
     let filename = locked
         .path
@@ -73,13 +75,14 @@ pub(super) fn LockedView() -> Element {
                     else { "Ваши пароли под замком" }
                 }
                 p { class: "unlock-description", title: "{path}",
-                    if create && locked.path.is_none() { "Выберите тип хранилища." }
+                    if cloud_password { "Придумайте мастер-пароль для защиты локального профиля." }
+                    else if create && locked.path.is_none() { "Выберите тип хранилища." }
                     else if create { "Придумайте мастер-пароль для нового хранилища «{filename}»." }
                     else if touch_id { "Используйте Touch ID или введите мастер-пароль, чтобы открыть «{filename}»." }
                     else if ready { "Введите мастер-пароль, чтобы открыть хранилище «{filename}»." }
                     else { "Откройте хранилище или создайте новое, чтобы сохранить свои пароли." }
                 }
-                if create && locked.path.is_none() {
+                if create && locked.path.is_none() && !cloud_password {
                     div { class: "storage-choices",
                         button { r#type: "button", class: "storage-choice", onclick: move |_| runtime::pick_vault(true),
                             strong { "Однопользовательское" }
@@ -96,32 +99,12 @@ pub(super) fn LockedView() -> Element {
                         }
                     }
                     if locked.storage_kind == Some(StorageKind::Cloud) {
-                        div { class: "cloud-setup",
-                            p { class: "muted", "Подключите подготовленное хранилище Storj." }
-                            label { r#for: "cloud-username", "Имя пользователя" }
-                            input { id: "cloud-username", value: "{locked.cloud.username}", autocomplete: "off",
-                                oninput: move |event| edit_locked(state, |locked| locked.cloud.username = event.value()), }
-                            label { r#for: "cloud-space", "Имя хранилища" }
-                            input { id: "cloud-space", value: "{locked.cloud.space_name}", autocomplete: "off",
-                                oninput: move |event| edit_locked(state, |locked| locked.cloud.space_name = event.value()), }
-                            label { r#for: "cloud-url", "Base URL" }
-                            input { id: "cloud-url", r#type: "url", value: "{locked.cloud.base_url}", placeholder: "https://…", autocomplete: "off",
-                                oninput: move |event| edit_locked(state, |locked| locked.cloud.base_url = event.value()), }
-                            label { r#for: "cloud-access", "Access Key" }
-                            input { id: "cloud-access", r#type: "password", value: locked.cloud.access_key.as_str(), autocomplete: "off",
-                                oninput: move |event| {
-                                    let value = Zeroizing::new(event.value());
-                                    edit_locked(state, |locked| replace_secret(&mut locked.cloud.access_key, &value));
-                                }, }
-                            label { r#for: "cloud-secret", "Secret Key" }
-                            input { id: "cloud-secret", r#type: "password", value: locked.cloud.secret_key.as_str(), autocomplete: "off",
-                                oninput: move |event| {
-                                    let value = Zeroizing::new(event.value());
-                                    edit_locked(state, |locked| replace_secret(&mut locked.cloud.secret_key, &value));
-                                }, }
-                            p { class: "notice", role: "status", "Настройка облака в разработке. Создание ключей и подключение будут доступны на следующем этапе." }
-                        }
+                        super::cloud_setup::CloudSetupView {}
                     }
+                }
+                if cloud_password {
+                    p { class: "notice", "Создание профиля и ключей ещё в разработке. Подключение к Storj не проверено; данные не сохранены." }
+                    button { r#type: "button", class: "setup-button", onclick: move |_| edit_locked(state, |locked| locked.edit_cloud_connection()), "Назад к подключению" }
                 }
                 if ready {
                     form { class: "unlock-form", onsubmit: submit,
@@ -149,7 +132,7 @@ pub(super) fn LockedView() -> Element {
                                         edit_locked(state, |locked| replace_secret(&mut locked.repeat, &value));
                                     },
                                 }
-                                IconButton { class: "unlock-submit quiet", kind: "submit", icon: Icon::ArrowRight, label: "Создать хранилище", disabled: busy }
+                                IconButton { class: "unlock-submit quiet", kind: "submit", icon: Icon::ArrowRight, label: "Создать хранилище", disabled: busy || cloud_password }
                             }
                         }
                     }

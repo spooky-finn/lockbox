@@ -40,20 +40,14 @@ pub(crate) enum StorageKind {
     Cloud,
 }
 
-#[derive(Default)]
-pub(crate) struct CloudSetup {
-    pub(crate) username: String,
-    pub(crate) space_name: String,
-    pub(crate) base_url: String,
-    pub(crate) access_key: Zeroizing<String>,
-    pub(crate) secret_key: Zeroizing<String>,
-}
+pub(crate) use super::cloud_setup::CloudSetup;
 
 pub(crate) struct Locked {
     pub(crate) path: Option<PathBuf>,
     pub(crate) mode: Mode,
     pub(crate) storage_kind: Option<StorageKind>,
     pub(crate) cloud: CloudSetup,
+    pub(crate) cloud_password_step: bool,
     pub(crate) password: Zeroizing<String>,
     pub(crate) repeat: Zeroizing<String>,
     pub(crate) error: Option<String>,
@@ -79,6 +73,7 @@ impl Locked {
             mode: Mode::Open,
             storage_kind: None,
             cloud: CloudSetup::default(),
+            cloud_password_step: false,
             password: secret_buffer(),
             repeat: secret_buffer(),
             error,
@@ -126,6 +121,26 @@ impl Locked {
             let _ = sender.send(result);
         });
         self.pending = Some(receiver);
+    }
+
+    pub(crate) fn continue_cloud(&mut self) {
+        if self.mode != Mode::Create || self.storage_kind != Some(StorageKind::Cloud) {
+            return;
+        }
+        match self.cloud.validate() {
+            Ok(()) => {
+                self.error = None;
+                self.cloud_password_step = true;
+            }
+            Err(error) => self.error = Some(error.into()),
+        }
+    }
+
+    pub(crate) fn edit_cloud_connection(&mut self) {
+        self.cloud_password_step = false;
+        self.password.zeroize();
+        self.repeat.zeroize();
+        self.error = None;
     }
 
     pub(crate) fn submit(&mut self) {

@@ -1,5 +1,6 @@
 //! Dioxus presentation. Each component subscribes to its own reactive inputs.
 mod button;
+mod cloud_setup;
 mod directories;
 mod directory_editor;
 mod editor;

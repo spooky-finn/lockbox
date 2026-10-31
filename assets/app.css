@@ -419,3 +419,6 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 99px; }
 .cloud-setup input { width: 100%; padding: 10px 12px; border: 1px solid var(--lock-secondary); border-radius: 8px; background: var(--control); color: var(--lock-ink); }
 .lock-screen:has(.cloud-setup) { overflow-y: auto; }
 .lock-screen:has(.cloud-setup) .lock-actions { position: static; transform: none; margin-top: 24px; }
+.setup-button { padding: 10px 14px; border: 1px solid var(--lock-secondary); border-radius: 8px; color: var(--lock-ink); background: var(--control); cursor: pointer; }
+.setup-button:focus-visible { outline: 2px solid var(--lock-ink); outline-offset: 2px; }
+.storj-guide { white-space: pre-wrap; font: inherit; line-height: 1.5; }
