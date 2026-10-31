@@ -28,3 +28,34 @@ fn search_matches_title_username_and_url_ignoring_case() {
     unlocked.search = "ПОЧ".into();
     assert_eq!(titles(&unlocked), ["Почта"]);
 }
+
+#[test]
+fn concurrent_folder_cycles_and_dangling_parents_do_not_hide_records() {
+    use crate::core::folder::Folder;
+    let dir = tempfile::tempdir().unwrap();
+    let mut workspace = unlocked(&dir);
+    add(&mut workspace, "Find me", "username", "https://example.com");
+    workspace.vault.folders = vec![
+        Folder {
+            id: "f".into(),
+            name: "F".into(),
+            parent_id: Some("g".into()),
+        },
+        Folder {
+            id: "g".into(),
+            name: "G".into(),
+            parent_id: Some("f".into()),
+        },
+    ];
+    workspace.vault.entries[0].folder_id = Some("f".into());
+    assert_eq!(project(&workspace.vault, "").len(), 3);
+    assert!(matches!(
+        project(&workspace.vault, "find").as_slice(),
+        [Node::Record(_)]
+    ));
+    workspace.vault.entries[0].folder_id = Some("missing".into());
+    assert!(matches!(
+        project(&workspace.vault, "find").as_slice(),
+        [Node::Record(_)]
+    ));
+}

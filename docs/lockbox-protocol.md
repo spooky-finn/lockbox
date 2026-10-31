@@ -104,9 +104,14 @@ stable random IDs. Existing workflows in [workspace.rs](../src/app/workspace.rs)
 and [directories.rs](../src/app/directories.rs) mutate collections then save.
 Shared mode replaces that persistence boundary with signed local transactions.
 
-Current vault has no user identity, space membership, signatures, or network
-sync. Sharing its encryption key would establish shared decryption capability,
-but would not establish individual authorship.
+New v3 cloud profiles now implement an experimental `LBX-SYNC-0` engine with
+independent device identities, signed membership epochs, encrypted events,
+deterministic projection, durable outbox and Storj transport. See
+[implementation boundaries and API](sync-engine.md). Its compact inline
+control/grant/checkpoint schema is separately versioned and does not claim
+conformance to the full proposal-v1 schemas below. Existing v1/v2 vaults retain
+local persistence. Sharing a local vault key alone does not establish individual
+authorship.
 
 Local mode remains usable without cloud. Migration and cloud publication are
 separate actions. Existing `core/app/infra/ui` layering stays authoritative;

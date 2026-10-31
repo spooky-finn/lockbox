@@ -68,6 +68,21 @@ pub(super) fn tick() {
     if pending {
         poll_workers();
     }
+    {
+        let mut state = consume_context::<Session>();
+        // Avoid notifying the whole UI at 10 Hz while the network worker waits.
+        let should_tick = matches!(&*state.peek(), Screen::Unlocked(u) if u.vault.profile.as_ref().is_some_and(|p| p.sync.is_some()) && u.sync.needs_tick(u.is_editing()));
+        if should_tick {
+            state.with_mut(|screen| {
+                if let Screen::Unlocked(workspace) = screen {
+                    let editing = workspace.is_editing();
+                    if let Some(error) = workspace.sync.tick(&mut workspace.vault, editing) {
+                        workspace.error = Some(error);
+                    }
+                }
+            });
+        }
+    }
     publish_status();
     let now = unix_now();
     if *clock.peek() != now {
@@ -165,11 +180,11 @@ pub(super) fn create_cloud_profile() {
         .add_filter("lockbox", &["lbx"])
         .set_file_name("profile.lbx")
         .save_file();
-    if let Some(path) = path {
-        if let Screen::Locked(form) = &mut *state.write() {
-            form.path = Some(with_vault_extension(path));
-            form.submit();
-        }
+    if let Some(path) = path
+        && let Screen::Locked(form) = &mut *state.write()
+    {
+        form.path = Some(with_vault_extension(path));
+        form.submit();
     }
 }
 

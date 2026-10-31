@@ -3,8 +3,8 @@ use super::{biometrics::TouchId, directories::Directories, editor::Draft};
 use crate::{core::entry::Entry, core::generator, core::totp, infra::vault::Vault};
 
 pub(crate) struct Unlocked {
-    /// Derived once on unlock; wiped together with the session.
-    _space_content_keys: Option<crate::core::identity::ContentKeys>,
+    pub(crate) sync: super::space_sync::SpaceSync,
+    pub(crate) sync_recovery: zeroize::Zeroizing<String>,
     pub(crate) vault: Vault,
     pub(crate) touch_id: TouchId,
     pub(crate) search: String,
@@ -20,12 +20,9 @@ pub(crate) struct Unlocked {
 
 impl Unlocked {
     pub(crate) fn new(vault: Vault) -> Self {
-        let space_content_keys = vault
-            .profile
-            .as_ref()
-            .map(|profile| profile.space.content_keys());
         Self {
-            _space_content_keys: space_content_keys,
+            sync: super::space_sync::SpaceSync::default(),
+            sync_recovery: zeroize::Zeroizing::new(String::new()),
             vault,
             touch_id: TouchId::default(),
             search: String::new(),
@@ -42,6 +39,18 @@ impl Unlocked {
     pub(crate) fn selected_entry(&self) -> Option<&Entry> {
         let id = self.selected.as_ref()?;
         self.vault.entries.iter().find(|entry| &entry.id == id)
+    }
+
+    pub(crate) fn activate_sync(&mut self) {
+        let recovery = secrecy::SecretString::from(std::mem::take(&mut *self.sync_recovery));
+        self.error = self
+            .vault
+            .activate_sync(&recovery)
+            .err()
+            .map(|error| error.to_string());
+        if self.error.is_none() {
+            self.sync.saved();
+        }
     }
 
     pub(crate) fn select(&mut self, id: String) {
@@ -112,13 +121,14 @@ impl Unlocked {
             Some(slot) => *slot = entry,
             None => self.vault.entries.push(entry),
         }
-        if let Err(error) = self.vault.save() {
+        if let Err(error) = self.vault.save_changes() {
             self.vault.entries = previous;
             return Err(format!("Не удалось сохранить: {error}"));
         }
         self.draft = None;
         self.search.clear();
         self.select(id);
+        self.sync.saved();
         Ok(())
     }
 
@@ -128,12 +138,13 @@ impl Unlocked {
         };
         let previous = self.vault.entries.clone();
         self.vault.entries.retain(|entry| entry.id != id);
-        if let Err(error) = self.vault.save() {
+        if let Err(error) = self.vault.save_changes() {
             self.vault.entries = previous;
             return Err(format!("Не удалось сохранить: {error}"));
         }
         self.selected = None;
         self.confirm_delete = false;
+        self.sync.saved();
         Ok(())
     }
 }

@@ -11,6 +11,7 @@ description = "Local password manager with TOTP"
 [dependencies]
 arboard = "3.7.0"
 argon2 = "0.5"
+base64 = "0.22"
 chacha20poly1305 = "0.10"
 dirs = "6"
 ed25519-dalek = { version = "=2.2.0", default-features = false, features = ["std", "zeroize"] }
@@ -34,6 +35,11 @@ x25519-dalek = { version = "=2.0.1", default-features = false, features = ["stat
 url = "2"
 zeroize = { version = "1.8", features = ["derive", "serde"] }
 rmcp = { version = "3.8.0", features = ["server"] }
+rand_core = { version = "0.9", features = ["os_rng"] }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+quick-xml = { version = "0.41", features = ["serialize"] }
+serde_jcs = "0.2"
+time = { version = "0.3", features = ["formatting", "macros"] }
 
 [dev-dependencies]
 dioxus-ssr = "0.7"

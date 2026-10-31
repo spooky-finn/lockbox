@@ -7,6 +7,7 @@ pub(crate) mod editor;
 pub(crate) mod security;
 pub(crate) mod session;
 pub(crate) mod settings;
+pub(crate) mod space_sync;
 pub(crate) mod time;
 pub(crate) mod tree;
 pub(crate) mod workspace;

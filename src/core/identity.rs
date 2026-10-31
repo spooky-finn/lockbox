@@ -1,5 +1,6 @@
 //! Initial identity material. No protocol signatures or admission are produced here.
 use ed25519_dalek::SigningKey;
+#[cfg(test)]
 use hkdf::Hkdf;
 use hpke::{Deserializable, Kem, Serializable, kem::X25519HkdfSha256};
 use serde::{Deserialize, Serialize};
@@ -47,6 +48,9 @@ pub(crate) fn hex(bytes: &[u8]) -> String {
 }
 
 impl DeviceKeys {
+    pub(crate) fn sync_secret(&self) -> crate::core::sync::DeviceSecret {
+        crate::core::sync::DeviceSecret::from_parts(self.signing_secret, self.hpke_secret)
+    }
     pub(crate) fn generate(root: &SigningKey) -> Result<(Self, PublicIdentity), getrandom::Error> {
         let signing_secret = random32()?;
         let signing_key = SigningKey::from_bytes(&signing_secret)
@@ -94,9 +98,13 @@ impl DeviceKeys {
     }
 }
 
+#[cfg(test)]
 pub(crate) type ContentKeys = (Zeroizing<[u8; 32]>, Zeroizing<[u8; 32]>);
 
 impl SpaceKeys {
+    pub(crate) fn epoch_key(&self) -> &[u8; 32] {
+        &self.epoch_key
+    }
     pub(crate) fn generate() -> Result<Self, getrandom::Error> {
         Ok(Self {
             space_id: *random32()?,
@@ -106,6 +114,7 @@ impl SpaceKeys {
         })
     }
 
+    #[cfg(test)]
     pub(crate) fn content_keys(&self) -> ContentKeys {
         let hkdf = Hkdf::<Sha256>::new(Some(&self.space_id), &self.epoch_key);
         let derive = |domain: &[u8]| {

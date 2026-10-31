@@ -1,4 +1,4 @@
-//! Encrypted bootstrap profile; protocol admission and publishing remain disabled.
+//! Encrypted device profile, independent root capsule, and durable sync journal.
 use super::vault::{KdfParams, Result, VaultError};
 use crate::core::identity::{DeviceKeys, PublicIdentity, SpaceKeys, random32};
 use argon2::{Algorithm, Argon2, Params, Version};
@@ -14,11 +14,11 @@ use sha2::Sha256;
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 #[derive(Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
-pub(crate) struct ProviderConfiguration {
-    pub(crate) base_url: String,
-    pub(crate) bucket: String,
-    pub(crate) access_key: String,
-    pub(crate) secret_key: String,
+pub struct ProviderConfiguration {
+    pub base_url: String,
+    pub bucket: String,
+    pub access_key: String,
+    pub secret_key: String,
 }
 
 #[derive(Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
@@ -31,6 +31,12 @@ pub(crate) struct BootstrapProfile {
     device: DeviceKeys,
     pub(crate) space: SpaceKeys,
     pub(crate) provider: ProviderConfiguration,
+    #[serde(default)]
+    #[zeroize(skip)]
+    pub(crate) sync: Option<crate::core::sync::SyncState>,
+    #[serde(default)]
+    #[zeroize(skip)]
+    pub(crate) certificate: Option<crate::core::sync::Signed<crate::core::sync::Certificate>>,
     root_capsule: RootCapsule,
 }
 
@@ -57,26 +63,84 @@ impl BootstrapProfile {
         let (device, identity) = DeviceKeys::generate(&root).map_err(|_| VaultError::Random)?;
         let root_capsule = RootCapsule::seal(&root, recovery_password, kdf)?;
         let space = SpaceKeys::generate().map_err(|_| VaultError::Random)?;
+        let secret = device.sync_secret();
+        let certificate = secret.certificate(&root, identity.hpke_key)?;
+        let sync = crate::core::sync::Machine::create(
+            crate::core::sync::Hash(space.space_id),
+            crate::core::sync::Hash(space.namespace),
+            certificate.clone(),
+            &secret,
+            space.epoch_key(),
+            crate::core::sync::Hash(space.epoch_context),
+        )?;
         Ok(Self {
-            schema_version: 1,
+            schema_version: 2,
             username,
             space_name,
             identity,
             device,
             space,
             provider,
+            sync: Some(sync),
+            certificate: Some(certificate),
             root_capsule,
         })
     }
 
     pub(crate) fn validate(&self) -> bool {
-        self.schema_version == 1
+        ((self.schema_version == 1 && self.sync.is_none())
+            || (self.schema_version == 2 && self.sync.is_some() && self.certificate.is_some()))
             && self.device.matches(&self.identity)
             && self.root_capsule.version == 1
             && self.root_capsule.kdf.validate().is_ok()
             && self.root_capsule.ciphertext.len() == 48
             && !self.username.trim().is_empty()
             && !self.space_name.trim().is_empty()
+            && self.sync.as_ref().is_none_or(|sync| {
+                sync.space.0 == self.space.space_id && sync.namespace.0 == self.space.namespace
+            })
+            && self.certificate.as_ref().is_none_or(|certificate| {
+                certificate.verify().is_ok()
+                    && certificate.body.device.0 == self.identity.device_id
+                    && certificate.body.user.0 == self.identity.user_id
+                    && certificate.body.root_key == self.identity.root_key
+                    && certificate.body.signing_key == self.identity.signing_key
+                    && certificate.body.hpke_key == self.identity.hpke_key
+            })
+    }
+
+    pub(crate) fn sync_secret(&self) -> crate::core::sync::DeviceSecret {
+        self.device.sync_secret()
+    }
+
+    pub(crate) fn activate_sync(&mut self, recovery_password: &SecretString) -> Result<()> {
+        if self.sync.is_some() {
+            return Ok(());
+        }
+        let root = self
+            .root_capsule
+            .open(recovery_password, &self.identity.root_key)
+            .map_err(|_| VaultError::RecoveryFailed)?;
+        let device = self.sync_secret();
+        let certificate = device.certificate(&root, self.identity.hpke_key)?;
+        let sync = crate::core::sync::Machine::create(
+            crate::core::sync::Hash(self.space.space_id),
+            crate::core::sync::Hash(self.space.namespace),
+            certificate.clone(),
+            &device,
+            self.space.epoch_key(),
+            crate::core::sync::Hash(self.space.epoch_context),
+        )?;
+        self.certificate = Some(certificate);
+        self.sync = Some(sync);
+        self.schema_version = 2;
+        Ok(())
+    }
+
+    pub(crate) fn cancel_activation(&mut self) {
+        self.sync = None;
+        self.certificate = None;
+        self.schema_version = 1;
     }
 }
 
@@ -134,7 +198,6 @@ impl RootCapsule {
         Ok(capsule)
     }
 
-    #[cfg(test)]
     fn open(&self, password: &SecretString, public_key: &[u8; 32]) -> Result<SigningKey> {
         if self.version != 1 {
             return Err(VaultError::Corrupted);

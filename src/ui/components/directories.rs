@@ -78,7 +78,7 @@ pub(super) fn DirectoryView() -> Element {
                 div { class: "delete-confirm", role: "alert",
                     p { "Удалить папку «{directory.name}» и её подпапки? Все записи будут перемещены на уровень выше." }
                     div { class: "actions",
-                        IconButton { class: "danger", icon: Icon::Trash, label: "Удалить папку", onclick: move |_| edit_unlocked(state, |u| u.error = u.directories.delete(&mut u.vault).err()) }
+                        IconButton { class: "danger", icon: Icon::Trash, label: "Удалить папку", onclick: move |_| edit_unlocked(state, |u| { u.error = u.directories.delete(&mut u.vault).err(); if u.error.is_none() { u.sync.saved(); } }) }
                         IconButton { icon: Icon::Close, label: "Отмена", onclick: move |_| edit_unlocked(state, |u| u.directories.confirm_delete = false) }
                     }
                 }

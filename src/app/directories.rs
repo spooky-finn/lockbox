@@ -55,7 +55,7 @@ impl Directories {
         }
         folder::validate(&folders, &vault.entries).map_err(str::to_owned)?;
         let previous = std::mem::replace(&mut vault.folders, folders);
-        if let Err(error) = vault.save() {
+        if let Err(error) = vault.save_changes() {
             vault.folders = previous;
             return Err(format!("Не удалось сохранить папку: {error}"));
         }
@@ -95,7 +95,7 @@ impl Directories {
             }
         }
         vault.folders.retain(|folder| !removed.contains(&folder.id));
-        if let Err(error) = vault.save() {
+        if let Err(error) = vault.save_changes() {
             vault.folders = previous;
             for (index, folder) in assignments {
                 vault.entries[index].folder_id = folder;
@@ -113,6 +113,7 @@ impl Directories {
 impl Unlocked {
     pub(crate) fn save_directory(&mut self) -> Result<(), String> {
         self.directories.save(&mut self.vault)?;
+        self.sync.saved();
         self.search.clear();
         Ok(())
     }
