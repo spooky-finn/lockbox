@@ -28,6 +28,7 @@ sha2 = "0.10"
 subtle = "2.6"
 thiserror = "2"
 zeroize = { version = "1.8", features = ["derive"] }
+rmcp = { version = "3.8.0", features = ["server"] }
 
 [dev-dependencies]
 dioxus-ssr = "0.7"
