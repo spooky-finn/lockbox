@@ -66,6 +66,10 @@ pub struct Certificate {
     pub hpke_key: Key,
 }
 
+fn device_id(signing_key: &Key) -> Hash {
+    Hash::digest(b"lockbox.device\0", signing_key)
+}
+
 impl Signed<Certificate> {
     pub fn hash(&self) -> Result<Hash> {
         Ok(Hash::digest(
@@ -78,7 +82,7 @@ impl Signed<Certificate> {
         let body = &self.body;
 
         if body.user != Hash::digest(b"lockbox.user\0", &body.root_key)
-            || body.device != Hash::digest(b"lockbox.device\0", &body.signing_key)
+            || body.device != device_id(&body.signing_key)
             || VerifyingKey::from_bytes(&body.signing_key).map_or(true, |key| key.is_weak())
         {
             return Err(Error::InvalidSignature);
@@ -125,7 +129,7 @@ impl DeviceSecret {
             Certificate {
                 user: Hash::digest(b"lockbox.user\0", &root_key),
                 root_key,
-                device: self.id(),
+                device: device_id(&signing_key),
                 signing_key,
                 hpke_key,
             },
@@ -135,18 +139,16 @@ impl DeviceSecret {
     }
 
     pub fn id(&self) -> Hash {
-        Hash::digest(
-            b"lockbox.device\0",
-            &self.signer().verifying_key().to_bytes(),
-        )
+        device_id(&self.signer().verifying_key().to_bytes())
     }
 
     pub(super) fn matches_certificate(&self, certificate: &Certificate) -> bool {
         let Ok(private) = <X25519HkdfSha256 as Kem>::PrivateKey::from_bytes(&self.hpke) else {
             return false;
         };
-        self.id() == certificate.device
-            && self.signer().verifying_key().to_bytes() == certificate.signing_key
+        let signing_key = self.signer().verifying_key().to_bytes();
+        device_id(&signing_key) == certificate.device
+            && signing_key == certificate.signing_key
             && X25519HkdfSha256::sk_to_pk(&private).to_bytes().as_slice() == certificate.hpke_key
     }
     pub(super) fn signer(&self) -> SigningKey {

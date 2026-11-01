@@ -9,23 +9,21 @@ Last full suite: cycle 58; 413 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 58: Stream canonical signing messages
-- Private signing_bytes helper prefixes domain, writes canonical body directly
-  into same Vec with serde_jcs::to_writer. sign/verify share exact transcript
-  setup; remove intermediate canonical Vec and whole-body copy.
-- Local serde_jcs 0.2 source confirms to_vec delegates to same to_writer.
-  Preserve InvalidEncoding mapping, key/signature rejection order, public API,
-  wire signatures and signature domain separation.
-- Full suite: 413 library, four integration, two doctests passed; two OS probes
-  ignored. Fixed wire/signature golden fixture passed. Formatting/strict
-  all-target Clippy passed. Source matches verified snapshot; whitespace clean.
-- Snapshot: /tmp/lockbox-refactor-58.mzyh9phl. Unrelated edits untouched.
+Cycle 59: Reuse derived device public key
+- Certificate creation hashes its already-derived signing_key instead of deriving
+  Ed25519 key again through self.id. Certificate matching derives once and uses
+  same bytes for both identity hash and explicit signing-key comparison.
+- Private device_id centralizes unchanged device hash domain across creation,
+  public id, certificate verification and matching. Keep HPKE parse/comparison,
+  root binding, weak-key rejection and signature verification order.
+- Formatting/strict all-target Clippy passed. 54 protocol, two sync identity,
+  six vault identity, two sync integration tests passed. Source matches verified
+  snapshot; whitespace checks passed. Unrelated edits untouched.
+- Snapshot: /tmp/lockbox-refactor-59.wf3jt_fu.
 
-Next search: DeviceSecret.certificate already derives signing_key, then self.id
-repeats Ed25519 public-key derivation. matches_certificate derives signer twice
-through id then direct comparison. Consider derive once and share private device
-ID helper across certificate creation/verification/id/matching. Keep HPKE checks
-and identity domain exact; inspect existing identity and invitation coverage.
-Rejected for now: recovery suggestions borrow API returns slice lifetime tied to
-prefix; static callback ownership prevents simply replacing Vec with slice.
-Avoid extra lifetime/range machinery for tiny suggestion lists.
+Next search: device.id() inside find/accepted-change loop predicates repeats
+Ed25519 public-key derivation per item. Replay has three searches across every
+control epoch; epoch_key, prepare_transaction and join_admission also repeat it.
+Consider one immutable local device_id per function before first lookup, reused
+for subsequent comparisons/header. Keep guard/decode/error ordering and keys
+uncached across calls. Inspect actual scopes before choosing all affected paths.
