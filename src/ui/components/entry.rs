@@ -35,7 +35,13 @@ pub(super) fn EntryView() -> Element {
         article { class: "entry-detail",
             div { class: "detail-heading",
                 EntryIcon { title: entry.title.clone(), slug: icons::catalog().for_entry(entry).map(|i| i.slug.clone()), large: true }
-                div { p { class: "detail-kind", {language.text(Text::Password)} } h1 { "{entry.title}" } }
+                div { class: "detail-title", p { class: "detail-kind", {language.text(Text::Password)} } h1 { "{entry.title}" } }
+                if !unlocked.confirm_delete {
+                    div { class: "actions entry-actions",
+                        IconButton { class: "quiet", icon: Icon::Edit, label: language.text(Text::Edit), disabled: unlocked.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.start_edit()) }
+                        IconButton { class: "danger quiet", icon: Icon::Trash, label: language.text(Text::Delete), disabled: unlocked.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.confirm_delete = true) }
+                    }
+                }
             }
             dl { class: "fields",
                 div { class: "field-row",
@@ -94,12 +100,13 @@ pub(super) fn EntryView() -> Element {
             }
 
             if !entry.attachments.is_empty() {
-                section { class: "stack",
+                section { class: "entry-attachments",
                     h2 { {language.text(Text::Attachments)} }
                     for file in &entry.attachments {
-                        div { class: "input-actions", key: "{file.id}",
-                            span { "{file.name} ({file.data.len()} B)" }
-                            IconButton { icon: Icon::Save, label: language.text(Text::SaveAttachment),
+                        div { class: "attachment-row", key: "{file.id}",
+                            span { class: "attachment-name", "{file.name}" }
+                            span { class: "attachment-size", "{file.data.len()} B" }
+                            IconButton { class: "quiet", icon: Icon::Save, label: language.text(Text::SaveAttachment),
                                 onclick: { let id = file.id.clone(); move |_| runtime::export_attachment(&id) },
                             }
                         }
@@ -114,11 +121,6 @@ pub(super) fn EntryView() -> Element {
                         IconButton { class: "danger", icon: Icon::Trash, label: language.text(Text::DeleteEntry), disabled: unlocked.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.error = u.delete_selected().err()) }
                         IconButton { icon: Icon::Close, label: language.text(Text::Cancel), onclick: move |_| edit_unlocked(state, |u| u.confirm_delete = false) }
                     }
-                }
-            } else {
-                div { class: "actions entry-actions",
-                    IconButton { icon: Icon::Edit, label: language.text(Text::Edit), disabled: unlocked.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.start_edit()) }
-                    IconButton { class: "danger quiet", icon: Icon::Trash, label: language.text(Text::Delete), disabled: unlocked.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.confirm_delete = true) }
                 }
             }
         }

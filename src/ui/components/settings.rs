@@ -60,8 +60,12 @@ pub(super) fn SettingsView() -> Element {
             section { class: "settings-section stack",
                 h2 { {language.text(Text::Security)} }
                 div { class: "preference-row",
-                    label { r#for: "auto-lock", {language.text(Text::AutoLock)} }
+                    div { class: "preference-copy",
+                        label { r#for: "auto-lock", {language.text(Text::AutoLock)} }
+                        p { id: "auto-lock-description", class: "muted", {language.text(Text::LockTheVaultAfterAPeriodOfInactivity)} }
+                    }
                     select { id: "auto-lock", aria_label: language.text(Text::AutoLockTimeout),
+                        aria_describedby: "auto-lock-description",
                         value: "{preferences.config.auto_lock_minutes}",
                         onchange: move |event| {
                             if let Ok(minutes) = event.value().parse() { runtime::set_auto_lock(minutes); }
@@ -73,15 +77,18 @@ pub(super) fn SettingsView() -> Element {
                         }
                     }
                 }
-                p { class: "muted", {language.text(Text::LockTheVaultAfterAPeriodOfInactivity)} }
                 if unlocked.touch_id.available {
-                    label { class: "preference-row", "Touch ID"
-                        input { class: "switch", r#type: "checkbox", checked: unlocked.touch_id.enabled,
+                    div { class: "preference-row",
+                        div { class: "preference-copy",
+                            label { r#for: "settings-touch-id", "Touch ID" }
+                            p { id: "touch-id-description", class: "muted", {language.text(Text::UnlockThisVaultWithYourFingerprint)} }
+                        }
+                        input { id: "settings-touch-id", class: "switch", r#type: "checkbox", checked: unlocked.touch_id.enabled,
+                            aria_describedby: "touch-id-description",
                             disabled: unlocked.touch_id.pending.is_some(),
                             onchange: move |event| runtime::set_touch_id(event.checked()),
                         }
                     }
-                    p { class: "muted", {language.text(Text::UnlockThisVaultWithYourFingerprint)} }
                 } else {
                     p { class: "muted", {language.text(Text::TouchIDIsUnavailableOnThisDevice)} }
                 }

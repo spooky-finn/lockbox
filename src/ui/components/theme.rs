@@ -41,8 +41,8 @@ pub(super) fn use_system_theme() -> &'static str {
     use_effect(move || {
         // Match --canvas in app.css, including the transparent title bar's backdrop.
         let background = match theme() {
-            Theme::Dark => (27, 30, 37, 255),
-            _ => (237, 240, 245, 255),
+            Theme::Dark => (32, 33, 36, 255),
+            _ => (245, 245, 247, 255),
         };
         window.set_background_color(Some(background));
     });
