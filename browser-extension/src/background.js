@@ -61,14 +61,18 @@ async function tabAt(tabId, expectedOrigin) {
   return tab;
 }
 
-async function inspect(tabId, origin, mode) {
-  await tabAt(tabId, origin);
-  const results = await api.scripting.executeScript({
+function pageScript(tabId, func, args) {
+  return {
     target: { tabId, frameIds: [0] },
     world: "ISOLATED",
-    func: inspectPage,
-    args: [origin, mode],
-  });
+    func,
+    args,
+  };
+}
+
+async function inspect(tabId, origin, mode) {
+  await tabAt(tabId, origin);
+  const results = await api.scripting.executeScript(pageScript(tabId, inspectPage, [origin, mode]));
   const result = results[0]?.result;
   if (!result?.token) throw new Error(result?.error || "This page does not allow autofill.");
   return result.token;
@@ -80,12 +84,9 @@ async function fill(tabId, origin, entryId, mode, token) {
   try {
     await tabAt(tabId, origin);
     if (version !== generation) throw new Error("Vault locked during fill. Unlock again.");
-    const results = await api.scripting.executeScript({
-      target: { tabId, frameIds: [0] },
-      world: "ISOLATED",
-      func: fillPage,
-      args: [origin, token, credential.username, credential.password, mode],
-    });
+    const results = await api.scripting.executeScript(pageScript(
+      tabId, fillPage, [origin, token, credential.username, credential.password, mode],
+    ));
     const result = results[0]?.result;
     if (!result?.filled) throw new Error(result?.error || "Could not fill this page.");
     return { filled: true };

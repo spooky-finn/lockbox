@@ -64,8 +64,10 @@ test("credential fetched only after successful form inspection, never returned t
   const reply = await f.message({ action: "fill", tabId: 1, origin: "https://accounts.example", entryId: "id" });
   assert.deepEqual(reply, { ok: true, data: { filled: true } });
   assert.deepEqual(f.injections.map((item) => item.func.name), ["inspectPage", "fillPage"]);
-  assert.deepEqual(f.injections[1].target, { tabId: 1, frameIds: [0] });
-  assert.equal(f.injections[1].world, "ISOLATED");
+  for (const injection of f.injections) {
+    assert.deepEqual(injection.target, { tabId: 1, frameIds: [0] });
+    assert.equal(injection.world, "ISOLATED");
+  }
   assert.equal(f.injections[1].args[1], "document-token");
   assert.equal(f.requests.at(-1).action, "credential");
   assert.ok(!JSON.stringify(reply).includes("fictional-password"));

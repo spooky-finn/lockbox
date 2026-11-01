@@ -7,20 +7,21 @@ Manual compaction tool unavailable; rolling handoff supports automatic compactio
 No delegation requested. Keep unrelated work outside refactor commits.
 Last full suite: cycle 48; 411 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
+Last extension check: cycle 51; 17 tests and both builds passed; two browser probes skipped.
 
-Cycle 50: Borrow history render field text
-- Snapshot field list uses Cow: borrow ordinary fields, secret placeholders,
-  folder IDs and icon slugs; own only formatted TOTP text. Avoid intermediate
-  String copies before Dioxus formats text into owned nodes.
-- Preserve field order, difference filtering, secret reveal checks, placeholders,
-  Unicode/escaping, empty values and attachment rendering. No hook/state changes.
-- Eight record-view and 45 desktop tests passed. Formatting and strict all-target
-  Clippy passed. Source matches verified snapshot; whitespace checks passed.
-  No new tests for direct ownership change. Icon ID lookup already indexed;
-  leave it and concurrent favicon work unchanged.
-- Validate isolated snapshot at /tmp/lockbox-refactor-50.cv5n4iq5 when workspace
-  cannot compile due to concurrent edits.
+Cycle 51: Share browser script injection setup
+- Private synchronous pageScript builds identical top-frame/ISOLATED options for
+  inspection and fill. Keep await order, document token, origin/session checks,
+  self-contained injected functions, result checks and credential cleanup.
+- Existing six background tests passed before refactor with expanded assertion:
+  both inspection and fill use frameIds [0] and world ISOLATED.
+- npm run check passed: syntax checks, seventeen Node tests and Chrome/Firefox
+  builds. Two optional real-browser probes skipped: CHROME_BIN/FIREFOX_BIN unset.
+  No Rust changes, native registration, browser installation or publication.
+- Both sources match tested snapshot; whitespace checks passed. Unrelated edits
+  untouched. Isolated artifact: /tmp/lockbox-refactor-51._o18_16c/browser-extension.
 
-Next search: broaden to browser extension and asset JavaScript, build scripts,
-plus encrypted-file write/sync duplication. Inspect existing tests and guidance.
+Next search: browser background/popup workflow duplication and build/registration
+scripts. Page injection functions intentionally self-contained; retain safeguards
+and validation/cancellation ordering. Asset JS already small; avoid forced helpers.
 Inspect current code and tests before choosing; no quota-driven edits.
