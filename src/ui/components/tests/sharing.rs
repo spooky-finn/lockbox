@@ -43,8 +43,7 @@ fn sharing_page_renders_member_controls_without_record_or_provider_secrets() {
     let mut entry = Entry::new();
     entry.title = "Private record title".into();
     entry.password = "private-record-marker".into();
-    shared.entries.push(entry);
-    shared.save_changes().unwrap();
+    shared.upsert_entry(entry).unwrap();
     let mut dom = mounted();
     update(&mut dom, |state| {
         runtime::set_language(crate::core::language::Language::English);
@@ -55,7 +54,7 @@ fn sharing_page_renders_member_controls_without_record_or_provider_secrets() {
     });
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("People and access"));
-    assert!(html.contains("Open recipient device file"));
+    assert!(html.contains("Open sharing file"));
     assert!(html.contains("Controls membership"));
     assert!(html.contains("<h3>owner</h3>"));
     assert!(html.contains("Devices and access"));
@@ -97,7 +96,7 @@ fn recipient_enters_an_independent_code_and_drafts_remain_hidden_and_intact() {
     assert!(!html.contains("private-draft-marker"));
     assert!(html.contains("Save or cancel the current draft"));
     let accept = html
-        .split("Sign consent")
+        .split("Sign and save consent")
         .next()
         .unwrap()
         .rsplit("<button")
@@ -133,9 +132,9 @@ fn wizard_follows_artifacts_and_resumes_a_recipient_waiting_for_admission() {
     });
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("<h2>Finish connecting</h2>"));
-    assert!(html.contains("Open admission confirmation"));
+    assert!(html.contains("Open sharing file"));
     assert!(html.contains("Awaiting owner confirmation"));
-    assert!(!html.contains("Prepare device file"));
+    assert!(!html.contains("Create and save join request"));
 
     update(&mut dom, |state| {
         edit_unlocked(state, |u| {
@@ -155,6 +154,17 @@ fn wizard_follows_artifacts_and_resumes_a_recipient_waiting_for_admission() {
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("<h2>Send an invitation</h2>"));
     assert!(html.contains("Save sharing file"));
+    let mut verification_code = String::new();
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| {
+            verification_code = u.sharing.output.as_ref().unwrap().code.unwrap().to_string();
+            u.sharing.saved_output = u.sharing.output.take();
+        });
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("<h2>Approve access</h2>"));
+    assert!(html.contains("Awaiting consent"));
+    assert!(html.contains(&verification_code));
     update(&mut dom, |state| {
         edit_unlocked(state, |u| {
             u.sharing.output = None;
@@ -163,7 +173,7 @@ fn wizard_follows_artifacts_and_resumes_a_recipient_waiting_for_admission() {
     });
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("<h2>Approve access</h2>"));
-    assert!(html.contains("Admit device"));
+    assert!(html.contains("Approve and save confirmation"));
 }
 
 #[test]
@@ -182,6 +192,7 @@ fn wizard_follows_file_outputs_through_a_complete_admission() {
         runtime::set_language(crate::core::language::Language::English);
         edit_unlocked(state, |u| {
             u.vault = guest;
+            u.sharing.joining = true;
             u.open_sharing();
             u.sharing_action(Action::Certificate, 0);
         });
@@ -189,6 +200,14 @@ fn wizard_follows_file_outputs_through_a_complete_admission() {
     let html = dioxus_ssr::render(&guest_dom);
     assert!(html.contains("<h2>Prepare your device</h2>"));
     assert!(html.contains("Save sharing file"));
+    assert!(!html.contains("Invite a participant"));
+    assert!(!html.contains("Controls membership"));
+    update(&mut guest_dom, |state| {
+        edit_unlocked(state, |u| u.sharing.saved_output = u.sharing.output.take());
+    });
+    let html = dioxus_ssr::render(&guest_dom);
+    assert!(html.contains("<h2>Accept the invitation</h2>"));
+    assert!(html.contains("Request saved. Send it to the owner and wait for an invitation."));
 
     let mut response = None;
     update(&mut guest_dom, |state| {
@@ -202,6 +221,12 @@ fn wizard_follows_file_outputs_through_a_complete_admission() {
     let html = dioxus_ssr::render(&guest_dom);
     assert!(html.contains("<h2>Accept the invitation</h2>"));
     assert!(html.contains("Save sharing file"));
+    update(&mut guest_dom, |state| {
+        edit_unlocked(state, |u| u.sharing.saved_output = u.sharing.output.take());
+    });
+    let html = dioxus_ssr::render(&guest_dom);
+    assert!(html.contains("<h2>Finish connecting</h2>"));
+    assert!(html.contains("Awaiting owner confirmation"));
 
     let mut owner_dom = mounted();
     let mut receipt = None;
@@ -251,8 +276,7 @@ fn participant_names_are_rendered_and_saved_in_the_encrypted_profile() {
         .unwrap();
     owner.admit_invitation(response, 0).unwrap();
     owner
-        .profile
-        .as_mut()
+        .test_profile_mut()
         .unwrap()
         .participant_names
         .insert(user, "Alice <Admin>".into());
@@ -260,7 +284,7 @@ fn participant_names_are_rendered_and_saved_in_the_encrypted_profile() {
     let bytes = std::fs::read(directory.path().join("owner.lbx")).unwrap();
     assert!(!String::from_utf8_lossy(&bytes).contains("Alice <Admin>"));
     // Serialization keeps names while older profiles without this field remain readable.
-    let profile = owner.profile.as_ref().unwrap();
+    let profile = owner.test_profile().unwrap();
     let mut serialized = serde_json::to_value(profile).unwrap();
     let restored: crate::infra::profile::BootstrapProfile =
         serde_json::from_value(serialized.clone()).unwrap();

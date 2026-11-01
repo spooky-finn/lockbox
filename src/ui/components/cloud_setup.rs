@@ -41,9 +41,11 @@ pub(super) fn CloudSetupView() -> Element {
             label { r#for: "cloud-username", {language.text(Text::Username)} }
             input { id: "cloud-username", value: "{locked.cloud.username}", autocomplete: "off",
                 oninput: move |event| edit_locked(state, |locked| locked.cloud.username = event.value()), }
-            label { r#for: "cloud-space", {language.text(Text::VaultName)} }
-            input { id: "cloud-space", value: "{locked.cloud.space_name}", autocomplete: "off",
-                oninput: move |event| edit_locked(state, |locked| locked.cloud.space_name = event.value()), }
+            if !locked.joining {
+                label { r#for: "cloud-space", {language.text(Text::VaultName)} }
+                input { id: "cloud-space", value: "{locked.cloud.space_name}", autocomplete: "off",
+                    oninput: move |event| edit_locked(state, |locked| locked.cloud.space_name = event.value()), }
+            }
             label { r#for: "cloud-url", "Base URL" }
             input { id: "cloud-url", r#type: "url", value: "{locked.cloud.base_url}", placeholder: "https://…", autocomplete: "off",
                 oninput: move |event| edit_locked(state, |locked| locked.cloud.base_url = event.value()), }

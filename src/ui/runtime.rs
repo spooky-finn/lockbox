@@ -201,6 +201,11 @@ pub(super) fn begin_create() {
     *state.write() = Screen::Locked(Box::new(form));
 }
 
+pub(super) fn begin_join() {
+    let mut state = consume_context::<Session>();
+    *state.write() = Screen::Locked(Box::new(Locked::begin_join()));
+}
+
 pub(super) fn create_cloud_profile() {
     let mut state = consume_context::<Session>();
     {
@@ -216,7 +221,7 @@ pub(super) fn create_cloud_profile() {
 
     let path = dirs::home_dir()
         .ok_or_else(|| std::io::Error::other("Cannot locate home directory"))
-        .and_then(|home| new_profile_path(&home));
+        .and_then(|home| crate::infra::paths::new_profile_path(&home));
     if let Screen::Locked(form) = &mut *state.write() {
         match path {
             Ok(path) => {
@@ -226,15 +231,6 @@ pub(super) fn create_cloud_profile() {
             Err(error) => form.error = Some(format!("Cannot create profile directory: {error}")),
         }
     }
-}
-
-fn new_profile_path(home: &std::path::Path) -> std::io::Result<std::path::PathBuf> {
-    let directory = home.join(".lockbox");
-    std::fs::create_dir_all(&directory)?;
-    let mut random = [0u8; 16];
-    getrandom::fill(&mut random).map_err(std::io::Error::other)?;
-    let name: String = random.iter().map(|byte| format!("{byte:02x}")).collect();
-    Ok(directory.join(format!("profile-{name}.lbx")))
 }
 
 pub(super) fn pick_vault(create: bool) {

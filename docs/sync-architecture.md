@@ -45,7 +45,9 @@ flowchart TD
 | `core/sync/machine/invitations.rs` | Addressed signature proofs, consent-bound admission and receipt verification | Clock-based expiry or artifact export |
 | `core/sync/machine/replay.rs` | Verified history, epoch closure, causal validation and projection | Disk writes or timestamp winners |
 | `core/sync/machine/parents.rs` | Bounded causal merge parent selection, including prior local sequence ancestry | Conflict resolution or membership authority |
-| `infra/vault.rs` | Public facade, profile lifecycle and file/witness commit ordering | Membership and mutation authorization |
+| `infra/vault/mod.rs` | Public facade, profile lifecycle and file/witness commit ordering | Membership and mutation authorization |
+| `infra/vault/edits.rs` | Record/folder commands, read access and readable-view rollback | Alternate signing or witness ordering |
+| `infra/vault/metadata.rs` | Public profile summary and durable local participant aliases | Replicated membership authority or UI state |
 | `infra/vault/format.rs` | Header codec, contents serialization, KDF and authenticated encryption | Filesystem effects or witness policy |
 | `infra/vault/file.rs` | Private file creation, process locks, backups and atomic replacement | Generation allocation or witness acknowledgement |
 | `core/anchor.rs` | Pure equal/linked-next generation reconciliation | OS stores, files or peer freshness |
@@ -61,7 +63,7 @@ flowchart TD
 | `infra/vault/exchange.rs` | Candidate receive commits, acknowledgement rollback and retained pending commits | Signing new local mutations |
 | `infra/sync.rs` | Bounded discovery, publication order and provider contracts | Which decrypted mutation is authorized |
 | `infra/sync/discovery.rs` | Ciphertext-only discovery requests, recursive reference GETs and paginated scans | Admission, signatures or plaintext validation |
-| `infra/sync/worker.rs` | Thread lifetime, cancellation and one result mailbox | Session status, retries or vault access |
+| `infra/jobs.rs` | Thread lifetime, cancellation and one result mailbox | Session status, retries or vault access |
 | `infra/storj.rs` | S3 request signing, HTTPS, provider configuration and client construction | User identity or space membership |
 | `app/space_sync.rs` | Exchange phases, draft deferral, retry scheduling and status | HTTP construction, signing keys or cryptographic replay |
 | `app/space_sync/schedule.rs` | Monotonic deadlines and backoff from explicit clock/jitter inputs | Provider errors or protocol authority |
@@ -103,9 +105,14 @@ the factory, namespace, hashes and ciphertext into workers.
 
 ## Durable operations and failure handling
 
-Use `Vault::save_changes` for entry/folder edits. Its shared-space implementation
-turns staged records into a transaction, restores the current verified view, and
-passes the prepared encrypted body to `commit_prepared`.
+Use `Vault::upsert_entry`, `delete_entry`, `save_folder`, `delete_folder` or
+`append_records` for entry/folder edits. The command boundary owns staging and
+rollback; application and UI callers receive read-only collections. Internally,
+`save_changes` turns staged records into a transaction, restores the current
+verified view, and passes the prepared encrypted body to `commit_prepared`.
+Shared command failure restores both readable collections while retaining signing
+intents, witness state and pending exchange candidates. Local entry rollback
+retains only the affected records.
 
 The ordering is:
 
@@ -202,11 +209,11 @@ transport retry handling.
 | New wire field or signature binding | `machine/protocol.rs`, `wire.rs`, `crypto.rs` | Canonical wire fixture and signature/hash tests; explicit wire-contract review |
 | Crash/durability behavior | `infra/vault/shared.rs`, `infra/vault/exchange.rs` and file adapter | Intent restart, failed candidate/receipt writes, revocation commit failure, legacy activation |
 | New provider | `Storage` / `StorageFactory` implementation | Lost responses, partial visibility, pagination and bounded bodies |
-| Retry policy or session lifecycle | `app/space_sync.rs`, `schedule.rs`, `infra/sync/worker.rs` | Explicit-time backoff, scope changes, faults during pending work, cancellation and late receipts |
+| Retry policy or session lifecycle | `app/space_sync.rs`, `schedule.rs`, `infra/jobs.rs` | Explicit-time backoff, scope changes, faults during pending work, cancellation and late receipts |
 
 ## Verification and fixtures
 
-Run from `scripts/lockbox`:
+Run from the repository root:
 
 ```sh
 cargo test --locked --all-targets

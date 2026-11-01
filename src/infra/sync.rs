@@ -65,7 +65,6 @@ pub trait StorageFactory: Send + Sync {
 }
 
 mod discovery;
-pub(crate) mod worker;
 
 pub use discovery::Discovery;
 

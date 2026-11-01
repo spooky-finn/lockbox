@@ -41,7 +41,7 @@ fn locking_wipes_clipboard_discards_the_draft_and_keeps_the_path() {
     let reopened =
         crate::infra::vault::Vault::open(&path, &secrecy::SecretString::from("master".to_owned()))
             .unwrap();
-    assert!(reopened.entries.is_empty());
+    assert!(reopened.entries().is_empty());
 }
 
 #[test]
@@ -75,4 +75,36 @@ fn opening_with_password_restores_biometric_key_and_remembers_the_file() {
         panic!("not open");
     };
     assert!(workspace.touch_id.enabled);
+}
+
+#[test]
+fn joining_opens_sharing_and_survives_a_session_lock() {
+    let dir = tempfile::tempdir().unwrap();
+    let workspace = unlocked(&dir);
+    let mut settings = Settings {
+        config: Config::default(),
+        path: None,
+    };
+    let fake = FakeBiometrics::default();
+    let mut native = security();
+    let mut screen = Screen::Locked(Box::new(Locked::begin_join()));
+    screen.open(
+        Opened {
+            vault: workspace.vault,
+            with_password: true,
+        },
+        &mut settings,
+        &fake,
+        &mut native,
+    );
+    let Screen::Unlocked(workspace) = &screen else {
+        panic!("not open")
+    };
+    assert!(workspace.page == crate::app::workspace::Page::Sharing);
+    assert!(workspace.sharing.joining);
+    screen.lock(&settings, &fake, &mut native, None);
+    let Screen::Locked(form) = &screen else {
+        panic!("not locked")
+    };
+    assert!(form.joining);
 }

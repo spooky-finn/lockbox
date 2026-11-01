@@ -12,6 +12,22 @@ pub(crate) fn use_language() -> Language {
 }
 
 impl Language {
+    pub(crate) fn sync_status(self, status: crate::app::space_sync::Status) -> &'static str {
+        use crate::app::space_sync::Status;
+        self.text(match status {
+            Status::Saved => Text::SavedOnThisDevice,
+            Status::Syncing => Text::Syncing,
+            Status::Synced => Text::StorjSyncComplete,
+            Status::Offline => Text::OfflineDataSavedOnThisDevice,
+            Status::Incomplete => Text::IncompleteHistoryWaitingForData,
+            Status::Conflict => Text::ConflictingVersions,
+            Status::Removed => Text::AccessToTheSpaceWasRemoved,
+            Status::Waiting => Text::SharingWaitingAdmission,
+            Status::Failed => Text::HistoryVerificationFailedUploadsPaused,
+            Status::Recovery => Text::ProfileRequiresRecoveryExchangePaused,
+        })
+    }
+
     pub(crate) fn text(self, key: Text) -> &'static str {
         let (ru, en) = key.translations();
 

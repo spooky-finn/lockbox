@@ -131,7 +131,7 @@ fn application_worker_creates_and_reopens_identity_profile() {
         .recv_timeout(Duration::from_secs(30))
         .unwrap()
         .unwrap();
-    let profile = opened.vault.profile.as_ref().unwrap();
+    let profile = opened.vault.test_profile().unwrap();
     assert_eq!(profile.username, "Alice");
     assert_eq!(profile.space_name, "Team");
     let id = profile.identity.user_id;
@@ -142,9 +142,6 @@ fn application_worker_creates_and_reopens_identity_profile() {
         &SecretString::from("local master password".to_owned()),
     )
     .unwrap();
-    assert_eq!(reopened.profile.as_ref().unwrap().identity.user_id, id);
-    assert_eq!(
-        reopened.profile.as_ref().unwrap().identity.device_id,
-        device
-    );
+    assert_eq!(reopened.test_profile().unwrap().identity.user_id, id);
+    assert_eq!(reopened.test_profile().unwrap().identity.device_id, device);
 }

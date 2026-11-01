@@ -46,8 +46,7 @@ pub fn exercise(
     let mut entry = Entry::new();
     entry.title = "Disposable synchronization probe".into();
     entry.password = "fictional initial value".into();
-    owner.entries.push(entry);
-    owner.save_changes()?;
+    owner.upsert_entry(entry)?;
     let descriptor = owner.space_descriptor().ok_or("missing descriptor")?;
     let invitation = owner.issue_invitation(editor_certificate.clone(), Role::Editor, None)?;
     let admission = editor.accept_invitation(invitation, &descriptor)?;
@@ -56,14 +55,16 @@ pub fn exercise(
     owner.synchronize(owner_storage)?;
     editor.synchronize(editor_storage)?;
     check(
-        owner.entries == editor.entries,
+        owner.entries() == editor.entries(),
         "initial admission did not converge",
     )?;
 
-    owner.entries[0].password = "fictional owner value".into();
-    owner.save_changes()?;
-    editor.entries[0].password = "fictional editor value".into();
-    editor.save_changes()?;
+    let mut entry = owner.entries()[0].clone();
+    entry.password = "fictional owner value".into();
+    owner.upsert_entry(entry)?;
+    let mut entry = editor.entries()[0].clone();
+    entry.password = "fictional editor value".into();
+    editor.upsert_entry(entry)?;
     let mut lossy = Observed {
         inner: owner_storage,
         writes: 0,
@@ -113,17 +114,18 @@ pub fn exercise(
     owner.synchronize(&mut lossy)?;
     editor.synchronize(&mut observed_editor)?;
     check(
-        owner.entries == editor.entries,
+        owner.entries() == editor.entries(),
         "resolution did not converge",
     )?;
 
     owner.set_space_members(roster(Role::Reader))?;
     owner.synchronize(&mut lossy)?;
     editor.synchronize(&mut observed_editor)?;
-    editor.entries[0].title = "reader must not publish this".into();
+    let mut entry = editor.entries()[0].clone();
+    entry.title = "reader must not publish this".into();
     check(
         matches!(
-            editor.save_changes(),
+            editor.upsert_entry(entry),
             Err(VaultError::Sync(Error::InsufficientRole))
         ),
         "reader was allowed to mutate the space",
@@ -132,8 +134,9 @@ pub fn exercise(
     owner.synchronize(&mut lossy)?;
     editor.synchronize(&mut observed_editor)?;
 
-    editor.entries[0].password = "fictional offline draft".into();
-    editor.save_changes()?;
+    let mut entry = editor.entries()[0].clone();
+    entry.password = "fictional offline draft".into();
+    editor.upsert_entry(entry)?;
     owner.set_space_members(vec![(owner_certificate, Role::Owner)])?;
     owner.synchronize(&mut lossy)?;
     let before = observed_editor.writes;
@@ -153,7 +156,7 @@ pub fn exercise(
         "excluded offline draft was lost",
     )?;
     check(
-        owner.entries[0].password == "fictional editor value",
+        owner.entries()[0].password == "fictional editor value",
         "revocation replaced the accepted state",
     )?;
     Ok(())
@@ -201,7 +204,7 @@ pub fn check_reopened(owner: &Vault, editor: &Vault) -> Result<()> {
         owner_view.projection.conflicts().next().is_none(),
         "resolved conflict reappeared on restart",
     )?;
-    check(owner.entries.len() == 1, "reopened owner lost records")?;
+    check(owner.entries().len() == 1, "reopened owner lost records")?;
     check(
         editor.excluded_edits()?.len() == 1,
         "reopened revoked device lost its draft",

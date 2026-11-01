@@ -17,7 +17,7 @@ embedded credentials, bucket bounds and credential syntax; explicit region guard
 
 ## 2. Smaller local entry rollback
 
-[`Unlocked`](../src/app/workspace.rs) retains previous entry for update, inserted
+[`Unlocked`](../src/app/records/workspace.rs) retains previous entry for update, inserted
 index for creation, removed entries and original indices for deletion. Local
 operations no longer clone entire entry collection, including unrelated passwords
 and attachment bytes.
@@ -44,7 +44,7 @@ faults and wide-frontier behavior. Canonical wire fixture unchanged.
 
 ## 4. Vault format and filesystem separation
 
-[`vault.rs`](../src/infra/vault.rs) retains public facade and explicit generation/
+[`vault.rs`](../src/infra/vault/mod.rs) retains public facade and explicit generation/
 witness ordering. Private [`format.rs`](../src/infra/vault/format.rs) owns header
 codec, serialization, key derivation and authenticated encryption.
 [`file.rs`](../src/infra/vault/file.rs) owns private files, process locks, backups

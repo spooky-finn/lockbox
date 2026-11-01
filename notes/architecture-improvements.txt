@@ -1,0 +1,41 @@
+Architecture improvements — 2026-11-01
+
+Implemented
+- Vault owns upsert/delete records, folder save/subtree delete, import batches,
+  restore and participant aliases. App no longer stages collections or undo.
+- entries()/folders() expose read-only slices. Mutable collections and private
+  profile restricted to infrastructure; fault-injection access test-only.
+- Local entry rollback retains affected records only. Shared rollback restores
+  both readable collections; signing intents/witness/pending candidates retained.
+- UI receives ProfileSummary and participant display accessors, without private
+  profile container. App owns alias save, conflict resolution, rebase and retry.
+- UI owns typed sync-status localization; duplicate Russian translation repaired.
+- Record workflows grouped src/app/records; record UI grouped
+  src/ui/components/records; reusable controls grouped components/shared.
+- Vault facade now vault/mod.rs; vault regression tests grouped vault/tests.
+- Existing module import paths retained via internal re-exports. Collection
+  field access intentionally replaced by accessor/command API; examples and
+  public acceptance scenarios migrated.
+- Generic workers moved infra/jobs.rs; favicon HTTP/cache moved infra/favicon.rs;
+  profile path policy moved infra/paths.rs. Desktop launches ui::App directly.
+- Docs updated: module ownership, mutation contracts, root build commands,
+  current version references. No dependency, encrypted-format or wire changes.
+- Concurrent auth/join/sharing/translation edits preserved.
+
+Coverage
+- New regressions: alias persistence/removal without replicated events; failed
+  alias insertion/replacement/removal; invalid alias rejection before disk writes;
+  shared folder deletion rollback and retained-intent retry/reopen.
+- Full all-target suite exercises records, folders, history, imports, witness
+  recovery, lock lifecycle, S3 HTTP fixtures and two public acceptance scenarios.
+- Local HTTP fixtures need socket-enabled execution; no live Storj used.
+- Validation: 290 library tests + 2 public acceptance scenarios + 2 doctests
+  passed. One explicit OS probe ignored. Strict all-target Clippy, formatting,
+  private Rustdoc links and Markdown relative links passed.
+
+Deliberate boundaries
+- Single Cargo package retained. Feature moves preserve module contracts.
+- Existing injectable StorageFactory/Biometrics retained; no blanket trait layer.
+- Session signal remains unified. Existing unrelated-update regression passes;
+  future signal splitting needs profiling and explicit lock-time secret cleanup.
+- Core replay, canonical wire fixture and durable commit ordering unchanged.

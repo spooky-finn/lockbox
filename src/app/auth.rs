@@ -50,6 +50,7 @@ pub(crate) struct Locked {
     pub(crate) storage_kind: Option<StorageKind>,
     pub(crate) cloud: CloudSetup,
     pub(crate) cloud_password_step: bool,
+    pub(crate) joining: bool,
     pub(crate) password: Zeroizing<String>,
     pub(crate) repeat: Zeroizing<String>,
     pub(crate) recovery_password: Zeroizing<String>,
@@ -78,6 +79,7 @@ impl Locked {
             storage_kind: None,
             cloud: CloudSetup::default(),
             cloud_password_step: false,
+            joining: false,
             password: secret_buffer(),
             repeat: secret_buffer(),
             recovery_password: secret_buffer(),
@@ -89,6 +91,16 @@ impl Locked {
             waiting_touch_id: false,
             notice: None,
         }
+    }
+
+    pub(crate) fn begin_join() -> Self {
+        let mut form = Self::new(None);
+        form.mode = Mode::Create;
+        form.storage_kind = Some(StorageKind::Cloud);
+        form.joining = true;
+        // A local staging profile supplies independent keys until admission.
+        form.cloud.space_name = "Shared space".into();
+        form
     }
 
     /// Offers Touch ID when it was turned on for this file and the sensor is available.

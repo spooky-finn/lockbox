@@ -7,7 +7,7 @@ use crate::{
         Admission, AdmissionReceipt, Certificate, Hash, Invitation, Machine, Role, Signed,
         SpaceDescriptor, canonical, decode,
     },
-    infra::{sharing_files, sync::worker::Worker, vault::Vault},
+    infra::{jobs::Worker, sharing_files, vault::Vault},
 };
 use std::{
     path::PathBuf,
@@ -49,6 +49,28 @@ pub(crate) enum Artifact {
 }
 
 impl Artifact {
+    fn detect(bytes: &[u8]) -> Result<Self, String> {
+        // Select by structure, then use the same strict decoder and signature
+        // checks as explicit imports. Filenames never establish artifact type.
+        if bytes.len() > crate::core::sync::MAX_INVITATION_BYTES {
+            return Err("Sharing file is too large".into());
+        }
+        let value: serde_json::Value = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
+        let object = value.as_object().ok_or("Unrecognized sharing file")?;
+        let kind = if object.contains_key("confirmation") {
+            Kind::Receipt
+        } else if object.contains_key("request") {
+            Kind::Response
+        } else if object.contains_key("offer") {
+            Kind::Invitation
+        } else if object.contains_key("body") {
+            Kind::Certificate
+        } else {
+            return Err("Unrecognized sharing file".into());
+        };
+        Self::decode(kind, bytes)
+    }
+
     fn decode(kind: Kind, bytes: &[u8]) -> Result<Self, String> {
         let result = (|| -> crate::core::sync::Result<Self> {
             Ok(match kind {
@@ -97,6 +119,8 @@ pub(crate) struct Sharing {
     job: Option<(Ticket, Worker<Result<FileReply, String>>)>,
     pub review: Option<Artifact>,
     pub output: Option<Output>,
+    pub saved_output: Option<Output>,
+    pub joining: bool,
     pub recipient_verified: bool,
     pub code: String,
     pub expiry_days: u64,
@@ -112,6 +136,8 @@ impl Default for Sharing {
             job: None,
             review: None,
             output: None,
+            saved_output: None,
+            joining: false,
             recipient_verified: false,
             code: String::new(),
             expiry_days: 7,
@@ -138,6 +164,7 @@ impl Sharing {
 
     pub fn cancel_output(&mut self) {
         self.output = None;
+        self.saved_output = None;
         self.notice = None;
     }
 
@@ -175,6 +202,61 @@ pub(crate) enum Action {
 }
 
 impl Unlocked {
+    pub fn retry_sync(&mut self) {
+        // Reconciliation updates the typed protection notice without installing
+        // incoming history or disturbing an active draft.
+        let _ = self.vault.reconcile_profile();
+        self.sync.retry();
+    }
+
+    pub fn set_participant_name(&mut self, user: Hash, name: &str) {
+        if self.sharing_blocked() {
+            return;
+        }
+        self.error = self
+            .vault
+            .set_participant_name(user, name)
+            .err()
+            .map(|error| error.to_string());
+    }
+
+    pub fn resolve_conflict(
+        &mut self,
+        entity: crate::core::sync::Entity,
+        revision: crate::core::sync::Revision,
+    ) {
+        self.error = self
+            .vault
+            .resolve_sync(entity, revision)
+            .err()
+            .map(|error| error.to_string());
+        if self.error.is_none() {
+            self.sync.saved();
+        }
+    }
+
+    pub fn rebase_change(&mut self, hash: Hash) {
+        self.error = self
+            .vault
+            .rebase_edit(hash)
+            .err()
+            .map(|error| error.to_string());
+        if self.error.is_none() {
+            self.sync.saved();
+        }
+    }
+
+    pub fn retry_profile_protection(&mut self) {
+        self.error = self
+            .vault
+            .reconcile_profile()
+            .err()
+            .map(|error| error.to_string());
+        if self.error.is_none() {
+            self.sync.retry();
+        }
+    }
+
     pub fn sharing_blocked(&self) -> bool {
         self.is_editing()
             || self.sharing.busy()
@@ -196,7 +278,7 @@ impl Unlocked {
         })
     }
 
-    pub fn import_sharing(&mut self, ticket: Ticket, path: PathBuf, kind: Kind) {
+    pub fn import_sharing(&mut self, ticket: Ticket, path: PathBuf) {
         if !self.sharing.matches(&self.vault, &ticket) || self.sharing.busy() {
             return;
         }
@@ -204,7 +286,7 @@ impl Unlocked {
             ticket,
             Worker::spawn(move |cancel| {
                 let bytes = sharing_files::read(&path, &cancel)?;
-                Artifact::decode(kind, &bytes)
+                Artifact::detect(&bytes)
                     .map(Box::new)
                     .map(FileReply::Imported)
             }),
@@ -220,12 +302,14 @@ impl Unlocked {
             .sharing
             .output
             .as_ref()
+            .or(self.sharing.saved_output.as_ref())
             .is_none_or(|current| !Arc::ptr_eq(&current.bytes, &output.bytes))
         {
             return;
         }
         self.sharing.review = None;
-        self.sharing.output = None;
+        self.sharing.output = Some(output.clone());
+        self.sharing.saved_output = None;
         self.sharing.recipient_verified = false;
         self.sharing.confirm_remove = None;
         self.sharing.code.clear();
@@ -254,7 +338,10 @@ impl Unlocked {
             .and_then(|reply| reply);
         self.error = (|| -> Result<(), String> {
             match result? {
-                FileReply::Exported => self.sharing.notice = Some("Sharing file saved"),
+                FileReply::Exported => {
+                    self.sharing.saved_output = self.sharing.output.take();
+                    self.sharing.notice = Some("Sharing file saved");
+                }
                 FileReply::Imported(artifact) => {
                     match &*artifact {
                         Artifact::Response(response) => self
@@ -270,6 +357,7 @@ impl Unlocked {
                     }
                     self.sharing.review = Some(*artifact);
                     self.sharing.output = None;
+                    self.sharing.saved_output = None;
                     self.sharing.recipient_verified = false;
                     self.sharing.code.clear();
                     self.sharing.notice = None;
@@ -301,6 +389,7 @@ impl Unlocked {
         // A revoked/cancelled admission must not remain available through an
         // older open export dialog or the previous output panel.
         self.sharing.output = None;
+        self.sharing.saved_output = None;
         self.sync.suspend();
         let mut code = None;
         let (kind, bytes) = match action {

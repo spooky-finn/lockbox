@@ -4,7 +4,8 @@
 use crate::{
     core::sync::{Hash, SyncState},
     infra::{
-        sync::{self, Cancellation, Download, StorageFactory, TransportError, worker::Worker},
+        jobs::Worker,
+        sync::{self, Cancellation, Download, StorageFactory, TransportError},
         vault::{Result as VaultResult, Vault, VaultError},
     },
 };
@@ -50,23 +51,6 @@ pub(crate) enum Status {
     Waiting,
     Failed,
     Recovery,
-}
-
-impl Status {
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Saved => "Saved on this device",
-            Self::Syncing => "Syncing…",
-            Self::Synced => "Storj sync complete",
-            Self::Offline => "Offline · data saved on this device",
-            Self::Incomplete => "Incomplete history · waiting for data",
-            Self::Conflict => "Conflicting versions",
-            Self::Removed => "Access to the space was removed",
-            Self::Waiting => "Waiting for owner admission",
-            Self::Failed => "History verification failed · uploads paused",
-            Self::Recovery => "Profile requires recovery · exchange paused",
-        }
-    }
 }
 
 pub(crate) struct SpaceSync {

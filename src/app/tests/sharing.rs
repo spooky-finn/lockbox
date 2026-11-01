@@ -153,11 +153,7 @@ fn stale_dialogs_and_worker_results_cannot_cross_unlocked_sessions() {
     let mut u = create(&dir, "owner");
     let old = u.sharing.ticket(&u.vault);
     u.sharing = Sharing::default();
-    u.import_sharing(
-        old.clone(),
-        dir.path().join("missing.json"),
-        Kind::Certificate,
-    );
+    u.import_sharing(old.clone(), dir.path().join("missing.json"));
     assert!(!u.sharing.busy());
     let certificate = u.vault.device_certificate().unwrap();
     u.sharing.job = Some((
@@ -191,11 +187,108 @@ fn cancellation_invalidates_the_previous_output_and_an_open_export_dialog() {
     action(&mut owner, Action::Issue(Role::Reader));
     let output = owner.sharing.output.clone().unwrap();
     let ticket = owner.sharing.ticket(&owner.vault);
+    owner.export_sharing(
+        ticket.clone(),
+        dir.path().join("offer.json"),
+        output.clone(),
+    );
+    finish_file_job(&mut owner);
+    assert!(owner.sharing.saved_output.is_some());
     let id = owner.vault.issued_invitations(100)[0].id;
     action(&mut owner, Action::Cancel(id));
     assert!(owner.sharing.output.is_none());
+    assert!(owner.sharing.saved_output.is_none());
     let path = dir.path().join("cancelled-invitation.json");
     owner.export_sharing(ticket, path.clone(), output);
     assert!(!owner.sharing.busy());
     assert!(!path.exists());
+}
+
+#[test]
+fn automatic_detection_keeps_artifact_verification_and_rejects_mixed_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut owner = create(&dir, "owner");
+    let mut guest = create(&dir, "guest");
+    let certificate = guest.vault.device_certificate().unwrap();
+    let certificate_bytes = canonical(&certificate).unwrap();
+    assert!(matches!(
+        Artifact::detect(&certificate_bytes).unwrap(),
+        Artifact::Certificate(_)
+    ));
+    let invitation = owner
+        .vault
+        .issue_invitation(certificate, Role::Reader, None)
+        .unwrap();
+    assert!(matches!(
+        Artifact::detect(&invitation.bytes().unwrap()).unwrap(),
+        Artifact::Invitation(_)
+    ));
+    let response = guest
+        .vault
+        .accept_invitation(invitation.clone(), invitation.descriptor())
+        .unwrap();
+    assert!(matches!(
+        Artifact::detect(&response.bytes().unwrap()).unwrap(),
+        Artifact::Response(_)
+    ));
+    let receipt = owner.vault.admit_invitation(response, 0).unwrap();
+    assert!(matches!(
+        Artifact::detect(&receipt.bytes().unwrap()).unwrap(),
+        Artifact::Receipt(_)
+    ));
+    let mut mixed: serde_json::Value =
+        serde_json::from_slice(&invitation.bytes().unwrap()).unwrap();
+    mixed["request"] = serde_json::json!({});
+    assert!(Artifact::detect(&serde_json::to_vec(&mixed).unwrap()).is_err());
+    let mut tampered: serde_json::Value = serde_json::from_slice(&certificate_bytes).unwrap();
+    tampered["body"]["device"] = serde_json::json!(Hash([99; 32]));
+    assert!(Artifact::detect(&serde_json::to_vec(&tampered).unwrap()).is_err());
+    for bytes in [b"{}".as_slice(), b"[]", b"not JSON"] {
+        assert!(Artifact::detect(bytes).is_err());
+    }
+}
+
+fn finish_file_job(u: &mut Unlocked) {
+    for _ in 0..1000 {
+        u.poll_sharing(100);
+        if !u.sharing.busy() {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    panic!("sharing worker timed out");
+}
+
+#[test]
+fn generic_import_uses_contents_and_failed_save_retains_retry_output() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut guest = create(&dir, "guest");
+    let mut owner = create(&dir, "owner");
+    action(&mut guest, Action::Certificate);
+    let output = guest.sharing.output.clone().unwrap();
+    let existing = dir.path().join("already-exists.json");
+    std::fs::write(&existing, b"keep me").unwrap();
+    guest.export_sharing(
+        guest.sharing.ticket(&guest.vault),
+        existing.clone(),
+        output.clone(),
+    );
+    finish_file_job(&mut guest);
+    assert!(guest.error.is_some());
+    assert!(guest.sharing.output.is_some());
+    assert!(guest.sharing.saved_output.is_none());
+    assert_eq!(std::fs::read(existing).unwrap(), b"keep me");
+    let path = dir.path().join("arbitrary-name.json");
+    guest.export_sharing(guest.sharing.ticket(&guest.vault), path.clone(), output);
+    finish_file_job(&mut guest);
+    assert!(guest.error.is_none());
+    assert!(guest.sharing.output.is_none());
+    assert!(guest.sharing.saved_output.is_some());
+    owner.import_sharing(owner.sharing.ticket(&owner.vault), path);
+    finish_file_job(&mut owner);
+    assert!(owner.error.is_none());
+    assert!(matches!(
+        owner.sharing.review,
+        Some(Artifact::Certificate(_))
+    ));
 }

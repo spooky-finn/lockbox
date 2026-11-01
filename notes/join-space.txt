@@ -1,0 +1,13 @@
+Join space simplification
+
+- Welcome: Join a space; name + Storj credentials; master + recovery passwords.
+- Local staging profile creates independent keys. No space-name prompt.
+- One file opener. Detect content; retain strict parsing, signatures, trusted verification.
+- Create artifact opens save dialog. User sends file separately.
+- Cancel/save failure keeps output for retry. Saved invitation keeps verification code visible.
+- Saved request waits invitation; saved consent waits owner; saved invite waits consent.
+- Pending consent resumes sharing after reopen. Session lock keeps join path.
+- Protocol/artifact formats unchanged. Provider provisioning, pairing links, QR, drag/drop deferred.
+- Tests: artifact detection/tampering, failed-save retry, stale exports, wizard handoffs, join setup/lock.
+- Validation: cargo test --locked passes (290 unit, 2 integration, 2 doc; 1 OS probe ignored).
+- cargo clippy --locked --all-targets -- -D warnings passes. Formatting/diff checks pass.

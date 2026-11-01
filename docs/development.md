@@ -1,6 +1,6 @@
 # Developer guide
 
-Run commands from `scripts/lockbox` with a Rust toolchain supporting edition 2024.
+Run commands from the repository root with a Rust toolchain supporting edition 2024.
 The primary desktop platform is macOS. The UI uses the system WebView;
 Touch ID and Keychain integration live in platform adapters.
 
@@ -36,6 +36,30 @@ Use English for new documentation and developer notes.
 
 Compatibility exports live in `src/lib.rs`. Preserve existing public import paths
 when moving implementations between modules.
+
+Record workflows live together in `src/app/records/`: workspace state, editor
+drafts, folder navigation, tree projection and imports. Internal re-exports in
+`app/mod.rs` preserve existing caller paths. Record views live in
+`src/ui/components/records/`, while reusable controls live in
+`src/ui/components/shared/`. Unit tests stay beside their owning feature;
+`tests/` contains public acceptance scenarios.
+
+`Vault` owns record and folder mutations. Read collections through `entries()`
+and `folders()`; write through `upsert_entry`, `delete_entry`, `save_folder`,
+`delete_folder`, `append_records` and `restore_record`. Direct field access is
+restricted to infrastructure. Commands own rollback and preserve retained shared
+signing intents; UI and app callers must not stage collections or implement undo.
+Local entry edits retain only the changed records for rollback. Shared edits
+retain both readable collections because recovery can replace the entire view.
+
+UI handlers call app workflows for participant aliases, conflict resolution and
+recovery retries. `profile_summary`, `participant_name` and `participant_alias`
+expose display metadata without handing components the private profile container.
+Typed sync status is translated in `ui/i18n.rs`.
+
+Generic cancellable jobs live in `infra/jobs.rs`. Favicon HTTP/cache behavior
+lives in `infra/favicon.rs`, and default profile path policy in `infra/paths.rs`.
+The UI owns rendering, native dialogs and session-bound result application.
 
 ## Maintenance notes
 

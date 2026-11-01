@@ -1,0 +1,98 @@
+Architecture review — 2026-11-01
+
+Scope
+- Repository inspection only. Suggestions; no implementation or test claims.
+- Keep core/app/infra/ui layers. Existing Machine/Vault facades, pure replay,
+  transport contracts, durable intent boundary already useful.
+
+Priority 1 — mutation ownership
+- Vault exposes mutable entries/folders: src/infra/vault.rs:119,122.
+- App stages collections, implements rollback: workspace.rs, directories.rs.
+- Add Vault commands: upsert_entry, delete_entry, save_folder, delete_folder,
+  set_participant_name. Expose read-only slices/views; migrate callers gradually.
+- Vault owns validation, history, persistence, rollback. Shared commands reuse
+  commit_prepared; preserve retained intents and pending exchange candidates.
+- No generic snapshot rollback over shared protocol state. Existing full shared
+  rollback protects state changed by intent recovery; remove only after proving
+  equivalent failure behavior.
+
+Priority 2 — presentation boundary
+- ui/components/sharing.rs:331 mutates profile, saves, rolls back inside handler.
+- ui/components/workspace.rs directly resolves/rebases/reconciles vault state.
+- Move orchestration to app methods; handlers call methods and render outcomes.
+- Supply participant/conflict view data; avoid exposing BootstrapProfile to UI.
+
+Priority 3 — contracts and composition
+- Storage/StorageFactory, Biometrics already injectable. Reuse contracts.
+- Move app-facing service contracts into app/ports when separating adapters;
+  keep domain-only protocol types in core. Avoid trait per concrete struct.
+- Move generic Worker from infra/sync/worker.rs into infra/jobs.rs; sharing and
+  import already use it. Retain explicit cancellation and session scope binding.
+- Move favicon network/cache code from ui/favicon.rs into infra/favicon.rs.
+- Move profile path/filesystem policy from ui/runtime.rs into infrastructure.
+- Add desktop composition module for concrete services. Keep app::App alias
+  as compatibility shim until callers migrate; main should launch ui::App.
+
+Priority 4 — feature ownership and state
+- Group app and UI by auth, records, sharing, settings; UI common controls separate.
+- Split UI runtime by lifecycle, clipboard, attachments, dialogs when useful.
+- Session Signal<Screen> exposes entire unlocked workspace. Start with feature
+  view data and focused updates; split signals only when needed/profiling supports.
+- Preserve lock-time unmount/drop of secret-bearing views and drafts. New signal
+  handles/jobs must not retain plaintext beyond session lifetime.
+- Use typed app errors and status enums; UI owns display/localization. Current
+  SpaceSync::Status::label contains provider-specific English messages.
+
+Suggested target (incremental; no empty placeholder modules)
+src/
+  core/                   existing domain + protocol modules
+  app/
+    auth/                 unlock/create/session/biometrics workflows
+    records/              workspace/editor/directories/import workflows
+    sharing/              artifact/member workflows
+    sync/                 coordinator + schedule
+    settings.rs
+    security.rs
+    ports/                selected app-facing service contracts
+  infra/
+    vault/                facade + current private modules
+    profile/              encrypted local profile + sharing ledger
+    sync/                 ciphertext discovery/exchange implementation
+    providers/storj/      official AWS SDK adapter + configuration
+    platform/             clipboard, biometrics, autolock
+    witness/              existing witness adapters
+    jobs.rs               cancellable worker
+    favicon.rs            HTTP + disk cache
+    config.rs
+    attachments.rs
+  ui/
+    features/             auth, records, sharing, settings
+    shared/               buttons, icons, symbols, theme
+    runtime/              lifecycle, dialogs, clipboard, attachments
+    context.rs
+    i18n/
+    window.rs
+  desktop.rs              concrete dependency composition
+  lib.rs
+  main.rs
+
+Tests/docs
+- Unit tests beside owning feature; tests/ remains public acceptance scenarios.
+- Preserve wire fixture unchanged during moves. Reuse existing rollback,
+  intent retry, witness failure, pending exchange and lock cancellation coverage.
+- docs/README.md:26 lists v4/v5, schema 3; implementation writes v6/v7,
+  schema 5 (vault/format.rs:26, profile.rs:112).
+- README/development/sync architecture mention scripts/lockbox although checkout
+  root contains Cargo.toml. Make documented commands match standalone checkout.
+- Keep current behavior owned by engine/protection docs; index links to owners.
+
+Delivery order
+1. Extract participant-name handler into app + Vault command; small vertical slice.
+2. Encapsulate record/folder edits; preserve shared durability failure semantics.
+3. Move favicon/jobs/path policy; establish selected ports/composition.
+4. Group features with mechanical moves; retain public import facades.
+5. Refine state subscriptions and error localization; repair stale docs.
+- Validate each slice with relevant existing tests; structural moves also require
+  all-target tests, doctests, formatting, Clippy and private Rustdoc links.
+- Keep single Cargo package initially. Consider workspace crates only when
+  independent reuse/build needs justify dependency enforcement and migration.

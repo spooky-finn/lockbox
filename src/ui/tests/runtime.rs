@@ -139,8 +139,8 @@ fn clock_status_and_activity_do_not_rerender_session_subscribers() {
 #[test]
 fn profile_paths_use_private_directory_and_unique_names() {
     let home = tempfile::tempdir().unwrap();
-    let first = runtime::new_profile_path(home.path()).unwrap();
-    let second = runtime::new_profile_path(home.path()).unwrap();
+    let first = crate::infra::paths::new_profile_path(home.path()).unwrap();
+    let second = crate::infra::paths::new_profile_path(home.path()).unwrap();
     assert_eq!(first.parent().unwrap(), home.path().join(".lockbox"));
     assert!(first.parent().unwrap().is_dir());
     assert_eq!(first.extension().unwrap(), "lbx");

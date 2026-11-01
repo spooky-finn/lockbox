@@ -40,6 +40,7 @@ impl Screen {
                 biometrics,
                 false,
             );
+            locked.joining = unlocked.sharing.joining;
             locked.notice = reason.map(|reason| format!("Vault locked: {reason}"));
             *self = Self::Locked(Box::new(locked));
         }
@@ -52,6 +53,12 @@ impl Screen {
         biometrics: &dyn Biometrics,
         security: &mut Security,
     ) {
+        let joining = matches!(self, Self::Locked(form) if form.joining)
+            || opened
+                .vault
+                .accepted_invitations()
+                .iter()
+                .any(|invitation| !invitation.joined);
         let (touch_id, biometric_error) =
             TouchId::open(&opened.vault, settings, biometrics, opened.with_password);
         let config_error = settings
@@ -59,6 +66,10 @@ impl Screen {
             .err();
         let mut unlocked = Unlocked::new(opened.vault);
         unlocked.touch_id = touch_id;
+        if joining {
+            unlocked.sharing.joining = true;
+            unlocked.open_sharing();
+        }
         let errors: Vec<_> = biometric_error.into_iter().chain(config_error).collect();
         unlocked.error = (!errors.is_empty()).then(|| errors.join("; "));
         *self = Self::Unlocked(Box::new(unlocked));

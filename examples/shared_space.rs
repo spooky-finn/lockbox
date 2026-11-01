@@ -74,8 +74,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut entry = Entry::new();
     entry.title = "Shared account".into();
     entry.password = "initial fixture".into();
-    alice.entries.push(entry);
-    alice.save_changes()?;
+    alice.upsert_entry(entry)?;
     // Real callers compare complete user fingerprints through an authenticated
     // channel before supplying certificates and this descriptor.
     let descriptor = alice.space_descriptor().unwrap();
@@ -87,10 +86,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut storage = Memory::default();
     alice.synchronize(&mut storage)?;
     bob.synchronize(&mut storage)?;
-    alice.entries[0].password = "Alice's fixture".into();
-    alice.save_changes()?;
-    bob.entries[0].password = "Bob's fixture".into();
-    bob.save_changes()?;
+    let mut entry = alice.entries()[0].clone();
+    entry.password = "Alice's fixture".into();
+    alice.upsert_entry(entry)?;
+    let mut entry = bob.entries()[0].clone();
+    entry.password = "Bob's fixture".into();
+    bob.upsert_entry(entry)?;
     // The provider stores the object but loses its response. Retry uses the same
     // durable signed bytes instead of creating another logical edit.
     storage.lose_response = true;
@@ -105,8 +106,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     alice.resolve_sync(conflict.entity.clone(), chosen.revision)?;
     alice.synchronize(&mut storage)?;
     bob.synchronize(&mut storage)?;
-    assert_eq!(alice.entries, bob.entries);
-    assert_eq!(alice.entries[0].password, "Bob's fixture");
+    assert_eq!(alice.entries(), bob.entries());
+    assert_eq!(alice.entries()[0].password, "Bob's fixture");
     println!(
         "Two independent profiles converged. Concurrent versions survived, retries were idempotent, and explicit resolution synchronized."
     );

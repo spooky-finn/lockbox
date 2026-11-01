@@ -6,7 +6,7 @@
 
 ## Development and documentation
 
-From `scripts/lockbox`, run `cargo run --locked` to start the desktop app.
+From the repository root, run `cargo run --locked` to start the desktop app.
 See the [developer guide](docs/development.md) for validation and asset generation,
 and the [documentation index](docs/README.md) for architecture, implemented sync
 behavior, recovery and release plans.
@@ -82,9 +82,12 @@ live-bucket Storj и независимое ревью безопасности 
 src/
   core/            записи, папки, TOTP и генерация паролей
   app/             сценарии, сессия, черновики и навигация
+    records/       записи, папки, редактор, импорт и дерево
   infra/           файлы хранилища, настройки и системные сервисы
   ui/              Dioxus runtime, контексты и каталог иконок
     components/    компоненты интерфейса и стилизация
+      records/     экраны записей и навигация
+      shared/      общие кнопки, иконки, тема и статус
   bin/             инструменты сборки ресурсов
   lib.rs           границы модулей и совместимые публичные импорты
   main.rs          запуск desktop-приложения

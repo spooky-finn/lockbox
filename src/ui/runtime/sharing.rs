@@ -1,13 +1,10 @@
 //! Native dialogs return only to their originating unlocked profile. File I/O
 //! belongs to a cancellable session worker, never the Dioxus event callback.
 
-use crate::{
-    app::{session::Screen, sharing::Kind},
-    ui::context::Session,
-};
+use crate::{app::session::Screen, ui::context::Session};
 use dioxus::prelude::*;
 
-pub(in crate::ui) fn import_sharing_file(kind: Kind) {
+pub(in crate::ui) fn import_sharing_file() {
     let mut state = consume_context::<Session>();
     let ticket = match &*state.peek() {
         Screen::Unlocked(u) if !u.sharing.busy() => u.sharing.ticket(&u.vault),
@@ -20,7 +17,7 @@ pub(in crate::ui) fn import_sharing_file(kind: Kind) {
             .await
             && let Screen::Unlocked(u) = &mut *state.write()
         {
-            u.import_sharing(ticket, path.path().to_path_buf(), kind);
+            u.import_sharing(ticket, path.path().to_path_buf());
         }
     });
 }
@@ -29,7 +26,13 @@ pub(in crate::ui) fn export_sharing_file() {
     let mut state = consume_context::<Session>();
     let (ticket, output) = match &*state.peek() {
         Screen::Unlocked(u) if !u.sharing.busy() => {
-            let Some(output) = u.sharing.output.clone() else {
+            let Some(output) = u
+                .sharing
+                .output
+                .as_ref()
+                .or(u.sharing.saved_output.as_ref())
+                .cloned()
+            else {
                 return;
             };
             (u.sharing.ticket(&u.vault), output)

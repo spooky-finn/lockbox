@@ -96,15 +96,15 @@ fn owner_recovery_uses_current_reader_content_with_an_old_read_only_authority_ba
     let mut record = Entry::new();
     record.title = "Old backup content".into();
     record.password = "fictional secret".into();
-    owner.entries.push(record);
-    owner.save_changes()?;
+    owner.upsert_entry(record)?;
     let backup = directory.path().join("old-authority-backup.lbx");
     std::fs::copy(owner.path(), &backup)?;
     let offer = owner.issue_invitation(reader.device_certificate().unwrap(), Role::Reader, None)?;
     let response = reader.accept_invitation(offer, &owner.space_descriptor().unwrap())?;
     reader.join_invitation(owner.admit_invitation(response, 0)?)?;
-    owner.entries[0].title = "Latest content held by the reader".into();
-    owner.save_changes()?;
+    let mut entry = owner.entries()[0].clone();
+    entry.title = "Latest content held by the reader".into();
+    owner.upsert_entry(entry)?;
     let mut storage = Memory(Arc::new(Mutex::new(BTreeMap::new())));
     owner.synchronize(&mut storage)?;
     reader.synchronize(&mut storage)?;
@@ -114,7 +114,7 @@ fn owner_recovery_uses_current_reader_content_with_an_old_read_only_authority_ba
     let read_only_store = ProfileStore::new(Arc::new(MemoryWitness::default()));
     let authority: Vault = read_only_store.open(&backup, &password)?;
     assert!(authority.signing_error().is_some());
-    assert_eq!(authority.entries[0].title, "Old backup content");
+    assert_eq!(authority.entries()[0].title, "Old backup content");
     let mut recovered = profiles.recover_controller(
         directory.path().join("recovered.lbx"),
         &password,
@@ -132,7 +132,7 @@ fn owner_recovery_uses_current_reader_content_with_an_old_read_only_authority_ba
         old_device
     );
     assert_eq!(
-        recovered.entries[0].title,
+        recovered.entries()[0].title,
         "Latest content held by the reader"
     );
     recovered.synchronize(&mut storage)?;
@@ -142,12 +142,13 @@ fn owner_recovery_uses_current_reader_content_with_an_old_read_only_authority_ba
         recovered.device_certificate().unwrap().body.device
     );
     assert_eq!(reader.sync_replay()?.unwrap().role, Some(Role::Reader));
-    recovered.entries[0].title = "Edit by the recovered controller".into();
-    recovered.save_changes()?;
+    let mut entry = recovered.entries()[0].clone();
+    entry.title = "Edit by the recovered controller".into();
+    recovered.upsert_entry(entry)?;
     recovered.synchronize(&mut storage)?;
     reader.synchronize(&mut storage)?;
-    assert_eq!(reader.entries, recovered.entries);
-    assert_eq!(authority.entries[0].title, "Old backup content");
+    assert_eq!(reader.entries(), recovered.entries());
+    assert_eq!(authority.entries()[0].title, "Old backup content");
     Ok(())
 }
 

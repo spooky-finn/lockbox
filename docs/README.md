@@ -23,9 +23,9 @@ are bundled into the application. Keep both versions aligned when changing setup
 
 Local persistence versions remain independent from the unversioned sync protocol:
 
-- Local encrypted file format: new local vaults write **v4**, shared profiles **v5**.
-  Older v1/v2/v3 files remain readable.
-- Bootstrap profile schema: new shared profiles use **3**, including witness protection.
+- Local encrypted file versions and bootstrap schemas: see the
+  [profile protection guide](profile-protection.md) and [application README](../README.md)
+  for current writes and supported readers.
 - Remote wire protocol: **unversioned**, experimental; previous versioned artifacts unsupported.
 - Protocol proposal: **v1**, a broader target design.
 

@@ -140,7 +140,7 @@ fn witness_failure_cancels_old_work_even_during_a_draft_and_retry_can_resume() {
 fn downloaded_history_waits_until_the_active_draft_is_finished() {
     let dir = tempfile::tempdir().unwrap();
     let mut vault = vault(&dir);
-    let profile = vault.profile.as_ref().unwrap();
+    let profile = vault.test_profile().unwrap();
     let device = profile.sync_secret();
     let mut remote = profile.sync.as_ref().unwrap().clone();
     let mut entry = Entry::new();
@@ -169,10 +169,10 @@ fn downloaded_history_waits_until_the_active_draft_is_finished() {
     };
     assert!(!session.needs_tick(true));
     assert!(session.tick(&mut vault, true).is_none());
-    assert!(vault.entries.is_empty());
+    assert!(vault.entries().is_empty());
     assert!(session.worker.is_some());
     assert!(session.tick(&mut vault, false).is_none());
-    assert_eq!(vault.entries[0].title, "Remote");
+    assert_eq!(vault.entries()[0].title, "Remote");
     assert_eq!(session.status, Status::Incomplete);
 }
 
@@ -197,8 +197,7 @@ fn new_edits_saved_during_upload_remain_pending_after_old_receipts() {
     let dir = tempfile::tempdir().unwrap();
     let mut vault = vault(&dir);
     let old_plan: Vec<_> = vault
-        .profile
-        .as_ref()
+        .test_profile()
         .unwrap()
         .sync
         .as_ref()
@@ -209,7 +208,7 @@ fn new_edits_saved_during_upload_remain_pending_after_old_receipts() {
         .collect();
     let mut entry = Entry::new();
     entry.title = "Saved during upload".into();
-    vault.entries.push(entry);
+    vault.test_entries_mut().push(entry);
     vault.save_changes().unwrap();
     let mut session = SpaceSync {
         worker: Some(Worker::ready(Ok(Reply::Uploaded(old_plan)))),
@@ -220,8 +219,7 @@ fn new_edits_saved_during_upload_remain_pending_after_old_receipts() {
     assert!(session.needs_tick(false));
     assert_eq!(
         vault
-            .profile
-            .as_ref()
+            .test_profile()
             .unwrap()
             .sync
             .as_ref()
@@ -238,7 +236,7 @@ fn injected_provider_runs_the_complete_background_exchange() {
     let mut vault = vault(&directory);
     let mut entry = Entry::new();
     entry.title = "Local fixture".into();
-    vault.entries.push(entry);
+    vault.test_entries_mut().push(entry);
     vault.save_changes().unwrap();
     let factory = Arc::new(MemoryFactory::default());
     let mut session = SpaceSync::new(Some(factory.clone()));
@@ -247,7 +245,7 @@ fn injected_provider_runs_the_complete_background_exchange() {
     assert_eq!(factory.objects.lock().unwrap().len(), 2);
     assert!(vault.sync_state().unwrap().outbox.is_empty());
     assert!(vault.sync_state().unwrap().last_exchange.is_some());
-    assert_eq!(vault.entries[0].title, "Local fixture");
+    assert_eq!(vault.entries()[0].title, "Local fixture");
 }
 
 #[test]
@@ -285,8 +283,13 @@ fn a_verified_fault_cancels_a_pending_job_even_while_editing() {
         Ok(Reply::Uploaded(vec![]))
     });
     let cancel = started_rx.recv_timeout(Duration::from_secs(2)).unwrap();
-    vault.profile.as_mut().unwrap().sync.as_mut().unwrap().fault =
-        Some(crate::core::sync::Error::ControlFork);
+    vault
+        .test_profile_mut()
+        .unwrap()
+        .sync
+        .as_mut()
+        .unwrap()
+        .fault = Some(crate::core::sync::Error::ControlFork);
     assert!(session.needs_tick_for(&vault, true));
     assert!(session.tick(&mut vault, true).is_none());
     assert!(cancel.check().is_err());
@@ -351,8 +354,7 @@ fn upload_completion_does_not_hide_an_invalid_outbox() {
     let mut vault = vault(&directory);
     let hash = Hash([0xee; 32]);
     vault
-        .profile
-        .as_mut()
+        .test_profile_mut()
         .unwrap()
         .sync
         .as_mut()
@@ -373,7 +375,7 @@ fn upload_completion_does_not_hide_an_invalid_outbox() {
 fn a_pending_receive_commit_cancels_old_work_and_resumes_after_storage_recovers() {
     let directory = tempfile::tempdir().unwrap();
     let mut vault = vault(&directory);
-    let profile = vault.profile.as_ref().unwrap();
+    let profile = vault.test_profile().unwrap();
     let device = profile.sync_secret();
     let mut remote = profile.sync.as_ref().unwrap().clone();
     remote.intent = Some(

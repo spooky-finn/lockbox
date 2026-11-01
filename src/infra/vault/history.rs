@@ -95,12 +95,6 @@ impl Vault {
         {
             entry.folder_id = None;
         }
-        let previous = self.entries.clone();
-        self.entries.push(entry);
-        if let Err(error) = self.save_changes() {
-            self.entries = previous;
-            return Err(error);
-        }
-        Ok(())
+        self.upsert_entry(entry)
     }
 }

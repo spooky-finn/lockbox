@@ -79,12 +79,14 @@ pub(super) fn LockedView() -> Element {
                     }
                 }
                 h1 { class: "unlock-title",
-                    if create { {language.text(Text::CreateAVault)} }
+                    if create && locked.joining { {language.text(Text::SharingConnect)} }
+                    else if create { {language.text(Text::CreateAVault)} }
                     else if ready { {language.text(Text::VaultIsLocked)} }
                     else { {language.text(Text::YourPasswordsLockedAway)} }
                 }
                 p { class: "unlock-description", title: "{path}",
-                    if cloud_password { {language.text(Text::ChooseAMasterPasswordToProtectYourLocalProfile)} }
+                    if create && locked.joining && !cloud_password { {language.text(Text::SharingJoinSetup)} }
+                    else if cloud_password { {language.text(Text::ChooseAMasterPasswordToProtectYourLocalProfile)} }
                     else if create && locked.path.is_none() { {language.text(Text::ChooseAVaultType)} }
                     else if create { {language.format(Text::ChooseAMasterPasswordForTheNewVault, &[filename.to_string()])} }
                     else if touch_id { {language.format(Text::UseTouchIDOrEnterTheMasterPasswordToOpen, &[filename.to_string()])} }
@@ -93,22 +95,23 @@ pub(super) fn LockedView() -> Element {
                 }
 
                 if create && locked.path.is_none() && !cloud_password {
-                    div { class: "storage-choices",
-                        button { r#type: "button", class: "storage-choice", onclick: move |_| runtime::pick_vault(true),
-                            strong { {language.text(Text::SingleUser)} }
-                            span { {language.text(Text::LocalVaultOnThisDevice)} }
-                        }
-                        button { r#type: "button", class: "storage-choice",
-                            aria_pressed: locked.storage_kind == Some(StorageKind::Cloud),
-                            onclick: move |_| edit_locked(state, |locked| {
-                                locked.storage_kind = Some(StorageKind::Cloud);
-                                locked.error = None;
-                            }),
-                            strong { {language.text(Text::MultipleUsers)} }
-                            span { {language.text(Text::SharedCloudVaultInStorj)} }
+                    if !locked.joining {
+                        div { class: "storage-choices",
+                            button { r#type: "button", class: "storage-choice", onclick: move |_| runtime::pick_vault(true),
+                                strong { {language.text(Text::SingleUser)} }
+                                span { {language.text(Text::LocalVaultOnThisDevice)} }
+                            }
+                            button { r#type: "button", class: "storage-choice",
+                                aria_pressed: locked.storage_kind == Some(StorageKind::Cloud),
+                                onclick: move |_| edit_locked(state, |locked| {
+                                    locked.storage_kind = Some(StorageKind::Cloud);
+                                    locked.error = None;
+                                }),
+                                strong { {language.text(Text::MultipleUsers)} }
+                                span { {language.text(Text::SharedCloudVaultInStorj)} }
+                            }
                         }
                     }
-
                     if locked.storage_kind == Some(StorageKind::Cloud) {
                         super::cloud_setup::CloudSetupView {}
                     }
@@ -204,6 +207,10 @@ pub(super) fn LockedView() -> Element {
                 }
                 IconButton { class: "quiet", icon: Icon::FolderPlus, label: language.text(Text::CreateVault2), disabled: busy,
                     onclick: move |_| runtime::begin_create(),
+                }
+
+                button { class: "quiet", disabled: busy, onclick: move |_| runtime::begin_join(),
+                    {language.text(Text::SharingConnect)}
                 }
 
                 if settings.read().config.last_vault.is_some() {

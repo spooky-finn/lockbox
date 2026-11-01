@@ -116,7 +116,7 @@ fn english_translates_existing_errors_and_creation_without_translating_user_data
     let mut dom = mounted();
     update(&mut dom, |state| {
         edit_unlocked(state, |u| {
-            u.vault.entries[0].title = "Работа".into();
+            u.vault.test_entries_mut()[0].title = "Работа".into();
             u.error = Some("Could not save: incorrect master password".into());
         });
         runtime::set_language(Language::English);

@@ -87,7 +87,7 @@ Readers can export known secrets. Copy prevention is outside cryptographic model
 
 ## 2 Current implementation
 
-[src/infra/vault.rs](../src/infra/vault.rs) encrypts entire JSON vault with
+[src/infra/vault/mod.rs](../src/infra/vault/mod.rs) encrypts entire JSON vault with
 XChaCha20-Poly1305. Master password passes Argon2id and HKDF. Header authenticated
 as associated data. New local vaults write v4 and shared profiles write v5;
 v1/v2/v3 files remain readable. Attachments are encrypted with their entries.
@@ -101,8 +101,8 @@ Current layers:
 - [src/ui](../src/ui): Dioxus components, contexts, lifecycle integration.
 
 [Entry](../src/core/entry.rs) and [Folder](../src/core/folder.rs) already have
-stable random IDs. Existing workflows in [workspace.rs](../src/app/workspace.rs)
-and [directories.rs](../src/app/directories.rs) mutate collections then save.
+stable random IDs. Existing workflows in [workspace.rs](../src/app/records/workspace.rs)
+and [directories.rs](../src/app/records/directories.rs) mutate collections then save.
 Shared mode replaces that persistence boundary with signed local transactions.
 
 New v5 cloud profiles now implement an experimental unversioned sync engine with

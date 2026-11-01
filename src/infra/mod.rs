@@ -15,3 +15,7 @@ pub(crate) mod provider;
 pub(crate) mod attachments;
 pub(crate) mod lease;
 pub(crate) mod sharing_files;
+
+pub(crate) mod favicon;
+pub(crate) mod jobs;
+pub(crate) mod paths;

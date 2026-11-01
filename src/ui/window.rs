@@ -164,8 +164,8 @@ pub(crate) fn title(screen: &Screen, language: Language) -> String {
     };
 
     let vault = &unlocked.vault;
-    let (name, kind) = match vault.profile.as_ref() {
-        Some(profile) => (profile.space_name.clone(), Text::TabCloud),
+    let (name, kind) = match vault.profile_summary() {
+        Some(profile) => (profile.space_name.to_owned(), Text::TabCloud),
         None => (
             vault
                 .path()

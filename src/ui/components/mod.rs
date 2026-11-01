@@ -1,27 +1,18 @@
 //! Dioxus presentation. Each component subscribes to its own reactive inputs.
 
-mod button;
+mod records;
+pub(crate) use records::{
+    directories, directory_editor, editor, entry, folder_select, generator, history, sidebar,
+    toolbar, totp, tree, workspace,
+};
+
+mod shared;
+pub(crate) use shared::{button, icons, lock_mark, status, symbol, theme};
+
 mod cloud_setup;
-mod directories;
-mod directory_editor;
-mod editor;
-mod entry;
-mod folder_select;
-mod generator;
-mod history;
-mod icons;
-mod lock_mark;
 mod locked;
 mod settings;
 mod sharing;
-mod sidebar;
-mod status;
-mod symbol;
-mod theme;
-mod toolbar;
-mod totp;
-mod tree;
-mod workspace;
 
 use crate::app::session::Screen;
 use crate::ui::runtime;

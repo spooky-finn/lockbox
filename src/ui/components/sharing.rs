@@ -22,7 +22,14 @@ use flow::{Path, Step, Workflow};
 fn act(action: Action) {
     let state = consume_context::<Session>();
     let now = *(consume_context::<Clock>().0).peek();
-    edit_unlocked(state, |u| u.sharing_action(action, now));
+    let mut save = false;
+    edit_unlocked(state, |u| {
+        u.sharing_action(action, now);
+        save = u.error.is_none() && u.sharing.output.is_some();
+    });
+    if save {
+        runtime::export_sharing_file();
+    }
 }
 
 #[cfg(test)]
@@ -35,6 +42,11 @@ pub(super) fn role_text(role: Role) -> Text {
         Role::Editor => Text::SharingEditor,
         Role::Reader => Text::SharingReader,
     }
+}
+
+fn select_step(state: Session, mut selection: Signal<Option<Step>>, step: Step) {
+    edit_unlocked(state, |u| u.sharing.cancel_output());
+    selection.set(Some(step));
 }
 
 #[component]
@@ -54,6 +66,10 @@ pub(super) fn SharingView() -> Element {
             if u.vault.signing_error().is_some() { p { class: "notice", {language.text(Text::SharingReadOnly)} } }
             if u.sharing.busy() { p { role: "status", {language.text(Text::SharingBusy)} } }
             if let Some(notice) = u.sharing.notice { p { class: "notice", role: "status", {language.message(notice)} } }
+            button { class: "primary", disabled: blocked,
+                onclick: move |_| runtime::import_sharing_file(),
+                {language.text(Text::SharingOpenFile)}
+            }
             Wizard { blocked }
             details { class: "settings-section sharing-identity",
                 summary { {language.text(Text::SharingThisDevice)} }
@@ -66,7 +82,9 @@ pub(super) fn SharingView() -> Element {
                     }
                 }
             }
-            Members { blocked }
+            if !u.sharing.joining {
+                Members { blocked }
+            }
             Invitations { blocked }
         }
     }
@@ -87,17 +105,17 @@ fn Wizard(blocked: bool) -> Element {
     let path = step.path();
     rsx! {
         div { class: "sharing-paths", role: "group", aria_label: language.text(Text::SharingChoosePath),
-            if u.is_controller() {
+            if u.is_controller() && !u.sharing.joining {
                 button { class: if path == Path::Invite { "sharing-path selected" } else { "sharing-path" },
                     aria_pressed: path == Path::Invite, disabled: workflow.navigation_locked(),
-                    onclick: move |_| selection.set(Some(Path::Invite.first())),
+                    onclick: move |_| select_step(state, selection, Path::Invite.first()),
                     strong { {language.text(Text::SharingInvite)} }
                     span { {language.text(Text::SharingInvitePathHint)} }
                 }
             }
             button { class: if path == Path::Join { "sharing-path selected" } else { "sharing-path" },
                 aria_pressed: path == Path::Join, disabled: workflow.navigation_locked(),
-                onclick: move |_| selection.set(Some(Path::Join.first())),
+                onclick: move |_| select_step(state, selection, Path::Join.first()),
                 strong { {language.text(Text::SharingConnect)} }
                 span { {language.text(Text::SharingJoinPathHint)} }
             }
@@ -110,7 +128,7 @@ fn Wizard(blocked: bool) -> Element {
                             button { class: if item == step { "sharing-step current" } else { "sharing-step" },
                                 aria_current: if item == step { "step" } else { "false" },
                                 disabled: workflow.navigation_locked(),
-                                onclick: move |_| selection.set(Some(item)),
+                                onclick: move |_| select_step(state, selection, item),
                                 span { class: "sharing-step-number", "{index + 1}" }
                                 span { {language.text(item.title())} }
                             }
@@ -126,15 +144,15 @@ fn Wizard(blocked: bool) -> Element {
                 StepAction { step, blocked }
             }
             Review { blocked }
-            SharingOutput { oninteract: move |_| selection.set(Some(step)) }
+            SharingOutput { oninteract: move |_| selection.set(None) }
             if !workflow.is_complete() {
                 footer { class: "sharing-navigation",
                     button { class: "quiet", disabled: !workflow.can_go_back(),
-                        onclick: move |_| selection.set(Some(step.previous().unwrap_or(step))),
+                        onclick: move |_| select_step(state, selection, step.previous().unwrap_or(step)),
                         {language.text(Text::SharingPreviousStep)} }
                     if let Some(next) = step.next() {
                         button { class: "quiet", disabled: workflow.navigation_locked(),
-                            onclick: move |_| selection.set(Some(next)),
+                            onclick: move |_| select_step(state, selection, next),
                             {language.text(Text::SharingNextStep)} }
                     }
                 }
@@ -146,28 +164,14 @@ fn Wizard(blocked: bool) -> Element {
 #[component]
 fn StepAction(step: Step, blocked: bool) -> Element {
     let language = use_language();
-    let (label, import) = match step {
-        Step::GetDevice => (Text::SharingImportDevice, Some(Kind::Certificate)),
-        Step::ApproveAccess => (Text::SharingImportResponse, Some(Kind::Response)),
-        Step::PrepareDevice => (Text::SharingExportDevice, None),
-        Step::AcceptInvitation => (Text::SharingImportInvitation, Some(Kind::Invitation)),
-        Step::Connect => (Text::SharingImportConfirmation, Some(Kind::Receipt)),
-        Step::SendInvitation => {
-            return rsx! {
-                div { class: "actions sharing-actions",
-                    p { class: "muted", {language.text(Text::SharingResumeInvite)} }
-                }
-            };
-        }
-    };
+    if step != Step::PrepareDevice {
+        return rsx! {};
+    }
     rsx! {
         div { class: "actions sharing-actions",
             button { class: "primary", disabled: blocked,
-                onclick: move |_| match import {
-                    Some(kind) => runtime::import_sharing_file(kind),
-                    None => act(Action::Certificate),
-                },
-                {language.text(label)}
+                onclick: move |_| act(Action::Certificate),
+                {language.text(Text::SharingExportDevice)}
             }
         }
     }
@@ -181,12 +185,25 @@ fn SharingOutput(oninteract: EventHandler) -> Element {
     let Screen::Unlocked(u) = &*screen else {
         return rsx! {};
     };
-    let Some(output) = &u.sharing.output else {
+    let Some(output) = u
+        .sharing
+        .output
+        .as_ref()
+        .or(u.sharing.saved_output.as_ref())
+    else {
         return rsx! {};
     };
     rsx! {
         section { class: "sharing-output stack", aria_label: language.text(Text::SharingOutput),
             h3 { {language.text(Text::SharingOutput)} }
+            if u.sharing.output.is_none() {
+                p { role: "status", {language.text(match output.kind {
+                    Kind::Certificate => Text::SharingWaitingInvitation,
+                    Kind::Invitation => Text::SharingPending,
+                    Kind::Response => Text::SharingAwaitingOwner,
+                    Kind::Receipt => Text::SharingSendConfirmation,
+                })} }
+            }
             p { {language.text(match output.kind {
                 Kind::Certificate => Text::SharingSendDevice, Kind::Invitation => Text::SharingSendInvitation,
                 Kind::Response => Text::SharingSendResponse, Kind::Receipt => Text::SharingSendConfirmation,
@@ -198,7 +215,7 @@ fn SharingOutput(oninteract: EventHandler) -> Element {
             button { class: "primary", disabled: u.sharing.busy(), onclick: move |_| {
                 oninteract.call(());
                 runtime::export_sharing_file();
-            }, {language.text(Text::SharingSaveFile)} }
+            }, {language.text(if u.sharing.output.is_some() { Text::SharingSaveFile } else { Text::SharingSaveAgain })} }
             button { class: "quiet", disabled: u.sharing.busy(), onclick: move |_| {
                 oninteract.call(());
                 edit_unlocked(state, |u| u.sharing.cancel_output());
@@ -308,11 +325,7 @@ fn Members(blocked: bool) -> Element {
             for (user, (role, devices)) in users {
                 div { class: "sharing-member stack", key: "{user}",
                     div { class: "sharing-member-heading",
-                        h3 { {u.vault.profile.as_ref().and_then(|p| {
-                            p.participant_names.get(&user).cloned().or_else(|| {
-                                p.certificate.as_ref().filter(|c| c.body.user == user).map(|_| p.username.clone())
-                            })
-                        }).unwrap_or_else(|| language.text(Text::SharingUnnamedUser).to_string())} }
+                        h3 { {u.vault.participant_name(user).unwrap_or_else(|| language.text(Text::SharingUnnamedUser)).to_owned()} }
                         span { class: "sharing-role", {language.text(role_text(role))} }
                     }
                     if devices.iter().any(|c| Some(c.body.device) == controller) {
@@ -323,24 +336,9 @@ fn Members(blocked: bool) -> Element {
                             summary { {language.text(Text::SharingEditName)} }
                             label { r#for: "participant-name-{user}", {language.text(Text::SharingLocalName)} }
                             input { id: "participant-name-{user}", maxlength: 256,
-                                value: u.vault.profile.as_ref().and_then(|p| p.participant_names.get(&user)).cloned().unwrap_or_default(),
+                                value: u.vault.participant_alias(user).unwrap_or_default().to_owned(),
                                 disabled: blocked,
-                                onchange: move |event| edit_unlocked(state, |u| {
-                                    let name = event.value().trim().to_owned();
-                                    if name.len() > 256 || name.chars().any(char::is_control) { return; }
-                                    if let Some(profile) = u.vault.profile.as_mut() {
-                                        let previous = profile.participant_names.get(&user).cloned();
-                                        if name.is_empty() { profile.participant_names.remove(&user); }
-                                        else { profile.participant_names.insert(user, name); }
-                                        if let Err(error) = u.vault.save() {
-                                            if let Some(profile) = u.vault.profile.as_mut() {
-                                                if let Some(previous) = previous { profile.participant_names.insert(user, previous); }
-                                                else { profile.participant_names.remove(&user); }
-                                            }
-                                            u.error = Some(error.to_string());
-                                        }
-                                    }
-                                }),
+                                onchange: move |event| edit_unlocked(state, |u| u.set_participant_name(user, &event.value())),
                             }
                             p { class: "muted", {language.text(Text::SharingLocalNameHint)} }
                         }
@@ -389,6 +387,9 @@ fn Invitations(blocked: bool) -> Element {
             h2 { {language.text(Text::SharingInvitations)} }
             for invitation in u.vault.issued_invitations(now) {
                 div { class: "sharing-member stack", key: "{invitation.id}",
+                    if let Some(name) = u.vault.participant_name(invitation.user) {
+                        h3 { "{name}" }
+                    }
                     code { class: "sharing-code", "{invitation.id}" }
                     code { class: "sharing-code muted", "{invitation.device}" }
                     p { {language.text(match invitation.status {

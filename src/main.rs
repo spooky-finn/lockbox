@@ -3,5 +3,5 @@ fn main() {
     let _ = dioxus::logger::init(dioxus::logger::tracing::Level::INFO);
     dioxus::LaunchBuilder::desktop()
         .with_cfg(lockbox::ui::window::config(true))
-        .launch(lockbox::app::App);
+        .launch(lockbox::ui::App);
 }

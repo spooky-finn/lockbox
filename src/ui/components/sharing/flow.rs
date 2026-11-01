@@ -34,6 +34,16 @@ impl Workflow {
                     .map(|output| Step::output(output.kind))
             })
             .or(complete.then_some(Step::Connect))
+            .or_else(|| {
+                sharing
+                    .saved_output
+                    .as_ref()
+                    .map(|output| match output.kind {
+                        Kind::Certificate => Step::AcceptInvitation,
+                        Kind::Invitation | Kind::Receipt => Step::ApproveAccess,
+                        Kind::Response => Step::Connect,
+                    })
+            })
             .or(selection)
             .unwrap_or_else(|| Step::resume(unlocked, now));
         Self {
@@ -144,6 +154,8 @@ impl Step {
             .any(|invitation| invitation.status == InvitationStatus::Pending)
         {
             Self::ApproveAccess
+        } else if unlocked.sharing.joining {
+            Self::PrepareDevice
         } else if unlocked.is_controller() {
             Self::GetDevice
         } else {

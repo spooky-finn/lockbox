@@ -86,3 +86,38 @@ fn cloud_submit_validates_then_offers_identity_creation() {
     assert!(html.contains("id=\"recovery-repeat\""));
     assert!(html.contains("Создать профиль и ключи…"));
 }
+
+#[test]
+fn joining_starts_at_connection_setup_without_creating_a_named_space() {
+    use crate::ui::context::edit_locked;
+
+    let mut dom = mounted();
+    update(&mut dom, |_| {
+        runtime::set_language(crate::core::language::Language::English);
+        runtime::begin_join();
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("Join a space"));
+    assert!(html.contains("id=\"cloud-username\""));
+    assert!(html.contains("id=\"cloud-secret\""));
+    assert!(!html.contains("id=\"cloud-space\""));
+    assert!(!html.contains("storage-choices"));
+    assert!(!html.contains("id=\"master-password\""));
+    update(&mut dom, |state| {
+        edit_locked(state, |form| {
+            form.cloud.username = "Guest".into();
+            form.cloud.base_url = "https://gateway.storjshare.io".into();
+            form.cloud.bucket = "team-vault".into();
+            form.cloud.access_key.push_str("fictional-access");
+            form.cloud.secret_key.push_str("fictional-secret");
+            form.continue_cloud();
+            assert!(form.joining);
+            assert!(form.cloud_password_step);
+        });
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("id=\"master-password\""));
+    assert!(html.contains("id=\"recovery-password\""));
+    update(&mut dom, |_| runtime::begin_create());
+    assert!(dioxus_ssr::render(&dom).contains("storage-choices"));
+}

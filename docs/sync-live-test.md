@@ -1,6 +1,6 @@
 # Live Storj acceptance test
 
-Run from `scripts/lockbox` against a dedicated test bucket with fictional data.
+Run from the repository root against a dedicated test bucket with fictional data.
 The probe uses the production HTTPS/SigV4 adapter and two independently generated
 device profiles. It never uploads a profile or private device key.
 

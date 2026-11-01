@@ -62,7 +62,7 @@ fn fixture() -> Element {
             period: 30,
         });
         unlocked.selected = Some(entry.id.clone());
-        unlocked.vault.entries.push(entry);
+        unlocked.vault.test_entries_mut().push(entry);
         Screen::Unlocked(Box::new(unlocked))
     });
     let settings = use_signal(|| Settings {
