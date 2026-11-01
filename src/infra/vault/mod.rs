@@ -19,6 +19,7 @@
 //! This facade keeps file-generation and witness commit ordering explicit.
 //! The public [`Vault`] facade retains the existing import paths for both modes.
 
+use crate::core::identity::Key;
 use std::{
     cell::RefCell,
     fs, io,
@@ -117,7 +118,7 @@ pub struct Vault {
     kdf: KdfParams,
     salt: [u8; SALT_LEN],
     check: [u8; CHECK_LEN],
-    key: Zeroizing<[u8; 32]>,
+    key: Zeroizing<Key>,
     pub(in crate::infra) entries: Vec<Entry>,
     history: RefCell<Vec<crate::core::history::RecordChange>>,
     saved_entries: RefCell<Vec<Entry>>,
@@ -156,7 +157,7 @@ pub use store::{ControllerRecovery, DeviceRecovery, ProfileStore, SharedProfile}
 
 enum Unlock<'a> {
     Password(&'a SecretString),
-    Key(&'a [u8; 32]),
+    Key(&'a Key),
 }
 
 impl Vault {
@@ -280,7 +281,7 @@ impl Vault {
     }
 
     /// Opens with a key exported earlier, skipping Argon2id (used for Touch ID).
-    pub fn open_with_key(path: impl AsRef<Path>, key: &[u8; 32]) -> Result<Self> {
+    pub fn open_with_key(path: impl AsRef<Path>, key: &Key) -> Result<Self> {
         ProfileStore::default().open_with_key(path, key)
     }
 
@@ -364,7 +365,7 @@ impl Vault {
     }
 
     /// The derived encryption key, for storing behind Touch ID.
-    pub fn export_key(&self) -> Zeroizing<[u8; 32]> {
+    pub fn export_key(&self) -> Zeroizing<Key> {
         self.key.clone()
     }
 
@@ -513,7 +514,7 @@ impl Header {
     fn into_vault(
         self,
         path: PathBuf,
-        key: Zeroizing<[u8; 32]>,
+        key: Zeroizing<Key>,
         contents: Contents,
         profile_lock: Option<crate::infra::lease::ExclusiveFile>,
         witnesses: Arc<dyn WitnessStore>,

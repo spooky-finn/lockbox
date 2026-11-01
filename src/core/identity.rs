@@ -8,36 +8,38 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
+pub(crate) type Key = [u8; 32];
+
 #[derive(Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 pub(crate) struct DeviceKeys {
-    signing_secret: [u8; 32],
-    hpke_secret: [u8; 32],
+    signing_secret: Key,
+    hpke_secret: Key,
 }
 
 #[derive(Serialize, Deserialize, Zeroize)]
 pub(crate) struct PublicIdentity {
-    pub(crate) user_id: [u8; 32],
-    pub(crate) root_key: [u8; 32],
-    pub(crate) device_id: [u8; 32],
-    pub(crate) signing_key: [u8; 32],
-    pub(crate) hpke_key: [u8; 32],
+    pub(crate) user_id: Key,
+    pub(crate) root_key: Key,
+    pub(crate) device_id: Key,
+    pub(crate) signing_key: Key,
+    pub(crate) hpke_key: Key,
 }
 
 #[derive(Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 pub(crate) struct SpaceKeys {
-    pub(crate) space_id: [u8; 32],
-    pub(crate) namespace: [u8; 32],
-    epoch_key: [u8; 32],
-    pub(crate) epoch_context: [u8; 32],
+    pub(crate) space_id: Key,
+    pub(crate) namespace: Key,
+    epoch_key: Key,
+    pub(crate) epoch_context: Key,
 }
 
-pub(crate) fn random32() -> Result<Zeroizing<[u8; 32]>, getrandom::Error> {
+pub(crate) fn random32() -> Result<Zeroizing<Key>, getrandom::Error> {
     let mut bytes = Zeroizing::new([0; 32]);
     getrandom::fill(bytes.as_mut())?;
     Ok(bytes)
 }
 
-pub(crate) fn fingerprint(domain: &[u8], key: &[u8; 32]) -> [u8; 32] {
+pub(crate) fn fingerprint(domain: &[u8], key: &Key) -> Key {
     let mut hash = Sha256::new();
     hash.update(domain);
     hash.update(key);
@@ -101,10 +103,10 @@ impl DeviceKeys {
 }
 
 #[cfg(test)]
-pub(crate) type ContentKeys = (Zeroizing<[u8; 32]>, Zeroizing<[u8; 32]>);
+pub(crate) type ContentKeys = (Zeroizing<Key>, Zeroizing<Key>);
 
 impl SpaceKeys {
-    pub(crate) fn epoch_key(&self) -> &[u8; 32] {
+    pub(crate) fn epoch_key(&self) -> &Key {
         &self.epoch_key
     }
     pub(crate) fn generate() -> Result<Self, getrandom::Error> {

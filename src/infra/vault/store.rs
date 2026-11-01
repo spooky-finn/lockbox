@@ -1,5 +1,6 @@
 //! Explicit witness-store injection for CLI hosts, tests and alternate platforms.
 
+use crate::core::identity::Key;
 use super::{KdfParams, ProviderConfiguration, Result, Unlock, Vault};
 use crate::core::sync::{Error, Hash, Machine, RecoveryAnchor, SpaceDescriptor};
 use crate::infra::{
@@ -210,7 +211,7 @@ impl ProfileStore {
         )
     }
 
-    pub fn open_with_key(&self, path: impl AsRef<Path>, key: &[u8; 32]) -> Result<Vault> {
+    pub fn open_with_key(&self, path: impl AsRef<Path>, key: &Key) -> Result<Vault> {
         Vault::open_using(path.as_ref(), Unlock::Key(key), self.witnesses.clone())
     }
 }

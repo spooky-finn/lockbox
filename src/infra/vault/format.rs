@@ -1,5 +1,6 @@
 //! Encrypted file format, authenticated contents and password derivation.
 
+use crate::core::identity::Key;
 use super::{KdfParams, Result, VaultError};
 use crate::{
     core::{
@@ -82,7 +83,7 @@ impl Header {
 }
 
 /// Authenticated decryption of the whole file; `None` if the key or data is wrong.
-pub(super) fn decrypt(data: &[u8], key: &[u8; 32]) -> Option<Contents> {
+pub(super) fn decrypt(data: &[u8], key: &Key) -> Option<Contents> {
     let (header, ciphertext) = data.split_at(HEADER_LEN);
     let nonce = XNonce::from_slice(&header[66..HEADER_LEN]);
     let plaintext = Zeroizing::new(
@@ -145,7 +146,7 @@ pub(super) fn derive(
     password: &SecretString,
     salt: &[u8; SALT_LEN],
     kdf: KdfParams,
-) -> Result<(Zeroizing<[u8; 32]>, [u8; CHECK_LEN])> {
+) -> Result<(Zeroizing<Key>, [u8; CHECK_LEN])> {
     let params = Params::new(kdf.memory_kib, kdf.passes, kdf.lanes, Some(32))
         .map_err(|_| VaultError::InvalidKdfParams)?;
     let mut master = Zeroizing::new([0u8; 32]);
@@ -162,7 +163,7 @@ pub(super) fn derive(
     Ok((key, check))
 }
 
-pub(super) fn cipher(key: &[u8; 32]) -> XChaCha20Poly1305 {
+pub(super) fn cipher(key: &Key) -> XChaCha20Poly1305 {
     XChaCha20Poly1305::new(key.into())
 }
 
@@ -194,7 +195,7 @@ impl Header {
 
 pub(super) fn encrypt(
     contents: ContentsRef<'_>,
-    key: &[u8; 32],
+    key: &Key,
     header: &[u8; HEADER_LEN],
     nonce: &[u8; NONCE_LEN],
 ) -> Vec<u8> {

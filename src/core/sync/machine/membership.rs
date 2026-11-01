@@ -1,5 +1,6 @@
 //! Owner authority, roster validation, HPKE grants, and epoch checkpoints.
 
+use crate::core::identity::Key;
 use super::super::{
     Blob, Certificate, DeviceSecret, Error, Hash, Object, Projection, Result, Role, Signed,
     canonical, crypto, wire::sorted_unique,
@@ -16,7 +17,7 @@ pub(super) fn grant_aad(epoch: &Epoch, certificate: &Signed<Certificate>) -> Res
     canonical(&(epoch, certificate.hash()?))
 }
 
-pub(super) fn epoch_key(control: &Control, device: &DeviceSecret) -> Result<Zeroizing<[u8; 32]>> {
+pub(super) fn epoch_key(control: &Control, device: &DeviceSecret) -> Result<Zeroizing<Key>> {
     let grant = control
         .grants
         .iter()
@@ -37,7 +38,7 @@ pub(super) fn build_control(
     members: Vec<Member>,
     closed_frontier: Vec<Hash>,
     baseline: &Projection,
-    key: &[u8; 32],
+    key: &Key,
 ) -> Result<Control> {
     let encryption = EpochEncryption { epoch: &epoch, key };
     let grants = members
@@ -76,7 +77,7 @@ pub(super) fn validate_control_body(
     previous: Option<&Signed<Control>>,
     state: &SyncState,
     ancestors: &[(Hash, &Signed<Control>)],
-) -> Result<[u8; 32]> {
+) -> Result<Key> {
     let key = ControlAuthority::new(body, state).signing_key(previous)?;
     verify_admissions(body, previous, state, ancestors)?;
     if body.approval.is_some() {
@@ -88,7 +89,7 @@ pub(super) fn validate_control_body(
 /// Recipient grants and checkpoint encryption share one immutable epoch scope.
 struct EpochEncryption<'a> {
     epoch: &'a Epoch,
-    key: &'a [u8; 32],
+    key: &'a Key,
 }
 
 impl EpochEncryption<'_> {
@@ -205,7 +206,7 @@ impl<'a> ControlAuthority<'a> {
         }
     }
 
-    fn signing_key(&self, previous: Option<&Signed<Control>>) -> Result<[u8; 32]> {
+    fn signing_key(&self, previous: Option<&Signed<Control>>) -> Result<Key> {
         self.validate_shape()?;
         self.roster.verify(self.body.owner, &self.body.grants)?;
         let controller = self.roster.controller(self.body.controller)?;
@@ -231,7 +232,7 @@ impl<'a> ControlAuthority<'a> {
         Ok(())
     }
 
-    fn genesis_key(&self, controller: &Member) -> Result<[u8; 32]> {
+    fn genesis_key(&self, controller: &Member) -> Result<Key> {
         let body = self.body;
 
         if body.epoch.number.0 != 0
@@ -247,7 +248,7 @@ impl<'a> ControlAuthority<'a> {
         Ok(controller.certificate.body.signing_key)
     }
 
-    fn successor_key(&self, previous: &Signed<Control>) -> Result<[u8; 32]> {
+    fn successor_key(&self, previous: &Signed<Control>) -> Result<Key> {
         let body = self.body;
 
         let author = Roster(&previous.body.members).member(previous.body.controller)?;

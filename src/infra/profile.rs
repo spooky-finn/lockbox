@@ -1,5 +1,6 @@
 //! Encrypted device profile, independent root capsule, and durable sync journal.
 
+use crate::core::identity::Key;
 use super::vault::{KdfParams, Result, VaultError};
 use crate::core::identity::{DeviceKeys, PublicIdentity, SpaceKeys, random32};
 use argon2::{Algorithm, Argon2, Params, Version};
@@ -251,7 +252,7 @@ impl BootstrapProfile {
 }
 
 impl RootCapsule {
-    fn key(&self, password: &SecretString) -> Result<Zeroizing<[u8; 32]>> {
+    fn key(&self, password: &SecretString) -> Result<Zeroizing<Key>> {
         let kdf = self.kdf.validate()?;
         let params = Params::new(kdf.memory_kib, kdf.passes, kdf.lanes, Some(32))
             .map_err(|_| VaultError::InvalidKdfParams)?;
@@ -270,7 +271,7 @@ impl RootCapsule {
         Ok(key)
     }
 
-    fn aad(&self, public_key: &[u8; 32]) -> Vec<u8> {
+    fn aad(&self, public_key: &Key) -> Vec<u8> {
         let mut aad = b"lockbox.root-capsule.v1\0".to_vec();
         aad.extend_from_slice(&self.version.to_le_bytes());
 
@@ -305,7 +306,7 @@ impl RootCapsule {
         Ok(capsule)
     }
 
-    fn open(&self, password: &SecretString, public_key: &[u8; 32]) -> Result<SigningKey> {
+    fn open(&self, password: &SecretString, public_key: &Key) -> Result<SigningKey> {
         if self.version != 1 {
             return Err(VaultError::Corrupted);
         }
@@ -322,7 +323,7 @@ impl RootCapsule {
                 )
                 .map_err(|_| VaultError::Corrupted)?,
         );
-        let seed: Zeroizing<[u8; 32]> = Zeroizing::new(
+        let seed: Zeroizing<Key> = Zeroizing::new(
             plaintext
                 .as_slice()
                 .try_into()

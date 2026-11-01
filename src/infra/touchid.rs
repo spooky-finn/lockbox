@@ -6,6 +6,7 @@
 //! gets the key without Touch ID. Binding it needs a signing identity from an
 //! Apple Developer account (`errSecMissingEntitlement` without one).
 
+use crate::core::identity::Key;
 use std::sync::Arc;
 
 use zeroize::Zeroizing;
@@ -45,7 +46,7 @@ pub trait Biometrics: Send + Sync {
 
 /// Keychain item: key, when the password was last typed, and the finger set.
 struct Record {
-    key: Zeroizing<[u8; 32]>,
+    key: Zeroizing<Key>,
     saved_at: u64,
     domain_state: Vec<u8>,
 }
@@ -81,7 +82,7 @@ pub fn unlock(
     biometrics: &dyn Biometrics,
     vault_id: &str,
     now: u64,
-) -> Result<Zeroizing<[u8; 32]>, TouchIdError> {
+) -> Result<Zeroizing<Key>, TouchIdError> {
     if !available(biometrics) {
         return Err(TouchIdError::Unavailable);
     }
@@ -111,7 +112,7 @@ pub fn unlock(
 pub fn enable(
     biometrics: &dyn Biometrics,
     vault_id: &str,
-    key: &[u8; 32],
+    key: &Key,
     now: u64,
 ) -> Result<(), TouchIdError> {
     if !available(biometrics) {
@@ -128,7 +129,7 @@ pub fn enable(
 pub fn refresh(
     biometrics: &dyn Biometrics,
     vault_id: &str,
-    key: &[u8; 32],
+    key: &Key,
     now: u64,
 ) -> Result<(), TouchIdError> {
     let fingers = biometrics.domain_state().ok_or(TouchIdError::Unavailable)?;
@@ -142,7 +143,7 @@ pub fn disable(biometrics: &dyn Biometrics, vault_id: &str) {
 fn save(
     biometrics: &dyn Biometrics,
     vault_id: &str,
-    key: &[u8; 32],
+    key: &Key,
     now: u64,
     domain_state: Vec<u8>,
 ) -> Result<(), TouchIdError> {

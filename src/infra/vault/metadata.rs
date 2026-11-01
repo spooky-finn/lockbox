@@ -1,5 +1,6 @@
 //! Read-only public profile metadata and durable local participant aliases.
 
+use crate::core::identity::Key;
 use super::{Result, Vault, VaultError};
 use crate::core::sync::Hash;
 
@@ -7,9 +8,9 @@ use crate::core::sync::Hash;
 pub struct ProfileSummary<'a> {
     pub username: &'a str,
     pub space_name: &'a str,
-    pub user_id: [u8; 32],
-    pub device_id: [u8; 32],
-    pub space_id: [u8; 32],
+    pub user_id: Key,
+    pub device_id: Key,
+    pub space_id: Key,
     pub sync_enabled: bool,
 }
 

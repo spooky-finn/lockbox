@@ -1,3 +1,4 @@
+use crate::core::identity::Key;
 use super::*;
 use std::{
     collections::HashMap,
@@ -57,7 +58,7 @@ impl Biometrics for FakeBiometrics {
     }
 }
 
-const KEY: [u8; 32] = [9; 32];
+const KEY: Key = [9; 32];
 const DAY: u64 = 24 * 60 * 60;
 
 fn enabled() -> FakeBiometrics {

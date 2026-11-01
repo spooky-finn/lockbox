@@ -1,5 +1,6 @@
 //! Prepare commands and complete reserved signing intents without performing I/O.
 
+use crate::core::identity::Key;
 use super::super::{
     Blob, Certificate, Counter, DeviceSecret, Error, Hash, Object, Projection, Result, Role,
     Signed, Transaction, canonical,
@@ -26,7 +27,7 @@ impl Machine {
         namespace: Hash,
         certificate: Signed<Certificate>,
         device: &DeviceSecret,
-        epoch_key: &[u8; 32],
+        epoch_key: &Key,
         context: Hash,
     ) -> Result<SyncState> {
         certificate.verify()?;
@@ -79,7 +80,7 @@ impl Machine {
 
     /// Bootstrap trust must come from an independently authenticated owner root,
     /// space ID and genesis hash. Provider-supplied names never establish trust.
-    pub fn join(space: Hash, namespace: Hash, genesis: Hash, owner_root: [u8; 32]) -> SyncState {
+    pub fn join(space: Hash, namespace: Hash, genesis: Hash, owner_root: Key) -> SyncState {
         SyncState {
             space,
             namespace,

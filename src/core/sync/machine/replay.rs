@@ -1,5 +1,6 @@
 //! Verify control history and causal changes, then derive the reference projection.
 
+use crate::core::identity::Key;
 use super::super::{
     DeviceSecret, Error, Hash, Object, Projection, Result, Role, Signed, Transaction, canonical,
     crypto::{self, nonce},
@@ -165,7 +166,7 @@ fn replay_epoch(
     membership: Hash,
     control: &Control,
     baseline: &Projection,
-    key: &[u8; 32],
+    key: &Key,
     changes: &BTreeMap<Hash, Signed<Change>>,
     controls: &BTreeSet<Hash>,
     next: Option<&Control>,
@@ -331,7 +332,7 @@ struct AuthenticatedChanges {
 fn authenticate_changes(
     membership: Hash,
     control: &Control,
-    key: &[u8; 32],
+    key: &Key,
     changes: &BTreeMap<Hash, Signed<Change>>,
 ) -> AuthenticatedChanges {
     let mut verified = BTreeMap::new();

@@ -1,3 +1,4 @@
+use crate::core::identity::Key;
 use super::{Blob, Error, Hash, Result, canonical};
 use chacha20poly1305::{
     XChaCha20Poly1305, XNonce,
@@ -36,7 +37,7 @@ pub(super) fn sign<T: Serialize>(body: T, key: &SigningKey, domain: &[u8]) -> Re
 
 pub(super) fn verify<T: Serialize>(
     signed: &Signed<T>,
-    key: &[u8; 32],
+    key: &Key,
     domain: &[u8],
 ) -> Result<()> {
     let key = VerifyingKey::from_bytes(key).map_err(|_| Error::InvalidSignature)?;
@@ -57,10 +58,10 @@ pub(super) fn verify<T: Serialize>(
 #[serde(deny_unknown_fields)]
 pub struct Certificate {
     pub user: Hash,
-    pub root_key: [u8; 32],
+    pub root_key: Key,
     pub device: Hash,
-    pub signing_key: [u8; 32],
-    pub hpke_key: [u8; 32],
+    pub signing_key: Key,
+    pub hpke_key: Key,
 }
 
 impl Signed<Certificate> {
@@ -87,8 +88,8 @@ impl Signed<Certificate> {
 /// One installation's signing and HPKE secrets. Never copy to admit another device.
 #[derive(Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 pub struct DeviceSecret {
-    signing: [u8; 32],
-    hpke: [u8; 32],
+    signing: Key,
+    hpke: Key,
 }
 
 impl DeviceSecret {
@@ -107,14 +108,14 @@ impl DeviceSecret {
         Ok((secret, certificate))
     }
 
-    pub(crate) fn from_parts(signing: [u8; 32], hpke: [u8; 32]) -> Self {
+    pub(crate) fn from_parts(signing: Key, hpke: Key) -> Self {
         Self { signing, hpke }
     }
 
     pub(crate) fn certificate(
         &self,
         root: &SigningKey,
-        hpke_key: [u8; 32],
+        hpke_key: Key,
     ) -> Result<Signed<Certificate>> {
         let root_key = root.verifying_key().to_bytes();
         let signing_key = self.signer().verifying_key().to_bytes();
@@ -155,7 +156,7 @@ impl DeviceSecret {
         enc: &Blob,
         ciphertext: &Blob,
         aad: &[u8],
-    ) -> Result<Zeroizing<[u8; 32]>> {
+    ) -> Result<Zeroizing<Key>> {
         let private = <X25519HkdfSha256 as Kem>::PrivateKey::from_bytes(&self.hpke)
             .map_err(|_| Error::AuthenticationFailed)?;
         let enc = <X25519HkdfSha256 as Kem>::EncappedKey::from_bytes(&enc.0)
@@ -182,7 +183,7 @@ impl DeviceSecret {
     }
 }
 
-pub(super) fn seal_grant(public: &[u8; 32], key: &[u8; 32], aad: &[u8]) -> Result<(Blob, Blob)> {
+pub(super) fn seal_grant(public: &Key, key: &Key, aad: &[u8]) -> Result<(Blob, Blob)> {
     let public = <X25519HkdfSha256 as Kem>::PublicKey::from_bytes(public)
         .map_err(|_| Error::InvalidEncoding)?;
     let mut info = b"lockbox.sync.grant\0".to_vec();
@@ -200,18 +201,18 @@ pub(super) fn seal_grant(public: &[u8; 32], key: &[u8; 32], aad: &[u8]) -> Resul
     Ok((Blob(enc.to_bytes().to_vec()), Blob(ciphertext)))
 }
 
-pub(super) fn random32() -> Result<Zeroizing<[u8; 32]>> {
+pub(super) fn random32() -> Result<Zeroizing<Key>> {
     let mut value = Zeroizing::new([0; 32]);
     getrandom::fill(value.as_mut()).map_err(|_| Error::Random)?;
     Ok(value)
 }
 
 pub(super) fn content_key(
-    key: &[u8; 32],
+    key: &Key,
     space: Hash,
     context: Hash,
     checkpoint: bool,
-) -> Zeroizing<[u8; 32]> {
+) -> Zeroizing<Key> {
     let domain = if checkpoint {
         b"lockbox.checkpoint\0".as_slice()
     } else {
@@ -227,7 +228,7 @@ pub(super) fn content_key(
     out
 }
 
-pub(super) fn encrypt(key: &[u8; 32], nonce: &[u8; 24], bytes: &[u8], aad: &[u8]) -> Result<Blob> {
+pub(super) fn encrypt(key: &Key, nonce: &[u8; 24], bytes: &[u8], aad: &[u8]) -> Result<Blob> {
     XChaCha20Poly1305::new(key.into())
         .encrypt(XNonce::from_slice(nonce), Payload { msg: bytes, aad })
         .map(Blob)
@@ -235,7 +236,7 @@ pub(super) fn encrypt(key: &[u8; 32], nonce: &[u8; 24], bytes: &[u8], aad: &[u8]
 }
 
 pub(super) fn decrypt(
-    key: &[u8; 32],
+    key: &Key,
     nonce: &[u8; 24],
     bytes: &Blob,
     aad: &[u8],

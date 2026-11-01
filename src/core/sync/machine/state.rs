@@ -1,5 +1,6 @@
 //! Persisted ciphertext journal, pinned trust anchors, and replay results.
 
+use crate::core::identity::Key;
 use super::super::{Blob, Error, Hash, Object, Projection, Result, Role, Transaction};
 use super::protocol::{Change, Control};
 use serde::{Deserialize, Serialize};
@@ -52,7 +53,7 @@ pub struct SyncState {
     #[serde(default)]
     pub required_control: Option<Hash>,
     /// Owner trust anchor, compared through an authenticated channel on join.
-    pub owner_root: [u8; 32],
+    pub owner_root: Key,
     /// Immutable candidate objects; only replay establishes their authority.
     pub objects: BTreeMap<Hash, Blob>,
     /// Locally committed objects awaiting provider acknowledgement.
@@ -73,7 +74,7 @@ pub struct SpaceDescriptor {
     pub space: Hash,
     pub namespace: Hash,
     pub genesis: Hash,
-    pub owner_root: [u8; 32],
+    pub owner_root: Key,
 }
 
 impl SyncState {
