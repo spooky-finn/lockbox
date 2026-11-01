@@ -9,25 +9,31 @@ Last full suite: cycle 69; 415 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 69: Consume hierarchy lineage directly
-- Expose existing leaf-to-root lineage iterator within crate, document bound and
-  direction. Directory reveal removes collapsed IDs directly; import Targets
-  counts iterator instead of collecting/reversing breadcrumb Vec per folder.
-- Preserve ancestry checks, MAX_DEPTH, cycle/dangling handling, duplicate-ID first
-  match, reveal set and import depth behavior. Root-to-leaf breadcrumbs unchanged.
-- Full suite: 415 library, four integration, two doctests passed; two OS probes
-  ignored. Formatting/strict all-target Clippy passed. All three sources match
-  verified snapshot; whitespace clean. Unrelated edits untouched.
-- Snapshot: /tmp/lockbox-refactor-69.kus9qprp.
+Cycle 70: Extract verified record history construction
+- replay_epoch keeps ancestry lookups/order/sort and every fallible causal/crypto
+  check. New materialize_history helper only clones/formats already verified
+  records, actors, revisions and before/after values, returning Vec<RecordChange>.
+- Public replay still always builds same complete history. Loop matches original
+  after iterator/index/import adaptations; exact comparison passed. Original loop
+  saved /tmp/lockbox-replay-history-original.txt. No skipped validation or mode yet.
+- Formatting/strict all-target Clippy passed. 55 protocol, five vault history,
+  two sync integration tests passed. Source matches verified snapshot;
+  whitespace clean. Unrelated edits untouched.
+- Snapshot: /tmp/lockbox-refactor-70.ubsqsl_b.
 
-Next search: replay_epoch eagerly builds RecordChange history (cloned before/after
-entries/attachments) for every replay, including command preparation, receipt and
-projection checks that never read it. Inspect/audit all Replay.history consumers
-before design. Candidate first step: extract display-history construction from
-verification into private helper, preserving exact output/order; commit separately.
-Then consider optional internal materialization while public Machine.replay and
-Vault.sync_replay keep full history, and every path still verifies entire causal/
-crypto history. history_verified must retain its current meaning. Avoid a confusing
-8th replay_epoch argument (Clippy limit); inspect full function before choosing.
-Minor fallback: Hierarchy.path currently collects Folder refs then name refs;
-map names before reverse/collect can remove one Vec, existing path tests cover.
+Next goal: avoid unused record-history clones in internal Machine operations.
+Audit found no Machine command reads Replay.history; only outer replay aggregates
+it. Invitation/receipt.history are separate signed artifacts, must stay intact.
+Vault.record_history and trash read Replay.history; public Machine.replay and
+Vault.sync_replay must continue returning full history.
+Possible design: private EpochReplay with Replay state + accepted VerifiedChange
+map + owned ordered Hashes. replay_epoch verifies/orders unconditionally and
+returns these; outer replay optionally calls infallible materialize_history.
+Add crate-private replay_state wrapper, share core loop with public replay through
+private include_record_history option; no 8th replay_epoch arg. Keep history_verified
+and ALL crypto/causal/ancestry checks identical even when display history omitted.
+First switch audited Machine-internal calls only (commands, invitations, authority),
+leave Vault/public consumers for separate audit. Add meaningful full-vs-state
+regression covering projection, every status/set/diagnostic field, pending/faults,
+closed epochs/attachments and new-member history_verified=false. Destructure Replay
+in comparison helper so new fields require audit. Inspect actual code before design.

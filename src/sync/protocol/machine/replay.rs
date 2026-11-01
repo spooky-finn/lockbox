@@ -1,5 +1,6 @@
 //! Verify control history and causal changes, then derive the reference projection.
 
+use crate::records::history::RecordChange;
 use crate::sync::{
     identity::Key,
     protocol::{
@@ -275,9 +276,37 @@ fn replay_epoch(
         })
         .collect::<Result<Vec<_>>>()?;
     ordered.sort_by_key(|(depth, hash)| (*depth, **hash));
+    let history = materialize_history(
+        control,
+        baseline,
+        &accepted,
+        ordered.into_iter().map(|(_, hash)| *hash),
+    );
+    Ok(Replay {
+        history,
+        membership,
+        epoch: control.epoch.number.0,
+        projection,
+        frontier,
+        accepted: included,
+        pending,
+        rejected,
+        excluded,
+        role: None,
+        ready: true,
+        history_verified: true,
+    })
+}
+
+fn materialize_history(
+    control: &Control,
+    baseline: &Projection,
+    accepted: &BTreeMap<Hash, VerifiedChange<'_>>,
+    ordered: impl IntoIterator<Item = Hash>,
+) -> Vec<RecordChange> {
     let mut history = Vec::new();
-    for (_, hash) in ordered {
-        let change = &accepted[hash];
+    for hash in ordered {
+        let change = &accepted[&hash];
         let author = change.header.author;
         let actor = control
             .members
@@ -311,7 +340,7 @@ fn replay_epoch(
                     }
                 })
                 .collect();
-            history.push(crate::records::history::RecordChange {
+            history.push(RecordChange {
                 id: mutation.entity.id.clone(),
                 revision: format!("{hash}:{index}"),
                 actor: actor.clone(),
@@ -326,20 +355,7 @@ fn replay_epoch(
             });
         }
     }
-    Ok(Replay {
-        history,
-        membership,
-        epoch: control.epoch.number.0,
-        projection,
-        frontier,
-        accepted: included,
-        pending,
-        rejected,
-        excluded,
-        role: None,
-        ready: true,
-        history_verified: true,
-    })
+    history
 }
 
 struct AuthenticatedChanges<'a> {
