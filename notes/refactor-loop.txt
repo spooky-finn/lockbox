@@ -8,17 +8,16 @@ No delegation requested. Keep unrelated work outside refactor commits.
 Last full suite: cycle 27; 395 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 28: Extract sync review component
-- Move shared-history notices, conflict/excluded-edit review and both reveal sets
-  into desktop SyncReview. Workspace keeps ordinary record/editor routing.
-- Component remains mounted with VaultContent; selection preserves reveal state,
-  page exit/lock removes component. No secret props or snapshot clones added.
-- Moved markup/handlers byte-match original. Existing suites passed: 45 desktop,
-  eight record-view, 20 sharing tests. No new tests for mechanical extraction.
+Cycle 29: Cache normalized sort keys
+- Use cached lowercase keys for folder siblings, entry siblings and selector
+  paths. Avoid allocating normalized strings for each sort comparison.
+- Keep stable input order for equal keys; cheap scalar-key sorts unchanged.
+- Regression passed before refactor: case/Cyrillic/Unicode expansion ties keep
+  order across tree and folder options. All 75 record tests passed afterward.
 - Formatting and strict all-target Clippy passed. Source byte-matches verified
   snapshot; workspace whitespace checks passed.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-28.lxFP50 when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-29.U74KhD when workspace cannot compile.
 
-Next search: normalized sort keys, excluded-edit replay, settings updates.
+Next search: search normalization, excluded-edit replay, settings updates.
 Inspect current code and tests before choosing; no quota-driven edits.

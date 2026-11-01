@@ -133,7 +133,7 @@ impl<'a> Hierarchy<'a> {
             .iter()
             .map(|folder| (folder, self.path(&folder.id)))
             .collect();
-        options.sort_by_key(|(_, path)| path.to_lowercase());
+        options.sort_by_cached_key(|(_, path)| path.to_lowercase());
         options
     }
 

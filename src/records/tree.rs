@@ -74,7 +74,7 @@ impl<'a> Hierarchy<'a> {
                 .push(folder);
         }
         for siblings in folders.values_mut() {
-            siblings.sort_by_key(|folder| folder.name.to_lowercase());
+            siblings.sort_by_cached_key(|folder| folder.name.to_lowercase());
         }
 
         let mut entries: BTreeMap<_, Vec<_>> = BTreeMap::new();
@@ -85,7 +85,7 @@ impl<'a> Hierarchy<'a> {
                 .push(entry);
         }
         for siblings in entries.values_mut() {
-            siblings.sort_by_key(|entry| entry.title.to_lowercase());
+            siblings.sort_by_cached_key(|entry| entry.title.to_lowercase());
         }
 
         Self { folders, entries }

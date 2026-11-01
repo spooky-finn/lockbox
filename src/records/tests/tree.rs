@@ -197,3 +197,40 @@ fn excessive_depth_keeps_unreachable_items_at_root_and_searchable() {
         ["0:entry:Deep target", "0:entry:Orphan target"]
     );
 }
+
+#[test]
+fn normalized_sort_ties_keep_input_order_for_siblings_and_folder_options() {
+    use crate::records::{
+        entry::Entry,
+        folder::{Folder, Hierarchy},
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let mut workspace = unlocked(&dir);
+    let names = ["Банк", "ALPHA", "банк", "alpha", "İ", "i\u{307}"];
+    *workspace.vault.test_folders_mut() = names
+        .iter()
+        .map(|name| Folder::new((*name).into(), None))
+        .collect();
+    *workspace.vault.test_entries_mut() = names
+        .iter()
+        .map(|name| {
+            let mut entry = Entry::new();
+            entry.title = (*name).into();
+            entry
+        })
+        .collect();
+    let expected = ["ALPHA", "alpha", "İ", "i\u{307}", "Банк", "банк"];
+    let expected_outline = ["folder", "entry"]
+        .into_iter()
+        .flat_map(|kind| expected.iter().map(move |name| format!("0:{kind}:{name}")))
+        .collect::<Vec<_>>();
+    assert_eq!(outline(&project(&workspace.vault, "")), expected_outline);
+    assert_eq!(
+        Hierarchy::new(workspace.vault.folders())
+            .options()
+            .into_iter()
+            .map(|(folder, _)| folder.name.as_str())
+            .collect::<Vec<_>>(),
+        expected
+    );
+}
