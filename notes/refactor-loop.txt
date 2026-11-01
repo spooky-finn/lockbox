@@ -8,15 +8,14 @@ No delegation requested. Keep unrelated work outside refactor commits.
 Last full suite: cycle 12; 382 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 13: Import batch size counting
-- Count serializer output with a Write sink; no full plaintext JSON entry buffer.
-- Preserve byte/mutation limits, oversized-record handling and error fallback.
-- Boundary regression passed before refactor: exact byte limit versus one byte
-  above, with escaping, Unicode and binary attachment metadata.
-- Verification: 28 import tests, full formatting and strict all-target Clippy
-  passed in isolated snapshot. Workspace changes passed whitespace checks.
+Cycle 14: Active history page data
+- Load selected History or Trash once; enum keeps rendered data tied to page.
+- Trash skips unused revision copy and second shared replay. Keep outer error
+  alert, masking, reveal state, restore guards and navigation behavior.
+- Verification: eight record-view tests, full formatting and strict all-target
+  Clippy passed in isolated snapshot. Workspace whitespace checks passed.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-13.nKNyxC when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-14.6a9YMx when workspace cannot compile.
 
-Next search: UI status calculations, protocol history, worker/mailbox state.
+Next search: clipboard ownership, protocol history, worker/mailbox state.
 Inspect current code and tests before choosing; no quota-driven edits.
