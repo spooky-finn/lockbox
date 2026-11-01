@@ -8,17 +8,17 @@ No delegation requested. Keep unrelated work outside refactor commits.
 Last full suite: cycle 27; 395 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 27: Borrow localization arguments
-- Internal format/interpolate accept AsRef<str>; existing owned callers retained.
-  Conflict/draft rendering borrows passwords, notes, TOTP secret, IDs and names.
-- Remove redundant folder-ID copies. Masking/reveal state and templates unchanged.
-- Existing interpolation regression now checks owned and borrowed strings with
-  literal braces and Unicode. Domain-message translation stays unchanged.
-- Full suite passed: 395 library, four integration, two doctests; two OS probes
-  ignored. Formatting and strict all-target Clippy passed. Source byte-matches
-  verified snapshot; workspace whitespace checks passed.
+Cycle 28: Extract sync review component
+- Move shared-history notices, conflict/excluded-edit review and both reveal sets
+  into desktop SyncReview. Workspace keeps ordinary record/editor routing.
+- Component remains mounted with VaultContent; selection preserves reveal state,
+  page exit/lock removes component. No secret props or snapshot clones added.
+- Moved markup/handlers byte-match original. Existing suites passed: 45 desktop,
+  eight record-view, 20 sharing tests. No new tests for mechanical extraction.
+- Formatting and strict all-target Clippy passed. Source byte-matches verified
+  snapshot; workspace whitespace checks passed.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-27.Uzg9HX when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-28.lxFP50 when workspace cannot compile.
 
-Next search: sync review component boundaries, generic hex duplication, settings.
+Next search: normalized sort keys, excluded-edit replay, settings updates.
 Inspect current code and tests before choosing; no quota-driven edits.

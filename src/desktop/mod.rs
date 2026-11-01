@@ -7,6 +7,7 @@ mod root;
 pub(crate) mod runtime;
 pub(crate) mod security;
 pub(crate) mod session;
+mod sync_review;
 pub(crate) mod time;
 pub(crate) mod widgets;
 pub mod window;
