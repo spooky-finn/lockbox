@@ -3,10 +3,9 @@
 //! approval too. No root or incoming-controller approval authorizes itself.
 
 use crate::sync::protocol::{
-    Blob, Counter, DeviceSecret, Error, Hash, Object, Projection, Result, Role, Signed, canonical,
-    crypto, decode,
+    Blob, Counter, DeviceSecret, Error, Hash, Projection, Result, Role, Signed, canonical, crypto,
+    decode,
     machine::{
-        commands::capacity,
         history::with_history,
         membership::{build_control, epoch_key, validate_control_body},
         protocol::{Control, ControlApproval, ControlTransition, Epoch, Member},
@@ -137,11 +136,9 @@ impl Control {
             body: ControlApproval::for_control(self, state, self.controller)?,
             signature: Blob(vec![0; 64]),
         });
-        let object = Object::Control(Signed {
-            body: sized,
-            signature: Blob(vec![0; 64]),
-        });
-        capacity(state, object.bytes()?.len())
+        PreparedChange::Control(sized)
+            .check_capacity(state)
+            .map(|_| ())
     }
 
     fn decrypt_checkpoint(&self, device: &DeviceSecret) -> Result<Projection> {

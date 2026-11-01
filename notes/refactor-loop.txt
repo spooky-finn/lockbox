@@ -9,23 +9,21 @@ Last full suite: cycle 56; 413 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 56: Borrow shared transaction preparation
-- Internal prepare_borrowed and prepare_transaction read Transaction by reference.
-  Public prepare keeps owned signature and delegates. Merge/rebase borrow their
-  temporary inputs; vault save/conflict retry callbacks stop cloning transactions.
-- Preserve idle/writer/validation/byte budget/frontier order, random nonce timing,
-  capacity checks, encryption and durable reservation/recovery behavior.
-- New regression passed before refactor through owned API, then borrowed API:
-  exact decrypted JSON including Unicode and attachment, inputs/journal unchanged,
-  pending intent rejection preserves both, completed replay retains full payload.
-- Full suite: 413 library, four integration, two doctests passed; two OS probes
-  ignored. Formatting/strict all-target Clippy passed. All three sources match
-  verified snapshot; whitespace checks passed. Unrelated edits untouched.
-- Snapshot: /tmp/lockbox-refactor-56.2lb83o8g.
+Cycle 57: Move prepared bodies through capacity check
+- PreparedChange.check_capacity wraps owned body with placeholder signature,
+  checks exact canonical Object size, returns body. Change/membership preparation
+  drop ciphertext/control clones used only to size signed envelopes.
+- Authority approval sizing reuses helper. Keep its control clone: placeholder
+  approval must mutate a separate body. Keep capacity limits and error order,
+  signature size and actual signing only after durable intent persistence.
+- Formatting/strict all-target Clippy passed. 54 protocol, four vault authority,
+  two sync integration tests passed. Both sources match verified snapshot;
+  whitespace checks passed. Unrelated edits untouched.
+- Snapshot: /tmp/lockbox-refactor-57.q6k504g_.
 
-Next search: prepare_transaction/membership clone ciphertext/control just to
-construct dummy-signed Object for byte capacity checks. Consider moving owned
-PreparedChange into temporary Object and back after checking, avoiding cloned
-bodies and duplicated placeholders without duplicating wire serialization schema.
-Inspect authority helper ownership before including it; some inputs may be borrowed.
-Inspect current code and tests before choosing; no quota-driven edits.
+Next search: crypto sign/verify allocate canonical body, then copy into domain
+buffer. Local serde_jcs 0.2 to_vec delegates to to_writer. Consider private
+signing_bytes helper writing canonical body directly after domain prefix, keeping
+signature/weak-key checks and InvalidEncoding mapping in current order. Fixed
+wire fixture and signature domain tests already cover exact transcript. Inspect
+current code before editing; use existing serializer, no custom wire schema.

@@ -265,16 +265,7 @@ impl Machine {
 
         let ciphertext = crypto::encrypt(&content_key, &nonce, &plaintext, &canonical(&header)?)?;
         let change = Change { header, ciphertext };
-        capacity(
-            state,
-            Object::Change(Signed {
-                body: change.clone(),
-                signature: Blob(vec![0; 64]),
-            })
-            .bytes()?
-            .len(),
-        )?;
-        Ok(PreparedChange::Change(change))
+        PreparedChange::Change(change).check_capacity(state)
     }
 
     /// Owner explicitly supplies the complete next roster, including its own
@@ -340,16 +331,7 @@ impl Machine {
         with_history(state, |history| {
             validate_control_body(&control, Some(&previous), state, &history.chain)
         })?;
-        capacity(
-            state,
-            Object::Control(Signed {
-                body: control.clone(),
-                signature: Blob(vec![0; 64]),
-            })
-            .bytes()?
-            .len(),
-        )?;
-        Ok(PreparedChange::Control(control))
+        PreparedChange::Control(control).check_capacity(state)
     }
 
     /// Call only after state.intent has been persisted. Ed25519 deterministically
@@ -530,6 +512,22 @@ impl Machine {
             replay,
             false,
         )
+    }
+}
+
+impl PreparedChange {
+    pub(super) fn check_capacity(self, state: &SyncState) -> Result<Self> {
+        // Reserve the final signature's space without signing before persistence.
+        let signature = Blob(vec![0; 64]);
+        let object = match self {
+            Self::Change(body) => Object::Change(Signed { body, signature }),
+            Self::Control(body) => Object::Control(Signed { body, signature }),
+        };
+        capacity(state, object.bytes()?.len())?;
+        Ok(match object {
+            Object::Change(signed) => Self::Change(signed.body),
+            Object::Control(signed) => Self::Control(signed.body),
+        })
     }
 }
 
