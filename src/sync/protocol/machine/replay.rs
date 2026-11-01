@@ -205,6 +205,16 @@ struct EpochContext<'a> {
     next: Option<&'a Control>,
 }
 
+struct EpochReplay {
+    history: Vec<RecordChange>,
+    projection: Projection,
+    frontier: BTreeSet<Hash>,
+    accepted: BTreeSet<Hash>,
+    pending: BTreeSet<Hash>,
+    rejected: BTreeMap<Hash, Error>,
+    excluded: BTreeSet<Hash>,
+}
+
 impl EpochContext<'_> {
     fn replay(
         self,
@@ -212,7 +222,7 @@ impl EpochContext<'_> {
         changes: &BTreeMap<Hash, Signed<Change>>,
         controls: &BTreeMap<Hash, Signed<Control>>,
         include_record_history: bool,
-    ) -> Result<Replay> {
+    ) -> Result<EpochReplay> {
         let Self {
             membership,
             control,
@@ -311,19 +321,14 @@ impl EpochContext<'_> {
         } else {
             Vec::new()
         };
-        Ok(Replay {
+        Ok(EpochReplay {
             history,
-            membership,
-            epoch: control.epoch.number.0,
             projection,
             frontier,
             accepted: included,
             pending,
             rejected,
             excluded,
-            role: None,
-            ready: true,
-            history_verified: true,
         })
     }
 }

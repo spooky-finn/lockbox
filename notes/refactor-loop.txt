@@ -9,25 +9,26 @@ Last full suite: cycle 75; 417 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 75: Collect display order only when requested
-- EpochContext selects Option<Vec> for record-history order. All included hashes
-  still run identical fallible ancestry lookup in BTreeSet order; depth/hash pairs
-  are retained and sorted only when full display history is requested.
-- State-only replay avoids unused order Vec and sort. Preserve first error,
-  ancestry budgets, validation, projection/frontier/diagnostics, complete record
-  history order and before/after payloads. Comment protects mandatory validation.
-- Full suite: 417 library, four integration, two doctests passed; two OS probes
-  ignored. Formatting/strict all-target Clippy passed. Source matches verified
-  snapshot; whitespace clean. Unrelated edits untouched.
-- Snapshot: /tmp/lockbox-refactor-75.0hlmrywh.
+Cycle 76: Give epoch replay its own result type
+- Private EpochReplay contains only history/projection/frontier/accepted/pending/
+  rejected/excluded, exactly the seven fields consumed by outer Machine replay.
+  EpochContext returns it instead of public Replay with unused identity/status
+  placeholders (including misleading ready=true while epoch pending is nonempty).
+- Outer loop still constructs complete public Replay, including membership/epoch,
+  role/readiness/history_verified. All algorithms, field values and errors unchanged;
+  no public API/schema change. Compiler verifies every consumed private field.
+- Formatting/strict all-target Clippy passed. 57 protocol, five vault history,
+  two sync integration tests passed. Source matches verified snapshot;
+  whitespace clean. Unrelated edits untouched.
+- Snapshot: /tmp/lockbox-refactor-76.0cac7608.
 
-Next search: EpochContext.replay returns public Replay with placeholder membership,
-role=None, ready=true, history_verified=true even when its pending set is nonempty;
-outer Machine loop consumes only history/projection/frontier/accepted/pending/
-rejected/excluded and computes public readiness/role/metadata itself. Consider
-private EpochReplay result containing only those seven actual fields, leaving
-public Replay unchanged. Type boundary removes misleading unused placeholders;
-no behavior change or validation changes needed. Verify actual field consumers.
-Then inspect frontier derivation: outer loop uses it only for ready final epoch,
-so closed-epoch frontier cloning/removal work is discarded. An explicit private
-optional frontier may clarify when it is available; separate concern/commit.
+Next search: private frontier is cloned/derived for every epoch, but outer loop
+uses it only after global pending check in last epoch. Consider current_frontier:
+Option<BTreeSet<Hash>> populated only when next=None and local pending empty;
+outer after unchanged global pending guard can set ready from Some(frontier).
+Proof: next=None iff last chain index; empty global pending implies empty local
+pending. Some(empty) must still mark ready genesis/checkpoint with no new changes.
+Closed/incomplete epochs skip discarded set clone/removals. Preserve all failable
+ancestry/antichain/checkpoint/signature checks and their order, role and history.
+Missing independent required_control still blocks readiness before frontier use.
+Inspect code and existing pending/role/frontier tests; full suite appropriate.
