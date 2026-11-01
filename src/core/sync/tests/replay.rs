@@ -5,7 +5,13 @@ fn concurrent_passwords_converge_in_every_order_and_resolve_explicitly() {
     let (mut alice, alice_key) = owner();
     edit(&mut alice, &alice_key, vec![entry(1, "original")]);
     let (bob_key, bob_certificate) = identity(2);
-    admit(&mut alice, &alice_key, bob_certificate, Role::Editor);
+    admit(
+        &mut alice,
+        &alice_key,
+        &bob_key,
+        bob_certificate,
+        Role::Editor,
+    );
     let base = alice.clone();
     let mut bob = base.clone();
     let a = edit(&mut alice, &alice_key, vec![entry(1, "alice")]);
@@ -173,7 +179,7 @@ fn concurrent_folder_cycle_has_identical_evidence_in_both_orders() {
         Transaction::diff(&Projection::default(), &[], &[f.clone(), g.clone()]).unwrap(),
     );
     let (bob, certificate) = identity(2);
-    admit(&mut state, &alice, certificate, Role::Editor);
+    admit(&mut state, &alice, &bob, certificate, Role::Editor);
     let mut other = state.clone();
     let base = Machine::replay(&state, &alice).unwrap().projection;
     let mut moved_f = f.clone();
@@ -217,7 +223,7 @@ fn all_twenty_four_delivery_permutations_preserve_independent_transactions() {
     }
     let (mut state, alice) = owner();
     let (bob, certificate) = identity(2);
-    admit(&mut state, &alice, certificate, Role::Editor);
+    admit(&mut state, &alice, &bob, certificate, Role::Editor);
     let base = state.clone();
     let mut other = base.clone();
     let a = edit(&mut state, &alice, vec![entry(1, "one")]);
@@ -376,14 +382,19 @@ fn closing_over_semantically_invalid_history_is_a_checkpoint_fault() {
 #[test]
 fn wide_frontier_merge_preserves_conflicts_sequence_and_retry_bytes() {
     let (mut state, owner) = owner();
-    let mut members = Machine::members(&state, &owner).unwrap();
+    let mut admissions = vec![];
     let mut devices = vec![owner];
     for seed in 2..=66 {
         let (device, certificate) = identity(seed);
-        members.push((certificate, Role::Editor));
+        let offer =
+            Machine::offer_invitation(&state, &devices[0], certificate.clone(), Role::Editor, None)
+                .unwrap();
+        admissions.push(
+            Machine::accept_invitation(&offer, &state.descriptor(), &device, &certificate).unwrap(),
+        );
         devices.push(device);
     }
-    state.intent = Some(Machine::prepare_membership(&state, &devices[0], members).unwrap());
+    state.intent = Some(Machine::prepare_admissions(&state, &devices[0], admissions).unwrap());
     let membership = Machine::complete_intent(&mut state, &devices[0]).unwrap();
     let base = state.clone();
     let mut authors = std::collections::BTreeMap::new();

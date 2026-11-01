@@ -296,7 +296,7 @@ impl Projection {
 
     pub fn digest(&self) -> Result<Hash> {
         Ok(Hash::digest(
-            b"lockbox.sync.projection.v0\0",
+            b"lockbox.sync.projection\0",
             &canonical(self)?,
         ))
     }

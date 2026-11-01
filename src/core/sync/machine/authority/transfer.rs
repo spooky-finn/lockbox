@@ -14,7 +14,7 @@ use crate::core::sync::{
 };
 use std::collections::BTreeSet;
 
-const OFFER_DOMAIN: &[u8] = b"lockbox.sync.control-transfer-offer.v2\0";
+const OFFER_DOMAIN: &[u8] = b"lockbox.sync.control-transfer-offer\0";
 
 impl ControlTransfer {
     pub fn bytes(&self) -> Result<Vec<u8>> {

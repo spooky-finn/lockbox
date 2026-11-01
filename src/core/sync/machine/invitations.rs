@@ -4,7 +4,6 @@
 use super::{
     Machine,
     history::{ControlHistory, with_history},
-    profile::Profile,
     protocol::Control,
     state::{PreparedChange, SpaceDescriptor, SyncState},
 };
@@ -12,7 +11,7 @@ use crate::core::sync::{
     Admission, AdmissionConfirmation, AdmissionReceipt, Blob, Certificate, Counter, DeviceSecret,
     Error, Hash, Invitation, InviteOffer, JoinRequest, Object, Result, Role, Signed, canonical,
     crypto, decode,
-    invitation::{self, JOIN_DOMAIN, OFFER_DOMAIN, RECEIPT_DOMAIN, certificate_hash, offer_hash},
+    invitation::{JOIN_DOMAIN, OFFER_DOMAIN, RECEIPT_DOMAIN, certificate_hash, offer_hash},
     wire::sorted_unique,
 };
 use std::collections::{BTreeMap, BTreeSet};
@@ -51,7 +50,6 @@ impl Machine {
                 return Err(Error::RetiredDevice);
             }
             let offer = InviteOffer {
-                profile: invitation::PROFILE.into(),
                 descriptor: state.descriptor(),
                 anchor,
                 id: Hash(*crypto::random32()?),
@@ -100,7 +98,6 @@ impl Machine {
             return Err(Error::UnauthorizedDevice);
         }
         let request = JoinRequest {
-            profile: invitation::PROFILE.into(),
             offer: offer_hash(&invitation.offer)?,
             recipient: device.id(),
             challenge: Hash(*crypto::random32()?),
@@ -165,7 +162,6 @@ impl Machine {
                 return Err(Error::RetiredDevice);
             }
             let confirmation = AdmissionConfirmation {
-                profile: invitation::PROFILE.into(),
                 descriptor: state.descriptor(),
                 invitation: admission.id(),
                 acceptance: admission.hash()?,
@@ -212,8 +208,7 @@ impl Machine {
             }
             let (tip, current) = history.tip();
             let confirmation = &receipt.confirmation.body;
-            if confirmation.profile != invitation::PROFILE
-                || confirmation.descriptor != *expected
+            if confirmation.descriptor != *expected
                 || confirmation.control != tip
                 || confirmation.acceptance != admission.hash()?
                 || confirmation.author != current.body.controller
@@ -271,14 +266,6 @@ pub(super) fn verify_admissions(
     state: &SyncState,
     ancestors: &[(Hash, &Signed<Control>)],
 ) -> Result<()> {
-    if Profile::parse(&body.epoch.profile)? == Profile::Legacy {
-        return if body.admissions.is_empty() {
-            Ok(())
-        } else {
-            Err(Error::InvalidInvitation)
-        };
-    }
-
     let Some(previous) = previous else {
         return if body.admissions.is_empty() && body.members.len() == 1 {
             Ok(())
@@ -367,7 +354,7 @@ fn verify_offer(
 ) -> Result<()> {
     let body = &offer.body;
 
-    if body.profile != invitation::PROFILE || body.descriptor != state.descriptor() {
+    if body.descriptor != state.descriptor() {
         return Err(Error::InvalidInvitation);
     }
     let index = ancestors

@@ -4,7 +4,7 @@ use super::*;
 fn reader_knowing_the_epoch_key_still_cannot_write() {
     let (mut state, owner_key) = owner();
     let (reader, certificate) = identity(3);
-    admit(&mut state, &owner_key, certificate, Role::Reader);
+    admit(&mut state, &owner_key, &reader, certificate, Role::Reader);
     assert!(matches!(
         Machine::prepare(
             &state,
@@ -55,7 +55,13 @@ fn reader_knowing_the_epoch_key_still_cannot_write() {
 fn revocation_closes_frontier_and_preserves_late_offline_edits() {
     let (mut alice, alice_key) = owner();
     let (bob_key, bob_certificate) = identity(2);
-    admit(&mut alice, &alice_key, bob_certificate, Role::Editor);
+    admit(
+        &mut alice,
+        &alice_key,
+        &bob_key,
+        bob_certificate,
+        Role::Editor,
+    );
     let mut bob = alice.clone();
     let offline = edit(&mut bob, &bob_key, vec![entry(1, "offline secret")]);
     let members = Machine::members(&alice, &alice_key)
@@ -93,7 +99,7 @@ fn new_member_bootstraps_without_old_content_keys() {
     let (mut state, owner_key) = owner();
     edit(&mut state, &owner_key, vec![entry(1, "historical")]);
     let (bob, certificate) = identity(2);
-    admit(&mut state, &owner_key, certificate, Role::Editor);
+    admit(&mut state, &owner_key, &bob, certificate, Role::Editor);
     let descriptor = state.descriptor();
     let mut joined = Machine::join(
         descriptor.space,
@@ -133,8 +139,8 @@ fn device_and_control_forks_stop_replay_in_both_orders() {
     let (bob, cert) = identity(2);
     let mut left = base.clone();
     let mut right = base;
-    admit(&mut left, &device, cert.clone(), Role::Editor);
-    admit(&mut right, &device, cert, Role::Reader);
+    admit(&mut left, &device, &bob, cert.clone(), Role::Editor);
+    admit(&mut right, &device, &bob, cert, Role::Reader);
     deliver(&left, &mut right);
     assert!(matches!(
         Machine::replay(&right, &device),
@@ -147,7 +153,7 @@ fn device_and_control_forks_stop_replay_in_both_orders() {
 fn explicit_rebase_preserves_content_but_uses_new_epoch_and_author_signature() {
     let (mut state, alice) = owner();
     let (bob, certificate) = identity(2);
-    admit(&mut state, &alice, certificate, Role::Editor);
+    admit(&mut state, &alice, &bob, certificate, Role::Editor);
     let mut offline = state.clone();
     let excluded = edit(&mut offline, &bob, vec![entry(1, "offline")]);
     let members = Machine::members(&state, &alice).unwrap();
@@ -180,7 +186,7 @@ fn explicit_rebase_preserves_content_but_uses_new_epoch_and_author_signature() {
 fn a_closed_epoch_ignores_unincluded_orphans_and_late_signer_forks() {
     let (mut state, alice) = owner();
     let (bob, certificate) = identity(2);
-    admit(&mut state, &alice, certificate, Role::Editor);
+    admit(&mut state, &alice, &bob, certificate, Role::Editor);
     let mut left = state.clone();
     let mut right = state.clone();
     edit(&mut left, &bob, vec![entry(1, "left")]);

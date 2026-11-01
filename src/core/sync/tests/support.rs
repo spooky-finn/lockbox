@@ -6,14 +6,13 @@ pub(super) fn identity(seed: u8) -> (DeviceSecret, Signed<Certificate>) {
 
 pub(super) fn owner() -> (SyncState, DeviceSecret) {
     let (device, certificate) = identity(1);
-    let state = Machine::create_with_profile(
+    let state = Machine::create(
         Hash([1; 32]),
         Hash([2; 32]),
         certificate,
         &device,
         &[3; 32],
         Hash([4; 32]),
-        PROFILE,
     )
     .unwrap();
     (state, device)
@@ -46,12 +45,14 @@ pub(super) fn commit(
 pub(super) fn admit(
     state: &mut SyncState,
     owner: &DeviceSecret,
+    guest: &DeviceSecret,
     certificate: Signed<Certificate>,
     role: Role,
 ) {
-    let mut members = Machine::members(state, owner).unwrap();
-    members.push((certificate, role));
-    state.intent = Some(Machine::prepare_membership(state, owner, members).unwrap());
+    let offer = Machine::offer_invitation(state, owner, certificate.clone(), role, None).unwrap();
+    let consent =
+        Machine::accept_invitation(&offer, &state.descriptor(), guest, &certificate).unwrap();
+    state.intent = Some(Machine::prepare_admission(state, owner, consent).unwrap());
     Machine::complete_intent(state, owner).unwrap();
 }
 
@@ -76,7 +77,6 @@ pub(super) fn encrypted_change(
     let mut nonce = [0; 24];
     getrandom::fill(&mut nonce).unwrap();
     let header = ChangeHeader {
-        profile: PROFILE.into(),
         space: state.space,
         membership,
         epoch: control.body.epoch.number,

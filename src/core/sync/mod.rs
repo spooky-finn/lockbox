@@ -1,8 +1,7 @@
 //! Deterministic, provider-independent shared-space state machine.
 //!
-//! `LBX-SYNC-2` adds approved control handoff and owner-root recovery to the
-//! consent rules in `LBX-SYNC-1`. Legacy profile 0 remains readable. These are
-//! separate from docs/lockbox-protocol.md; only canonical objects enter replay.
+//! Addressed consent, approved controller handoff and owner-root recovery use
+//! one unversioned wire format; only canonical objects enter replay.
 //!
 //! # Host durability contract
 //!
@@ -69,8 +68,6 @@ pub const MAX_MUTATIONS: usize = 256;
 pub enum Error {
     #[error("invalid or noncanonical encoding")]
     InvalidEncoding,
-    #[error("unsupported synchronization profile")]
-    UnsupportedProtocol,
     #[error("object hash mismatch")]
     HashMismatch,
     #[error("invalid signature or certificate")]

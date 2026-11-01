@@ -126,7 +126,7 @@ impl Object {
         canonical(self)
     }
     pub fn hash(&self) -> Result<Hash> {
-        Ok(Hash::digest(b"lockbox.sync.object.v0\0", &self.bytes()?))
+        Ok(Hash::digest(b"lockbox.sync.object\0", &self.bytes()?))
     }
 }
 

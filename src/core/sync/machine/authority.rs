@@ -6,7 +6,6 @@ use super::{
     commands::capacity,
     history::with_history,
     membership::{build_control, epoch_key, validate_control_body},
-    profile::{PROFILE, Profile},
     protocol::{Control, ControlApproval, ControlTransition, Epoch, Member},
     state::{PreparedChange, Replay, SyncState},
 };
@@ -19,17 +18,16 @@ use ed25519_dalek::SigningKey;
 mod recovery;
 mod transfer;
 
-const APPROVAL_PROFILE: &str = "LBX-CONTROL-2";
-const TRANSFER_DOMAIN: &[u8] = b"lockbox.sync.control-transfer-approval.v2\0";
-const RECOVERY_DOMAIN: &[u8] = b"lockbox.sync.control-recovery-root.v2\0";
-const RECOVERY_DEVICE_DOMAIN: &[u8] = b"lockbox.sync.control-recovery-device.v2\0";
+const TRANSFER_DOMAIN: &[u8] = b"lockbox.sync.control-transfer-approval\0";
+const RECOVERY_DOMAIN: &[u8] = b"lockbox.sync.control-recovery-root\0";
+const RECOVERY_DEVICE_DOMAIN: &[u8] = b"lockbox.sync.control-recovery-device\0";
 
 impl Control {
-    pub(super) fn signing_domain(&self) -> Result<&'static [u8]> {
+    pub(super) fn signing_domain(&self) -> &'static [u8] {
         if self.is_recovery() {
-            Ok(RECOVERY_DEVICE_DOMAIN)
+            RECOVERY_DEVICE_DOMAIN
         } else {
-            Ok(Profile::parse(&self.epoch.profile)?.control_domain())
+            crypto::CONTROL_DOMAIN
         }
     }
 
@@ -37,7 +35,7 @@ impl Control {
         let mut unsigned = self.clone();
         unsigned.approval = None;
         Ok(Hash::digest(
-            b"lockbox.sync.control-statement.v2\0",
+            b"lockbox.sync.control-statement\0",
             &canonical(&unsigned)?,
         ))
     }
@@ -162,7 +160,6 @@ impl Control {
 impl ControlApproval {
     fn for_control(control: &Control, state: &SyncState, author: Hash) -> Result<Self> {
         Ok(Self {
-            profile: APPROVAL_PROFILE.into(),
             descriptor: state.descriptor(),
             statement: control.statement_hash()?,
             author,
@@ -170,8 +167,7 @@ impl ControlApproval {
     }
 
     fn verify_binding(&self, control: &Control, state: &SyncState, author: Hash) -> Result<()> {
-        if self.profile != APPROVAL_PROFILE
-            || self.descriptor != state.descriptor()
+        if self.descriptor != state.descriptor()
             || self.statement != control.statement_hash()?
             || self.author != author
         {
@@ -257,7 +253,6 @@ impl Signed<Control> {
         transition: ControlTransition,
     ) -> Result<Control> {
         let epoch = Epoch {
-            profile: PROFILE.into(),
             space: state.space,
             number: Counter(
                 replay

@@ -5,7 +5,6 @@
 use super::{
     Machine,
     history::with_history,
-    profile::Profile,
     protocol::{Change, Control},
     state::SyncState,
 };
@@ -78,7 +77,6 @@ fn closed_nodes(
         if h.membership != membership
             || h.space != state.space
             || h.epoch != control.epoch.number
-            || h.profile != control.epoch.profile
             || h.sequence.0 == 0
             || h.nonce.0.len() != 24
             || h.parents.len() > crate::core::sync::MAX_PARENTS
@@ -95,7 +93,7 @@ fn closed_nodes(
         crypto::verify(
             &change,
             &member.certificate.body.signing_key,
-            Profile::parse(&h.profile)?.change_domain(),
+            crypto::CHANGE_DOMAIN,
         )?;
         pending.extend(h.parents.iter().copied());
         nodes.insert(hash, change);

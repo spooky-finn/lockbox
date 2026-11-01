@@ -9,7 +9,6 @@ use super::super::{
 };
 use super::{
     Machine,
-    profile::Profile,
     protocol::{Change, Control},
     state::{Replay, SyncState},
 };
@@ -346,10 +345,6 @@ fn authenticate_changes(
         }
 
         let check = || -> Result<Transaction> {
-            if header.profile != control.epoch.profile {
-                return Err(Error::UnsupportedProtocol);
-            }
-
             if header.space != control.epoch.space
                 || header.epoch != control.epoch.number
                 || header.sequence.0 == 0
@@ -367,7 +362,7 @@ fn authenticate_changes(
             crypto::verify(
                 signed,
                 &member.certificate.body.signing_key,
-                Profile::parse(&header.profile)?.change_domain(),
+                crypto::CHANGE_DOMAIN,
             )?;
 
             if member.role == Role::Reader {

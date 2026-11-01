@@ -1,0 +1,7 @@
+- Sync protocol unversioned. Profile selectors, old domains, upgrade/downgrade branches gone.
+- Development rule: one current protocol. Replace old formats freely. Future versioning allowed when compatibility needed.
+- Invitations, approvals, identity/content domains unversioned. Consent, transfer, recovery rules stay.
+- Old wire artifacts rejected. Local vault file/schema versions separate, unchanged.
+- Single independent change fixture. Tests cover old-field/domain rejection, consent, replay, recovery.
+- Checks: 63 core tests, 2 integration scenarios, 4 Storj adapter tests pass. All-target check, format pass.
+- Full suite: existing duplicate translation «Участники и доступ» fails. Local socket failures pass on rerun.

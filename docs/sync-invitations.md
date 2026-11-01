@@ -1,8 +1,8 @@
 # Addressed invitations and admission
 
-New spaces use experimental `LBX-SYNC-2`, extending `LBX-SYNC-1`. Both retain the causal event, HPKE,
-checkpoint and durability rules of `LBX-SYNC-0` and requires signed consent for
-every added device certificate. These profiles remain separate from the broader
+Shared spaces use one experimental, unversioned protocol. Causal events, HPKE,
+checkpoints and durable signing require signed consent for every added device
+certificate. This implementation remains separate from the broader
 [protocol proposal](lockbox-protocol.md). The desktop implements the invitation
 and member-management flows below; other production release gates remain open.
 
@@ -108,18 +108,15 @@ of the owner's user identity can have `Owner`; the verified current controller r
 only membership authority.
 
 `set_space_members` remains the API for changes to existing roles, removal and
-key rotation. Adding a device without consent fails with `ConsentRequired` in
-profile 1. Pure hosts can use `Machine::prepare_admission` or batch multiple
+key rotation. Adding a device without consent fails with `ConsentRequired`. Pure hosts can use `Machine::prepare_admission` or batch multiple
 proofs with `prepare_admissions`, persist the returned intent, then complete and
 persist it before publication. `Machine` does not implement local expiry or
 cancellation policy: that policy belongs to the durable controller host.
 
-Existing profile-0 spaces replay with their original rules and signature domains.
-An admission containing consent upgrades a legacy space to profile 1. Downgrades
-are rejected. Control/change signature domains differ between profiles; object
-and certificate hash domains retain their existing spelling. Empty admission
-lists are omitted, preserving canonical legacy bytes. The `change-v0.json` and
-independently signed `change-v1.json` fixtures cover this boundary.
+Wire artifacts carry no protocol version or profile selector. Control/change
+signatures use fixed, distinct domains. Previous versioned artifacts are rejected;
+there is no upgrade, downgrade or compatibility path. `change.json` pins the
+canonical wire bytes and an independently generated signature.
 
 ## Persistence and local policy
 
@@ -161,7 +158,7 @@ state, not knowledge of events that have never arrived.
 ## Evidence and remaining work
 
 Tests exercise independent recipients, wrong roots, substituted signatures/roles,
-missing consent on received controls, legacy upgrade/downgrade, retired device
+missing consent on received controls, rejection of versioned artifacts, retired device
 IDs, signed-head truncation, expiry/cancellation, exact retries after restart,
 file failures, independently pinned newer heads and explicit receipt refresh,
 and a witness acknowledgement failure after the receipt file

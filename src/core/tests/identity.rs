@@ -9,7 +9,7 @@ fn keys_are_independent_and_identifiers_use_protocol_domains() {
     assert_ne!(public.signing_key, public.hpke_key);
     assert_eq!(
         public.user_id,
-        fingerprint(b"lockbox.user.v1\0", &public.root_key)
+        fingerprint(b"lockbox.user\0", &public.root_key)
     );
     let (_, another) = DeviceKeys::generate(&root).unwrap();
     assert_eq!(public.user_id, another.user_id);
@@ -18,7 +18,7 @@ fn keys_are_independent_and_identifiers_use_protocol_domains() {
     let space = SpaceKeys::generate().unwrap();
     let (changes, checkpoints) = space.content_keys();
     assert_ne!(*changes, *checkpoints);
-    let mut info = b"lockbox.changes.v1\0".to_vec();
+    let mut info = b"lockbox.changes\0".to_vec();
     info.extend_from_slice(&space.epoch_context);
     let mut expected = [0; 32];
     Hkdf::<Sha256>::new(Some(&space.space_id), &space.epoch_key)

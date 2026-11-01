@@ -6,7 +6,6 @@ use super::super::{
 };
 use super::{
     invitations::verify_admissions,
-    profile::Profile,
     protocol::{Control, ControlTransition, Epoch, Grant, Member},
     state::SyncState,
 };
@@ -69,7 +68,7 @@ pub(super) fn validate_control(
 ) -> Result<()> {
     let key = validate_control_body(&control.body, previous, state, ancestors)?;
     control.body.verify_approval(previous, state)?;
-    crypto::verify(control, &key, control.body.signing_domain()?)
+    crypto::verify(control, &key, control.body.signing_domain())
 }
 
 pub(super) fn validate_control_body(
@@ -219,13 +218,8 @@ impl<'a> ControlAuthority<'a> {
 
     fn validate_shape(&self) -> Result<()> {
         let body = self.body;
-        let profile = Profile::parse(&body.epoch.profile)?;
-        if profile != Profile::Current && (body.transition.is_some() || body.approval.is_some()) {
-            return Err(Error::UnsupportedProtocol);
-        }
-
         if body.epoch.space != self.state.space
-            || body.owner != Hash::digest(b"lockbox.user.v1\0", &self.state.owner_root)
+            || body.owner != Hash::digest(b"lockbox.user\0", &self.state.owner_root)
             || body.closed_frontier.len() > body.frontier_limit()
             || !sorted_unique(&body.closed_frontier)
             || body.checkpoint_nonce.0.len() != 24
@@ -256,9 +250,6 @@ impl<'a> ControlAuthority<'a> {
     fn successor_key(&self, previous: &Signed<Control>) -> Result<[u8; 32]> {
         let body = self.body;
 
-        if Profile::parse(&previous.body.epoch.profile)? > Profile::parse(&body.epoch.profile)? {
-            return Err(Error::UnsupportedProtocol);
-        }
         let author = Roster(&previous.body.members).member(previous.body.controller)?;
 
         if previous.body.epoch.number.0.checked_add(1) != Some(body.epoch.number.0)

@@ -47,8 +47,8 @@ and APIs are documented in [sync-engine.md](sync-engine.md); all remaining relea
 work and acceptance evidence are tracked in the
 [production delivery plan](sync-production-plan.md).
 
-Облачный flow создаёт локальный профиль v5 с bootstrap-схемой 3 и движком
-LBX-SYNC-0. Это отдельный экспериментальный wire profile, а не полная
+Облачный flow создаёт локальный профиль v5 с bootstrap-схемой 3 и единым движком
+синхронизации без версии. Это отдельный экспериментальный wire profile, а не полная
 реализация protocol v1. [Границы и API](sync-engine.md) описаны отдельно.
 Пример `cargo run --example shared_space` проверяет два профиля через Storage
 trait без сетевого доступа. Старые bootstrap-профили схемы 1 продолжают читаться.

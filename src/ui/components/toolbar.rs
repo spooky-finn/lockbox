@@ -46,9 +46,6 @@ pub(super) fn Toolbar() -> Element {
                 StatusBar {}
             }
             div { class: "actions",
-                IconButton { icon: Icon::Settings, label: language.text(Text::Settings),
-                    onclick: move |_| edit_unlocked(state, |u| u.open_settings()),
-                }
                 IconButton { icon: Icon::Lock, label: language.text(Text::LockVault),
                     onclick: move |_| runtime::lock(None),
                 }

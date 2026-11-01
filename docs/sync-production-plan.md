@@ -2,7 +2,7 @@
 
 This is the release work for Lockbox's multiuser, local-first event engine over
 Storj/S3. Passing an offline demonstration does not satisfy this plan. The
-current `LBX-SYNC-1` profile and legacy `LBX-SYNC-0` remain experimental until the release gates below
+unversioned sync protocol remains experimental until the release gates below
 have evidence. The [protocol proposal](lockbox-protocol.md) defines the broader
 design; [sync-engine.md](sync-engine.md) describes implemented behavior.
 
@@ -41,7 +41,7 @@ design; [sync-engine.md](sync-engine.md) describes implemented behavior.
 | Addressed invitations and device lifecycle | Signed consent, cancellation, replay/idempotency, role checks, recovery and UI flows | Profile-1 core, durable Vault API and desktop sharing/member screens implemented; file, session, trust-code and rendering tests pass; full recovery wizard pending |
 | Bounded large-history operation | Profiled maximum supported history, safe checkpoint/retention behavior and documented capacity | Planned |
 | S3 exchange | Authenticated PUT/GET/LIST with independent clients, failures and pagination | Loopback LIST/PUT/GET; reusable live probe added; real service pending |
-| Protocol release and security review | Stable versioned schema, conformance corpus, dependency review and independent cryptographic review | Pending |
+| Protocol release and security review | Stable wire schema, conformance corpus, dependency review and independent cryptographic review | Pending |
 
 ## Validation policy
 

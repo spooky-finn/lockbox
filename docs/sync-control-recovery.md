@@ -1,8 +1,7 @@
 # Controller transfer and recovery
 
-New spaces use experimental `LBX-SYNC-2`. Profiles 0 and 1 retain their original
-rules. Profile 2 adds explicit controller transitions and separate approval
-domains. It remains distinct from [the proposal](lockbox-protocol.md); independent
+Shared spaces use one experimental, unversioned protocol with explicit controller
+transitions and separate approval domains. It remains distinct from [the proposal](lockbox-protocol.md); independent
 review and a stable interoperability release remain open gates.
 
 The owner identity stays fixed. Control handoff moves membership authority
@@ -127,21 +126,20 @@ references in [Apple's flock contract](https://developer.apple.com/library/archi
 ## Wire boundary
 
 `Control` adds optional `transition` and `approval`, omitted on ordinary controls.
-Older profiles reject transition fields and profile downgrades. An approval binds
-`LBX-CONTROL-2`, the complete descriptor, author identity and statement hash. That
+An approval binds the complete descriptor, author identity and statement hash. That
 hash covers canonical control fields with only `approval` omitted, under
-`lockbox.sync.control-statement.v2\0`. The final author signs the complete control
+`lockbox.sync.control-statement\0`. The final author signs the complete control
 including approval bytes. This nested encoding avoids circular hashes and is
 explicitly separate from the proposal's signature-envelope encoding.
 
 | Signature | Domain |
 | --- | --- |
-| Ordinary/transfer controller | `lockbox.sync.control.v2\0` |
-| Transaction | `lockbox.sync.change.v2\0` |
-| Transfer offer | `lockbox.sync.control-transfer-offer.v2\0` |
-| Incoming controller approval | `lockbox.sync.control-transfer-approval.v2\0` |
-| Recovery root approval | `lockbox.sync.control-recovery-root.v2\0` |
-| Recovered-device final author | `lockbox.sync.control-recovery-device.v2\0` |
+| Ordinary/transfer controller | `lockbox.sync.control\0` |
+| Transaction | `lockbox.sync.change\0` |
+| Transfer offer | `lockbox.sync.control-transfer-offer\0` |
+| Incoming controller approval | `lockbox.sync.control-transfer-approval\0` |
+| Recovery root approval | `lockbox.sync.control-recovery-root\0` |
+| Recovered-device final author | `lockbox.sync.control-recovery-device\0` |
 
 Root authority comes from the verified predecessor's owner certificate, never
 from an untrusted recovery claim. Transfer requires the exact already admitted
@@ -155,8 +153,7 @@ Tests cover missing/substituted approval, stale content/frontier, restart,
 old-controller authority loss, retained late drafts, root/normal forks in both
 orders, lost witness acknowledgements, duplicate root claims and unpublished
 dependency relay. Public-API integration uses an old read-only owner backup plus
-current reader-held content, then resumes edits and synchronization. Profile-0/1
-byte fixtures remain unchanged; profile 2 has an independent signature fixture.
+current reader-held content, then resumes edits and synchronization. The unversioned wire format has an independently generated signature fixture.
 
 Root ownership transfer, automatic fork repair, desktop handoff/recovery wizards,
 large-history compaction, global freshness proofs, live Storj validation and

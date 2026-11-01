@@ -2,8 +2,8 @@
 
 The synchronization engine keeps the `Machine` and `Vault` facades while
 separating protocol rules, durable storage, transport construction and session
-scheduling. New spaces use experimental `LBX-SYNC-2`; `LBX-SYNC-0/1` histories retain
-their original rules. Protected shared profiles use bootstrap schema 5 with an
+scheduling. Shared spaces use one experimental, unversioned protocol; previous versioned
+histories are unsupported. Protected shared profiles use bootstrap schema 5 with an
 invitation ledger and independent witness evidence.
 See [sync-engine.md](sync-engine.md) for protocol behavior and
 [profile-protection.md](profile-protection.md) for durability and recovery rules.
@@ -43,7 +43,6 @@ flowchart TD
 | `core/sync/machine/relay.rs` | Signature and ancestry checks for relayed closed ciphertext | Claims about unavailable old plaintext |
 | `core/sync/invitation.rs` | Canonical public invitation, consent and receipt artifacts | Local cancellation policy or persistence |
 | `core/sync/machine/invitations.rs` | Addressed signature proofs, consent-bound admission and receipt verification | Clock-based expiry or artifact export |
-| `core/sync/machine/profile.rs` | Explicit protocol versions and signature domains | Implicit upgrade or downgrade |
 | `core/sync/machine/replay.rs` | Verified history, epoch closure, causal validation and projection | Disk writes or timestamp winners |
 | `core/sync/machine/parents.rs` | Bounded causal merge parent selection, including prior local sequence ancestry | Conflict resolution or membership authority |
 | `infra/vault.rs` | Public facade, profile lifecycle and file/witness commit ordering | Membership and mutation authorization |
@@ -200,7 +199,7 @@ transport retry handling.
 | --- | --- | --- |
 | New mutation or conflict semantics | `model.rs` and command/replay validation | Delivery permutations, complete revision bases, atomicity |
 | Admission, role or epoch closure rule | `machine/membership.rs` and `machine/replay.rs` | Reader forgery, revocation, forks, checkpoint comparison |
-| New wire field or signature binding | `machine/protocol.rs`, `wire.rs`, `crypto.rs` | Canonical wire fixture and signature/hash tests; explicit protocol version decision |
+| New wire field or signature binding | `machine/protocol.rs`, `wire.rs`, `crypto.rs` | Canonical wire fixture and signature/hash tests; explicit wire-contract review |
 | Crash/durability behavior | `infra/vault/shared.rs`, `infra/vault/exchange.rs` and file adapter | Intent restart, failed candidate/receipt writes, revocation commit failure, legacy activation |
 | New provider | `Storage` / `StorageFactory` implementation | Lost responses, partial visibility, pagination and bounded bodies |
 | Retry policy or session lifecycle | `app/space_sync.rs`, `schedule.rs`, `infra/sync/worker.rs` | Explicit-time backoff, scope changes, faults during pending work, cancellation and late receipts |
@@ -220,7 +219,7 @@ The S3 HTTP fixture binds to loopback; a sandbox may require permission for that
 local socket. The other transport tests use in-memory adapters and do not require
 credentials or a live Storj bucket.
 
-`src/core/sync/fixtures/change-v0.json` was captured before the module extraction.
+`src/core/sync/fixtures/change.json` was generated independently with Python cryptography.
 It contains a deterministic signature over public test metadata and opaque test
 ciphertext bytes. `change_wire_contract_survives_internal_refactors` checks exact
 canonical bytes, the fixed complete-object hash, decoding and strict signature
@@ -228,6 +227,6 @@ verification. It does not claim that the opaque ciphertext is a decryptable
 transaction; separate tests cover AEAD and mutation authorization.
 
 Do not regenerate that fixture merely to make a refactor pass. A mismatch means
-the wire contract changed and needs an explicit compatibility decision. Existing
+the wire contract changed and needs explicit wire-contract review. Existing
 profile, revocation, crash-recovery and two-client tests remain the behavioral
 reference for this implementation.

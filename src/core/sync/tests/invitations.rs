@@ -1,20 +1,6 @@
 use super::*;
 use crate::core::sync::{Admission, AdmissionReceipt, Invitation};
 
-fn current_owner() -> (SyncState, DeviceSecret) {
-    let (device, certificate) = identity(1);
-    let state = Machine::create(
-        Hash([1; 32]),
-        Hash([2; 32]),
-        certificate,
-        &device,
-        &[3; 32],
-        Hash([4; 32]),
-    )
-    .unwrap();
-    (state, device)
-}
-
 fn consent(
     state: &SyncState,
     owner: &DeviceSecret,
@@ -39,7 +25,7 @@ fn complete(state: &mut SyncState, owner: &DeviceSecret, proof: Admission) -> Ha
 
 #[test]
 fn signed_admission_bootstraps_current_checkpoint_and_is_retry_stable() {
-    let (mut state, owner) = current_owner();
+    let (mut state, owner) = owner();
     edit(&mut state, &owner, vec![entry(1, "prior history")]);
     let (guest, cert) = identity(2);
     let (offer, proof) = consent(&state, &owner, &guest, cert);
@@ -84,7 +70,7 @@ fn signed_admission_bootstraps_current_checkpoint_and_is_retry_stable() {
 
 #[test]
 fn consent_binds_recipient_role_offer_and_independent_root() {
-    let (mut state, owner) = current_owner();
+    let (mut state, owner) = owner();
     let (guest, cert) = identity(2);
     let (other, other_cert) = identity(3);
     let (offer, proof) = consent(&state, &owner, &guest, cert.clone());
@@ -121,7 +107,7 @@ fn consent_binds_recipient_role_offer_and_independent_root() {
 
 #[test]
 fn receipt_signature_detects_truncation_and_revoked_device_cannot_rejoin() {
-    let (mut state, owner) = current_owner();
+    let (mut state, owner) = owner();
     let (guest, cert) = identity(2);
     let (offer, proof) = consent(&state, &owner, &guest, cert.clone());
     complete(&mut state, &owner, proof.clone());
@@ -158,7 +144,7 @@ fn receipt_signature_detects_truncation_and_revoked_device_cannot_rejoin() {
 
 #[test]
 fn signed_control_without_consent_cannot_admit_a_device_on_receive() {
-    let (mut state, owner) = current_owner();
+    let (mut state, owner) = owner();
     let (guest, cert) = identity(2);
     let (_, proof) = consent(&state, &owner, &guest, cert);
     let PreparedChange::Control(mut body) =
@@ -167,14 +153,7 @@ fn signed_control_without_consent_cannot_admit_a_device_on_receive() {
         panic!()
     };
     body.admissions.clear();
-    let object = Object::Control(
-        crypto::sign(
-            body,
-            &owner.signer(),
-            super::super::profile::Profile::Current.control_domain(),
-        )
-        .unwrap(),
-    );
+    let object = Object::Control(crypto::sign(body, &owner.signer(), CONTROL_DOMAIN).unwrap());
     let hash = object.hash().unwrap();
     Machine::receive(&mut state, hash, object.bytes().unwrap()).unwrap();
     let replay = Machine::replay(&state, &owner).unwrap();
@@ -184,21 +163,19 @@ fn signed_control_without_consent_cannot_admit_a_device_on_receive() {
 }
 
 #[test]
-fn legacy_profile_upgrades_with_consent_and_cannot_downgrade() {
+fn versioned_invitation_artifacts_are_rejected() {
     let (mut state, owner) = owner();
-    let (guest, cert) = identity(2);
-    let (_, proof) = consent(&state, &owner, &guest, cert);
-    complete(&mut state, &owner, proof);
-    let members = Machine::members(&state, &owner).unwrap();
-    let PreparedChange::Control(mut body) =
-        Machine::prepare_membership(&state, &owner, members).unwrap()
-    else {
-        panic!()
-    };
-    body.epoch.profile = PROFILE.into();
-    state.intent = Some(PreparedChange::Control(body));
-    assert!(matches!(
-        Machine::complete_intent(&mut state, &owner),
-        Err(Error::UnsupportedProtocol)
-    ));
+    let (guest, certificate) = identity(2);
+    let (offer, proof) = consent(&state, &owner, &guest, certificate);
+    let mut old: serde_json::Value = serde_json::from_slice(&offer.bytes().unwrap()).unwrap();
+    old["offer"]["body"]["profile"] = "LBX-INVITE-1".into();
+    assert!(Invitation::decode(&canonical(&old).unwrap()).is_err());
+    let mut old: serde_json::Value = serde_json::from_slice(&proof.bytes().unwrap()).unwrap();
+    old["request"]["body"]["profile"] = "LBX-INVITE-1".into();
+    assert!(Admission::decode(&canonical(&old).unwrap()).is_err());
+    complete(&mut state, &owner, proof.clone());
+    let receipt = Machine::admission_receipt(&state, &owner, &proof).unwrap();
+    let mut old: serde_json::Value = serde_json::from_slice(&receipt.bytes().unwrap()).unwrap();
+    old["confirmation"]["body"]["profile"] = "LBX-INVITE-1".into();
+    assert!(AdmissionReceipt::decode(&canonical(&old).unwrap()).is_err());
 }

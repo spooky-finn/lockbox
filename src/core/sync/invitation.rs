@@ -7,15 +7,13 @@ use super::{
 use serde::{Deserialize, Serialize};
 
 pub const MAX_INVITATION_BYTES: usize = 96 * 1024 * 1024;
-pub(super) const PROFILE: &str = "LBX-INVITE-1";
-pub(super) const OFFER_DOMAIN: &[u8] = b"lockbox.sync.invite.v1\0";
-pub(super) const JOIN_DOMAIN: &[u8] = b"lockbox.sync.join.v1\0";
-pub(super) const RECEIPT_DOMAIN: &[u8] = b"lockbox.sync.admission-receipt.v1\0";
+pub(super) const OFFER_DOMAIN: &[u8] = b"lockbox.sync.invite\0";
+pub(super) const JOIN_DOMAIN: &[u8] = b"lockbox.sync.join\0";
+pub(super) const RECEIPT_DOMAIN: &[u8] = b"lockbox.sync.admission-receipt\0";
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct InviteOffer {
-    pub(crate) profile: String,
     pub(crate) descriptor: SpaceDescriptor,
     pub(crate) anchor: Hash,
     pub(crate) id: Hash,
@@ -29,7 +27,6 @@ pub struct InviteOffer {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct JoinRequest {
-    pub(crate) profile: String,
     pub(crate) offer: Hash,
     pub(crate) recipient: Hash,
     pub(crate) challenge: Hash,
@@ -54,7 +51,6 @@ pub struct Invitation {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct AdmissionConfirmation {
-    pub(crate) profile: String,
     pub(crate) descriptor: SpaceDescriptor,
     pub(crate) invitation: Hash,
     pub(crate) acceptance: Hash,
@@ -94,7 +90,7 @@ impl Invitation {
     /// and signed control anchor, not only a displayed owner name or root key.
     pub fn verification_code(&self) -> Result<Hash> {
         Ok(Hash::digest(
-            b"lockbox.sync.invitation-verification.v1\0",
+            b"lockbox.sync.invitation-verification\0",
             &canonical(&(self.descriptor(), self.anchor()))?,
         ))
     }
@@ -132,9 +128,7 @@ impl Admission {
     pub fn verify_consent(&self) -> Result<()> {
         self.recipient().verify()?;
         let request = &self.request.body;
-        if request.profile != PROFILE
-            || request.offer != self.offer_hash()?
-            || request.recipient != self.recipient().body.device
+        if request.offer != self.offer_hash()? || request.recipient != self.recipient().body.device
         {
             return Err(Error::InvalidInvitation);
         }
@@ -162,7 +156,7 @@ impl Admission {
     }
     pub fn hash(&self) -> Result<Hash> {
         Ok(Hash::digest(
-            b"lockbox.sync.acceptance-object.v1\0",
+            b"lockbox.sync.acceptance-object\0",
             &canonical(self)?,
         ))
     }
@@ -176,7 +170,7 @@ impl Admission {
 
 pub(super) fn offer_hash(offer: &Signed<InviteOffer>) -> Result<Hash> {
     Ok(Hash::digest(
-        b"lockbox.sync.invite-object.v1\0",
+        b"lockbox.sync.invite-object\0",
         &canonical(offer)?,
     ))
 }

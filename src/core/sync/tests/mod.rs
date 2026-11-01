@@ -4,7 +4,6 @@ use super::{Machine, PreparedChange, SyncState};
 use super::{
     commands::control_at,
     membership::epoch_key,
-    profile::LEGACY_PROFILE as PROFILE,
     protocol::{Change, ChangeHeader},
 };
 use crate::core::sync::{

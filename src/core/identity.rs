@@ -71,9 +71,9 @@ impl DeviceKeys {
                 hpke_secret: *secret_bytes,
             },
             PublicIdentity {
-                user_id: fingerprint(b"lockbox.user.v1\0", &root_key),
+                user_id: fingerprint(b"lockbox.user\0", &root_key),
                 root_key,
-                device_id: fingerprint(b"lockbox.device.v1\0", &signing_key),
+                device_id: fingerprint(b"lockbox.device\0", &signing_key),
                 signing_key,
                 hpke_key: public_bytes,
             },
@@ -93,8 +93,8 @@ impl DeviceKeys {
             .to_bytes()
             == public.signing_key
             && hpke_public == public.hpke_key
-            && fingerprint(b"lockbox.user.v1\0", &public.root_key) == public.user_id
-            && fingerprint(b"lockbox.device.v1\0", &public.signing_key) == public.device_id
+            && fingerprint(b"lockbox.user\0", &public.root_key) == public.user_id
+            && fingerprint(b"lockbox.device\0", &public.signing_key) == public.device_id
             && ed25519_dalek::VerifyingKey::from_bytes(&public.root_key)
                 .is_ok_and(|key| !key.is_weak())
     }
@@ -128,8 +128,8 @@ impl SpaceKeys {
             key
         };
         (
-            derive(b"lockbox.changes.v1\0"),
-            derive(b"lockbox.checkpoint.v1\0"),
+            derive(b"lockbox.changes\0"),
+            derive(b"lockbox.checkpoint\0"),
         )
     }
 }

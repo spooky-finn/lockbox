@@ -1,11 +1,10 @@
 # Shared-space synchronization engine
 
-New spaces use experimental **LBX-SYNC-2**; existing **LBX-SYNC-0/1** histories
-remain supported. Profile 1 adds signed recipient consent; profile 2 adds
-[controller transfer and recovery](sync-control-recovery.md). It implements
-the deterministic event model from [the proposal](lockbox-protocol.md), with a
-smaller, separately versioned wire schema. It does not claim proposal-v1
-interoperability or a completed security review.
+Shared spaces use one experimental, unversioned protocol with signed recipient
+consent and [controller transfer and recovery](sync-control-recovery.md).
+It implements the deterministic event model from [the proposal](lockbox-protocol.md)
+with a smaller wire schema. Previous versioned histories are unsupported.
+It does not claim interoperability with the proposal or a completed security review.
 
 For module ownership, dependency direction, provider extension and durability
 contracts, see the [synchronization architecture guide](sync-architecture.md).
@@ -159,9 +158,9 @@ secrets must already be uppercase canonical Base32.
 Objects contain either a signed control record or a signed encrypted change.
 Controls embed certificates, HPKE grants and one encrypted checkpoint; there
 are no circular object references. Domain prefixes are distinct
-`lockbox.sync.{certificate,control,change,object,projection}.v0\0` strings.
-Content key derivation retains the proposal's `lockbox.changes.v1\0` and
-`lockbox.checkpoint.v1\0` HKDF contexts.
+`lockbox.sync.{certificate,control,change,object,projection}\0` strings.
+Content key derivation uses `lockbox.changes\0` and
+`lockbox.checkpoint\0` HKDF contexts.
 
 The wire requires JCS canonical JSON, using `serde_jcs`. Typed decoding followed
 by exact canonical re-encoding rejects duplicate keys, unknown nested fields,

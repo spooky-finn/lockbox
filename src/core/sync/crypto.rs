@@ -14,9 +14,9 @@ use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
-pub(super) const CERT_DOMAIN: &[u8] = b"lockbox.sync.certificate.v0\0";
-pub(super) const CONTROL_DOMAIN: &[u8] = b"lockbox.sync.control.v0\0";
-pub(super) const CHANGE_DOMAIN: &[u8] = b"lockbox.sync.change.v0\0";
+pub(super) const CERT_DOMAIN: &[u8] = b"lockbox.sync.certificate\0";
+pub(super) const CONTROL_DOMAIN: &[u8] = b"lockbox.sync.control\0";
+pub(super) const CHANGE_DOMAIN: &[u8] = b"lockbox.sync.change\0";
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -66,7 +66,7 @@ pub struct Certificate {
 impl Signed<Certificate> {
     pub fn hash(&self) -> Result<Hash> {
         Ok(Hash::digest(
-            b"lockbox.sync.certificate-object.v0\0",
+            b"lockbox.sync.certificate-object\0",
             &canonical(self)?,
         ))
     }
@@ -74,8 +74,8 @@ impl Signed<Certificate> {
     pub fn verify(&self) -> Result<()> {
         let body = &self.body;
 
-        if body.user != Hash::digest(b"lockbox.user.v1\0", &body.root_key)
-            || body.device != Hash::digest(b"lockbox.device.v1\0", &body.signing_key)
+        if body.user != Hash::digest(b"lockbox.user\0", &body.root_key)
+            || body.device != Hash::digest(b"lockbox.device\0", &body.signing_key)
             || VerifyingKey::from_bytes(&body.signing_key).map_or(true, |key| key.is_weak())
         {
             return Err(Error::InvalidSignature);
@@ -120,7 +120,7 @@ impl DeviceSecret {
         let signing_key = self.signer().verifying_key().to_bytes();
         sign(
             Certificate {
-                user: Hash::digest(b"lockbox.user.v1\0", &root_key),
+                user: Hash::digest(b"lockbox.user\0", &root_key),
                 root_key,
                 device: self.id(),
                 signing_key,
@@ -133,7 +133,7 @@ impl DeviceSecret {
 
     pub fn id(&self) -> Hash {
         Hash::digest(
-            b"lockbox.device.v1\0",
+            b"lockbox.device\0",
             &self.signer().verifying_key().to_bytes(),
         )
     }
@@ -160,7 +160,7 @@ impl DeviceSecret {
             .map_err(|_| Error::AuthenticationFailed)?;
         let enc = <X25519HkdfSha256 as Kem>::EncappedKey::from_bytes(&enc.0)
             .map_err(|_| Error::AuthenticationFailed)?;
-        let mut info = b"lockbox.sync.grant.v0\0".to_vec();
+        let mut info = b"lockbox.sync.grant\0".to_vec();
         info.extend(aad);
         let bytes = Zeroizing::new(
             hpke::single_shot_open::<ChaCha20Poly1305, HkdfSha256, X25519HkdfSha256>(
@@ -185,7 +185,7 @@ impl DeviceSecret {
 pub(super) fn seal_grant(public: &[u8; 32], key: &[u8; 32], aad: &[u8]) -> Result<(Blob, Blob)> {
     let public = <X25519HkdfSha256 as Kem>::PublicKey::from_bytes(public)
         .map_err(|_| Error::InvalidEncoding)?;
-    let mut info = b"lockbox.sync.grant.v0\0".to_vec();
+    let mut info = b"lockbox.sync.grant\0".to_vec();
     info.extend(aad);
     let (enc, ciphertext) =
         hpke::single_shot_seal::<ChaCha20Poly1305, HkdfSha256, X25519HkdfSha256, _>(
@@ -213,9 +213,9 @@ pub(super) fn content_key(
     checkpoint: bool,
 ) -> Zeroizing<[u8; 32]> {
     let domain = if checkpoint {
-        b"lockbox.checkpoint.v1\0".as_slice()
+        b"lockbox.checkpoint\0".as_slice()
     } else {
-        b"lockbox.changes.v1\0".as_slice()
+        b"lockbox.changes\0".as_slice()
     };
 
     let mut info = domain.to_vec();

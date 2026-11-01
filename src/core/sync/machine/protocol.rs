@@ -4,8 +4,6 @@ use super::super::{Admission, Blob, Certificate, Counter, Hash, Object, Role, Si
 use super::state::SpaceDescriptor;
 use serde::{Deserialize, Serialize};
 
-pub(super) use super::profile::PROFILE;
-
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Member {
@@ -16,7 +14,6 @@ pub struct Member {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct Epoch {
-    pub(super) profile: String,
     pub(super) space: Hash,
     pub(super) number: Counter,
     pub(super) context: Hash,
@@ -77,7 +74,6 @@ pub enum ControlTransition {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ControlApproval {
-    pub(super) profile: String,
     pub(super) descriptor: SpaceDescriptor,
     pub(super) statement: Hash,
     pub(super) author: Hash,
@@ -105,7 +101,6 @@ pub struct RecoveryAnchor {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ChangeHeader {
-    pub(super) profile: String,
     pub(super) space: Hash,
     pub(super) membership: Hash,
     pub(super) epoch: Counter,

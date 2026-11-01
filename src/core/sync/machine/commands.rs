@@ -8,13 +8,12 @@ use super::super::{
 };
 use super::{
     Machine,
-    protocol::{Change, ChangeHeader, Control, Epoch, Member, PROFILE},
+    protocol::{Change, ChangeHeader, Control, Epoch, Member},
     state::{ExcludedEdit, PreparedChange, Replay, SyncState},
 };
 use super::{
     history::with_history,
     membership::{build_control, epoch_key, validate_control_body},
-    profile::Profile,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use zeroize::Zeroizing;
@@ -30,26 +29,6 @@ impl Machine {
         epoch_key: &[u8; 32],
         context: Hash,
     ) -> Result<SyncState> {
-        Self::create_with_profile(
-            space,
-            namespace,
-            certificate,
-            device,
-            epoch_key,
-            context,
-            PROFILE,
-        )
-    }
-
-    pub(super) fn create_with_profile(
-        space: Hash,
-        namespace: Hash,
-        certificate: Signed<Certificate>,
-        device: &DeviceSecret,
-        epoch_key: &[u8; 32],
-        context: Hash,
-        profile: &str,
-    ) -> Result<SyncState> {
         certificate.verify()?;
 
         if !device.matches_certificate(&certificate.body) {
@@ -63,7 +42,6 @@ impl Machine {
             role: Role::Owner,
         }];
         let epoch = Epoch {
-            profile: profile.into(),
             space,
             number: Counter(0),
             context,
@@ -82,7 +60,7 @@ impl Machine {
         let object = Object::Control(crypto::sign(
             control,
             &device.signer(),
-            Profile::parse(profile)?.control_domain(),
+            crypto::CONTROL_DOMAIN,
         )?);
         let genesis = object.hash()?;
         Ok(SyncState {
@@ -243,7 +221,6 @@ impl Machine {
         let mut nonce = [0; 24];
         getrandom::fill(&mut nonce).map_err(|_| Error::Random)?;
         let header = ChangeHeader {
-            profile: control.body.epoch.profile.clone(),
             space: state.space,
             membership: replay.membership,
             epoch: Counter(replay.epoch),
@@ -274,7 +251,7 @@ impl Machine {
 
     /// Owner explicitly supplies the complete next roster, including its own
     /// certificate. Admission never follows possession of provider credentials.
-    /// Ownership/control transfer are intentionally unsupported in this profile.
+    /// Controller transfer uses a separate approval flow.
     pub fn prepare_membership(
         state: &SyncState,
         device: &DeviceSecret,
@@ -309,7 +286,6 @@ impl Machine {
             .collect();
         members.sort_by_key(|m| m.certificate.body.device);
         let epoch = Epoch {
-            profile: PROFILE.into(),
             space: state.space,
             number: Counter(
                 replay
@@ -319,17 +295,6 @@ impl Machine {
             ),
             context: Hash(*crypto::random32()?),
             previous: Some(replay.membership),
-        };
-
-        let epoch = Epoch {
-            profile: if admissions.is_empty()
-                || Profile::parse(&previous.body.epoch.profile)? >= Profile::Consent
-            {
-                previous.body.epoch.profile.clone()
-            } else {
-                super::profile::CONSENT_PROFILE.into()
-            },
-            ..epoch
         };
 
         let mut control = build_control(
@@ -373,7 +338,7 @@ impl Machine {
                     return Err(Error::UnauthorizedDevice);
                 }
 
-                let domain = Profile::parse(&change.header.profile)?.change_domain();
+                let domain = crypto::CHANGE_DOMAIN;
                 Object::Change(crypto::sign(change, &device.signer(), domain)?)
             }
             PreparedChange::Control(control) => {
@@ -390,7 +355,7 @@ impl Machine {
                     validate_control_body(&control, Some(&previous), state, &history.chain)
                 })?;
                 control.verify_approval(Some(&previous), state)?;
-                let domain = control.signing_domain()?;
+                let domain = control.signing_domain();
                 let signed = crypto::sign(control, &device.signer(), domain)?;
                 Object::Control(signed)
             }

@@ -1,8 +1,8 @@
 # Profile protection and fresh-device recovery
 
 New shared profiles use encrypted bootstrap schema **5** inside the versioned
-`.lbx` container. Signed remote objects use `LBX-SYNC-2`; existing `LBX-SYNC-0/1`
-histories remain supported. Local file generations
+`.lbx` container. Signed remote objects use one unversioned protocol; previous versioned
+histories are unsupported. Local file generations
 and witnesses are never uploaded. Local vaults now write v4; v1/v2 remain readable. Shared profiles also read v3.
 The file version prevents older clients from discarding entry attachments.
 Schema 4 preserves the [durable invitation ledger](sync-invitations.md); schema 5

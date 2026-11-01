@@ -9,7 +9,6 @@ mod history;
 mod invitations;
 mod membership;
 mod parents;
-mod profile;
 mod protocol;
 mod relay;
 mod replay;
