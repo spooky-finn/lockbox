@@ -5,20 +5,20 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 35; 400 library, four integration, two doctests passed.
+Last full suite: cycle 37; 402 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 36: Compact deletion staging once
-- Replace repeated Vec::remove shifts with one retain_mut pass. Move matching
-  entries into undo storage and record original indices; no payload clones added.
-- Keep all matching-ID removal, survivor order, shared snapshot and undo behavior.
-- Regression passed before refactor: beginning/end/adjacent legacy duplicate IDs,
-  missing ID, failed save, payload/history/disk rollback and durable retry.
-- Passed: nine edit, 76 record, 17 history-filtered tests, failed-delete UI test,
-  both sync integration tests. Formatting and strict all-target Clippy passed.
-  Source byte-matches snapshot; workspace whitespace checks passed.
+Cycle 37: Borrow projection comparison values
+- Plain shared save guard uses existing borrowed projection iterators; avoid
+  cloning passwords, attachment bytes and folder values just for equality.
+- Preserve deep equality, order, length, conflict filtering and public snapshots.
+- Regression passed before refactor: reject eleven unjournaled payload/order/
+  length mutations, preserve disk and journal, accept unchanged save and reopen.
+- Full suite passed above. Formatting and strict all-target Clippy passed.
+  Test-only type alias then passed focused regression and Clippy again.
+  All three sources byte-match verified snapshot; whitespace checks passed.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-36.TplZH4 when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-37.Gk7vRt when workspace cannot compile.
 
-Next search: projection equality snapshots, subtree assignment undo, publication.
+Next search: subtree assignment undo, publication graph bookkeeping.
 Inspect current code and tests before choosing; no quota-driven edits.

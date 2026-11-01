@@ -764,6 +764,83 @@ fn failed_acknowledgement_restores_receipts_and_exchange_time() {
 }
 
 #[test]
+fn plain_shared_saves_reject_payload_order_and_length_changes() {
+    use crate::records::entry::{Totp, TotpAlgorithm};
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("projection-guard.lbx");
+    let mut vault = profile_vault(&path, "Alice");
+    let folders = [
+        Folder::new("First".into(), None),
+        Folder::new("Second".into(), None),
+    ];
+    let mut entries = [entry("First"), entry("Second")];
+    for entry in &mut entries {
+        entry.totp = Some(Totp {
+            secret: "JBSWY3DPEHPK3PXP".into(),
+            algorithm: TotpAlgorithm::Sha1,
+            digits: 6,
+            period: 30,
+        });
+        entry
+            .add_attachment("payload.bin".into(), vec![0, 255, 42])
+            .unwrap();
+    }
+    vault.append_records(&folders, &entries).unwrap();
+    let saved_entries = vault.entries().to_vec();
+    let saved_folders = vault.folders().to_vec();
+    let objects = vault.sync_state().unwrap().objects.clone();
+    let before = fs::read(&path).unwrap();
+    type Change = (&'static str, fn(&mut Vault));
+    let cases: [Change; 11] = [
+        ("password", |v| v.entries[0].password.push('!')),
+        ("attachment", |v| v.entries[0].attachments[0].data[0] = 9),
+        ("TOTP", |v| {
+            v.entries[0].totp.as_mut().unwrap().secret = "KRSXG5DSNFXGOIDB".into()
+        }),
+        ("entry order", |v| v.entries.reverse()),
+        ("missing entry", |v| {
+            v.entries.pop();
+        }),
+        ("extra entry", |v| v.entries.push(entry("Extra"))),
+        ("folder name", |v| v.folders[0].name.push('!')),
+        ("folder parent", |v| {
+            v.folders[0].parent_id = Some(v.folders[1].id.clone())
+        }),
+        ("folder order", |v| v.folders.reverse()),
+        ("missing folder", |v| {
+            v.folders.pop();
+        }),
+        ("extra folder", |v| {
+            v.folders.push(Folder::new("Extra".into(), None))
+        }),
+    ];
+    for (name, change) in cases {
+        vault.entries = saved_entries.clone();
+        vault.folders = saved_folders.clone();
+        change(&mut vault);
+        assert!(
+            matches!(
+                vault.save(),
+                Err(VaultError::Sync(
+                    crate::sync::protocol::Error::InvalidTransaction
+                ))
+            ),
+            "{name}"
+        );
+        assert_eq!(fs::read(&path).unwrap(), before, "{name}");
+        assert_eq!(vault.sync_state().unwrap().objects, objects, "{name}");
+    }
+    vault.entries = saved_entries.clone();
+    vault.folders = saved_folders.clone();
+    vault.save().unwrap();
+    assert_eq!(vault.sync_state().unwrap().objects, objects);
+    drop(vault);
+    let reopened = Vault::open(&path, &SecretString::from("master".to_owned())).unwrap();
+    assert_eq!(reopened.entries(), saved_entries);
+    assert_eq!(reopened.folders(), saved_folders);
+}
+
+#[test]
 fn shared_history_attributes_signer_and_restores_deleted_record() {
     let dir = tempfile::tempdir().unwrap();
     let mut vault = profile_vault(&dir.path().join("history.lbx"), "Alice");

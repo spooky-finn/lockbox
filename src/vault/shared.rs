@@ -42,8 +42,8 @@ impl Vault {
 
             let replay = crate::sync::protocol::Machine::replay(sync, &profile.sync_secret())?;
 
-            if replay.projection.entries() != self.entries
-                || replay.projection.folders() != self.folders
+            if !replay.projection.entry_values().eq(self.entries.iter())
+                || !replay.projection.folder_values().eq(self.folders.iter())
             {
                 return Err(crate::sync::protocol::Error::InvalidTransaction.into());
             }

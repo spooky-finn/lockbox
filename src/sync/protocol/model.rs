@@ -215,14 +215,14 @@ impl Projection {
             })
     }
 
-    fn entry_values(&self) -> impl Iterator<Item = &Entry> {
+    pub(crate) fn entry_values(&self) -> impl Iterator<Item = &Entry> {
         self.values().filter_map(|value| match value {
             Value::Entry(entry) => Some(entry),
             _ => None,
         })
     }
 
-    fn folder_values(&self) -> impl Iterator<Item = &Folder> {
+    pub(crate) fn folder_values(&self) -> impl Iterator<Item = &Folder> {
         self.values().filter_map(|value| match value {
             Value::Folder(folder) => Some(folder),
             _ => None,
