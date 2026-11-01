@@ -156,13 +156,34 @@ fn explicit_rebase_preserves_content_but_uses_new_epoch_and_author_signature() {
     admit(&mut state, &alice, &bob, certificate, Role::Editor);
     let mut offline = state.clone();
     let excluded = edit(&mut offline, &bob, vec![entry(1, "offline")]);
-    let members = Machine::members(&state, &alice).unwrap();
+    let mut members = Machine::members(&state, &alice).unwrap();
+    members
+        .iter_mut()
+        .find(|(certificate, _)| certificate.body.device == bob.id())
+        .unwrap()
+        .1 = Role::Reader;
     state.intent = Some(Machine::prepare_membership(&state, &alice, members).unwrap());
     Machine::complete_intent(&mut state, &alice).unwrap();
     deliver(&offline, &mut state);
     let edits = Machine::excluded_edits(&state, &bob).unwrap();
     assert_eq!(edits.len(), 1);
     assert_eq!(edits[0].author, bob.id());
+    assert!(matches!(
+        Machine::prepare_rebase(&state, &bob, excluded),
+        Err(Error::InsufficientRole)
+    ));
+    state.intent = Some(Machine::prepare(&state, &alice, empty_transaction()).unwrap());
+    let pending = canonical(&state).unwrap();
+    assert!(matches!(
+        Machine::prepare_rebase(&state, &alice, excluded),
+        Err(Error::PendingIntent)
+    ));
+    assert!(matches!(
+        Machine::prepare_rebase(&state, &alice, Hash([99; 32])),
+        Err(Error::InvalidTransaction)
+    ));
+    assert_eq!(canonical(&state).unwrap(), pending);
+    state.intent = None;
     // Alice explicitly re-authors Bob's proposed content; Bob is never credited
     // as signer of Alice's new event, and provenance remains advisory metadata.
     state.intent = Some(Machine::prepare_rebase(&state, &alice, excluded).unwrap());

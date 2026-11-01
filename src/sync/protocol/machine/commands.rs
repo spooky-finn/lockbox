@@ -196,6 +196,7 @@ impl Machine {
         .map(Some)
     }
 
+    // Callers check idle state and writer authority against this same immutable state.
     fn prepare_transaction(
         state: &SyncState,
         device: &DeviceSecret,
@@ -434,9 +435,17 @@ impl Machine {
     /// before re-authoring it against the current visible revisions.
     pub fn excluded_edits(state: &SyncState, device: &DeviceSecret) -> Result<Vec<ExcludedEdit>> {
         let replay = Self::replay(state, device)?;
+        Self::decrypt_excluded(state, device, &replay)
+    }
+
+    fn decrypt_excluded(
+        state: &SyncState,
+        device: &DeviceSecret,
+        replay: &Replay,
+    ) -> Result<Vec<ExcludedEdit>> {
         let mut edits = Vec::new();
 
-        for hash in replay.excluded {
+        for &hash in &replay.excluded {
             let Object::Change(signed) = decode::<Object>(&state.objects[&hash].0)? else {
                 continue;
             };
@@ -475,7 +484,7 @@ impl Machine {
         use crate::sync::protocol::Mutation;
         let replay = Self::replay(state, device)?;
         replay.require_writer()?;
-        let edit = Self::excluded_edits(state, device)?
+        let edit = Self::decrypt_excluded(state, device, &replay)?
             .into_iter()
             .find(|edit| edit.hash == excluded)
             .ok_or(Error::InvalidTransaction)?;
@@ -506,13 +515,16 @@ impl Machine {
                 value: old.value,
             });
         }
-        Self::prepare(
+        state.require_idle()?;
+        Self::prepare_transaction(
             state,
             device,
             Transaction {
                 mutations,
                 rebased_from: Some(excluded),
             },
+            replay,
+            false,
         )
     }
 }

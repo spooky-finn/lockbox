@@ -5,19 +5,21 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 27; 395 library, four integration, two doctests passed.
+Last full suite: cycle 31; 397 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 30: Normalize tree query once
-- Move entry matcher from desktop workspace into tree module, its only caller.
-  Reuse query normalized by project; remove per-entry query trim/lowercase copy.
-- Preserve title/username/URL matching, inherited folders and orphan fallback.
-- Regression passed before refactor: Unicode whitespace/case/dotted-I queries;
-  passwords, notes, TOTP, attachment names/data remain outside search fields.
-- All 76 record and 45 desktop tests passed. Formatting and strict all-target
-  Clippy passed. Source byte-matches snapshot; whitespace checks passed.
+Cycle 31: Reuse rebase verification
+- Rebase uses one fresh replay for writer authority, excluded draft decryption
+  and transaction preparation; remove two redundant full replays.
+- Shared decryption helper private. Decode all drafts in same order; retain idle
+  check after selection, original error precedence, wire and provenance rules.
+- Expanded regression passed before refactor: demoted reader denied, pending
+  intent retained, missing edit precedes idle error, owner re-authorship intact.
+- Full suite passed: 397 library, four integration, two doctests; two OS probes
+  ignored. Formatting and strict all-target Clippy passed. Source byte-matches
+  verified snapshot; workspace whitespace checks passed.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-30.DNbPaJ when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-31.Ql9elY when workspace cannot compile.
 
-Next search: excluded-edit replay, settings updates, identity formatting.
+Next search: receive/publish setup, settings updates, identity formatting.
 Inspect current code and tests before choosing; no quota-driven edits.
