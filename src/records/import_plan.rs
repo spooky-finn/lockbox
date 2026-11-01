@@ -121,7 +121,7 @@ impl<'a> Targets<'a> {
         for folder in folders {
             depth.insert(
                 Some(folder.id.clone()),
-                hierarchy.ancestors(&folder.id).len(),
+                hierarchy.lineage(&folder.id).count(),
             );
         }
 

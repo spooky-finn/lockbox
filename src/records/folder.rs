@@ -98,7 +98,8 @@ impl<'a> Hierarchy<'a> {
         Self { folders, by_id }
     }
 
-    fn lineage(&self, id: &str) -> impl Iterator<Item = &'a Folder> {
+    /// Leaf-to-root walk, bounded for cycles and excessive depth.
+    pub(crate) fn lineage(&self, id: &str) -> impl Iterator<Item = &'a Folder> {
         let mut current = self.by_id.get(id).copied();
         let mut visited = BTreeSet::new();
         std::iter::from_fn(move || {

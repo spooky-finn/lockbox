@@ -5,25 +5,29 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 65; 415 library, four integration, two doctests passed.
+Last full suite: cycle 69; 415 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 68: Share local folder name policy
-- New crate-private folder.valid_name names the existing nonblank/128 Unicode
-  character rule. Local hierarchy validation and import Targets.place delegate.
-- Saved-name validation counts original raw name; import still trims source name
-  first, then validates and stores it. Preserve errors, invalid-folder fallback,
-  normalized sibling matching and all hierarchy checks. Protocol frozen whitespace
-  and literal name limit remain independent; no count algorithm change.
-- Formatting/strict all-target Clippy passed. 76 records, nine vault edit,
-  22 vault persistence tests passed. Both sources match verified snapshot;
-  whitespace clean. Unrelated edits untouched.
-- Snapshot: /tmp/lockbox-refactor-68.kbila24v.
+Cycle 69: Consume hierarchy lineage directly
+- Expose existing leaf-to-root lineage iterator within crate, document bound and
+  direction. Directory reveal removes collapsed IDs directly; import Targets
+  counts iterator instead of collecting/reversing breadcrumb Vec per folder.
+- Preserve ancestry checks, MAX_DEPTH, cycle/dangling handling, duplicate-ID first
+  match, reveal set and import depth behavior. Root-to-leaf breadcrumbs unchanged.
+- Full suite: 415 library, four integration, two doctests passed; two OS probes
+  ignored. Formatting/strict all-target Clippy passed. All three sources match
+  verified snapshot; whitespace clean. Unrelated edits untouched.
+- Snapshot: /tmp/lockbox-refactor-69.kus9qprp.
 
-Next search: Hierarchy.lineage already provides bounded leaf-to-root iterator.
-Directory reveal removes ancestor IDs from set (order irrelevant), import Targets
-only needs ancestor count, yet both allocate/reverse ancestors Vec. Consider making
-lineage crate-visible with direction/limit doc and consume directly in these two
-callers. Keep root-to-leaf ancestors API for breadcrumbs, same cycle/depth/duplicate
-handling and first-ID match. Existing folder/directory/import tests cover them.
+Next search: replay_epoch eagerly builds RecordChange history (cloned before/after
+entries/attachments) for every replay, including command preparation, receipt and
+projection checks that never read it. Inspect/audit all Replay.history consumers
+before design. Candidate first step: extract display-history construction from
+verification into private helper, preserving exact output/order; commit separately.
+Then consider optional internal materialization while public Machine.replay and
+Vault.sync_replay keep full history, and every path still verifies entire causal/
+crypto history. history_verified must retain its current meaning. Avoid a confusing
+8th replay_epoch argument (Clippy limit); inspect full function before choosing.
+Minor fallback: Hierarchy.path currently collects Folder refs then name refs;
+map names before reverse/collect can remove one Vec, existing path tests cover.

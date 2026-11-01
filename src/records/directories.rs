@@ -26,7 +26,7 @@ pub(crate) struct DirectoryDraft {
 impl Directories {
     pub fn reveal(&mut self, vault: &Vault) {
         if let Some(id) = &self.selected {
-            for folder in folder::Hierarchy::new(vault.folders()).ancestors(id) {
+            for folder in folder::Hierarchy::new(vault.folders()).lineage(id) {
                 self.collapsed.remove(&folder.id);
             }
         }
