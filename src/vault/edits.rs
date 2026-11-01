@@ -89,17 +89,29 @@ impl Vault {
 
     pub fn save_folder(&mut self, folder: Folder) -> Result<()> {
         let shared = self.shared_snapshot();
-        let previous = self.folders.clone();
-        if let Some(slot) = self.folders.iter_mut().find(|item| item.id == folder.id) {
-            *slot = folder;
-        } else {
+        let index = self
+            .folders
+            .iter()
+            .position(|item| item.id == folder.id)
+            .unwrap_or(self.folders.len());
+        let previous = if index == self.folders.len() {
             self.folders.push(folder);
-        }
+            None
+        } else {
+            Some(std::mem::replace(&mut self.folders[index], folder))
+        };
+        let undo = move |vault: &mut Self| {
+            if let Some(folder) = previous {
+                vault.folders[index] = folder;
+            } else {
+                vault.folders.remove(index);
+            }
+        };
         if let Err(error) = folder::validate(&self.folders, &self.entries) {
-            self.folders = previous;
+            undo(self);
             return Err(VaultError::InvalidFolders(error));
         }
-        self.commit_edit(shared, move |vault| vault.folders = previous)
+        self.commit_edit(shared, undo)
     }
 
     /// Removes a subtree, moving its records into the removed folder's parent.

@@ -5,21 +5,21 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 34; 398 library, four integration, two doctests passed.
+Last full suite: cycle 35; 400 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 34: Stream bounded dependency hints
-- Object dependencies return borrowed iterator; discovery and transfer traversal
-  consume directly. Publication explicitly collects its queued graph lists.
-- Keep order, duplicates, membership/previous anchors, normal cap 64 and recovery
-  cap 512. Public APIs, canonical bytes and authority checks unchanged.
-- Regression passed before refactor: over-limit change/control/transfer/recovery
-  hints bounded; duplicate previous parent and empty dependencies preserved.
-- Full suite passed: 398 library, four integration, two doctests; two OS probes
+Cycle 35: Narrow folder-save rollback
+- Retain replaced folder or appended slot for local undo; remove full folder
+  collection clone. One undo closure handles validation and persistence failure.
+- Keep shared full-view snapshot because recovery can replace both collections.
+- Two regressions passed before refactor: local invalid edits/write failures keep
+  positions/data/history/disk; shared update/insert retries retain exact intent
+  and add one event, surviving reopen.
+- Full suite passed: 400 library, four integration, two doctests; two OS probes
   ignored. Formatting and strict all-target Clippy passed. Source byte-matches
   verified snapshot; workspace whitespace checks passed.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-34.k3bGm1 when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-35.o9Mw67 when workspace cannot compile.
 
-Next search: publication graph bookkeeping, local edit rollback, settings.
+Next search: subtree assignment undo, duplicate-ID deletion, publication graph.
 Inspect current code and tests before choosing; no quota-driven edits.

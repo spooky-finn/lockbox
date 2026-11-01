@@ -208,3 +208,114 @@ fn shared_import_batch_retry_preserves_existing_records_and_reserved_intent() {
     }
     assert_eq!(reopened.folders(), [folder]);
 }
+
+#[test]
+fn local_folder_upserts_restore_position_after_validation_and_write_failures() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("local-folders.lbx");
+    let password = SecretString::from("master".to_owned());
+    let mut vault = Vault::create(
+        &path,
+        &password,
+        KdfParams {
+            memory_kib: 8192,
+            passes: 1,
+            lanes: 1,
+        },
+    )
+    .unwrap();
+    let first = Folder::new("First".into(), None);
+    let second = Folder::new("Second".into(), None);
+    let original = [first.clone(), second.clone()];
+    let mut entry = Entry::new();
+    entry.title = "Keep this record".into();
+    entry.password = "fictional secret".into();
+    entry.folder_id = Some(first.id.clone());
+    entry
+        .add_attachment("keep.bin".into(), vec![0, 255, 42])
+        .unwrap();
+    vault
+        .append_records(&original, std::slice::from_ref(&entry))
+        .unwrap();
+    let before = fs::read(&path).unwrap();
+    let history = vault.record_history().unwrap().len();
+
+    let mut duplicate = first.clone();
+    duplicate.name = " Second ".into();
+    let mut cycle = second.clone();
+    cycle.parent_id = Some(second.id.clone());
+    for invalid in [
+        duplicate,
+        Folder::new("Missing parent".into(), Some("missing".into())),
+        cycle,
+    ] {
+        assert!(matches!(
+            vault.save_folder(invalid),
+            Err(VaultError::InvalidFolders(_))
+        ));
+        assert_eq!(vault.folders(), original);
+        assert_eq!(vault.entries(), std::slice::from_ref(&entry));
+        assert_eq!(fs::read(&path).unwrap(), before);
+    }
+    let mut renamed = first;
+    renamed.name = "Renamed".into();
+    let inserted = Folder::new("Inserted".into(), Some(renamed.id.clone()));
+    let temporary = path.with_extension("lbx.tmp");
+    fs::create_dir(&temporary).unwrap();
+    for folder in [&renamed, &inserted] {
+        assert!(vault.save_folder(folder.clone()).is_err());
+        assert_eq!(vault.folders(), original);
+        assert_eq!(vault.entries(), std::slice::from_ref(&entry));
+        assert_eq!(vault.record_history().unwrap().len(), history);
+        assert_eq!(fs::read(&path).unwrap(), before);
+    }
+    fs::remove_dir(temporary).unwrap();
+    vault.save_folder(renamed.clone()).unwrap();
+    vault.save_folder(inserted.clone()).unwrap();
+    let expected = [renamed, second, inserted];
+    assert_eq!(vault.folders(), expected);
+    drop(vault);
+    let reopened = Vault::open(&path, &password).unwrap();
+    assert_eq!(reopened.folders(), expected);
+    assert_eq!(reopened.entries(), &[entry]);
+}
+
+#[test]
+fn shared_folder_upserts_retry_retained_intents_after_restoring_readable_view() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = ProfileStore::new(Arc::new(MemoryWitness::default()));
+    let path = directory.path().join("shared-folders.lbx");
+    let mut vault = sharing_tests::create(&store, &path);
+    let parent = Folder::new("Parent".into(), None);
+    vault.save_folder(parent.clone()).unwrap();
+    let mut entry = Entry::new();
+    entry.title = "Preserved record".into();
+    entry.folder_id = Some(parent.id.clone());
+    vault.upsert_entry(entry.clone()).unwrap();
+    let mut renamed = parent;
+    renamed.name = "Renamed parent".into();
+    let child = Folder::new("Child".into(), Some(renamed.id.clone()));
+    let temporary = path.with_extension("lbx.tmp");
+    for folder in [&renamed, &child] {
+        let folders = vault.folders().to_vec();
+        let objects = vault.sync_state().unwrap().objects.len();
+        fs::create_dir(&temporary).unwrap();
+        assert!(vault.save_folder(folder.clone()).is_err());
+        assert_eq!(vault.folders(), folders);
+        assert_eq!(vault.entries(), std::slice::from_ref(&entry));
+        assert!(vault.sync_state().unwrap().intent.is_some());
+        fs::remove_dir(&temporary).unwrap();
+        vault.save_folder(folder.clone()).unwrap();
+        assert!(vault.sync_state().unwrap().intent.is_none());
+        assert_eq!(vault.sync_state().unwrap().objects.len(), objects + 1);
+        assert!(vault.folders().contains(folder));
+    }
+    drop(vault);
+    let reopened = store
+        .open(&path, &SecretString::from("test master".to_owned()))
+        .unwrap();
+    assert_eq!(reopened.folders().len(), 2);
+    assert!(reopened.folders().contains(&renamed));
+    assert!(reopened.folders().contains(&child));
+    assert_eq!(reopened.entries(), &[entry]);
+}
