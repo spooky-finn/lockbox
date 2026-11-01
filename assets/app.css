@@ -227,7 +227,8 @@ input.switch:disabled { opacity: .45; cursor: default; }
 .count { padding: 2px 7px; min-width: 23px; border-radius: 8px; background: var(--control); color: var(--muted); text-align: center; font-size: 11px; font-variant-numeric: tabular-nums; }
 .search-field { position: relative; margin: 0 3px 10px; }
 .search-field > .symbol { position: absolute; left: 9px; top: 7px; width: 14px; height: 14px; color: var(--muted); pointer-events: none; }
-.search-field > input[type=search] { height: 28px; padding: 4px 9px 4px 28px; line-height: 18px; border-radius: 8px; background: var(--control); box-shadow: inset 0 1px 2px rgb(20 35 60 / 3%); font-size: 12px; }
+/* Override the shared input rule so text keeps clear of the search icon. */
+.search-field > #search { height: 28px; padding: 4px 9px 4px 28px; line-height: 18px; border-radius: 8px; background: var(--control); box-shadow: inset 0 1px 2px rgb(20 35 60 / 3%); font-size: 12px; }
 .sidebar nav { flex: 1; min-height: 0; overflow: auto; padding: 3px; }
 .vault-tree, .tree-branch { list-style: none; margin: 0; padding: 0; }
 .tree-branch { margin: 1px 0 2px 8px; padding-left: 9px; border-left: 1px solid var(--separator); }

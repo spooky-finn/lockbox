@@ -662,7 +662,7 @@ impl Text {
             Self::AutoInitial => ("авто: буква", "auto: initial"),
             Self::ChooseIcon => ("Выбрать иконку…", "Choose icon…"),
             Self::ChooseIconAutomatically => ("Подобрать иконку автоматически", "Choose icon automatically"),
-            Self::SharingParticipants => ("Участники и доступ", "Sharing and participants"),
+            Self::SharingParticipants => ("Участники", "Members"),
             Self::Attachments => ("Файлы", "Files"),
             Self::AddAttachment => ("Добавить файл", "Add file"),
             Self::RemoveAttachment => ("Удалить файл", "Remove file"),
