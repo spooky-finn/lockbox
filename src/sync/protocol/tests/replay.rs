@@ -84,12 +84,32 @@ fn selected_record_history_matches_full_filter_without_weakening_verification() 
     second
         .add_attachment("second.bin".into(), vec![3, 2, 1])
         .unwrap();
-    let initial = edit(&mut state, &device, vec![first.clone(), second.clone()]);
+    let mut folder = crate::records::folder::Folder {
+        id: first.id.clone(),
+        name: "Folder".into(),
+        parent_id: None,
+    };
+    let initial = commit(
+        &mut state,
+        &device,
+        Transaction::diff(
+            &Projection::default(),
+            &[first.clone(), second.clone()],
+            &[folder.clone()],
+        )
+        .unwrap(),
+    );
     edit(&mut state, &device, vec![first.clone()]);
     let (guest, certificate) = identity(2);
     admit(&mut state, &device, &guest, certificate, Role::Editor);
     first.password = "after checkpoint".into();
     edit(&mut state, &device, vec![first.clone(), second.clone()]);
+    folder.name = "Renamed folder".into();
+    let before = Machine::replay(&state, &device).unwrap();
+    let rename =
+        Transaction::diff(&before.projection, &before.projection.entries(), &[folder]).unwrap();
+    commit(&mut state, &device, rename);
+    commit(&mut state, &device, empty_transaction());
     let mut concurrent = state.clone();
     first.password = "owner conflict".into();
     edit(&mut state, &device, vec![first.clone(), second.clone()]);
@@ -97,6 +117,7 @@ fn selected_record_history_matches_full_filter_without_weakening_verification() 
     edit(&mut concurrent, &guest, vec![first.clone(), second.clone()]);
     deliver(&concurrent, &mut state);
     let full = Machine::replay(&state, &device).unwrap();
+    assert_eq!(full.history.len(), 7);
     assert_eq!(full.projection.conflicts().count(), 1);
     assert!(full.history.iter().any(|change| change.action == "Delete"));
     assert!(full.history.iter().any(|change| change.action == "Restore"));

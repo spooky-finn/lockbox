@@ -4,7 +4,7 @@ use crate::records::history::RecordChange;
 use crate::sync::{
     identity::Key,
     protocol::{
-        DeviceSecret, Error, Hash, Object, Projection, Result, Role, Signed, Transaction,
+        DeviceSecret, Error, Hash, Mutation, Object, Projection, Result, Role, Signed, Transaction,
         canonical,
         crypto::{self, nonce},
         decode,
@@ -32,12 +32,13 @@ impl RecordHistory<'_> {
         !matches!(self, Self::Omit)
     }
 
-    fn includes(self, id: &str) -> bool {
-        match self {
-            Self::Omit => false,
-            Self::All => true,
-            Self::Record(selected) => selected == id,
-        }
+    fn includes(self, mutation: &Mutation) -> bool {
+        mutation.entity.kind == crate::sync::protocol::EntityKind::Entry
+            && match self {
+                Self::Omit => false,
+                Self::All => true,
+                Self::Record(selected) => selected == mutation.entity.id,
+            }
     }
 }
 
@@ -343,7 +344,13 @@ impl EpochContext<'_> {
         // Ancestry validation is required even when display revisions are omitted.
         for hash in &included {
             let depth = ancestry(&accepted[hash].header.parents, &accepted)?.len();
-            if let Some(ordered) = &mut ordered {
+            if let Some(ordered) = &mut ordered
+                && accepted[hash]
+                    .transaction
+                    .mutations
+                    .iter()
+                    .any(|mutation| record_history.includes(mutation))
+            {
                 ordered.push((depth, hash));
             }
         }
@@ -392,9 +399,7 @@ fn materialize_history(
                 .unwrap_or_else(|| author.to_string())
         });
         for (index, mutation) in change.transaction.mutations.iter().enumerate() {
-            if mutation.entity.kind != crate::sync::protocol::EntityKind::Entry
-                || !record_history.includes(&mutation.entity.id)
-            {
+            if !record_history.includes(mutation) {
                 continue;
             }
             let before = mutation

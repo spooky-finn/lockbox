@@ -9,34 +9,22 @@ Last full suite: cycle 78; 419 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 78: Materialize selected record revisions only
-- Private RecordHistory Omit/All/Record mode replaces bool. Public replay/full
-  record_history stay complete; state and selected paths share every validation,
-  ancestry check, projection/frontier and diagnostic. Selected=None uses Omit,
-  still verifies complete journal and preserves all errors.
-- Shared materializer filters Entry mutation ID before before/after payload clones.
-  Vault callback selector accepts FnOnce for record-ID capture, retains same guard,
-  profile lookup, secret lifetime and error mapping. Local filter clones matches
-  only. Private record_history_for feeds view; trash remains full-history consumer.
-- View uses selected vector is_empty/iter.rev, removes duplicated ID predicates.
-  Same order, revision indices, masking/reveal hooks, headings and error rendering.
-- Eight baseline checks passed before refactor. New full-filter byte oracle covers
-  two records/attachments, delete/restore across checkpoint, conflicts, unavailable
-  older keys, matching/missing/None IDs, pending/fault/malformed history. Vault
-  covers local/shared selection and pending commits even None; rendering covers
-  switching records, missing/empty selection and hidden secrets. Two new tests.
-- Full suite: 419 library, four integration, two doctests passed; two OS probes
-  ignored. Formatting/strict all-target Clippy passed. All eight sources match
-  verified snapshot; whitespace clean. Unrelated edits untouched.
-- Snapshot: /tmp/lockbox-refactor-78.cu1abs8l.
+Cycle 79: Select events with displayed record revisions
+- RecordHistory.includes takes Mutation; Entry-kind and optional ID match live
+  once. Ordering collector and row materializer share predicate.
+- Every included event still runs fallible ancestry validation first. Only events
+  with matching Entry mutations enter display sort and actor lookup. Depth/hash
+  order and original mutation indices unchanged. Omit still scans no mutations.
+- Baseline full-filter oracle passed before change. Fixture adds mixed Entry and
+  Folder sharing ID, folder-only edit, empty event, expected seven record rows;
+  retains checkpoints, conflicts, missing dependencies, faults and error parity.
+- Formatting/strict all-target Clippy passed. 58 protocol, five vault-history,
+  nine record-view and two integration tests passed. Both sources match verified
+  snapshot; whitespace clean. Unrelated edits untouched.
+- Snapshot: /tmp/lockbox-refactor-79.dlg4m9_n.
 
-Next search: selected history still collects/sorts order metadata for every change
-and derives actor IDs for changes with no displayed rows. Consider centralizing
-Entry-kind plus ID predicate in RecordHistory.includes(&Mutation), using it both
-for materializer and transaction.any before order push. Keep fallible ancestry
-call for EVERY included hash before filtering. Depth counts full ancestry, so
-relative depth/hash row order stays same; mutation.enumerate must retain original
-wire indices. Omit stays no ordering; All may omit folder-only/empty changes with
-no record rows. Add baseline mixed Entry/Folder same-ID and folder-only event
-fixture/expected row count to full-filter oracle before changing; public full
-history, verification, state fields and errors must stay identical. Inspect first.
+Next search: Hierarchy.path currently creates ancestors Vec<&Folder>, reverses,
+then collects a second Vec<&str> before join. Existing bounded lineage iterator
+can map names directly into one Vec, reverse once, join. Preserve first duplicate
+ID, cycles, missing parents, depth limit and stable options ordering; existing
+folder, directory and view tests cover boundaries. Inspect before changing.
