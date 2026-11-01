@@ -24,6 +24,7 @@ mod support;
 use support::*;
 
 mod intents;
+mod authority;
 mod invitations;
 mod membership;
 mod replay;

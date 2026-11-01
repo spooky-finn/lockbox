@@ -164,6 +164,7 @@ impl Machine {
     }
 
     pub fn accept_control_transfer(state: &SyncState, device: &DeviceSecret, offer: &ControlTransfer) -> Result<Signed<ControlApproval>> {
+        if state.intent.is_some() { return Err(Error::PendingIntent); }
         if offer.descriptor != state.descriptor() || offer.control.transition != Some(ControlTransition::Transfer)
             || offer.control.approval.is_some() || offer.control.controller != device.id() {
             return Err(Error::UnauthorizedDevice);
@@ -226,6 +227,11 @@ fn successor(state: &SyncState, previous: &Control, replay: &super::Replay, targ
     let mut control = build_control(epoch, previous.owner, target, members,
         replay.frontier.iter().copied().collect(), &replay.projection, &*crypto::random32()?)?;
     control.transition = Some(transition);
+    // Reserve enough bytes for both approvals before any signature can exist.
+    let mut sized = control.clone();
+    sized.approval = Some(Signed { body: ControlApproval { profile: APPROVAL_PROFILE.into(),
+        descriptor: state.descriptor(), statement: statement(&control)?, author: target }, signature: Blob(vec![0;64]) });
+    super::commands::capacity(state, Object::Control(Signed { body: sized, signature: Blob(vec![0;64]) }).bytes()?.len())?;
     Ok(control)
 }
 
