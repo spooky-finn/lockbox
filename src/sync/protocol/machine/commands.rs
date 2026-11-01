@@ -118,11 +118,7 @@ impl Machine {
     /// Quarantine downloads until their public authority can be authenticated.
     /// Plaintext and causal validity remain replay's responsibility.
     pub fn receive(state: &mut SyncState, expected: Hash, bytes: Vec<u8>) -> Result<bool> {
-        let object: Object = decode(&bytes)?;
-
-        if object.hash()? != expected {
-            return Err(Error::HashMismatch);
-        }
+        let object = Object::decode(&bytes, expected)?;
         if state.rejected_candidates.contains_key(&expected) {
             return Ok(false);
         }

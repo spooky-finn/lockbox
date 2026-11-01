@@ -8,6 +8,8 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer, de::DeserializeOwn
 use sha2::{Digest, Sha256};
 use zeroize::Zeroize;
 
+const OBJECT_DOMAIN: &[u8] = b"lockbox.sync.object\0";
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Default, Zeroize)]
 pub struct Hash(pub [u8; 32]);
 
@@ -131,8 +133,17 @@ impl Object {
     /// Serialize once when both the object hash and canonical bytes are needed.
     pub(super) fn encode(&self) -> Result<(Hash, Vec<u8>)> {
         let bytes = self.bytes()?;
-        let hash = Hash::digest(b"lockbox.sync.object\0", &bytes);
+        let hash = Hash::digest(OBJECT_DOMAIN, &bytes);
         Ok((hash, bytes))
+    }
+
+    /// Check canonical encoding before comparing the complete-object hash.
+    pub(crate) fn decode(bytes: &[u8], expected: Hash) -> Result<Self> {
+        let object = decode(bytes)?;
+        if Hash::digest(OBJECT_DOMAIN, bytes) != expected {
+            return Err(Error::HashMismatch);
+        }
+        Ok(object)
     }
 }
 

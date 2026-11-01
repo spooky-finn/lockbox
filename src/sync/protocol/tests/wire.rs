@@ -28,7 +28,7 @@ fn change_wire_contract_survives_internal_refactors() {
         "88a4ea5764e7a65286f301e2abfb66cb3c3eca91c753b3618ad7916736c5face"
     );
     assert_eq!(object.hash().unwrap(), hash);
-    let parsed: Object = decode(expected).unwrap();
+    let parsed = Object::decode(expected, hash).unwrap();
     assert_eq!(parsed.hash().unwrap(), object.hash().unwrap());
 }
 
@@ -50,6 +50,35 @@ fn wire_rejects_duplicates_unknown_fields_and_noncanonical_primitives() {
     let unknown = text.replacen('{', "{\"unknown\":0,", 1);
     assert!(decode::<Object>(unknown.as_bytes()).is_err());
     assert!(decode::<Object>(&vec![b' '; crate::sync::protocol::MAX_OBJECT_BYTES + 1]).is_err());
+}
+
+#[test]
+fn receive_checks_canonical_encoding_before_object_hash() {
+    let bytes = include_bytes!("../fixtures/change.json");
+    let noncanonical = [b" ".as_slice(), bytes.as_slice()].concat();
+    let oversized = vec![b' '; crate::sync::protocol::MAX_OBJECT_BYTES + 1];
+    let (mut state, _) = owner();
+    let before = canonical(&state).unwrap();
+    for (bytes, expected, error) in [
+        (bytes.as_slice(), Hash::default(), Error::HashMismatch),
+        (
+            noncanonical.as_slice(),
+            Hash::digest(b"lockbox.sync.object\0", &noncanonical),
+            Error::InvalidEncoding,
+        ),
+        (b"{".as_slice(), Hash::default(), Error::InvalidEncoding),
+        (
+            oversized.as_slice(),
+            Hash::default(),
+            Error::ResourceBudgetExceeded,
+        ),
+    ] {
+        assert_eq!(
+            Machine::receive(&mut state, expected, bytes.to_vec()),
+            Err(error)
+        );
+        assert_eq!(canonical(&state).unwrap(), before);
+    }
 }
 
 #[test]

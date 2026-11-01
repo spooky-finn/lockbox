@@ -1,7 +1,7 @@
 //! Authenticated control metadata, independent of content keys and projections.
 
 use crate::sync::protocol::{
-    Error, Hash, Object, Result, Signed, decode,
+    Error, Hash, Object, Result, Signed,
     machine::{membership::validate_control, protocol::Control, state::SyncState},
 };
 use std::collections::{BTreeMap, BTreeSet};
@@ -89,11 +89,7 @@ pub(super) fn with_history<T>(
 pub(super) fn controls(state: &SyncState) -> Result<BTreeMap<Hash, Signed<Control>>> {
     let mut controls = BTreeMap::new();
     for (hash, bytes) in &state.objects {
-        let object: Object = decode(&bytes.0)?;
-
-        if object.hash()? != *hash {
-            return Err(Error::HashMismatch);
-        }
+        let object = Object::decode(&bytes.0, *hash)?;
         if let Object::Control(control) = object {
             controls.insert(*hash, control);
         }

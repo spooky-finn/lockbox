@@ -51,11 +51,7 @@ impl Machine {
         let mut changes = BTreeMap::new();
 
         for (hash, bytes) in state.objects.iter().chain(&state.candidates) {
-            let object: Object = decode(&bytes.0)?;
-
-            if object.hash()? != *hash {
-                return Err(Error::HashMismatch);
-            }
+            let object = Object::decode(&bytes.0, *hash)?;
 
             match object {
                 Object::Control(control) => {

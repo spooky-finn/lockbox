@@ -131,10 +131,7 @@ pub(super) fn promote(state: &mut SyncState) -> Result<()> {
         let mut verified = Vec::new();
         let mut rejected = Vec::new();
         for (hash, bytes) in &state.candidates {
-            let object: Object = decode(&bytes.0)?;
-            if object.hash()? != *hash {
-                return Err(Error::HashMismatch);
-            }
+            let object = Object::decode(&bytes.0, *hash)?;
             match authenticated(*hash, &object, state, history.as_ref()) {
                 Ok(true) => verified.push(*hash),
                 Ok(false) => {}
