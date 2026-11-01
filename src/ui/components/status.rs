@@ -17,7 +17,7 @@ pub(super) fn StatusBar() -> Element {
 
     let editing = matches!(&*state.read(), Screen::Unlocked(workspace) if workspace.is_editing());
     rsx! {
-        footer { class: "status", aria_live: "polite",
+        div { class: "status", role: "status", aria_live: "polite",
             if let Some(seconds) = status.lock_seconds {
                 span { class: "notice", {language.format(Text::AutoLockInS, &[seconds.to_string()])}
                     if editing { {language.text(Text::UnsavedChangesWillBeDiscarded)} }

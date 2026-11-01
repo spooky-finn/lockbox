@@ -3,3 +3,4 @@
 *.lbx
 *.lbx.bak
 *.lbx.tmp
+.DS_Store

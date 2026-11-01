@@ -5,6 +5,7 @@ or the [developer guide](development.md) for build commands and layer boundaries
 
 | Question | Document | Scope |
 | --- | --- | --- |
+| Как устроена криптография и зачем столько шагов подключения? | [Подробное эссе на русском](cryptography-explained.ru.md) | Локальное шифрование, ключи, приглашения, синхронизация, отзыв доступа и восстановление |
 | How does sync work today? | [Sync engine](sync-engine.md) | Implemented experimental `LBX-SYNC-0` behavior, API and limits |
 | Where should a sync change live? | [Sync architecture](sync-architecture.md) | Module ownership, extension points and durability contracts |
 | How do rollback protection and recovery work? | [Profile protection](profile-protection.md) | Local witness, installation binding and recovery boundaries |

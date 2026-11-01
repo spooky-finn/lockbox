@@ -6,7 +6,7 @@ use super::{
 };
 use super::{
     directories::DirectoryView, directory_editor::DirectoryEditor, editor::DraftView,
-    entry::EntryView, sidebar::Sidebar, status::StatusBar, toolbar::Toolbar,
+    entry::EntryView, sidebar::Sidebar, toolbar::Toolbar,
 };
 use crate::app::session::Screen;
 use crate::ui::context::{Session, edit_unlocked};
@@ -57,7 +57,6 @@ pub(super) fn UnlockedView() -> Element {
                 else { VaultContent {} }
             }
         }
-        StatusBar {}
     }
 }
 
@@ -74,17 +73,7 @@ fn VaultContent() -> Element {
     };
     rsx! {
         if let Some(profile) = &unlocked.vault.profile {
-            if let Some(sync) = &profile.sync {
-                div { class: if matches!(unlocked.sync.status, crate::app::space_sync::Status::Saved | crate::app::space_sync::Status::Syncing | crate::app::space_sync::Status::Synced) { "sync-status" } else { "sync-status notice" },
-                    p { aria_live: "polite", {language.format(Text::PendingUpload, &[language.message(unlocked.sync.status.label()), sync.outbox.len().to_string()])} }
-                    button { class: "quiet", onclick: move |_| edit_unlocked(state, |u| {
-                    // Reconciliation updates the typed notice without installing
-                    // incoming history or disturbing an active draft.
-                    let _ = u.vault.reconcile_profile();
-                    u.sync.retry();
-                    }), {language.text(Text::RetrySync)} }
-                }
-            } else {
+            if profile.sync.is_none() {
                 p { class: "notice", {language.text(Text::ThisProfilePredatesSyncConfirmYourRecoveryPasswordToConnectExistingEntries)} }
                 form {
                     onsubmit: move |event: FormEvent| { event.prevent_default(); edit_unlocked(state, |u| u.activate_sync()); },
