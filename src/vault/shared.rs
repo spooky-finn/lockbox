@@ -177,9 +177,15 @@ impl Vault {
         self.replay_using(crate::sync::protocol::Machine::replay_state)
     }
 
+    pub(super) fn sync_replay_record(&self, record: Option<&str>) -> Result<Option<Replay>> {
+        self.replay_using(|state, device| {
+            crate::sync::protocol::Machine::replay_record_history(state, device, record)
+        })
+    }
+
     fn replay_using(
         &self,
-        replay: fn(&SyncState, &DeviceSecret) -> ProtocolResult<Replay>,
+        replay: impl FnOnce(&SyncState, &DeviceSecret) -> ProtocolResult<Replay>,
     ) -> Result<Option<Replay>> {
         self.ensure_exchange_committed()?;
         self.profile

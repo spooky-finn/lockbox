@@ -20,6 +20,27 @@ use crate::sync::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
+#[derive(Clone, Copy)]
+enum RecordHistory<'a> {
+    Omit,
+    All,
+    Record(&'a str),
+}
+
+impl RecordHistory<'_> {
+    fn requested(self) -> bool {
+        !matches!(self, Self::Omit)
+    }
+
+    fn includes(self, id: &str) -> bool {
+        match self {
+            Self::Omit => false,
+            Self::All => true,
+            Self::Record(selected) => selected == id,
+        }
+    }
+}
+
 impl Machine {
     /// Verify pinned control history, roles, signatures, dependencies and epoch
     /// closure, then derive the same projection for every ordering of that set.
@@ -28,18 +49,31 @@ impl Machine {
     /// persists integrity faults and retains its previous readable snapshot while
     /// dependencies are incomplete; inspect [`Replay::ready`] before installing it.
     pub fn replay(state: &SyncState, device: &DeviceSecret) -> Result<Replay> {
-        Self::replay_inner(state, device, true)
+        Self::replay_inner(state, device, RecordHistory::All)
     }
 
     /// Verify the complete history without allocating display-only record revisions.
     pub(crate) fn replay_state(state: &SyncState, device: &DeviceSecret) -> Result<Replay> {
-        Self::replay_inner(state, device, false)
+        Self::replay_inner(state, device, RecordHistory::Omit)
+    }
+
+    /// Verify the complete history, materializing only the selected record's revisions.
+    pub(crate) fn replay_record_history(
+        state: &SyncState,
+        device: &DeviceSecret,
+        record: Option<&str>,
+    ) -> Result<Replay> {
+        Self::replay_inner(
+            state,
+            device,
+            record.map_or(RecordHistory::Omit, RecordHistory::Record),
+        )
     }
 
     fn replay_inner(
         state: &SyncState,
         device: &DeviceSecret,
-        include_record_history: bool,
+        record_history: RecordHistory<'_>,
     ) -> Result<Replay> {
         if let Some(fault) = state.fault {
             return Err(fault);
@@ -168,7 +202,7 @@ impl Machine {
                 baseline: &baseline,
                 next,
             }
-            .replay(authenticated, &changes, &controls, include_record_history)?;
+            .replay(authenticated, &changes, &controls, record_history)?;
             result.history.extend(replayed.history);
             result.projection = replayed.projection;
             result.accepted.extend(replayed.accepted);
@@ -222,7 +256,7 @@ impl EpochContext<'_> {
         authenticated: AuthenticatedChanges<'_>,
         changes: &BTreeMap<Hash, Signed<Change>>,
         controls: &BTreeMap<Hash, Signed<Control>>,
-        include_record_history: bool,
+        record_history: RecordHistory<'_>,
     ) -> Result<EpochReplay> {
         let Self {
             membership,
@@ -305,7 +339,7 @@ impl EpochContext<'_> {
             frontier
         });
 
-        let mut ordered = include_record_history.then(Vec::new);
+        let mut ordered = record_history.requested().then(Vec::new);
         // Ancestry validation is required even when display revisions are omitted.
         for hash in &included {
             let depth = ancestry(&accepted[hash].header.parents, &accepted)?.len();
@@ -320,6 +354,7 @@ impl EpochContext<'_> {
                 baseline,
                 &accepted,
                 ordered.into_iter().map(|(_, hash)| *hash),
+                record_history,
             )
         } else {
             Vec::new()
@@ -341,6 +376,7 @@ fn materialize_history(
     baseline: &Projection,
     accepted: &BTreeMap<Hash, VerifiedChange<'_>>,
     ordered: impl IntoIterator<Item = Hash>,
+    record_history: RecordHistory<'_>,
 ) -> Vec<RecordChange> {
     let mut history = Vec::new();
     let mut actors = BTreeMap::new();
@@ -356,7 +392,9 @@ fn materialize_history(
                 .unwrap_or_else(|| author.to_string())
         });
         for (index, mutation) in change.transaction.mutations.iter().enumerate() {
-            if mutation.entity.kind != crate::sync::protocol::EntityKind::Entry {
+            if mutation.entity.kind != crate::sync::protocol::EntityKind::Entry
+                || !record_history.includes(&mutation.entity.id)
+            {
                 continue;
             }
             let before = mutation

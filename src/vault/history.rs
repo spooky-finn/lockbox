@@ -64,6 +64,20 @@ impl Vault {
         Ok(self.history.borrow().clone())
     }
 
+    /// Verify the complete journal before selecting display revisions, including no selection.
+    pub(crate) fn record_history_for(&self, record: Option<&str>) -> Result<Vec<RecordChange>> {
+        if let Some(replay) = self.sync_replay_record(record)? {
+            return Ok(replay.history);
+        }
+        Ok(self
+            .history
+            .borrow()
+            .iter()
+            .filter(|change| Some(change.id.as_str()) == record)
+            .cloned()
+            .collect())
+    }
+
     /// Deleted records with an accessible previous value. Never hides history failures.
     pub fn trash(&self) -> Result<Vec<Entry>> {
         self.select_trash(|trash| trash.into_values().cloned().collect())

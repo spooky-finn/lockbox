@@ -62,6 +62,23 @@ fn local_trash_keeps_latest_deleted_values_sorted_by_id_without_live_records() {
     vault.delete_entry(&first.id).unwrap();
     vault.delete_entry(&second.id).unwrap();
     let revisions = vault.record_history().unwrap().len();
+    let full = vault.record_history().unwrap();
+    for record in [
+        Some(first.id.as_str()),
+        Some(second.id.as_str()),
+        Some(live.id.as_str()),
+        None,
+        Some("missing"),
+    ] {
+        let expected: Vec<_> = full
+            .iter()
+            .filter(|change| Some(change.id.as_str()) == record)
+            .collect();
+        assert_eq!(
+            canonical(&vault.record_history_for(record).unwrap()).unwrap(),
+            canonical(&expected).unwrap()
+        );
+    }
 
     assert_eq!(vault.trash().unwrap(), [second, first.clone()]);
     assert_eq!(vault.record_history().unwrap().len(), revisions);
@@ -126,6 +143,22 @@ fn shared_trash_excludes_delete_edit_conflicts_and_folder_tombstones_with_same_i
     );
     assert!(!replay.history.is_empty());
     assert_eq!(canonical(&replay.history).unwrap(), history);
+    for record in [
+        Some(conflicted.id.as_str()),
+        Some(deleted.id.as_str()),
+        None,
+        Some("missing"),
+    ] {
+        let expected: Vec<_> = replay
+            .history
+            .iter()
+            .filter(|change| Some(change.id.as_str()) == record)
+            .collect();
+        assert_eq!(
+            canonical(&owner.record_history_for(record).unwrap()).unwrap(),
+            canonical(&expected).unwrap()
+        );
+    }
     assert_eq!(
         canonical(&owner.record_history().unwrap()).unwrap(),
         history

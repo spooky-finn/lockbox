@@ -5,37 +5,38 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 77; 417 library, four integration, two doctests passed.
+Last full suite: cycle 78; 419 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 77: Derive only a resolved current frontier
-- Private EpochReplay.current_frontier is Option, built lazily when next=None and
-  local pending empty. Closed/incomplete epochs avoid discarded set clone/removals.
-  Outer unchanged global pending guard runs before Some(frontier) sets ready.
-- next=None iff final chain index; empty global pending implies empty local pending,
-  so public readiness/frontier are equivalent. Some(empty) keeps empty epoch ready;
-  missing independent required_control remains blocked before frontier use.
-- Boundary assertions passed before refactor: empty resolved epoch, missing pinned
-  control, unavailable member history and missing closure/parent all retain expected
-  ready/frontier. Every fallible crypto/causal/ancestry check and order unchanged.
-- Full suite: 417 library, four integration, two doctests passed; two OS probes
-  ignored. Formatting/strict all-target Clippy passed. Both sources match verified
-  snapshot; whitespace clean. Unrelated edits untouched.
-- Snapshot: /tmp/lockbox-refactor-77.lnrsgzl8.
+Cycle 78: Materialize selected record revisions only
+- Private RecordHistory Omit/All/Record mode replaces bool. Public replay/full
+  record_history stay complete; state and selected paths share every validation,
+  ancestry check, projection/frontier and diagnostic. Selected=None uses Omit,
+  still verifies complete journal and preserves all errors.
+- Shared materializer filters Entry mutation ID before before/after payload clones.
+  Vault callback selector accepts FnOnce for record-ID capture, retains same guard,
+  profile lookup, secret lifetime and error mapping. Local filter clones matches
+  only. Private record_history_for feeds view; trash remains full-history consumer.
+- View uses selected vector is_empty/iter.rev, removes duplicated ID predicates.
+  Same order, revision indices, masking/reveal hooks, headings and error rendering.
+- Eight baseline checks passed before refactor. New full-filter byte oracle covers
+  two records/attachments, delete/restore across checkpoint, conflicts, unavailable
+  older keys, matching/missing/None IDs, pending/fault/malformed history. Vault
+  covers local/shared selection and pending commits even None; rendering covers
+  switching records, missing/empty selection and hidden secrets. Two new tests.
+- Full suite: 419 library, four integration, two doctests passed; two OS probes
+  ignored. Formatting/strict all-target Clippy passed. All eight sources match
+  verified snapshot; whitespace clean. Unrelated edits untouched.
+- Snapshot: /tmp/lockbox-refactor-78.cu1abs8l.
 
-Next opportunity: RecordsView history page materializes full history, then filters
-by selected ID twice. Consider private selected-record history projection to avoid
-cloning unrelated before/after records/attachments, while still verifying ENTIRE
-history including selected=None or missing ID. Public full replay/history unchanged.
-Possible typed RecordHistory mode: Omit/All/Record(&str), replacing include bool.
-Core replay_record_history(state, device, Option<&str>) selects Omit for None;
-materializer filters mutation.entity.id before cloning; all validation/order stays.
-Vault shared replay_using could accept impl FnOnce instead of fn pointer for ID
-capture; narrow pub(super) sync_replay_record helper feeds history.record_history_for.
-Local history filter clones matching change.id only. UI calls selected history,
-then is_empty and iter.rev (remove duplicate predicates); trash still full.
-Need full-filter byte oracle baseline and tests for matching/missing/None IDs,
-attachments, tombstones, conflicts, pending/fault errors even no selection, plus
-rendered selected-record masking/no-history behavior. Inspect actual tests/helpers
-before choosing design; this is candidate, no implementation started.
+Next search: selected history still collects/sorts order metadata for every change
+and derives actor IDs for changes with no displayed rows. Consider centralizing
+Entry-kind plus ID predicate in RecordHistory.includes(&Mutation), using it both
+for materializer and transaction.any before order push. Keep fallible ancestry
+call for EVERY included hash before filtering. Depth counts full ancestry, so
+relative depth/hash row order stays same; mutation.enumerate must retain original
+wire indices. Omit stays no ordering; All may omit folder-only/empty changes with
+no record rows. Add baseline mixed Entry/Folder same-ID and folder-only event
+fixture/expected row count to full-filter oracle before changing; public full
+history, verification, state fields and errors must stay identical. Inspect first.

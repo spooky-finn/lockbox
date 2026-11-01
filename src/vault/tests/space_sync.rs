@@ -713,6 +713,10 @@ fn failed_revocation_commit_blocks_old_epoch_publication_until_retry() {
         member.sync_replay(),
         Err(VaultError::PendingSyncCommit)
     ));
+    for record in [None, Some(member.entries[0].id.as_str())] {
+        let selected = member.record_history_for(record);
+        assert!(matches!(selected, Err(VaultError::PendingSyncCommit)));
+    }
     assert!(matches!(
         member.save_changes(),
         Err(VaultError::PendingSyncCommit)

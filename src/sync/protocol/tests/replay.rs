@@ -49,6 +49,75 @@ fn compare_replays(state: &SyncState, device: &DeviceSecret) -> Result<Replay, E
     }
 }
 
+fn compare_selected_history(state: &SyncState, device: &DeviceSecret, records: &[Option<&str>]) {
+    let full = Machine::replay(state, device);
+    for &record in records {
+        let selected = Machine::replay_record_history(state, device, record);
+        match (&full, selected) {
+            (Ok(full), Ok(selected)) => {
+                assert_eq!(replay_facts(full), replay_facts(&selected));
+                let expected: Vec<_> = full
+                    .history
+                    .iter()
+                    .filter(|change| Some(change.id.as_str()) == record)
+                    .collect();
+                assert_eq!(
+                    canonical(&selected.history).unwrap(),
+                    canonical(&expected).unwrap()
+                );
+            }
+            (Err(full), Err(selected)) => assert_eq!(*full, selected),
+            (Ok(_), Err(error)) => panic!("selected history failed: {error:?}"),
+            (Err(error), Ok(_)) => panic!("full history failed: {error:?}"),
+        }
+    }
+}
+
+#[test]
+fn selected_record_history_matches_full_filter_without_weakening_verification() {
+    let (mut state, device) = owner();
+    let mut first = entry(1, "first original");
+    first
+        .add_attachment("first.bin".into(), vec![0, 255, 42])
+        .unwrap();
+    let mut second = entry(2, "second original");
+    second
+        .add_attachment("second.bin".into(), vec![3, 2, 1])
+        .unwrap();
+    let initial = edit(&mut state, &device, vec![first.clone(), second.clone()]);
+    edit(&mut state, &device, vec![first.clone()]);
+    let (guest, certificate) = identity(2);
+    admit(&mut state, &device, &guest, certificate, Role::Editor);
+    first.password = "after checkpoint".into();
+    edit(&mut state, &device, vec![first.clone(), second.clone()]);
+    let mut concurrent = state.clone();
+    first.password = "owner conflict".into();
+    edit(&mut state, &device, vec![first.clone(), second.clone()]);
+    first.password = "guest conflict".into();
+    edit(&mut concurrent, &guest, vec![first.clone(), second.clone()]);
+    deliver(&concurrent, &mut state);
+    let full = Machine::replay(&state, &device).unwrap();
+    assert_eq!(full.projection.conflicts().count(), 1);
+    assert!(full.history.iter().any(|change| change.action == "Delete"));
+    assert!(full.history.iter().any(|change| change.action == "Restore"));
+    let records = [
+        Some(first.id.as_str()),
+        Some(second.id.as_str()),
+        None,
+        Some("missing"),
+    ];
+    compare_selected_history(&state, &device, &records);
+    compare_selected_history(&state, &guest, &records);
+    let mut incomplete = state.clone();
+    incomplete.objects.remove(&initial);
+    compare_selected_history(&incomplete, &device, &records);
+    let mut frozen = state.clone();
+    frozen.fault = Some(Error::DeviceFork);
+    compare_selected_history(&frozen, &device, &records);
+    state.objects.insert(state.genesis, Blob(b"{".to_vec()));
+    compare_selected_history(&state, &device, &records);
+}
+
 #[test]
 fn state_replay_preserves_closed_epochs_conflicts_and_unavailable_history() {
     let (mut state, device) = owner();

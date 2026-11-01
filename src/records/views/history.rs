@@ -30,7 +30,9 @@ pub(crate) fn RecordsView() -> Element {
     let records = if trash {
         u.vault.trash().map(Records::Trash)
     } else {
-        u.vault.record_history().map(Records::History)
+        u.vault
+            .record_history_for(u.selected.as_deref())
+            .map(Records::History)
     };
     let records = match records {
         Ok(records) => records,
@@ -63,8 +65,8 @@ pub(crate) fn RecordsView() -> Element {
                     if let Some(entry) = u.selected_entry() { h2 { "{entry.title}" } }
                     p { class: "muted", {language.text(Text::HistoryHint)} }
                     if u.vault.sync_state().is_none() { p { class: "muted", {language.text(Text::LocalHistoryHint)} } }
-                    if !history.iter().any(|h| Some(&h.id) == u.selected.as_ref()) { p { {language.text(Text::NoRecordHistory)} } }
-                    for change in history.iter().rev().filter(|h| Some(&h.id) == u.selected.as_ref()) {
+                    if history.is_empty() { p { {language.text(Text::NoRecordHistory)} } }
+                    for change in history.iter().rev() {
                         section { class: "history-change", key: "{change.revision}",
                             h2 { {language.text(match change.action.as_str() { "Delete" => Text::Deleted, "Restore" => Text::HistoryRestored, "Resolve" => Text::HistoryResolved, _ if change.before.is_empty() => Text::HistoryCreated, _ => Text::HistoryUpdated })} }
                             p { {language.format(Text::HistoryAuthor, std::slice::from_ref(&change.actor))} }

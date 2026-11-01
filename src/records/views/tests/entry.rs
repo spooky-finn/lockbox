@@ -71,3 +71,46 @@ fn history_hides_secrets_and_trash_restores_record() {
     });
     assert!(!dioxus_ssr::render(&dom).contains("new-history-secret"));
 }
+
+#[test]
+fn history_follows_selection_and_keeps_other_record_contents_hidden() {
+    use crate::{desktop::workspace::Page, records::entry::Entry};
+    let mut dom = mounted();
+    let mut other_id = String::new();
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| {
+            u.vault.save_changes().unwrap();
+            let mut other = Entry::new();
+            other.title = "Other history record".into();
+            other.username = "other-history-login".into();
+            other.password = "other-history-secret".into();
+            other_id = other.id.clone();
+            u.vault.upsert_entry(other).unwrap();
+            u.open_records_page(Page::History);
+        })
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("alice"));
+    assert!(!html.contains("other-history-login"));
+    assert!(!html.contains("private-test-password"));
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| u.selected = Some(other_id))
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("other-history-login"));
+    assert!(!html.contains("other-history-secret"));
+    for selected in [Some("missing".to_owned()), None] {
+        update(&mut dom, |state| {
+            edit_unlocked(state, |u| u.selected = selected)
+        });
+        let html = dioxus_ssr::render(&dom);
+        assert!(!html.contains("class=\"history-change\""));
+        assert!(!html.contains("other-history-login"));
+        assert!(
+            html.contains(
+                crate::settings::language::Language::Russian
+                    .text(crate::desktop::i18n::Text::NoRecordHistory)
+            )
+        );
+    }
+}
