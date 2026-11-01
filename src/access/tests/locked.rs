@@ -89,6 +89,7 @@ fn cloud_submit_validates_then_offers_identity_creation() {
     assert!(!html.contains("id=\"recovery-password\""));
     assert!(!html.contains("id=\"recovery-repeat\""));
     assert!(html.contains("Создать профиль и ключи…"));
+    assert!(!html.contains("lock-emblem"));
 }
 
 #[test]
@@ -146,16 +147,21 @@ fn recovery_words_are_hidden_until_revealed_and_removed_when_setup_is_left() {
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("Show recovery words"));
     assert!(!html.contains(words));
+    assert!(!html.contains("recovery-word-display"));
     update(&mut dom, |state| {
         edit_locked(state, |form| form.show_recovery_words = true)
     });
     let html = dioxus_ssr::render(&dom);
-    assert!(html.contains(words));
+    assert!(html.contains("recovery-word-display"));
+    assert_eq!(html.matches(">abandon</span>").count(), 11);
+    assert!(html.contains(">about</span>"));
     assert!(html.contains("id=\"recovery-saved\""));
     update(&mut dom, |state| {
         edit_locked(state, |form| form.edit_cloud_connection())
     });
-    assert!(!dioxus_ssr::render(&dom).contains(words));
+    let html = dioxus_ssr::render(&dom);
+    assert!(!html.contains("recovery-word-display"));
+    assert!(!html.contains(">abandon</span>"));
 }
 
 #[test]

@@ -71,16 +71,18 @@ pub(crate) fn LockedView() -> Element {
     rsx! {
         section { class: if cloud_password || recovering { "lock-screen recovery-screen" } else { "lock-screen" }, aria_label: language.text(Text::UnlockVault),
             div { class: "unlock-content",
-                LockMark {
-                    if touch_id {
-                        IconButton { class: "lock-badge touch-id", icon: Icon::Fingerprint, label: language.text(Text::UnlockWithTouchID), disabled: busy,
-                            onclick: move |_| {
-                                let biometrics = hardware.for_language(language);
-                                edit_locked(state, |locked| locked.start_touch_id(biometrics));
-                            },
+                if !cloud_password {
+                    LockMark {
+                        if touch_id {
+                            IconButton { class: "lock-badge touch-id", icon: Icon::Fingerprint, label: language.text(Text::UnlockWithTouchID), disabled: busy,
+                                onclick: move |_| {
+                                    let biometrics = hardware.for_language(language);
+                                    edit_locked(state, |locked| locked.start_touch_id(biometrics));
+                                },
+                            }
+                        } else {
+                            span { class: "lock-badge", aria_hidden: "true", Symbol { icon: Icon::Lock } }
                         }
-                    } else {
-                        span { class: "lock-badge", aria_hidden: "true", Symbol { icon: Icon::Lock } }
                     }
                 }
                 h1 { class: "unlock-title",
@@ -165,19 +167,11 @@ pub(crate) fn LockedView() -> Element {
                         }
 
                         if cloud_password || recovering {
-                            label { r#for: "recovery-words", {language.text(Text::RecoveryWords)} }
-                            p { class: "muted", {language.text(Text::RecoveryWordsHint)} }
+                            p { id: "recovery-words-label", class: "recovery-label", {language.text(Text::RecoveryWords)} }
+                            p { id: "recovery-words-hint", class: "muted", {language.text(Text::RecoveryWordsHint)} }
                             if recovering || locked.importing_words || locked.show_recovery_words {
-                                textarea { id: "recovery-words", rows: 4, autocomplete: "off", spellcheck: "false",
+                                super::recovery_words::RecoveryWordsInput {
                                     readonly: !recovering && !locked.importing_words, disabled: busy,
-                                    value: locked.recovery_words.as_str(),
-                                    oninput: move |event| {
-                                        let value = Zeroizing::new(event.value());
-                                        edit_locked(state, |locked| {
-                                            replace_secret(&mut locked.recovery_words, &value);
-                                            locked.words_saved = false;
-                                        });
-                                    },
                                 }
                             }
                             if cloud_password {
@@ -210,10 +204,10 @@ pub(crate) fn LockedView() -> Element {
                             }
                         }
                         if recovering {
-                            button { r#type: "submit", class: "setup-button", disabled: busy, {language.text(Text::ResetPasswordAndUnlock)} }
+                            button { id: "recovery-submit", r#type: "submit", class: "setup-button", disabled: busy, {language.text(Text::ResetPasswordAndUnlock)} }
                         }
                         if cloud_password {
-                            button { r#type: "submit", class: "setup-button", disabled: busy, {language.text(Text::CreateProfileAndKeys)} }
+                            button { id: "recovery-submit", r#type: "submit", class: "setup-button", disabled: busy, {language.text(Text::CreateProfileAndKeys)} }
                         }
                     }
                 }

@@ -139,9 +139,30 @@ h2 { font-size: 15px; font-weight: 600; letter-spacing: -.2px; }
 .lock-screen.recovery-screen { display: flex; flex-direction: column; gap: 24px; }
 .recovery-screen .unlock-content { flex: 0 0 auto; }
 .recovery-screen .lock-actions { position: static; transform: none; }
-.unlock-form:has(#recovery-saved), .unlock-form:has(#recovery-words) { width: 340px; }
+.recovery-screen .unlock-form { width: 100%; }
+.recovery-screen .unlock-content > .notice { margin: 12px 0; font-size: 12px; }
+.recovery-label { margin-top: 6px; font-weight: 600; text-align: left; }
+.recovery-label + .muted { text-align: left; font-size: 12px; }
+.recovery-word-editor { width: 100%; text-align: left; }
+.recovery-input-hint, .recovery-word-status { font-size: 11px; line-height: 1.5; }
+.recovery-input-hint { margin-bottom: 10px; }
+.recovery-word-status { margin-top: 10px; }
+.recovery-word-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.recovery-word-cell { position: relative; min-width: 0; }
+.recovery-word-number { color: var(--lock-secondary); font-size: 11px; font-variant-numeric: tabular-nums; user-select: none; }
+.recovery-word-cell > label { position: absolute; z-index: 1; left: 10px; top: 50%; transform: translateY(-50%); pointer-events: none; }
+.recovery-word-cell > input[type=text] { padding: 10px 8px 10px 32px; border: 1px solid var(--lock-field-border); border-radius: 8px; color: var(--lock-ink); background: var(--lock-field); box-shadow: none; font-size: 12px; }
+.recovery-word-cell > input[aria-invalid=true] { border-color: var(--error); }
+.recovery-word-cell > input:focus-visible { outline: none; border-color: var(--lock-focus); box-shadow: 0 0 0 2px rgb(174 136 67 / 35%); }
+.recovery-word-cell:focus-within { z-index: 2; }
+.recovery-suggestions { position: absolute; z-index: 3; top: calc(100% + 4px); left: 0; min-width: 100%; width: max-content; margin: 0; padding: 4px; list-style: none; border: 1px solid var(--lock-field-border); border-radius: 8px; color: var(--lock-ink); background: var(--lock-canvas); box-shadow: var(--shadow); font-size: 12px; }
+.recovery-suggestions > li { padding: 6px 10px; border-radius: 4px; cursor: pointer; }
+.recovery-suggestions > li[aria-selected=true], .recovery-suggestions > li:hover { background: var(--selected); }
+.recovery-word-display { margin: 0; padding: 0; list-style: none; text-align: left; }
+.recovery-word-display > li { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 10px; border: 1px solid var(--lock-field-border); border-radius: 8px; background: var(--lock-field); font-size: 12px; user-select: text; }
+.recovery-word-display .recovery-word-number { min-width: 14px; }
+@media (max-width: 420px) { .recovery-word-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .recovery-saved { display: flex; align-items: center; gap: 8px; text-align: left; }
-.unlock-form textarea { line-height: 1.6; text-align: left; }
 .unlock-input { position: relative; height: 34px; border: 1px solid var(--lock-field-border); border-radius: 8px; background: var(--lock-field); transition: border-color 140ms, box-shadow 140ms; }
 .unlock-input:focus-within { border-color: var(--lock-focus); box-shadow: 0 0 0 3px rgb(174 136 67 / 45%); }
 .unlock-input > input[type=password] { height: 100%; padding: 6px 32px 6px 10px; border: 0; border-radius: inherit; color: var(--lock-ink); background: transparent; box-shadow: none; font-size: 12px; text-align: center; caret-color: var(--lock-focus); }
