@@ -72,7 +72,7 @@ pub(super) fn tick() {
     {
         let mut state = consume_context::<Session>();
         // Avoid notifying the whole UI at 10 Hz while the network worker waits.
-        let should_tick = matches!(&*state.peek(), Screen::Unlocked(u) if u.vault.profile.as_ref().is_some_and(|p| p.sync.is_some()) && u.sync.needs_tick(u.is_editing()));
+        let should_tick = matches!(&*state.peek(), Screen::Unlocked(u) if u.sync.needs_tick_for(&u.vault, u.is_editing()));
         if should_tick {
             state.with_mut(|screen| {
                 if let Screen::Unlocked(workspace) = screen {
@@ -164,7 +164,7 @@ pub(super) fn begin_create() {
     let mut state = consume_context::<Session>();
     let mut form = Locked::new(None);
     form.mode = Mode::Create;
-    *state.write() = Screen::Locked(form);
+    *state.write() = Screen::Locked(Box::new(form));
 }
 
 pub(super) fn create_cloud_profile() {
@@ -211,7 +211,7 @@ pub(super) fn pick_vault(create: bool) {
             form.storage_kind = Some(StorageKind::Local);
             form.error = None;
         }
-        *state.write() = Screen::Locked(form);
+        *state.write() = Screen::Locked(Box::new(form));
     }
 }
 
@@ -220,7 +220,7 @@ pub(super) fn forget_path() {
     let mut state = consume_context::<Session>();
     let mut form = Locked::new(None);
     form.error = settings.write().remember(None).err();
-    *state.write() = Screen::Locked(form);
+    *state.write() = Screen::Locked(Box::new(form));
 }
 
 pub(super) fn set_touch_id(wanted: bool) {

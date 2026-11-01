@@ -1,7 +1,7 @@
 //! Storj's path-style S3 API with AWS Signature V4. No remote credential probes
 //! or uploads occur at construction, and response bodies never enter diagnostics.
 
-use super::sync::{Page, Result, Storage, TransportError};
+use super::sync::{Page, Result, Storage, StorageFactory, TransportError};
 use crate::core::sync::{Hash, MAX_OBJECT_BYTES};
 use hmac::{Hmac, Mac};
 use reqwest::{
@@ -21,6 +21,52 @@ pub struct Storj {
     access: Zeroizing<String>,
     secret: Zeroizing<String>,
     region: String,
+}
+
+/// Configuration-only factory; the HTTP client is created on a worker thread.
+/// Credentials are erased when the last factory reference is dropped.
+pub struct StorjFactory {
+    endpoint: String,
+    bucket: String,
+    access: Zeroizing<String>,
+    secret: Zeroizing<String>,
+    region: String,
+}
+
+impl StorjFactory {
+    /// Retain configuration without opening a connection or logging credentials.
+    pub fn new(endpoint: &str, bucket: &str, access: &str, secret: &str) -> Self {
+        Self::with_region(endpoint, bucket, access, secret, "us-east-1")
+    }
+
+    /// Use an explicit signing region; validation occurs in [`StorageFactory::connect`].
+    pub fn with_region(
+        endpoint: &str,
+        bucket: &str,
+        access: &str,
+        secret: &str,
+        region: &str,
+    ) -> Self {
+        Self {
+            endpoint: endpoint.into(),
+            bucket: bucket.into(),
+            access: Zeroizing::new(access.into()),
+            secret: Zeroizing::new(secret.into()),
+            region: region.into(),
+        }
+    }
+}
+
+impl StorageFactory for StorjFactory {
+    fn connect(&self) -> Result<Box<dyn Storage + Send>> {
+        Ok(Box::new(Storj::with_region(
+            &self.endpoint,
+            &self.bucket,
+            &self.access,
+            &self.secret,
+            &self.region,
+        )?))
+    }
 }
 
 impl Storj {

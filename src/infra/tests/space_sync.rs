@@ -329,3 +329,210 @@ fn failed_activation_keeps_existing_records_readable_and_recoverable() {
     assert_eq!(vault.entries[0].title, "Keep this");
     assert!(vault.space_descriptor().is_some());
 }
+
+#[test]
+fn incomplete_change_commit_failure_rolls_back_the_candidate_journal() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("profile.lbx");
+    let mut vault = profile_vault(&path, "Alice");
+    vault.entries.push(entry("Readable baseline"));
+    vault.save_changes().unwrap();
+    let profile = vault.profile.as_ref().unwrap();
+    let device = profile.sync_secret();
+    let mut remote = profile.sync.as_ref().unwrap().clone();
+    let mut latest = vault.entries.clone();
+    latest[0].title = "Missing parent".into();
+    let before = Machine::replay(&remote, &device).unwrap().projection;
+    remote.intent = Some(
+        Machine::prepare(
+            &remote,
+            &device,
+            Transaction::diff(&before, &latest, &[]).unwrap(),
+        )
+        .unwrap(),
+    );
+    Machine::complete_intent(&mut remote, &device).unwrap();
+    latest[0].title = "Delayed child".into();
+    let before = Machine::replay(&remote, &device).unwrap().projection;
+    remote.intent = Some(
+        Machine::prepare(
+            &remote,
+            &device,
+            Transaction::diff(&before, &latest, &[]).unwrap(),
+        )
+        .unwrap(),
+    );
+    let child = Machine::complete_intent(&mut remote, &device).unwrap();
+    let previous = crate::core::sync::canonical(vault.sync_state().unwrap()).unwrap();
+    let file = std::fs::read(&path).unwrap();
+    std::fs::create_dir(sibling(&path, "tmp")).unwrap();
+    let partial = || Download {
+        objects: vec![(child, remote.objects[&child].0.clone())],
+        incomplete: true,
+    };
+    assert!(vault.receive_sync(partial()).is_err());
+    assert_eq!(
+        crate::core::sync::canonical(vault.sync_state().unwrap()).unwrap(),
+        previous
+    );
+    assert_eq!(std::fs::read(&path).unwrap(), file);
+    assert_eq!(vault.entries[0].title, "Readable baseline");
+    std::fs::remove_dir(sibling(&path, "tmp")).unwrap();
+    vault.receive_sync(partial()).unwrap();
+    assert!(vault.sync_state().unwrap().objects.contains_key(&child));
+    assert_eq!(vault.entries[0].title, "Readable baseline");
+    vault
+        .receive_sync(Download {
+            objects: remote
+                .objects
+                .into_iter()
+                .map(|(hash, bytes)| (hash, bytes.0))
+                .collect(),
+            incomplete: false,
+        })
+        .unwrap();
+    assert_eq!(vault.entries[0].title, "Delayed child");
+}
+
+#[test]
+fn missing_genesis_commit_failure_restores_the_empty_join_journal() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut owner = profile_vault(&directory.path().join("owner.lbx"), "Alice");
+    let path = directory.path().join("member.lbx");
+    let mut member = profile_vault(&path, "Bob");
+    owner
+        .set_space_members(vec![
+            (owner.device_certificate().unwrap(), Role::Owner),
+            (member.device_certificate().unwrap(), Role::Editor),
+        ])
+        .unwrap();
+    let state = owner.sync_state().unwrap();
+    let successor = state
+        .objects
+        .iter()
+        .find(|(hash, _)| **hash != state.genesis)
+        .map(|(hash, bytes)| (*hash, bytes.0.clone()))
+        .unwrap();
+    member
+        .join_space(owner.space_descriptor().unwrap())
+        .unwrap();
+    let previous = crate::core::sync::canonical(member.sync_state().unwrap()).unwrap();
+    std::fs::create_dir(sibling(&path, "tmp")).unwrap();
+    assert!(
+        member
+            .receive_sync(Download {
+                objects: vec![successor],
+                incomplete: true
+            })
+            .is_err()
+    );
+    assert_eq!(
+        crate::core::sync::canonical(member.sync_state().unwrap()).unwrap(),
+        previous
+    );
+    assert!(member.entries.is_empty());
+    std::fs::remove_dir(sibling(&path, "tmp")).unwrap();
+    member.receive_sync(delivery(&owner)).unwrap();
+    assert!(member.sync_replay().unwrap().unwrap().ready);
+}
+
+#[derive(Default)]
+struct ExchangeProbe {
+    reads: usize,
+    writes: usize,
+}
+
+impl crate::infra::sync::Storage for ExchangeProbe {
+    fn list(
+        &mut self,
+        _: crate::core::sync::Hash,
+        _: Option<&str>,
+    ) -> crate::infra::sync::Result<crate::infra::sync::Page> {
+        self.reads += 1;
+        Ok(crate::infra::sync::Page {
+            objects: vec![],
+            next: None,
+        })
+    }
+    fn get(
+        &mut self,
+        _: crate::core::sync::Hash,
+        _: crate::core::sync::Hash,
+    ) -> crate::infra::sync::Result<Vec<u8>> {
+        Err(crate::infra::sync::TransportError::NotFound)
+    }
+    fn put(
+        &mut self,
+        _: crate::core::sync::Hash,
+        _: crate::core::sync::Hash,
+        _: &[u8],
+    ) -> crate::infra::sync::Result<()> {
+        self.writes += 1;
+        Ok(())
+    }
+}
+
+#[test]
+fn failed_revocation_commit_blocks_old_epoch_publication_until_retry() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut owner = profile_vault(&directory.path().join("owner.lbx"), "Alice");
+    let path = directory.path().join("member.lbx");
+    let mut member = profile_vault(&path, "Bob");
+    owner
+        .set_space_members(vec![
+            (owner.device_certificate().unwrap(), Role::Owner),
+            (member.device_certificate().unwrap(), Role::Editor),
+        ])
+        .unwrap();
+    member
+        .join_space(owner.space_descriptor().unwrap())
+        .unwrap();
+    member.receive_sync(delivery(&owner)).unwrap();
+    member.entries.push(entry("Late offline edit"));
+    member.save_changes().unwrap();
+    let old_outbox = member.sync_state().unwrap().outbox.clone();
+    owner
+        .set_space_members(vec![(owner.device_certificate().unwrap(), Role::Owner)])
+        .unwrap();
+    std::fs::create_dir(sibling(&path, "tmp")).unwrap();
+    assert!(member.receive_sync(delivery(&owner)).is_err());
+    assert!(member.has_pending_exchange());
+    assert_eq!(member.sync_state().unwrap().outbox, old_outbox);
+    assert_eq!(member.entries[0].title, "Late offline edit");
+    assert!(matches!(
+        member.sync_replay(),
+        Err(VaultError::PendingSyncCommit)
+    ));
+    assert!(matches!(
+        member.save_changes(),
+        Err(VaultError::PendingSyncCommit)
+    ));
+    assert!(matches!(member.save(), Err(VaultError::PendingSyncCommit)));
+    let mut provider = ExchangeProbe::default();
+    assert!(member.synchronize(&mut provider).is_err());
+    assert_eq!((provider.reads, provider.writes), (0, 0));
+    std::fs::remove_dir(sibling(&path, "tmp")).unwrap();
+    member.recover_exchange().unwrap();
+    assert!(!member.has_pending_exchange());
+    assert!(member.sync_replay().unwrap().unwrap().role.is_none());
+    assert!(member.synchronize(&mut provider).is_err());
+    assert_eq!(provider.writes, 0);
+    assert_eq!(member.entries[0].title, "Late offline edit");
+}
+
+#[test]
+fn failed_acknowledgement_restores_receipts_and_exchange_time() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("profile.lbx");
+    let mut vault = profile_vault(&path, "Alice");
+    let outbox = vault.sync_state().unwrap().outbox.clone();
+    let hashes: Vec<_> = outbox.iter().copied().collect();
+    std::fs::create_dir(sibling(&path, "tmp")).unwrap();
+    assert!(vault.acknowledge_sync(&hashes, true).is_err());
+    assert_eq!(vault.sync_state().unwrap().outbox, outbox);
+    assert!(vault.sync_state().unwrap().last_exchange.is_none());
+    std::fs::remove_dir(sibling(&path, "tmp")).unwrap();
+    vault.acknowledge_sync(&hashes, true).unwrap();
+    assert!(vault.sync_state().unwrap().outbox.is_empty());
+    assert!(vault.sync_state().unwrap().last_exchange.is_some());
+}

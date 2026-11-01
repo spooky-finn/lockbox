@@ -1,0 +1,24 @@
+//! Protocol facade with separate command preparation, verification, and schemas.
+//!
+//! Public methods are implemented by responsibility in `commands` and `replay`.
+//! This facade never owns a provider, filesystem handle, clock, or UI state.
+
+mod commands;
+mod membership;
+mod protocol;
+mod replay;
+mod state;
+
+pub use protocol::{Change, Control};
+pub use state::{ExcludedEdit, PreparedChange, Replay, SpaceDescriptor, SyncState};
+
+/// Stateless entry point for deterministic replay and encrypted command preparation.
+///
+/// Hosts must durably save [`SyncState::intent`] before calling
+/// [`Machine::complete_intent`], then commit the resulting state before uploading
+/// any object. [`crate::infra::vault::Vault`] provides that persistence adapter.
+pub struct Machine;
+
+#[cfg(test)]
+#[path = "../tests.rs"]
+mod tests;

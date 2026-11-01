@@ -1,9 +1,51 @@
-use super::*;
+use super::{Machine, PreparedChange, SyncState};
+use super::{
+    commands::control_at,
+    membership::epoch_key,
+    protocol::{Change, ChangeHeader, PROFILE},
+};
+use crate::core::sync::{
+    Blob, Certificate, Counter, DeviceSecret, Error, Hash, Object, Projection, Role, Signed,
+    Transaction, canonical,
+    crypto::{self, CHANGE_DOMAIN, CONTROL_DOMAIN, nonce},
+    decode,
+};
 use crate::core::{
     entry::Entry,
     sync::{Action, Entity, EntityKind, Mutation, Value},
 };
 use ed25519_dalek::SigningKey;
+use std::collections::BTreeSet;
+
+#[test]
+fn change_wire_contract_survives_internal_refactors() {
+    let signing = SigningKey::from_bytes(&[11; 32]);
+    let body = Change {
+        header: ChangeHeader {
+            profile: PROFILE.into(),
+            space: Hash([0x11; 32]),
+            membership: Hash([0x22; 32]),
+            epoch: Counter(17),
+            author: Hash::digest(b"lockbox.device.v1\0", &signing.verifying_key().to_bytes()),
+            sequence: Counter(42),
+            previous: Some(Hash([0x33; 32])),
+            parents: vec![Hash([0x33; 32]), Hash([0x44; 32])],
+            nonce: Blob(vec![0x55; 24]),
+        },
+        ciphertext: Blob(vec![1, 2, 3, 4, 5]),
+    };
+    let signed = crypto::sign(body, &signing, CHANGE_DOMAIN).unwrap();
+    crypto::verify(&signed, &signing.verifying_key().to_bytes(), CHANGE_DOMAIN).unwrap();
+    let object = Object::Change(signed);
+    let expected = include_bytes!("fixtures/change-v0.json");
+    assert_eq!(object.bytes().unwrap(), expected);
+    assert_eq!(
+        object.hash().unwrap().to_string(),
+        "f2029d61aef0fdfb6ad9b5f008d4aa26bda81b08433ccd5c1409fa120c0673c0"
+    );
+    let parsed: Object = decode(expected).unwrap();
+    assert_eq!(parsed.hash().unwrap(), object.hash().unwrap());
+}
 
 fn identity(seed: u8) -> (DeviceSecret, Signed<Certificate>) {
     DeviceSecret::generate(&SigningKey::from_bytes(&[seed; 32])).unwrap()

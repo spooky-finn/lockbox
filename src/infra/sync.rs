@@ -2,7 +2,7 @@
 
 use crate::core::sync::{Blob, Error, Hash, MAX_OBJECT_BYTES, MAX_OBJECTS, SyncState};
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -33,17 +33,38 @@ pub enum TransportError {
 pub type Result<T> = std::result::Result<T, TransportError>;
 
 pub struct Page {
+    /// Complete immutable-object hashes, in any provider order.
     pub objects: Vec<Hash>,
+    /// Opaque continuation token; callers detect repetition and never sort by it.
     pub next: Option<String>,
 }
 
 /// Immutable, content-addressed objects only. No timestamp, ETag or listing
 /// position is interpreted as membership, history order, or deletion evidence.
 pub trait Storage {
+    /// Enumerate only objects in the given namespace; omission is not deletion.
+    /// Return at most 1,000 hashes per page and keep `cursor` opaque.
     fn list(&mut self, namespace: Hash, cursor: Option<&str>) -> Result<Page>;
+    /// Fetch bounded bytes without interpreting signatures or membership.
+    /// `NotFound` means incomplete availability, not revoked authority.
     fn get(&mut self, namespace: Hash, hash: Hash) -> Result<Vec<u8>>;
+    /// Idempotently publish the exact bytes under their complete-object hash.
+    /// A successful acknowledgement does not imply receipt by other members.
     fn put(&mut self, namespace: Hash, hash: Hash, bytes: &[u8]) -> Result<()>;
 }
+
+/// Creates a transport on the calling worker thread.
+///
+/// Factories contain provider configuration only. Implementations must never
+/// capture a vault, signing identity, content key, or decrypted projection.
+/// Keeping construction separate lets the application use any [`Storage`]
+/// implementation without depending on a particular provider SDK.
+pub trait StorageFactory: Send + Sync {
+    /// Establish a blocking provider adapter. Do not perform protocol validation.
+    fn connect(&self) -> Result<Box<dyn Storage + Send>>;
+}
+
+pub(crate) mod worker;
 
 #[derive(Clone, Default)]
 pub struct Cancellation(Arc<AtomicBool>);
@@ -150,47 +171,52 @@ pub fn publication(
     if state.fault.is_some() || !replay.ready || replay.role.is_none() {
         return Ok(vec![]);
     }
-    let mut controls = Vec::new();
-    let mut changes = Vec::new();
+    // Decode each eligible object once, then order only the dependency edges.
+    // Independent objects may have any order; hashes never choose a data winner.
+    let mut pending = BTreeMap::new();
     for hash in &state.outbox {
         let bytes = state
             .objects
             .get(hash)
             .ok_or(TransportError::InvalidResponse)?;
-        match crate::core::sync::decode::<crate::core::sync::Object>(&bytes.0)
-            .map_err(TransportError::Verification)?
+        let object = crate::core::sync::decode::<crate::core::sync::Object>(&bytes.0)
+            .map_err(TransportError::Verification)?;
+        if matches!(object, crate::core::sync::Object::Control(_))
+            || (replay.accepted.contains(hash) && !replay.excluded.contains(hash))
         {
-            crate::core::sync::Object::Control(_) => controls.push((*hash, bytes.clone())),
-            crate::core::sync::Object::Change(_)
-                if replay.accepted.contains(hash) && !replay.excluded.contains(hash) =>
-            {
-                changes.push((*hash, bytes.clone()))
-            }
-            _ => {}
+            pending.insert(*hash, (bytes.clone(), object.dependencies()));
         }
     }
-    controls.extend(changes);
-    let mut pending: std::collections::BTreeMap<_, _> = controls.into_iter().collect();
+    let mut incoming = BTreeMap::new();
+    let mut children: BTreeMap<Hash, Vec<Hash>> = BTreeMap::new();
+    let mut ready = BTreeSet::new();
+    for (hash, (_, dependencies)) in &pending {
+        let mut count = 0;
+        for dependency in dependencies
+            .iter()
+            .filter(|dependency| pending.contains_key(dependency))
+        {
+            count += 1;
+            children.entry(*dependency).or_default().push(*hash);
+        }
+        incoming.insert(*hash, count);
+        if count == 0 {
+            ready.insert(*hash);
+        }
+    }
     let mut ordered = Vec::new();
-    while !pending.is_empty() {
-        let mut ready = Vec::new();
-        for (hash, bytes) in &pending {
-            let object: crate::core::sync::Object =
-                crate::core::sync::decode(&bytes.0).map_err(TransportError::Verification)?;
-            if object
-                .dependencies()
-                .iter()
-                .all(|dependency| !pending.contains_key(dependency))
-            {
-                ready.push(*hash);
+    while let Some(hash) = ready.pop_first() {
+        ordered.push((hash, pending.remove(&hash).unwrap().0));
+        for child in children.remove(&hash).unwrap_or_default() {
+            let count = incoming.get_mut(&child).unwrap();
+            *count -= 1;
+            if *count == 0 {
+                ready.insert(child);
             }
         }
-        if ready.is_empty() {
-            return Err(TransportError::Verification(Error::InvalidTransaction));
-        }
-        for hash in ready {
-            ordered.push((hash, pending.remove(&hash).unwrap()));
-        }
+    }
+    if !pending.is_empty() {
+        return Err(TransportError::Verification(Error::InvalidTransaction));
     }
     Ok(ordered)
 }

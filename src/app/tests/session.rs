@@ -59,7 +59,7 @@ fn opening_with_password_restores_biometric_key_and_remembers_the_file() {
         path: None,
     };
     let mut native = security();
-    let mut screen = Screen::Locked(Locked::new(None));
+    let mut screen = Screen::Locked(Box::new(Locked::new(None)));
     screen.open(
         Opened {
             vault: workspace.vault,

@@ -5,6 +5,9 @@ the deterministic event model from [the proposal](lockbox-protocol.md), with a
 smaller, separately versioned wire schema. It does not claim proposal-v1
 interoperability or a completed security review.
 
+For module ownership, dependency direction, provider extension and durability
+contracts, see the [synchronization architecture guide](sync-architecture.md).
+
 ## Responsibilities
 
 | Code | Responsibility |
@@ -12,11 +15,15 @@ interoperability or a completed security review.
 | `core/sync/wire.rs` | Canonical encoding, bounded decoding, IDs and object hashes |
 | `core/sync/crypto.rs` | Root-certified device identities, strict Ed25519, HPKE, AEAD |
 | `core/sync/model.rs` | Atomic transactions, revision sets, conflicts and reference projection |
-| `core/sync/machine.rs` | Membership chain, epoch closure, sequence checks, replay and signing preparation |
-| `infra/vault.rs` | Encrypted signing intent, atomic local commit, outbox, restart recovery and public API |
+| `core/sync/machine/` | Private protocol schemas, journal state, commands, membership rules and deterministic replay behind `Machine` |
+| `infra/vault.rs` | Encrypted file format, KDF, process lock and atomic replacement |
+| `infra/vault/shared.rs` | One durable signing-intent boundary, local commits, outbox, restart recovery and shared-space facade methods |
+| `infra/vault/exchange.rs` | Candidate receive commits, pending-commit recovery, acknowledgement rollback and blocking exchange |
 | `infra/sync.rs` | Bounded provider contract, discovery, cancellation and publication ordering |
-| `infra/storj.rs` | HTTPS path-style S3, SigV4, bounded responses and opaque ListObjectsV2 cursors |
-| `app/space_sync.rs` | Session-scoped ciphertext workers, backoff and application status |
+| `infra/storj.rs` | Configuration-only `StorjFactory`, HTTPS S3 adapter, SigV4, bounded responses and opaque ListObjectsV2 cursors |
+| `infra/sync/worker.rs` | Cancellable result mailbox without access to session or protocol state |
+| `app/space_sync.rs` | Typed exchange phases, scope-bound replies, draft deferral and application status |
+| `app/space_sync/schedule.rs` | Monotonic retry deadlines and testable backoff policy |
 
 Core replay has no network, filesystem, clock or UI dependency. Network timing,
 wall-clock time, listing order and random retry jitter never choose a record

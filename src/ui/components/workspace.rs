@@ -111,7 +111,7 @@ fn VaultContent() -> Element {
                                 onclick: {
                                     let entity = record.entity.clone();
                                     let revision = version.revision;
-                                    move |_| edit_unlocked(state, |u| { u.error = u.vault.resolve_sync(entity.clone(), revision).err().map(|e| e.to_string()); u.sync.saved(); })
+                                    move |_| edit_unlocked(state, |u| { u.error = u.vault.resolve_sync(entity.clone(), revision).err().map(|e| e.to_string()); if u.error.is_none() { u.sync.saved(); } })
                                 },
                                 {language.text(Text::KeepThisVersion)}
                             }
@@ -139,7 +139,7 @@ fn VaultContent() -> Element {
                                     }
                                 }
                                 p { {language.text(Text::RebasingReplacesTheCurrentVersionsWithTheSelectedContentsYouWillBeTheAuthorOfTheNewChange)} }
-                                button { onclick: { let hash = edit.hash; move |_| edit_unlocked(state, |u| { u.error = u.vault.rebase_edit(hash).err().map(|e| e.to_string()); u.sync.saved(); }) }, {language.text(Text::RebaseAfterReview)} }
+                                button { onclick: { let hash = edit.hash; move |_| edit_unlocked(state, |u| { u.error = u.vault.rebase_edit(hash).err().map(|e| e.to_string()); if u.error.is_none() { u.sync.saved(); } }) }, {language.text(Text::RebaseAfterReview)} }
                             }
                         }
                     }

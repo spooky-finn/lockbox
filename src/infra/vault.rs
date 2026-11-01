@@ -13,6 +13,10 @@
 //!
 //! The whole header is authenticated as associated data, so no field can be
 //! changed without the vault failing to open.
+//!
+//! Shared-space commands live in `shared`; receive commits live in `exchange`.
+//! This file owns encryption, password derivation, process lock, and atomic replace.
+//! The public [`Vault`] facade retains the existing import paths for both modes.
 
 use std::{
     fs::{self, File, OpenOptions},
@@ -83,6 +87,8 @@ pub enum VaultError {
     Transport(#[from] crate::infra::sync::TransportError),
     #[error("не удалось открыть корневой ключ: проверьте пароль восстановления")]
     RecoveryFailed,
+    #[error("received changes await a durable commit; retry synchronization")]
+    PendingSyncCommit,
 }
 
 pub type Result<T> = std::result::Result<T, VaultError>;
@@ -136,25 +142,14 @@ pub struct Vault {
     pub entries: Vec<Entry>,
     pub folders: Vec<Folder>,
     pub(crate) profile: Option<BootstrapProfile>,
+    pending_exchange: Option<exchange::PendingExchange>,
     _profile_lock: Option<File>,
 }
 
+mod exchange;
+mod shared;
+
 impl Vault {
-    /// Creates a new independent device profile and owner space. Credentials and
-    /// private keys are stored only inside this locally encrypted file.
-    pub fn create_shared(
-        path: impl AsRef<Path>,
-        password: &SecretString,
-        recovery_password: &SecretString,
-        kdf: KdfParams,
-        username: String,
-        space_name: String,
-        provider: ProviderConfiguration,
-    ) -> Result<Self> {
-        let profile =
-            BootstrapProfile::generate(username, space_name, provider, recovery_password, kdf)?;
-        Self::create_profile(path, password, kdf, profile)
-    }
     /// Creates and saves an empty vault. Never overwrites an existing file.
     pub fn create(path: impl AsRef<Path>, password: &SecretString, kdf: KdfParams) -> Result<Self> {
         let path = path.as_ref().to_path_buf();
@@ -174,6 +169,7 @@ impl Vault {
             entries: Vec::new(),
             folders: Vec::new(),
             profile: None,
+            pending_exchange: None,
             _profile_lock: None,
         };
         vault.save()?;
@@ -208,6 +204,7 @@ impl Vault {
             entries: Vec::new(),
             folders: Vec::new(),
             profile: Some(profile),
+            pending_exchange: None,
             _profile_lock: Some(profile_lock),
         };
         vault.save_inner(true)?;
@@ -284,356 +281,8 @@ impl Vault {
     /// Encrypts with a fresh nonce and replaces the file atomically,
     /// keeping the previous version next to it as `<name>.bak`.
     pub fn save(&self) -> Result<()> {
-        if let Some(profile) = &self.profile
-            && let Some(sync) = &profile.sync
-        {
-            if let Some(error) = sync.fault {
-                return Err(error.into());
-            }
-            let replay = crate::core::sync::Machine::replay(sync, &profile.sync_secret())?;
-            if replay.projection.entries() != self.entries
-                || replay.projection.folders() != self.folders
-            {
-                return Err(crate::core::sync::Error::InvalidTransaction.into());
-            }
-        }
+        self.ensure_sync_projection()?;
         self.save_inner(false)
-    }
-
-    /// Existing app workflows stage records first. Shared profiles convert the
-    /// complete edit into one atomic transaction and durably reserve its exact
-    /// encrypted signing body before signing or acknowledging the local save.
-    pub fn save_changes(&mut self) -> Result<()> {
-        use crate::core::sync::{Machine, Transaction};
-        let Some(profile) = self.profile.as_ref().filter(|p| p.sync.is_some()) else {
-            return self.save();
-        };
-        let device = profile.sync_secret();
-        let desired_entries = self.entries.clone();
-        let desired_folders = self.folders.clone();
-        self.recover_sync()?;
-        let sync = self.profile.as_ref().unwrap().sync.as_ref().unwrap();
-        let replay = Machine::replay(sync, &device)?;
-        let transaction =
-            Transaction::diff(&replay.projection, &desired_entries, &desired_folders)?;
-        if transaction.mutations.is_empty() {
-            return self.save();
-        }
-        let prepared = Machine::prepare(sync, &device, transaction)?;
-        self.entries = replay.projection.entries();
-        self.folders = replay.projection.folders();
-        self.profile.as_mut().unwrap().sync.as_mut().unwrap().intent = Some(prepared);
-        // On failure retain the same intent in memory as well as on disk.
-        self.save_inner(false)?;
-        self.recover_sync()
-    }
-
-    fn recover_sync(&mut self) -> Result<()> {
-        use crate::core::sync::Machine;
-        let Some(profile) = self.profile.as_mut().filter(|p| p.sync.is_some()) else {
-            return Ok(());
-        };
-        let device = profile.sync_secret();
-        let sync = profile.sync.as_mut().unwrap();
-        // A frozen history remains readable. Recovery never erases a fault or
-        // resumes publication merely because the provider is available again.
-        if sync.fault.is_some() {
-            return Ok(());
-        }
-        let recovering = sync.intent.is_some();
-        if recovering {
-            Machine::complete_intent(sync, &device)?;
-        }
-        let replay = match Machine::replay(sync, &device) {
-            Ok(replay) => replay,
-            Err(crate::core::sync::Error::MissingDependency) if !recovering => return Ok(()),
-            Err(error) => return Err(error.into()),
-        };
-        if !replay.ready && !recovering {
-            return Ok(());
-        }
-        self.entries = replay.projection.entries();
-        self.folders = replay.projection.folders();
-        if recovering {
-            self.save_inner(false)?;
-        }
-        Ok(())
-    }
-
-    pub fn sync_replay(&self) -> Result<Option<crate::core::sync::Replay>> {
-        self.profile
-            .as_ref()
-            .and_then(|profile| profile.sync.as_ref().map(|sync| (profile, sync)))
-            .map(|(profile, sync)| {
-                crate::core::sync::Machine::replay(sync, &profile.sync_secret())
-                    .map_err(VaultError::from)
-            })
-            .transpose()
-    }
-
-    pub(crate) fn receive_sync(&mut self, batch: crate::infra::sync::Download) -> Result<()> {
-        use crate::core::sync::{Error, Machine};
-        self.recover_sync()?;
-        let profile = self.profile.as_mut().ok_or(Error::UnauthorizedDevice)?;
-        let device = profile.sync_secret();
-        let sync = profile.sync.as_mut().ok_or(Error::UnauthorizedDevice)?;
-        let previous = sync.clone();
-        for (hash, bytes) in batch.objects {
-            if let Err(error) = Machine::receive(sync, hash, bytes) {
-                *sync = previous;
-                return Err(error.into());
-            }
-        }
-        if sync
-            .objects
-            .values()
-            .map(|blob| blob.0.len())
-            .sum::<usize>()
-            > crate::infra::sync::MAX_CACHE_BYTES
-        {
-            *sync = previous;
-            return Err(Error::ResourceBudgetExceeded.into());
-        }
-        match Machine::replay(sync, &device) {
-            Ok(replay) => {
-                // An incomplete transition or removal retains the previous
-                // readable local view. Only complete baselines replace it.
-                if !replay.ready {
-                    return self.save_inner(false);
-                }
-                let old_entries = std::mem::replace(&mut self.entries, replay.projection.entries());
-                let old_folders = std::mem::replace(&mut self.folders, replay.projection.folders());
-                if let Err(error) = self.save_inner(false) {
-                    self.profile.as_mut().unwrap().sync = Some(previous);
-                    self.entries = old_entries;
-                    self.folders = old_folders;
-                    return Err(error);
-                }
-                Ok(())
-            }
-            Err(
-                error @ (Error::ControlFork
-                | Error::DeviceFork
-                | Error::CheckpointMismatch
-                | Error::AuthenticationFailed),
-            ) => {
-                sync.fault = Some(error);
-                self.save_inner(false)?;
-                Err(error.into())
-            }
-            Err(Error::MissingDependency) => self.save_inner(false),
-            Err(error) => {
-                *sync = previous;
-                Err(error.into())
-            }
-        }
-    }
-
-    pub(crate) fn acknowledge_sync(
-        &mut self,
-        hashes: &[crate::core::sync::Hash],
-        completed: bool,
-    ) -> Result<()> {
-        let Some(sync) = self.profile.as_mut().and_then(|p| p.sync.as_mut()) else {
-            return Ok(());
-        };
-        let previous = sync.clone();
-        for hash in hashes {
-            sync.outbox.remove(hash);
-        }
-        if completed {
-            sync.last_exchange = Some(
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_secs(),
-            );
-        }
-        if let Err(error) = self.save_inner(false) {
-            self.profile.as_mut().unwrap().sync = Some(previous);
-            return Err(error);
-        }
-        Ok(())
-    }
-
-    pub fn resolve_sync(
-        &mut self,
-        entity: crate::core::sync::Entity,
-        revision: crate::core::sync::Revision,
-    ) -> Result<()> {
-        use crate::core::sync::{Error, Transaction};
-        let replay = self.sync_replay()?.ok_or(Error::UnauthorizedDevice)?;
-        let value = replay
-            .projection
-            .records
-            .iter()
-            .find(|r| r.entity == entity)
-            .and_then(|record| record.versions.iter().find(|v| v.revision == revision))
-            .ok_or(Error::InvalidTransaction)?
-            .value
-            .clone();
-        self.commit_sync(Transaction::resolve(&replay.projection, entity, value))
-    }
-
-    pub fn excluded_edits(&self) -> Result<Vec<crate::core::sync::ExcludedEdit>> {
-        use crate::core::sync::{Error, Machine};
-        let profile = self.profile.as_ref().ok_or(Error::UnauthorizedDevice)?;
-        let state = profile.sync.as_ref().ok_or(Error::UnauthorizedDevice)?;
-        Ok(Machine::excluded_edits(state, &profile.sync_secret())?)
-    }
-
-    /// Explicit re-authoring after reviewing both the old edit and current state.
-    pub fn rebase_edit(&mut self, hash: crate::core::sync::Hash) -> Result<()> {
-        use crate::core::sync::{Error, Machine};
-        let profile = self.profile.as_ref().ok_or(Error::UnauthorizedDevice)?;
-        let device = profile.sync_secret();
-        let state = profile.sync.as_ref().ok_or(Error::UnauthorizedDevice)?;
-        let prepared = Machine::prepare_rebase(state, &device, hash)?;
-        self.profile.as_mut().unwrap().sync.as_mut().unwrap().intent = Some(prepared);
-        self.save_inner(false)?;
-        self.recover_sync()
-    }
-
-    fn commit_sync(&mut self, transaction: crate::core::sync::Transaction) -> Result<()> {
-        use crate::core::sync::{Error, Machine};
-        let profile = self.profile.as_ref().ok_or(Error::UnauthorizedDevice)?;
-        let device = profile.sync_secret();
-        let sync = profile.sync.as_ref().ok_or(Error::UnauthorizedDevice)?;
-        let prepared = Machine::prepare(sync, &device, transaction)?;
-        self.profile.as_mut().unwrap().sync.as_mut().unwrap().intent = Some(prepared);
-        self.save_inner(false)?;
-        self.recover_sync()
-    }
-
-    /// Public admission API for callers building sharing workflows. Certificates
-    /// must be verified out of band against the intended participant fingerprint.
-    pub fn set_space_members(
-        &mut self,
-        members: Vec<(
-            crate::core::sync::Signed<crate::core::sync::Certificate>,
-            crate::core::sync::Role,
-        )>,
-    ) -> Result<()> {
-        use crate::core::sync::{Error, Machine};
-        let profile = self.profile.as_ref().ok_or(Error::UnauthorizedDevice)?;
-        let device = profile.sync_secret();
-        let sync = profile.sync.as_ref().ok_or(Error::UnauthorizedDevice)?;
-        let prepared = Machine::prepare_membership(sync, &device, members)?;
-        self.profile.as_mut().unwrap().sync.as_mut().unwrap().intent = Some(prepared);
-        self.save_inner(false)?;
-        self.recover_sync()
-    }
-
-    pub fn space_descriptor(&self) -> Option<crate::core::sync::SpaceDescriptor> {
-        self.profile
-            .as_ref()?
-            .sync
-            .as_ref()
-            .map(|sync| sync.descriptor())
-    }
-
-    pub fn device_certificate(
-        &self,
-    ) -> Option<crate::core::sync::Signed<crate::core::sync::Certificate>> {
-        self.profile.as_ref()?.certificate.clone()
-    }
-
-    /// Certifies an older bootstrap-only device with its separately protected
-    /// recovery authority, then journals its existing records as initial events.
-    pub fn activate_sync(&mut self, recovery_password: &SecretString) -> Result<()> {
-        use crate::core::sync::Error;
-        let profile = self.profile.as_mut().ok_or(Error::UnauthorizedDevice)?;
-        if profile.sync.is_some() {
-            return Ok(());
-        }
-        profile.activate_sync(recovery_password)?;
-        let entries = self.entries.clone();
-        let folders = self.folders.clone();
-        // Empty imports still have to persist the new schema and genesis.
-        let result = self.save_changes();
-        if result.is_err() {
-            let profile = self.profile.as_mut().unwrap();
-            let state = profile.sync.as_ref().unwrap();
-            if state.intent.is_none() && state.objects.len() == 1 {
-                profile.cancel_activation();
-            }
-            self.entries = entries;
-            self.folders = folders;
-        }
-        result
-    }
-
-    /// Attach an empty device profile to independently authenticated space
-    /// routing/identity metadata. No private key or shared secret is copied.
-    pub fn join_space(&mut self, descriptor: crate::core::sync::SpaceDescriptor) -> Result<()> {
-        use crate::core::sync::{Error, Machine};
-        if !self.entries.is_empty() || !self.folders.is_empty() {
-            return Err(Error::InvalidTransaction.into());
-        }
-        let profile = self.profile.as_mut().ok_or(Error::UnauthorizedDevice)?;
-        if profile
-            .sync
-            .as_ref()
-            .is_some_and(|s| s.intent.is_some() || s.objects.len() != 1)
-        {
-            return Err(Error::InvalidTransaction.into());
-        }
-        let previous = profile.sync.replace(Machine::join(
-            descriptor.space,
-            descriptor.namespace,
-            descriptor.genesis,
-            descriptor.owner_root,
-        ));
-        let old_space = profile.space.space_id;
-        let old_namespace = profile.space.namespace;
-        profile.space.space_id = descriptor.space.0;
-        profile.space.namespace = descriptor.namespace.0;
-        if let Err(error) = self.save_inner(false) {
-            let profile = self.profile.as_mut().unwrap();
-            profile.sync = previous;
-            profile.space.space_id = old_space;
-            profile.space.namespace = old_namespace;
-            return Err(error);
-        }
-        Ok(())
-    }
-
-    /// Blocking adapter for services/CLI callers. Desktop uses session-scoped
-    /// ciphertext workers instead. Downloaded history is committed before any
-    /// upload is authorized, and publication never sends the profile file.
-    pub fn synchronize(&mut self, storage: &mut dyn crate::infra::sync::Storage) -> Result<()> {
-        use crate::{
-            core::sync::{Error, Machine},
-            infra::sync,
-        };
-        self.recover_sync()?;
-        let profile = self.profile.as_ref().ok_or(Error::UnauthorizedDevice)?;
-        let state = profile.sync.as_ref().ok_or(Error::UnauthorizedDevice)?;
-        if let Some(error) = state.fault {
-            return Err(error.into());
-        }
-        let namespace = state.namespace;
-        let cancel = sync::Cancellation::default();
-        let batch = sync::download(
-            storage,
-            namespace,
-            &state.objects.keys().copied().collect(),
-            &cancel,
-        )?;
-        let incomplete = batch.incomplete;
-        self.receive_sync(batch)?;
-        let profile = self.profile.as_ref().unwrap();
-        let state = profile.sync.as_ref().unwrap();
-        let replay = Machine::replay(state, &profile.sync_secret())?;
-        if incomplete || !replay.ready {
-            return Err(Error::MissingDependency.into());
-        }
-        if replay.role.is_none() {
-            return Err(Error::UnauthorizedDevice.into());
-        }
-        let plan = sync::publication(state, &replay)?;
-        let receipts = sync::upload(storage, namespace, &plan, &cancel)?;
-        self.acknowledge_sync(&receipts, true)
     }
 
     fn save_inner(&self, create_new: bool) -> Result<()> {
@@ -781,6 +430,7 @@ impl Header {
             entries: contents.entries,
             folders: contents.folders,
             profile: contents.profile,
+            pending_exchange: None,
             _profile_lock: profile_lock,
         }
     }

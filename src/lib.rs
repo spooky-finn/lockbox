@@ -1,4 +1,5 @@
 //! Local password manager, organized by responsibility.
+
 pub mod app;
 pub mod core;
 pub mod infra;

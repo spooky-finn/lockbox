@@ -224,3 +224,11 @@ pub(super) fn decrypt(
         .map(Zeroizing::new)
         .map_err(|_| Error::AuthenticationFailed)
 }
+
+/// Check the XChaCha nonce length before passing it to the primitive.
+pub(super) fn nonce(blob: &Blob) -> Result<[u8; 24]> {
+    blob.0
+        .as_slice()
+        .try_into()
+        .map_err(|_| Error::InvalidEncoding)
+}

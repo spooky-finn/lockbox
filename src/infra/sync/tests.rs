@@ -133,3 +133,54 @@ fn repeated_cursor_and_cancelled_session_stop_exchange() {
         Err(TransportError::Cancelled)
     ));
 }
+
+#[test]
+fn publication_orders_epoch_and_causal_dependencies_before_references() {
+    use crate::core::{
+        entry::Entry,
+        sync::{Role, Transaction},
+    };
+    let (mut state, device) = fixture();
+    let genesis = state.genesis;
+    let mut entry = Entry::new();
+    entry.title = "Before rotation".into();
+    state.intent = Some(
+        Machine::prepare(
+            &state,
+            &device,
+            Transaction::diff(
+                &Machine::replay(&state, &device).unwrap().projection,
+                &[entry.clone()],
+                &[],
+            )
+            .unwrap(),
+        )
+        .unwrap(),
+    );
+    let first = Machine::complete_intent(&mut state, &device).unwrap();
+    let members = Machine::members(&state, &device).unwrap();
+    assert_eq!(members[0].1, Role::Owner);
+    state.intent = Some(Machine::prepare_membership(&state, &device, members).unwrap());
+    let control = Machine::complete_intent(&mut state, &device).unwrap();
+    entry.title = "After rotation".into();
+    state.intent = Some(
+        Machine::prepare(
+            &state,
+            &device,
+            Transaction::diff(
+                &Machine::replay(&state, &device).unwrap().projection,
+                &[entry],
+                &[],
+            )
+            .unwrap(),
+        )
+        .unwrap(),
+    );
+    let last = Machine::complete_intent(&mut state, &device).unwrap();
+    let hashes: Vec<_> = publication(&state, &Machine::replay(&state, &device).unwrap())
+        .unwrap()
+        .into_iter()
+        .map(|(hash, _)| hash)
+        .collect();
+    assert_eq!(hashes, vec![genesis, first, control, last]);
+}

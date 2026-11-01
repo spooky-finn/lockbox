@@ -1,0 +1,82 @@
+//! Wire schemas and immutable object dependencies. No authorization or I/O.
+
+use super::super::{Blob, Certificate, Counter, Hash, Object, Role, Signed};
+use serde::{Deserialize, Serialize};
+
+pub(super) const PROFILE: &str = "LBX-SYNC-0";
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Member {
+    pub certificate: Signed<Certificate>,
+    pub role: Role,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct Epoch {
+    pub(super) profile: String,
+    pub(super) space: Hash,
+    pub(super) number: Counter,
+    pub(super) context: Hash,
+    pub(super) previous: Option<Hash>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct Grant {
+    pub(super) device: Hash,
+    pub(super) enc: Blob,
+    pub(super) ciphertext: Blob,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Control {
+    pub(super) epoch: Epoch,
+    pub(super) owner: Hash,
+    pub(super) controller: Hash,
+    pub(super) members: Vec<Member>,
+    pub(super) closed_frontier: Vec<Hash>,
+    pub(super) grants: Vec<Grant>,
+    pub(super) checkpoint_nonce: Blob,
+    pub(super) checkpoint: Blob,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ChangeHeader {
+    pub(super) profile: String,
+    pub(super) space: Hash,
+    pub(super) membership: Hash,
+    pub(super) epoch: Counter,
+    pub(super) author: Hash,
+    pub(super) sequence: Counter,
+    pub(super) previous: Option<Hash>,
+    pub(super) parents: Vec<Hash>,
+    pub(super) nonce: Blob,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Change {
+    pub(super) header: ChangeHeader,
+    pub(super) ciphertext: Blob,
+}
+
+impl Object {
+    pub(crate) fn dependencies(&self) -> Vec<Hash> {
+        match self {
+            Self::Control(control) => control
+                .body
+                .epoch
+                .previous
+                .into_iter()
+                .chain(control.body.closed_frontier.iter().copied())
+                .collect(),
+            Self::Change(change) => std::iter::once(change.body.header.membership)
+                .chain(change.body.header.parents.iter().copied())
+                .collect(),
+        }
+    }
+}

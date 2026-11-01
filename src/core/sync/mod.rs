@@ -2,6 +2,33 @@
 //!
 //! `LBX-SYNC-0` is an experimental, deliberately separate wire profile from the
 //! proposal in docs/lockbox-protocol.md. Only canonical objects enter replay.
+//!
+//! # Host durability contract
+//!
+//! [`Machine`] separates unsigned command preparation from signing. The host owns
+//! storage and publication; it must commit each boundary in this order:
+//!
+//! ```no_run
+//! use lockbox::core::sync::{DeviceSecret, Hash, Machine, SyncState, Transaction};
+//!
+//! fn save_edit(
+//!     state: &mut SyncState,
+//!     device: &DeviceSecret,
+//!     edit: Transaction,
+//!     mut persist: impl FnMut(&SyncState) -> std::io::Result<()>,
+//! ) -> Result<Hash, Box<dyn std::error::Error>> {
+//!     state.intent = Some(Machine::prepare(state, device, edit)?);
+//!     persist(state)?; // reserve the exact encrypted signing body
+//!     let hash = Machine::complete_intent(state, device)?;
+//!     persist(state)?; // commit event, sequence and outbox before upload
+//!     Ok(hash)
+//! }
+//! ```
+//!
+//! An error after either persistence call must retain the same intent/event for
+//! recovery. [`crate::infra::vault::Vault`] implements this contract atomically
+//! inside its encrypted profile. Storage adapters receive only object bytes and
+//! never construct verified transactions or choose conflict winners.
 
 mod crypto;
 mod machine;
@@ -59,6 +86,20 @@ pub enum Error {
     PendingIntent,
     #[error("operating system randomness unavailable")]
     Random,
+}
+
+impl Error {
+    /// Faults in authenticated history freeze local writes and publication.
+    /// Rejected candidates and missing dependencies do not revoke membership.
+    pub fn is_history_fault(self) -> bool {
+        matches!(
+            self,
+            Self::ControlFork
+                | Self::DeviceFork
+                | Self::CheckpointMismatch
+                | Self::AuthenticationFailed
+        )
+    }
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

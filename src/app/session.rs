@@ -10,19 +10,19 @@ use super::{
 use crate::infra::touchid::Biometrics;
 
 pub(crate) enum Screen {
-    Locked(Locked),
+    Locked(Box<Locked>),
     Unlocked(Box<Unlocked>),
 }
 
 impl Screen {
     pub fn locked(settings: &Settings, biometrics: &dyn Biometrics) -> Self {
-        Self::Locked(
+        Self::Locked(Box::new(
             Locked::new(settings.config.last_vault.clone()).offer_touch_id(
                 &settings.config,
                 biometrics,
                 true,
             ),
-        )
+        ))
     }
 
     pub fn lock(
@@ -40,7 +40,7 @@ impl Screen {
                 false,
             );
             locked.notice = reason.map(|reason| format!("Хранилище заблокировано: {reason}"));
-            *self = Self::Locked(locked);
+            *self = Self::Locked(Box::new(locked));
         }
     }
 
