@@ -80,7 +80,7 @@ pub(crate) fn tick() {
         .clipboard
         .tick(Instant::now());
     let pending = match &*consume_context::<Session>().peek() {
-        Screen::Locked(form) => form.pending.is_some() || form.auto_touch_id,
+        Screen::Locked(form) => form.busy() || form.auto_touch_id,
         Screen::Unlocked(workspace) => {
             workspace.touch_id.pending.is_some()
                 || workspace.sharing.needs_poll()
@@ -192,13 +192,42 @@ pub(crate) fn poll_workers() {
 }
 
 pub(crate) fn begin_create() {
-    let mut state = consume_context::<Session>();
-    *state.write() = Screen::Locked(Box::new(Locked::begin_create()));
+    begin_creation(false);
 }
 
 pub(crate) fn begin_join() {
+    begin_creation(true);
+}
+
+fn begin_creation(joining: bool) {
     let mut state = consume_context::<Session>();
-    *state.write() = Screen::Locked(Box::new(Locked::begin_join()));
+    let settings = consume_context::<Signal<Settings>>();
+    let mut screen = state.write();
+    if let Screen::Locked(form) = &mut *screen
+        && form.mode == Mode::Create
+    {
+        form.switch_creation(joining);
+        return;
+    }
+    let form = if joining {
+        Locked::begin_join()
+    } else {
+        Locked::begin_create()
+    };
+    let source = match &*screen {
+        Screen::Locked(form) => form
+            .path
+            .as_ref()
+            .filter(|path| settings.peek().config.space_names.contains_key(*path))
+            .cloned(),
+        Screen::Unlocked(workspace) => workspace
+            .vault
+            .profile_summary()
+            .map(|_| workspace.vault.path().to_path_buf()),
+    };
+    *screen = Screen::Locked(Box::new(
+        form.with_identity_path(settings.peek().identity_path(), source),
+    ));
 }
 
 pub(crate) fn create_cloud_profile() {
@@ -209,7 +238,7 @@ pub(crate) fn create_cloud_profile() {
             return;
         };
 
-        if form.pending.is_some() || !form.validate_creation() {
+        if form.busy() || !form.validate_creation() {
             return;
         }
     }
@@ -240,7 +269,7 @@ pub(crate) fn pick_vault(create: bool) {
         if form.mode != Mode::Create
             || form.creation_step != CreationStep::Sync
             || form.joining
-            || form.pending.is_some()
+            || form.busy()
         {
             return;
         }
@@ -263,11 +292,9 @@ pub(crate) fn pick_vault(create: bool) {
                     form.choose_local_path(path);
                 }
             } else {
-                let form = Locked::new(Some(path)).offer_touch_id(
-                    &settings.peek().config,
-                    &*hardware.0,
-                    false,
-                );
+                let form = Locked::new(Some(path))
+                    .with_identity_path(settings.peek().identity_path(), None)
+                    .offer_touch_id(&settings.peek().config, &*hardware.0, false);
                 *state.write() = Screen::Locked(Box::new(form));
             }
         }

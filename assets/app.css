@@ -190,7 +190,7 @@ h2 { font-size: 15px; font-weight: 600; letter-spacing: -.2px; }
 .lock-screen :focus-visible { outline-color: var(--lock-focus); }
 
 /* Toolbar and preferences */
-.toolbar { position: relative; z-index: 2; padding: 2px 20px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto; flex-shrink: 0; gap: 12px; align-items: center; }
+.toolbar { position: relative; z-index: 2; min-height: 44px; padding: 6px 15px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto; flex-shrink: 0; gap: 12px; align-items: center; }
 .brand { display: flex; gap: 8px; align-items: center; min-width: 0; }
 .brand-icon { display: grid; place-items: center; width: 28px; height: 28px; flex: 0 0 28px; border-radius: 9px; color: var(--accent-ink); background: var(--control); border: 1px solid var(--glass-edge); box-shadow: var(--shadow); }
 .brand-icon .symbol { width: 17px; height: 17px; }
@@ -220,7 +220,7 @@ input.switch:disabled { opacity: .45; cursor: default; }
 .sidebar-resizer:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .workspace.sidebar-resizing, .workspace.sidebar-resizing * { cursor: col-resize !important; user-select: none !important; }
 .sidebar > :not(.tree-scroll) { flex-shrink: 0; }
-.sidebar-heading { display: flex; align-items: center; gap: 6px; padding: 0 3px 10px; }
+.sidebar-heading { display: flex; align-items: center; gap: 6px; min-height: 38px; padding: 0 3px 10px; }
 .sidebar-heading h2 { font-size: 13px; letter-spacing: -.2px; }
 .sidebar-heading .count { margin-left: auto; }
 .sidebar-heading .icon-button { width: 28px; height: 28px; min-height: 28px; flex-basis: 28px; padding: 5px; color: var(--muted); }
@@ -258,7 +258,7 @@ input.switch:disabled { opacity: .45; cursor: default; }
 
 .sidebar-heading .icon-button.primary { color: var(--accent-text); }
 .sidebar-footer { border-top: 1px solid var(--separator); margin: 8px 3px 0; padding-top: 6px; }
-.sidebar-settings { width: 100%; justify-content: flex-start; border-radius: var(--button-radius); padding: 7px 9px; font-size: 12px; color: var(--muted); }
+.sidebar-settings { width: 100%; min-height: 34px; justify-content: flex-start; gap: 9px; border-radius: var(--button-radius); padding: 7px 9px; font-size: 12px; color: var(--muted); }
 .sidebar-settings .symbol { width: 15px; height: 15px; flex-basis: 15px; }
 button.sidebar-settings[aria-current="page"], button.sidebar-settings[aria-current="page"]:hover:not(:disabled) { background: var(--active-item); color: var(--active-item-text); font-weight: 600; }
 button.sidebar-settings[aria-current="page"]:focus-visible { outline-color: var(--active-item-text); outline-offset: -3px; }
@@ -377,18 +377,24 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 99px; }
 .empty-state p { color: var(--muted); max-width: 250px; margin: 10px 0 22px; line-height: 1.7; }
 
 /* Editor, generator and icon picker */
-.draft { max-width: 800px; margin: 0 auto; padding: 18px; border: 1px solid var(--border); border-radius: 18px; background: var(--surface); box-shadow: var(--shadow); gap: 4px; }
+.draft { max-width: 800px; margin: 0 auto; padding: 18px; border: 0; border-radius: 18px; background: var(--surface); box-shadow: none; gap: 4px; }
 .form-heading { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
 .form-heading h1 { font-size: 21px; }
 .form-heading .detail-kind { font-size: 10px; line-height: 1.25; margin-bottom: 3px; }
 .form-icon { width: 36px; height: 36px; flex: 0 0 36px; margin: 0; border-radius: 11px; background: var(--selected); box-shadow: none; }
 .form-icon .symbol { width: 19px; height: 19px; }
 .draft.stack > label { font-size: 11px; line-height: 1.3; margin-top: 6px; }
-.draft input:not([type=checkbox]):not([type=range]), .draft select, .draft textarea { background: var(--subtle); border-radius: 8px; box-shadow: none; }
+.draft input:not([type=checkbox]):not([type=range]), .draft select, .draft textarea { background: var(--subtle); border-color: transparent; border-radius: 8px; box-shadow: none; }
 .draft input:not([type=checkbox]):not([type=range]), .draft select { height: 32px; min-height: 32px; padding: 5px 10px; line-height: 20px; }
 .draft .select-field > select { padding-right: 32px; }
 .draft textarea { min-height: 64px; padding: 6px 10px; line-height: 18px; }
 .draft .icon-button { width: 30px; height: 30px; min-height: 30px; flex-basis: 30px; padding: 6px; }
+.draft .icon-button { border-color: transparent; background: transparent; box-shadow: none; }
+.draft .icon-button.primary { color: var(--accent-ink); }
+.draft .icon-button:hover:not(:disabled) { background: var(--control); }
+.draft fieldset { min-width: 0; margin: 8px 0; padding: 12px 0; border: 0; }
+.draft fieldset legend { padding: 0; }
+.draft .form-icon { border: 0; }
 .draft .entry-icon { width: 24px; height: 24px; flex-basis: 24px; border-radius: 6px; font-size: 14px; }
 .input-actions { gap: 6px; }
 .input-actions > input:not([type=checkbox]) { flex: 1; width: 160px; }
@@ -533,6 +539,23 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 99px; }
 .profile-summary { max-width: 480px; }
 .profile-summary code { display: block; overflow-wrap: anywhere; user-select: text; }
 .profile-summary details { margin-top: 16px; text-align: left; }
+
+/* Keep the vault introduction on one axis, including its disclosure and action. */
+.vault-welcome { padding: 32px 16px; gap: 20px; }
+.vault-welcome .empty-icon { flex-shrink: 0; margin: 0; }
+.vault-welcome .profile-summary { width: 100%; max-width: 360px; min-width: 0; }
+.vault-welcome h2 { line-height: 1.3; overflow-wrap: anywhere; }
+.vault-welcome p { max-width: 360px; margin: 0 auto; line-height: 1.6; }
+.vault-welcome .profile-summary > p { margin-top: 8px; }
+.vault-welcome .profile-summary > .notice { margin-top: 20px; }
+.vault-welcome .profile-summary details { margin-top: 20px; border-top: 1px solid var(--separator); padding-top: 14px; }
+.vault-welcome summary { width: fit-content; max-width: 100%; margin-inline: auto; cursor: pointer; color: var(--muted); font-size: 12px; }
+.vault-welcome summary:hover { color: var(--ink); }
+.vault-welcome summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 3px; }
+.vault-welcome details p { margin: 14px 0 4px; font-size: 11px; }
+.vault-welcome details code { font-size: 11px; line-height: 1.6; }
+.vault-welcome > .actions { justify-content: center; }
+.welcome-create { gap: 8px; min-height: 34px; padding: 7px 14px; }
 
 .history-change { border-top: 1px solid var(--border); padding: 20px 0; }
 .history-diff { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }

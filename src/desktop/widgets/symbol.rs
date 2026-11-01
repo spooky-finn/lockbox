@@ -70,7 +70,9 @@ pub(crate) fn Symbol(icon: Icon) -> Element {
         Icon::Fingerprint => {
             "M4 11a8 8 0 0 1 16 0m-13 1v-1a5 5 0 0 1 10 0v3c0 3-.8 5-2 7M10 18c.8-2 1-4 1-7a1 1 0 0 1 2 0v3c0 3-.5 5-1.5 7M4 15c0 2-.3 3-1 4m4-4c0 3-.4 4.5-1.3 6M20 15c0 2-.2 3.5-.7 5"
         }
-        Icon::Save => "M12 3v12m-4-4 4 4 4-4M4 14v5a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5",
+        Icon::Save => {
+            "M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12l4 4v12a2 2 0 0 1-2 2ZM17 21v-8H7v8M7 3v5h8V3"
+        }
         Icon::Close => "m6 6 12 12M6 18 18 6",
         Icon::Sparkles => {
             "m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5L12 3Zm7-1v4m-2-2h4"

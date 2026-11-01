@@ -23,6 +23,12 @@ impl Settings {
         })
     }
 
+    pub(crate) fn identity_path(&self) -> Option<PathBuf> {
+        self.path
+            .as_ref()
+            .map(|path| path.with_file_name("identity.key"))
+    }
+
     /// Every tab keeps its own copy of the preferences. Reload the file first
     /// and apply only this change, so tabs never revert each other's settings.
     pub fn update(&mut self, change: impl FnOnce(&mut Config)) -> Result<(), String> {

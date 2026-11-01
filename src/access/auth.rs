@@ -5,7 +5,7 @@ use crate::{
     desktop::time::unix_now,
     platform::touchid::{self, Biometrics},
     settings::config::Config,
-    vault::{KdfParams, Vault, profile::ProviderConfiguration},
+    vault::{KdfParams, Vault, identity::Identity, profile::ProviderConfiguration},
 };
 use secrecy::{ExposeSecret, SecretString};
 use std::{
@@ -46,6 +46,7 @@ pub(crate) enum StorageKind {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CreationStep {
     EncryptionKey,
+    Identity,
     Sync,
     Password,
 }
@@ -67,6 +68,10 @@ pub(crate) struct Locked {
     pub(crate) show_recovery_words: bool,
     pub(crate) importing_words: bool,
     pub(crate) recovering: bool,
+    pub(crate) identity_path: Option<PathBuf>,
+    pub(crate) identity_source: Option<PathBuf>,
+    pub(crate) identity: Option<Identity>,
+    pending_identity: Option<Receiver<Result<Identity, String>>>,
     pub(crate) error: Option<String>,
     /// Argon2id and Touch ID run on a worker thread so the window keeps repainting.
     pub(crate) pending: Option<Receiver<Result<Opened, String>>>,
@@ -100,6 +105,10 @@ impl Locked {
             show_recovery_words: false,
             importing_words: false,
             recovering: false,
+            identity_path: None,
+            identity_source: None,
+            identity: None,
+            pending_identity: None,
             error,
             pending: None,
             touch_id: None,
@@ -123,6 +132,66 @@ impl Locked {
         // A local staging profile supplies independent keys until admission.
         form.cloud.space_name = "Shared space".into();
         form
+    }
+
+    pub(crate) fn busy(&self) -> bool {
+        self.pending.is_some() || self.pending_identity.is_some()
+    }
+
+    /// A missing identity may be set up once; unreadable files still require unlock.
+    pub(crate) fn with_identity_path(
+        mut self,
+        path: Option<PathBuf>,
+        source: Option<PathBuf>,
+    ) -> Self {
+        self.identity_path = path;
+        if self.mode == Mode::Create && self.identity_path.is_some() {
+            let saved = self.identity_path.as_ref().is_some_and(|path| {
+                !matches!(std::fs::symlink_metadata(path), Err(error) if error.kind() == std::io::ErrorKind::NotFound)
+            });
+            self.identity_source = (!saved).then_some(source).flatten();
+            if saved || self.identity_source.is_some() {
+                self.recovery_words.zeroize();
+                self.creation_step = CreationStep::Identity;
+            }
+        }
+        self
+    }
+
+    pub(crate) fn unlocking_identity(&self) -> bool {
+        self.creation_step == CreationStep::Identity
+            && (self.identity_source.is_some()
+                || self
+                    .identity_path
+                    .as_ref()
+                    .is_some_and(|path| path.exists()))
+    }
+
+    /// Switching between create and join must not replace the selected identity.
+    pub(crate) fn switch_creation(&mut self, joining: bool) {
+        if self.busy() {
+            return;
+        }
+        self.edit_sync_setup();
+        self.joining = joining;
+        self.recovering = false;
+        self.storage_kind = joining.then_some(StorageKind::Cloud);
+        self.cloud = CloudSetup::default();
+        if joining {
+            self.cloud.space_name = "Shared space".into();
+        }
+        if self.identity.is_none() {
+            self.creation_step = if self.identity_source.is_some()
+                || self
+                    .identity_path
+                    .as_ref()
+                    .is_some_and(|path| path.exists())
+            {
+                CreationStep::Identity
+            } else {
+                CreationStep::EncryptionKey
+            };
+        }
     }
 
     /// Offers Touch ID when it was turned on for this file and the sensor is available.
@@ -200,11 +269,18 @@ impl Locked {
     }
 
     pub(crate) fn edit_recovery_key(&mut self) {
+        if self.identity.is_some() {
+            return;
+        }
         self.edit_sync_setup();
         self.creation_step = CreationStep::EncryptionKey;
     }
 
     fn validate_recovery_key(&mut self) -> bool {
+        if self.identity.is_some() {
+            self.error = None;
+            return true;
+        }
         self.error = if let Err(error) = RecoveryPhrase::parse(&self.recovery_words) {
             Some(error.to_string())
         } else if !self.words_saved {
@@ -221,7 +297,11 @@ impl Locked {
             && self.validate_recovery_key()
         {
             self.show_recovery_words = false;
-            self.creation_step = CreationStep::Sync;
+            self.creation_step = if self.identity_path.is_some() {
+                CreationStep::Identity
+            } else {
+                CreationStep::Sync
+            };
         }
     }
 
@@ -239,6 +319,15 @@ impl Locked {
     }
 
     pub(crate) fn generate_recovery_words(&mut self) -> bool {
+        if self.identity.is_some()
+            || self.identity_source.is_some()
+            || self
+                .identity_path
+                .as_ref()
+                .is_some_and(|path| path.exists())
+        {
+            return false;
+        }
         match RecoveryPhrase::generate() {
             Ok(phrase) => {
                 self.recovery_words = Zeroizing::new(phrase.words().expose_secret().to_owned());
@@ -268,6 +357,7 @@ impl Locked {
         if self.mode != Mode::Create
             || self.storage_kind.is_none()
             || self.creation_step != CreationStep::Password
+            || (self.identity_path.is_some() && self.identity.is_none())
         {
             return false;
         }
@@ -283,20 +373,21 @@ impl Locked {
                     ))
                 } else if *self.password != *self.repeat {
                     Some("Passwords do not match".into())
-                } else if let Err(error) = RecoveryPhrase::parse(&self.recovery_words) {
-                    Some(error.to_string())
-                } else if !self.words_saved {
-                    Some("Save your recovery words before continuing".into())
                 } else {
                     None
                 }
             });
         self.error = error;
-        self.error.is_none()
+        self.error.is_none() && self.validate_recovery_key()
     }
 
     pub(crate) fn submit(&mut self) {
-        if self.pending.is_some() {
+        if self.busy() {
+            return;
+        }
+
+        if self.mode == Mode::Create && self.creation_step == CreationStep::Identity {
+            self.submit_identity();
             return;
         }
 
@@ -330,7 +421,16 @@ impl Locked {
             self.error = Some("Passwords do not match".into());
             return;
         }
-        let phrase = if self.mode == Mode::Create || self.recovering {
+        let identity = self.identity.clone();
+        let phrase = if self.mode == Mode::Create && identity.is_some() {
+            match identity.as_ref().unwrap().phrase() {
+                Ok(phrase) => phrase,
+                Err(error) => {
+                    self.error = Some(error.to_string());
+                    return;
+                }
+            }
+        } else if self.mode == Mode::Create || self.recovering {
             match RecoveryPhrase::parse(&self.recovery_words) {
                 Ok(phrase) => Some(phrase),
                 Err(error) => {
@@ -350,6 +450,7 @@ impl Locked {
         self.error = None;
         self.waiting_touch_id = false;
         let mode = self.mode;
+        let identity_path = self.identity_path.clone();
         let recovering = self.recovering;
         let cloud_creation = cloud.then(|| {
             (
@@ -383,34 +484,148 @@ impl Locked {
                     Mode::Open => Vault::open(&path, &password),
                     Mode::Create => {
                         if let Some((username, space_name, provider)) = cloud_creation {
-                            crate::vault::ProfileStore::default().create_shared_with_phrase(
+                            crate::vault::ProfileStore::default().create_shared_with_identity(
                                 &path,
                                 &password,
                                 KdfParams::default(),
                                 crate::vault::SharedProfile { username, space_name, provider },
-                                phrase.as_ref().expect("validated recovery phrase"),
+                                &identity.unwrap_or_else(|| Identity::from_phrase(phrase.as_ref().expect("validated recovery phrase"))),
                             )
-                        } else {
+                        } else if let Some(phrase) = phrase.as_ref() {
                             Vault::create_with_recovery_phrase(
                                 &path,
                                 &password,
                                 KdfParams::default(),
-                                phrase.as_ref().expect("validated recovery phrase"),
+                                phrase,
                             )
+                        } else {
+                            Vault::create(&path, &password, KdfParams::default())
                         }
                     }
                 }
             }
-            .map(|vault| Opened { vault, with_password, recovery_notice })
+            .map(|vault| {
+                // Adopt an existing space's root on password unlock, before any
+                // future space is created. Never rewrite an existing identity.
+                if mode == Mode::Open && !recovering && let Some(identity_path) = identity_path
+                    && !identity_path.exists() && vault.profile_summary().is_some() {
+                    match Identity::from_vault(&vault, &password).and_then(|identity| {
+                        identity.save_new(&identity_path, &password, KdfParams::default())
+                    }) {
+                        Ok(()) => {}
+                        Err(error) => recovery_notice = Some(format!("Could not save identity: {error}")),
+                    }
+                }
+                Opened { vault, with_password, recovery_notice }
+            })
             .map_err(|error| error.to_string());
             let _ = sender.send(result);
         });
         self.pending = Some(receiver);
     }
+
+    fn submit_identity(&mut self) {
+        let Some(path) = self.identity_path.clone() else {
+            return;
+        };
+        let unlocking = self.unlocking_identity() && !self.recovering;
+        if self.password.is_empty() {
+            self.error = Some("Enter master password".into());
+            return;
+        }
+        if !unlocking {
+            if self.password.chars().count() < MIN_PASSWORD_CHARS {
+                self.error = Some(format!(
+                    "Master password: at least {MIN_PASSWORD_CHARS} characters"
+                ));
+                return;
+            }
+            if *self.password != *self.repeat {
+                self.error = Some("Passwords do not match".into());
+                return;
+            }
+            if !self.recovering && !self.validate_recovery_key() {
+                return;
+            }
+        }
+        let proposed = if unlocking {
+            None
+        } else {
+            match RecoveryPhrase::parse(&self.recovery_words) {
+                Ok(phrase) => Some(Identity::from_phrase(&phrase)),
+                Err(error) => {
+                    self.error = Some(error.to_string());
+                    return;
+                }
+            }
+        };
+        let source = self.identity_source.clone();
+        let recovering = self.recovering;
+        let password = SecretString::from(std::mem::take(&mut *self.password));
+        self.repeat.zeroize();
+        self.error = None;
+        let (sender, receiver) = mpsc::channel();
+        thread::spawn(move || {
+            let result = (|| {
+                if path.exists() {
+                    if recovering {
+                        let phrase = proposed
+                            .as_ref()
+                            .ok_or(crate::vault::VaultError::RecoveryUnavailable)?
+                            .phrase()?
+                            .ok_or(crate::vault::VaultError::RecoveryUnavailable)?;
+                        return Identity::recover(&path, &phrase, &password);
+                    }
+                    if let Some(proposed) = proposed.as_ref() {
+                        proposed.save_new(&path, &password, KdfParams::default())?;
+                    }
+                    return Identity::open(&path, &password);
+                }
+                if (unlocking && source.is_none()) || recovering {
+                    return Err(crate::vault::VaultError::RecoveryUnavailable);
+                }
+                let identity = if let Some(source) = source {
+                    let vault = Vault::open(&source, &password)?;
+                    Identity::from_vault(&vault, &password)?
+                } else {
+                    proposed.ok_or(crate::vault::VaultError::RecoveryUnavailable)?
+                };
+                identity.save_new(&path, &password, KdfParams::default())?;
+                Ok(identity)
+            })()
+            .map_err(|error: crate::vault::VaultError| error.to_string());
+            let _ = sender.send(result);
+        });
+        self.pending_identity = Some(receiver);
+    }
 }
 
 impl Locked {
     pub(crate) fn poll(&mut self, biometrics: Arc<dyn Biometrics>) -> Option<Opened> {
+        if let Some(receiver) = &self.pending_identity {
+            match receiver.try_recv() {
+                Ok(Ok(identity)) => {
+                    self.recovery_words =
+                        Zeroizing::new(identity.words().unwrap_or_default().to_owned());
+                    self.identity = Some(identity);
+                    self.identity_source = None;
+                    self.pending_identity = None;
+                    self.words_saved = true;
+                    self.recovering = false;
+                    self.show_recovery_words = false;
+                    self.creation_step = CreationStep::Sync;
+                }
+                Ok(Err(error)) => {
+                    self.error = Some(error);
+                    self.pending_identity = None;
+                }
+                Err(TryRecvError::Disconnected) => {
+                    self.error = Some("Unlock was interrupted".into());
+                    self.pending_identity = None;
+                }
+                Err(TryRecvError::Empty) => {}
+            }
+        }
         if let Some(receiver) = &self.pending {
             match receiver.try_recv() {
                 Ok(Ok(opened)) => return Some(opened),

@@ -16,7 +16,7 @@ pub(crate) fn KeySetupView() -> Element {
     let Screen::Locked(locked) = &*screen else {
         return rsx! {};
     };
-    let busy = locked.pending.is_some();
+    let busy = locked.busy();
 
     rsx! {
         form { class: "unlock-form", onsubmit: move |event: FormEvent| {

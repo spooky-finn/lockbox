@@ -123,7 +123,7 @@ impl BootstrapProfile {
         Ok(())
     }
 
-    fn generate_for_root(
+    pub(crate) fn generate_for_root(
         root: &SigningKey,
         username: String,
         space_name: String,
@@ -191,6 +191,10 @@ impl BootstrapProfile {
                     && certificate.body.signing_key == self.identity.signing_key
                     && certificate.body.hpke_key == self.identity.hpke_key
             })
+    }
+
+    pub(crate) fn unlock_root(&self, password: &SecretString) -> Result<SigningKey> {
+        self.root_capsule.open(password, &self.identity.root_key)
     }
 
     pub(crate) fn sync_secret(&self) -> crate::sync::protocol::DeviceSecret {

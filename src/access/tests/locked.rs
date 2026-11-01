@@ -262,8 +262,8 @@ fn recovery_words_are_hidden_after_key_setup_and_preserved_on_back() {
     update(&mut dom, |_| runtime::begin_create());
     update(&mut dom, |state| {
         edit_locked(state, |form| {
-            assert_ne!(form.recovery_words.as_str(), words);
-            assert!(!form.words_saved);
+            assert_eq!(form.recovery_words.as_str(), words);
+            assert!(form.words_saved);
         })
     });
 }

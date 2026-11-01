@@ -1,0 +1,7 @@
+Main screen alignment
+
+- Welcome: shared 360px column. Center text, identity disclosure, folder action.
+- Consistent gaps replace uneven paragraph margins. Identity values wrap safely.
+- Folder action shows icon + translated label. Read-only protection retained.
+- Header inset matches sidebar controls. Footer rows share height, icon gap.
+- Existing editor CSS changes retained.

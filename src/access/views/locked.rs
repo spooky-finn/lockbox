@@ -29,15 +29,18 @@ pub(crate) fn LockedView() -> Element {
         return rsx! {};
     };
 
-    let busy = locked.pending.is_some();
+    let busy = locked.busy();
     let create = locked.mode == Mode::Create;
     let key_setup = create && locked.creation_step == CreationStep::EncryptionKey;
+    let identity_setup = create && locked.creation_step == CreationStep::Identity;
+    let identity_unlock = identity_setup && locked.unlocking_identity() && !locked.recovering;
     let sync_setup = create && locked.creation_step == CreationStep::Sync;
     let create_password = create && locked.creation_step == CreationStep::Password;
     let cloud_password = create_password && locked.storage_kind == Some(StorageKind::Cloud);
     let recovering = locked.recovering;
-    let ready =
-        create_password || !create && locked.path.as_ref().is_some_and(|path| path.exists());
+    let ready = identity_setup
+        || create_password
+        || !create && locked.path.as_ref().is_some_and(|path| path.exists());
     let touch_id = ready && !create && locked.touch_id.is_some();
     let filename = locked.space_name.clone().unwrap_or_else(|| {
         locked
@@ -52,7 +55,7 @@ pub(crate) fn LockedView() -> Element {
         .as_ref()
         .map(|path| path.display().to_string())
         .unwrap_or_default();
-    let weak_password = (create || recovering)
+    let weak_password = ((create && !identity_unlock) || recovering)
         && !locked.password.is_empty()
         && locked.password.chars().count() < MIN_PASSWORD_CHARS;
     let submit = move |event: FormEvent| {
@@ -63,15 +66,15 @@ pub(crate) fn LockedView() -> Element {
             return;
         }
         edit_locked(state, |locked| {
-            if locked.pending.is_none() {
+            if !locked.busy() {
                 locked.submit();
             }
         });
     };
     rsx! {
-        section { class: if key_setup || cloud_password || recovering { "lock-screen recovery-screen" } else { "lock-screen" }, aria_label: language.text(if key_setup { Text::EncryptionKeySetup } else { Text::UnlockVault }),
+        section { class: if key_setup || identity_setup || cloud_password || recovering { "lock-screen recovery-screen" } else { "lock-screen" }, aria_label: language.text(if key_setup { Text::EncryptionKeySetup } else { Text::UnlockVault }),
             div { class: "unlock-content",
-                if !key_setup && !cloud_password {
+                if !key_setup && !identity_setup && !cloud_password {
                     LockMark {
                         if touch_id {
                             IconButton { class: "lock-badge touch-id", icon: Icon::Fingerprint, label: language.text(Text::UnlockWithTouchID), disabled: busy,
@@ -88,6 +91,8 @@ pub(crate) fn LockedView() -> Element {
                 h1 { class: "unlock-title",
                     if recovering { {language.text(Text::RecoverVault)} }
                     else if key_setup { {language.text(Text::EncryptionKeySetup)} }
+                    else if identity_unlock { {language.text(Text::UnlockIdentity)} }
+                    else if identity_setup { {language.text(Text::ProtectIdentity)} }
                     else if create && locked.joining { {language.text(Text::SharingConnect)} }
                     else if create { {language.text(Text::CreateAVault)} }
                     else if ready { {language.text(Text::VaultIsLocked)} }
@@ -96,6 +101,8 @@ pub(crate) fn LockedView() -> Element {
                 p { class: "unlock-description", title: "{path}",
                     if recovering { {language.text(Text::RecoveryUnlockHint)} }
                     else if key_setup { {language.text(Text::EncryptionKeySetupHint)} }
+                    else if identity_unlock { {language.text(Text::UnlockIdentityHint)} }
+                    else if identity_setup { {language.text(Text::ProtectIdentityHint)} }
                     else if create && locked.joining && !cloud_password { {language.text(Text::SharingJoinSetup)} }
                     else if cloud_password { {language.text(Text::ChooseAMasterPasswordToProtectYourLocalProfile)} }
                     else if create && locked.path.is_none() { {language.text(Text::ChooseAVaultType)} }
@@ -110,9 +117,13 @@ pub(crate) fn LockedView() -> Element {
                 }
 
                 if sync_setup {
-                    button { r#type: "button", class: "setup-button", disabled: busy,
-                        onclick: move |_| edit_locked(state, |locked| locked.edit_recovery_key()),
-                        {language.text(Text::BackToEncryptionKey)}
+                    if locked.identity.is_some() {
+                        p { class: "notice", {language.text(Text::SharedIdentityHint)} }
+                    } else {
+                        button { r#type: "button", class: "setup-button", disabled: busy,
+                            onclick: move |_| edit_locked(state, |locked| locked.edit_recovery_key()),
+                            {language.text(Text::BackToEncryptionKey)}
+                        }
                     }
                     if !locked.joining {
                         div { class: "storage-choices",
@@ -164,7 +175,7 @@ pub(crate) fn LockedView() -> Element {
                             }
                         }
 
-                        if create || recovering {
+                        if (create && !identity_unlock) || recovering {
                             label { class: "sr-only", r#for: "repeat-password", {language.text(Text::RepeatMasterPassword)} }
                             div { class: "unlock-input",
                                 input { id: "repeat-password", r#type: "password", autocomplete: "off", disabled: busy,
@@ -175,7 +186,7 @@ pub(crate) fn LockedView() -> Element {
                                     },
                                 }
 
-                                if !cloud_password && !recovering {
+                                if !cloud_password && !recovering && !identity_setup {
                                     IconButton { class: "unlock-submit quiet", kind: "submit", icon: Icon::ArrowRight, label: language.text(Text::CreateVault), disabled: busy }
                                 }
                             }
@@ -192,10 +203,13 @@ pub(crate) fn LockedView() -> Element {
                         if cloud_password {
                             button { id: "recovery-submit", r#type: "submit", class: "setup-button", disabled: busy, {language.text(Text::CreateProfileAndKeys)} }
                         }
+                        if identity_setup && !recovering {
+                            button { r#type: "submit", class: "setup-button", disabled: busy, {language.text(Text::Continue)} }
+                        }
                     }
                 }
 
-                if ready && !create {
+                if ready && (!create || (identity_setup && locked.identity_source.is_none() && locked.unlocking_identity())) {
                     button { r#type: "button", class: "quiet", disabled: busy,
                         onclick: move |_| edit_locked(state, |locked| locked.toggle_recovery()),
                         if recovering { {language.text(Text::BackToPasswordUnlock)} }
@@ -210,7 +224,7 @@ pub(crate) fn LockedView() -> Element {
                         if busy {
                             p { role: "status", class: "muted",
                                 if locked.waiting_touch_id { {language.text(Text::WaitingForTouchID)} }
-                                else if create { {language.text(Text::CreatingVault)} }
+                                else if create && !identity_setup { {language.text(Text::CreatingVault)} }
                                 else { {language.text(Text::CheckingPassword)} }
                             }
                         }

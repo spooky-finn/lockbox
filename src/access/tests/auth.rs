@@ -326,3 +326,138 @@ fn recovery_mode_clears_secrets_and_validates_before_starting_worker() {
     assert!(form.repeat.is_empty());
     assert!(form.recovery_words.is_empty());
 }
+
+fn wait_for_identity(form: &mut Locked) {
+    use std::{
+        sync::Arc,
+        time::{Duration, Instant},
+    };
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while form.busy() && Instant::now() < deadline {
+        assert!(form.poll(Arc::new(FakeBiometrics::default())).is_none());
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(!form.busy(), "identity worker timed out");
+}
+
+#[test]
+fn identity_is_saved_without_a_space_and_reused_after_restart_for_joining() {
+    use crate::{access::mnemonic::RecoveryPhrase, vault::identity::Identity};
+    use secrecy::SecretString;
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("identity.key");
+    let mut form = Locked::begin_create().with_identity_path(Some(path.clone()), None);
+    let phrase = RecoveryPhrase::parse(&form.recovery_words).unwrap();
+    let root = phrase.signing_key().to_bytes();
+    form.words_saved = true;
+    form.continue_key_setup();
+    assert!(form.creation_step == CreationStep::Identity);
+    form.password.push_str("identity master password");
+    form.repeat.push_str("identity master password");
+    form.submit();
+    assert!(form.password.is_empty());
+    assert!(form.repeat.is_empty());
+    wait_for_identity(&mut form);
+    assert!(form.error.is_none());
+    assert!(form.creation_step == CreationStep::Sync);
+    assert!(form.path.is_none());
+    assert!(form.storage_kind.is_none());
+    assert!(path.exists());
+    assert!(!form.generate_recovery_words());
+    form.edit_recovery_key();
+    assert!(form.creation_step == CreationStep::Sync);
+    form.switch_creation(true);
+    assert!(form.joining);
+    assert_eq!(
+        form.identity.as_ref().unwrap().signing_key().to_bytes(),
+        root
+    );
+    drop(form);
+
+    let bytes = std::fs::read(&path).unwrap();
+    let mut join = Locked::begin_join().with_identity_path(Some(path.clone()), None);
+    assert!(join.creation_step == CreationStep::Identity);
+    assert!(join.recovery_words.is_empty());
+    assert!(!join.generate_recovery_words());
+    join.password.push_str("wrong password");
+    join.submit();
+    wait_for_identity(&mut join);
+    assert!(join.identity.is_none());
+    assert!(join.creation_step == CreationStep::Identity);
+    assert!(join.error.is_some());
+    assert_eq!(std::fs::read(&path).unwrap(), bytes);
+    join.password.push_str("identity master password");
+    join.submit();
+    wait_for_identity(&mut join);
+    assert!(join.error.is_none());
+    assert!(join.creation_step == CreationStep::Sync);
+    assert_eq!(
+        join.identity.as_ref().unwrap().signing_key().to_bytes(),
+        root
+    );
+    assert_eq!(
+        Identity::open(
+            &path,
+            &SecretString::from("identity master password".to_owned())
+        )
+        .unwrap()
+        .signing_key()
+        .to_bytes(),
+        root
+    );
+    assert_eq!(std::fs::read(&path).unwrap(), bytes);
+}
+
+#[test]
+fn joining_adopts_the_existing_profile_root_without_creating_another() {
+    use crate::vault::{KdfParams, ProfileStore, ProviderConfiguration, SharedProfile};
+    use secrecy::SecretString;
+    let directory = tempfile::tempdir().unwrap();
+    let source = directory.path().join("existing.lbx");
+    let password = SecretString::from("existing master password".to_owned());
+    let vault = ProfileStore::default()
+        .create_shared(
+            &source,
+            &password,
+            &password,
+            KdfParams {
+                memory_kib: 8192,
+                passes: 1,
+                lanes: 1,
+            },
+            SharedProfile {
+                username: "Alice".into(),
+                space_name: "Existing".into(),
+                provider: ProviderConfiguration {
+                    base_url: "https://gateway.storjshare.io".into(),
+                    bucket: "fictional-bucket".into(),
+                    access_key: "fictional-access".into(),
+                    secret_key: "fictional-secret".into(),
+                },
+            },
+        )
+        .unwrap();
+    let root = vault.test_profile().unwrap().identity.root_key;
+    let before = std::fs::read(&source).unwrap();
+    drop(vault);
+    let mut form = Locked::begin_join().with_identity_path(
+        Some(directory.path().join("identity.key")),
+        Some(source.clone()),
+    );
+    assert!(form.unlocking_identity());
+    assert!(form.recovery_words.is_empty());
+    form.password.push_str("existing master password");
+    form.submit();
+    wait_for_identity(&mut form);
+    assert!(form.error.is_none(), "{:?}", form.error);
+    assert_eq!(
+        form.identity
+            .as_ref()
+            .unwrap()
+            .signing_key()
+            .verifying_key()
+            .to_bytes(),
+        root
+    );
+    assert_eq!(std::fs::read(&source).unwrap(), before);
+}

@@ -18,11 +18,9 @@ pub(crate) enum Screen {
 impl Screen {
     pub fn locked(settings: &Settings, biometrics: &dyn Biometrics) -> Self {
         Self::Locked(Box::new(
-            Locked::new(settings.config.last_vault.clone()).offer_touch_id(
-                &settings.config,
-                biometrics,
-                true,
-            ),
+            Locked::new(settings.config.last_vault.clone())
+                .with_identity_path(settings.identity_path(), None)
+                .offer_touch_id(&settings.config, biometrics, true),
         ))
     }
 
@@ -36,11 +34,9 @@ impl Screen {
         security.clipboard.clear_now();
 
         if let Self::Unlocked(unlocked) = self {
-            let mut locked = Locked::new(Some(unlocked.vault.path().to_path_buf())).offer_touch_id(
-                &settings.config,
-                biometrics,
-                false,
-            );
+            let mut locked = Locked::new(Some(unlocked.vault.path().to_path_buf()))
+                .with_identity_path(settings.identity_path(), None)
+                .offer_touch_id(&settings.config, biometrics, false);
             locked.joining = unlocked.sharing.joining;
             locked.space_name = unlocked
                 .vault

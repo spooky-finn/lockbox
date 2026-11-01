@@ -163,6 +163,33 @@ impl ProfileStore {
         )
     }
 
+    pub(crate) fn create_shared_with_identity(
+        &self,
+        path: &Path,
+        password: &SecretString,
+        kdf: KdfParams,
+        configuration: SharedProfile,
+        identity: &crate::vault::identity::Identity,
+    ) -> Result<Vault> {
+        let profile = BootstrapProfile::generate_for_root(
+            &identity.signing_key(),
+            configuration.username,
+            configuration.space_name,
+            configuration.provider,
+            password,
+            kdf,
+        )?;
+        let phrase = identity.phrase()?;
+        Vault::create_profile_snapshot(
+            path,
+            password,
+            kdf,
+            profile,
+            self.witnesses.clone(),
+            (Vec::new(), Vec::new(), phrase.as_ref()),
+        )
+    }
+
     /// Recovers readable access without bypassing installation/rollback protection.
     pub fn open_with_recovery_phrase(
         &self,

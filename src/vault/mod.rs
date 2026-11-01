@@ -80,6 +80,8 @@ pub enum VaultError {
     WrongRecoveryPhrase,
     #[error("This vault does not have recovery words")]
     RecoveryUnavailable,
+    #[error("A different private identity key is already saved on this device")]
+    IdentityMismatch,
     #[error("{0}")]
     Mnemonic(#[from] crate::access::mnemonic::Error),
     #[error("received changes await a durable commit; retry synchronization")]
@@ -155,6 +157,7 @@ mod edits;
 mod metadata;
 pub use metadata::ProfileSummary;
 mod history;
+pub(crate) mod identity;
 mod protection;
 mod records;
 mod recovery;

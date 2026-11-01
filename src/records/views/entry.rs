@@ -47,7 +47,7 @@ pub(crate) fn EntryView() -> Element {
                 div { class: "detail-title", p { class: "detail-kind", {language.text(Text::Password)} } h1 { "{entry.title}" } }
                 if !unlocked.confirm_delete {
                     div { class: "actions entry-actions",
-                        button { class: "quiet", onclick: move |_| edit_unlocked(state, |u| u.open_records_page(crate::desktop::workspace::Page::History)), {language.text(Text::RecordHistory)} }
+                        IconButton { class: "quiet", icon: Icon::Clock, label: language.text(Text::RecordHistory), onclick: move |_| edit_unlocked(state, |u| u.open_records_page(crate::desktop::workspace::Page::History)) }
                         IconButton { class: "quiet", icon: Icon::Edit, label: language.text(Text::Edit), disabled: unlocked.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.start_edit()) }
                         IconButton { class: "danger quiet", icon: Icon::Trash, label: language.text(Text::Delete), disabled: unlocked.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.confirm_delete = true) }
                     }

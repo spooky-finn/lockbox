@@ -170,7 +170,7 @@ fn VaultContent() -> Element {
         else if unlocked.draft.is_some() { DraftView {} }
         else if unlocked.selected_entry().is_some() { EntryView {} }
         else if unlocked.directories.selected.is_some() { DirectoryView {} }
-        else { div { class: "empty-state",
+        else { div { class: "empty-state vault-welcome",
             div { class: "empty-icon", Symbol { icon: Icon::Key } }
             if let Some(profile) = unlocked.vault.profile_summary() {
                 div { class: "profile-summary",
@@ -192,7 +192,10 @@ fn VaultContent() -> Element {
             } else { h2 { {language.text(Text::EverythingImportantLockedAway)} } }
             p { {language.text(Text::SelectAnEntryOnTheLeftOrCreateOne)} }
             div { class: "actions",
-                IconButton { icon: Icon::FolderPlus, label: language.text(Text::NewFolder), disabled: unlocked.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.start_directory()) }
+                button { r#type: "button", class: "welcome-create", disabled: unlocked.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.start_directory()),
+                    Symbol { icon: Icon::FolderPlus }
+                    {language.text(Text::NewFolder)}
+                }
             }
         } }
     }
