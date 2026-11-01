@@ -7,23 +7,21 @@ Manual compaction tool unavailable; rolling handoff supports automatic compactio
 No delegation requested. Keep unrelated work outside refactor commits.
 Last full suite: cycle 48; 411 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
-Last extension check: cycle 52; 19 tests and both builds passed; two browser probes skipped.
+Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 52: Extract native browser connection lifecycle
-- createNativeSession owns port, request IDs, pending replies/timers and counters.
-  Inject runtime explicitly; background retains page policy and serialized queue.
-  Lifecycle statements identical after indentation/runtime qualifier changes.
-- Preserve immediate lock, cancellation/version checks, stale-port rejection,
-  native error text, timeout/disconnect cleanup and password clearing.
-- Two new regressions passed before refactor: unmatched replies/native denial
-  then retry on same port; pending disconnect and stale old-port events after
-  reconnect. Existing six background tests passed too.
-- npm run check: nineteen Node tests, syntax checks and both builds passed. New
-  module included byte-identically in Chrome/Firefox outputs. Two optional real
-  browser probes skipped (no configured binaries). No Rust or registration edits.
-- All four sources match verified snapshot; whitespace checks passed. Unrelated
-  edits untouched. Snapshot: /tmp/lockbox-refactor-52.8z0s_yor/browser-extension.
+Cycle 53: Remove duplicate browser lock route
+- Delete unreachable lock case from queued handler. Trusted popup listener owns
+  immediate lock and returns before queue creation. Clarify queue comments so
+  future edits preserve cancellation while earlier work is stalled.
+- Existing pending-inspection test now checks exact immediate locked reply;
+  all eight background tests passed before refactor with this assertion.
+- npm run check: nineteen Node tests, syntax checks and both builds passed.
+  Two optional real-browser probes skipped (no configured binaries). No Rust,
+  permissions, native registration, page-fill or packaging behavior changes.
+- Both sources match verified snapshot; whitespace checks passed. Unrelated
+  edits untouched. Snapshot: /tmp/lockbox-refactor-53.tbsdylab/browser-extension.
 
-Next search: browser popup state helpers, native registration/build scripts,
-then return to vault persistence duplication or records workflow boundaries.
+Next search: return to Rust value/entity validation copies and vault opening
+checks, plus common encrypted-file write/sync sequence. Popup and build scripts
+already short; avoid helpers without a clear improvement.
 Inspect current code and tests before choosing; no quota-driven edits.

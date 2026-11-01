@@ -59,7 +59,6 @@ async function handle(message, ticket) {
       try { return await companion.request({ action: "unlock", path: message.path, password: message.password }); }
       finally { message.password = ""; }
     }
-    case "lock": companion.disconnect(); return { unlocked: false };
     case "suggestions":
       await tabAt(message.tabId, message.origin);
       stillAllowed(ticket);
@@ -93,12 +92,13 @@ async function handle(message, ticket) {
 
 api.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!trustedPopup(sender, api.runtime)) return false;
-  // Serialize requests so lock/unlock, generation and saving cannot overlap.
+  // Lock immediately so pending work cannot delay cancellation.
   if (message.action === "lock") {
     companion.disconnect();
     sendResponse({ ok: true, data: { unlocked: false } });
     return false;
   }
+  // Serialize other requests so unlocking, generation and saving cannot overlap.
   const ticket = companion.cancellation;
   const work = chain.then(() => {
     stillAllowed(ticket);

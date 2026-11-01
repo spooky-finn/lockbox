@@ -103,7 +103,7 @@ test("locking while form inspection is pending cancels fill without reopening na
   await f.message({ action: "status" });
   const filling = f.message({ action: "fill", tabId: 1, origin: "https://accounts.example", entryId: "id" });
   await new Promise((resolve) => setImmediate(resolve));
-  await f.message({ action: "lock" });
+  assert.deepEqual(await f.message({ action: "lock" }), { ok: true, data: { unlocked: false } });
   release([{ result: { token: "document-token" } }]);
   assert.equal((await filling).ok, false);
   assert.deepEqual(f.requests.map((item) => item.action), ["status"]);
