@@ -39,17 +39,31 @@ pub(super) fn use_runtime() -> Session {
     use_context_provider(|| Clock(clock));
     use_context_provider(|| status);
 
+    // Wry delivers every window's events to every tab: act only on our own.
+    let own_window = dioxus::desktop::window().id();
     dioxus::desktop::use_wry_event_handler(move |event, _| {
         use dioxus::desktop::tao::event::{Event, WindowEvent};
 
-        if matches!(
-            event,
+        match event {
             Event::WindowEvent {
+                window_id,
                 event: WindowEvent::CloseRequested,
                 ..
-            } | Event::LoopDestroyed
-        ) {
-            lock(None);
+            } if *window_id == own_window => lock(None),
+            Event::LoopDestroyed => lock(None),
+            _ => {}
+        }
+    });
+    // The menu bar is shared too; the focused tab handles its commands.
+    dioxus::desktop::use_muda_event_handler(move |event| {
+        if !dioxus::desktop::window().is_focused() {
+            return;
+        }
+
+        match event.id().as_ref() {
+            super::window::NEW_TAB => super::window::open(true),
+            super::window::NEW_WINDOW => super::window::open(false),
+            _ => {}
         }
     });
     use_future(move || async move {
@@ -283,14 +297,16 @@ pub(super) fn set_auto_lock(minutes: u32) {
     let mut settings = consume_context::<Signal<Settings>>();
     let mut state = consume_context::<Session>();
     let native = consume_context::<SecurityHandle>();
-    settings.write().config.auto_lock_minutes = minutes;
+    let saved = settings
+        .write()
+        .update(|config| config.auto_lock_minutes = minutes);
     native
         .borrow_mut()
         .auto_lock
         .set_minutes(minutes, Instant::now(), SystemTime::now());
 
     if let Screen::Unlocked(workspace) = &mut *state.write() {
-        workspace.error = settings.peek().save().err();
+        workspace.error = saved.err();
     }
     publish_status();
 }
@@ -298,9 +314,9 @@ pub(super) fn set_auto_lock(minutes: u32) {
 pub(super) fn set_language(language: crate::core::language::Language) {
     let mut settings = consume_context::<Signal<Settings>>();
     let mut state = consume_context::<Session>();
-    settings.write().config.language = language;
+    let saved = settings.write().update(|config| config.language = language);
 
-    if let Err(error) = settings.peek().save() {
+    if let Err(error) = saved {
         match &mut *state.write() {
             Screen::Locked(form) => form.error = Some(error),
             Screen::Unlocked(workspace) => workspace.error = Some(error),

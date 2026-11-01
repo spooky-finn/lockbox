@@ -16,8 +16,9 @@ pub(crate) fn unlocked(dir: &tempfile::TempDir) -> Unlocked {
     Unlocked::new(Vault::create(path, &password, FAST).unwrap())
 }
 
-pub(crate) fn reopen(unlocked: &Unlocked) -> Vault {
-    Vault::open(
+/// What is on disk, read without the file lock the open session holds.
+pub(crate) fn reopen(unlocked: &Unlocked) -> crate::infra::vault::Records {
+    Vault::read_records(
         unlocked.vault.path(),
         &SecretString::from("master".to_owned()),
     )
