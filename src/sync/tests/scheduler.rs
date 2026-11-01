@@ -22,12 +22,17 @@ use std::{
 struct MemoryFactory {
     objects: Arc<Mutex<BTreeMap<Hash, Vec<u8>>>>,
     connections: AtomicUsize,
+    connection_threads: Mutex<Vec<std::thread::ThreadId>>,
     fail_once: AtomicBool,
 }
 
 impl StorageFactory for MemoryFactory {
     fn connect(&self) -> sync::Result<Box<dyn sync::Storage + Send>> {
         self.connections.fetch_add(1, Ordering::Relaxed);
+        self.connection_threads
+            .lock()
+            .unwrap()
+            .push(std::thread::current().id());
         if self.fail_once.swap(false, Ordering::Relaxed) {
             return Err(TransportError::AccessDenied);
         }
@@ -232,6 +237,7 @@ fn new_edits_saved_during_upload_remain_pending_after_old_receipts() {
 
 #[test]
 fn injected_provider_runs_the_complete_background_exchange() {
+    let caller = std::thread::current().id();
     let directory = tempfile::tempdir().unwrap();
     let mut vault = vault(&directory);
     let mut entry = Entry::new();
@@ -241,7 +247,9 @@ fn injected_provider_runs_the_complete_background_exchange() {
     let factory = Arc::new(MemoryFactory::default());
     let mut session = SpaceSync::new(Some(factory.clone()));
     assert_eq!(drive(&mut session, &mut vault), None);
-    assert_eq!(factory.connections.load(Ordering::Relaxed), 2);
+    let connections = factory.connection_threads.lock().unwrap();
+    assert_eq!(connections.len(), 2);
+    assert!(connections.iter().all(|thread| *thread != caller));
     assert_eq!(factory.objects.lock().unwrap().len(), 2);
     assert!(vault.sync_state().unwrap().outbox.is_empty());
     assert!(vault.sync_state().unwrap().last_exchange.is_some());

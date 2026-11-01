@@ -8,16 +8,16 @@ No delegation requested. Keep unrelated work outside refactor commits.
 Last full suite: cycle 10; 378 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 10: Sharing artifact transitions
-- Successful review/export/action transitions reuse cancel_review/cancel_output.
-- Preserve ticket/Arc identity gates and verification before replacing a review.
-- Keep notice when an action invalidates old exports; resets remain distinct.
-- New flow regression passed before refactor: replacing recipient requires fresh
-  verification and invalidates a saved output's old export dialog.
-- Verification: full suite above, full formatting and strict all-target Clippy
+Cycle 11: Scheduler provider setup
+- Download/upload share factory selection and worker-side connection setup.
+- Operation plans stay validated before worker start; vault stays on caller.
+- Keep typed failures, cancellation, scope gates and retry/recovery schedules.
+- Extended provider fixture proves both connections run off caller thread;
+  assertion passed before refactor.
+- Verification: 12 scheduler tests, full formatting and strict all-target Clippy
   passed in isolated snapshot. Workspace changes passed whitespace checks.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-10.WJtgab when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-11.Z8OhjS when workspace cannot compile.
 
-Next search: scheduler state, attachment boundaries, read-only sync projections.
+Next search: attachment boundaries, read-only sync projections, transport discovery.
 Inspect current code and tests before choosing; no quota-driven edits.

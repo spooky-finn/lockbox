@@ -221,12 +221,9 @@ impl SpaceSync {
             .ok_or(crate::sync::protocol::Error::UnauthorizedDevice)?;
         let plan = sync::publication(state, &replay)?;
         let namespace = state.namespace;
-        let factory = self.factory(vault)?;
-        self.start(move |cancel| {
-            let mut storage = factory.connect()?;
-            sync::upload(&mut *storage, namespace, &plan, &cancel).map(Reply::Uploaded)
-        });
-        Ok(())
+        self.start_exchange(vault, move |storage, cancel| {
+            sync::upload(storage, namespace, &plan, cancel).map(Reply::Uploaded)
+        })
     }
 
     fn uploaded(&mut self, vault: &mut Vault, receipts: Vec<Hash>) -> VaultResult<()> {
@@ -273,21 +270,26 @@ impl SpaceSync {
             .sync_state()
             .ok_or(crate::sync::protocol::Error::UnauthorizedDevice)?;
         let request = sync::Discovery::for_state(state)?;
-        let factory = self.factory(vault)?;
-        self.start(move |cancel| {
-            let mut storage = factory.connect()?;
-            request
-                .download(&mut *storage, &cancel)
-                .map(Reply::Downloaded)
-        });
-        Ok(())
+        self.start_exchange(vault, move |storage, cancel| {
+            request.download(storage, cancel).map(Reply::Downloaded)
+        })
     }
 
-    fn factory(&self, vault: &Vault) -> VaultResult<Arc<dyn StorageFactory>> {
-        match &self.factory {
-            Some(factory) => Ok(factory.clone()),
-            None => vault.storage_factory(),
-        }
+    /// Provider connections stay inside the worker; vault access stays with the caller.
+    fn start_exchange(
+        &mut self,
+        vault: &Vault,
+        task: impl FnOnce(&mut dyn sync::Storage, &Cancellation) -> sync::Result<Reply> + Send + 'static,
+    ) -> VaultResult<()> {
+        let factory = match &self.factory {
+            Some(factory) => factory.clone(),
+            None => vault.storage_factory()?,
+        };
+        self.start(move |cancel| {
+            let mut storage = factory.connect()?;
+            task(&mut *storage, &cancel)
+        });
+        Ok(())
     }
 
     fn start(&mut self, task: impl FnOnce(Cancellation) -> sync::Result<Reply> + Send + 'static) {
