@@ -178,7 +178,26 @@ enum Unlock<'a> {
 impl Vault {
     /// Creates and saves an empty vault. Never overwrites an existing file.
     pub fn create(path: impl AsRef<Path>, password: &SecretString, kdf: KdfParams) -> Result<Self> {
-        let path = path.as_ref().to_path_buf();
+        Self::create_local(path.as_ref(), password, kdf, None)
+    }
+
+    /// Creates a local vault with password and twelve-word recovery key slots.
+    pub fn create_with_recovery_phrase(
+        path: impl AsRef<Path>,
+        password: &SecretString,
+        kdf: KdfParams,
+        phrase: &crate::access::mnemonic::RecoveryPhrase,
+    ) -> Result<Self> {
+        Self::create_local(path.as_ref(), password, kdf, Some(phrase))
+    }
+
+    fn create_local(
+        path: &Path,
+        password: &SecretString,
+        kdf: KdfParams,
+        phrase: Option<&crate::access::mnemonic::RecoveryPhrase>,
+    ) -> Result<Self> {
+        let path = path.to_path_buf();
 
         if path.exists() {
             return Err(VaultError::AlreadyExists(path));
@@ -190,14 +209,23 @@ impl Vault {
         let kdf = kdf.validate()?;
         let mut salt = [0u8; SALT_LEN];
         random(&mut salt);
-        let (key, check) = derive(password, &salt, kdf)?;
+        let (mut key, check) = derive(password, &salt, kdf)?;
+        let recovery = if let Some(phrase) = phrase {
+            let mut data_key = Zeroizing::new([0u8; 32]);
+            getrandom::fill(data_key.as_mut()).map_err(|_| VaultError::Random)?;
+            let slots = recovery::RecoverySlots::create(&data_key, &key, phrase, &salt)?;
+            key = data_key;
+            Some(slots)
+        } else {
+            None
+        };
         let vault = Self {
             path,
             kdf,
             salt,
             check,
             key,
-            recovery: None,
+            recovery,
             entries: Vec::new(),
             history: RefCell::default(),
             saved_entries: RefCell::default(),
@@ -412,10 +440,9 @@ impl Vault {
         let (password_key, check) = derive(password, &self.salt, self.kdf)?;
         let mut slots = slots.clone();
         slots.reset_password(&self.key, &password_key, &self.salt)?;
-        self.profile
-            .as_mut()
-            .ok_or(VaultError::Corrupted)?
-            .reset_root_password(phrase, password, self.kdf)?;
+        if let Some(profile) = self.profile.as_mut() {
+            profile.reset_root_password(phrase, password, self.kdf)?;
+        }
         self.recovery = Some(slots);
         self.check = check;
         self.save()?;

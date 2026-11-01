@@ -111,6 +111,63 @@ fn twelve_words_recover_records_and_reset_password_without_old_password() {
 }
 
 #[test]
+fn local_vault_words_recover_records_history_and_reset_password_without_sync() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("local.lbx");
+    let phrase = RecoveryPhrase::parse(WORDS).unwrap();
+    let mut vault =
+        Vault::create_with_recovery_phrase(&path, &password("original password"), FAST, &phrase)
+            .unwrap();
+    let mut entry = Entry::new();
+    entry.title = "Local recovery fixture".into();
+    entry.password = "local record secret".into();
+    vault.upsert_entry(entry.clone()).unwrap();
+    entry.password = "updated local secret".into();
+    vault.upsert_entry(entry.clone()).unwrap();
+    let history_len = vault.history.borrow().len();
+    assert!(history_len > 0);
+    let key = vault.export_key();
+    let id = vault.id();
+    assert!(vault.profile.is_none());
+    drop(vault);
+    let original = fs::read(&path).unwrap();
+    assert_eq!(u16::from_le_bytes(original[4..6].try_into().unwrap()), 8);
+    assert!(!original.windows(WORDS.len()).any(|w| w == WORDS.as_bytes()));
+    let records = Vault::read_records(&path, &password("original password")).unwrap();
+    assert_eq!(records.entries[0].password, entry.password);
+    assert!(matches!(
+        Vault::create_with_recovery_phrase(&path, &password("replacement"), FAST, &phrase),
+        Err(VaultError::AlreadyExists(_))
+    ));
+    assert_eq!(fs::read(&path).unwrap(), original);
+    let wrong = RecoveryPhrase::parse(
+        "legal winner thank year wave sausage worth useful legal winner thank yellow",
+    )
+    .unwrap();
+    assert!(matches!(
+        Vault::open_with_recovery_phrase(&path, &wrong),
+        Err(VaultError::WrongRecoveryPhrase)
+    ));
+    let recovered = Vault::open_with_recovery_phrase(&path, &phrase).unwrap();
+    assert_eq!(recovered.entries[0].password, entry.password);
+    assert_eq!(recovered.history.borrow().len(), history_len);
+    let recovered = recovered
+        .reset_password_with_phrase(&phrase, &password("new master password"))
+        .unwrap();
+    assert!(recovered.profile.is_none());
+    assert_eq!(recovered.id(), id);
+    assert_eq!(*recovered.export_key(), *key);
+    drop(recovered);
+    assert!(matches!(
+        Vault::open(&path, &password("original password")),
+        Err(VaultError::WrongPassword)
+    ));
+    drop(Vault::open(&path, &password("new master password")).unwrap());
+    drop(Vault::open_with_key(&path, &key).unwrap());
+    assert!(Vault::open_with_recovery_phrase(&path, &phrase).is_ok());
+}
+
+#[test]
 fn wrong_words_tampering_and_truncated_slots_cannot_unlock_or_modify_file() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("profile.lbx");

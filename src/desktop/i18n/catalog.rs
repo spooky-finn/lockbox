@@ -2,6 +2,10 @@
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Text {
+    EncryptionKeySetup,
+    EncryptionKeySetupHint,
+    BackToEncryptionKey,
+    BackToSyncSetup,
     RecoverVault,
     RecoveryUnlockHint,
     NewMasterPassword,
@@ -447,6 +451,10 @@ pub(crate) enum Text {
 impl Text {
     pub(super) fn translations(self) -> (&'static str, &'static str) {
         match self {
+            Self::EncryptionKeySetup => ("Настройте ключ шифрования", "Set up your encryption key"),
+            Self::EncryptionKeySetupHint => ("Создайте или введите 12 слов восстановления и сохраните их перед настройкой синхронизации.", "Generate or enter 12 recovery words and save them before choosing how to sync."),
+            Self::BackToEncryptionKey => ("Назад к ключу шифрования", "Back to encryption key"),
+            Self::BackToSyncSetup => ("Назад к настройке синхронизации", "Back to sync settings"),
             Self::RecoverVault => ("Восстановить доступ", "Recover access"),
             Self::RecoveryUnlockHint => ("Введите 12 слов восстановления и задайте новый мастер-пароль.", "Enter your 12 recovery words and choose a new master password."),
             Self::NewMasterPassword => ("Новый мастер-пароль", "New master password"),
@@ -892,6 +900,10 @@ impl Text {
 }
 
 pub(super) const CATALOG: &[Text] = &[
+    Text::EncryptionKeySetup,
+    Text::EncryptionKeySetupHint,
+    Text::BackToEncryptionKey,
+    Text::BackToSyncSetup,
     Text::RecoverVault,
     Text::RecoveryUnlockHint,
     Text::NewMasterPassword,

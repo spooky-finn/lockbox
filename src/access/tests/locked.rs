@@ -4,9 +4,27 @@ use crate::desktop::{
 };
 
 #[test]
-fn creation_starts_with_storage_choice_and_cloud_has_separate_fields() {
+fn creation_requires_key_setup_before_storage_choice_and_cloud_fields() {
     let mut dom = mounted();
     update(&mut dom, |_| runtime::begin_create());
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("Настройте ключ шифрования"));
+    assert!(html.contains("id=\"recovery-saved\""));
+    assert!(!html.contains("storage-choices"));
+    assert!(!html.contains("id=\"cloud-secret\""));
+    assert!(!html.contains("id=\"master-password\""));
+    update(&mut dom, |state| {
+        crate::desktop::context::edit_locked(state, |form| {
+            form.continue_key_setup();
+        });
+    });
+    assert!(!dioxus_ssr::render(&dom).contains("storage-choices"));
+    update(&mut dom, |state| {
+        crate::desktop::context::edit_locked(state, |form| {
+            form.words_saved = true;
+            form.continue_key_setup();
+        });
+    });
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("Однопользовательское"));
     assert!(html.contains("Многопользовательское"));
@@ -44,6 +62,8 @@ fn cloud_submit_validates_then_offers_identity_creation() {
     dom.in_scope(ScopeId::APP, || {
         runtime::begin_create();
         edit_locked(consume_context::<Session>(), |form| {
+            form.words_saved = true;
+            form.continue_key_setup();
             form.storage_kind = Some(StorageKind::Cloud);
         });
     });
@@ -90,16 +110,27 @@ fn cloud_submit_validates_then_offers_identity_creation() {
     assert!(!html.contains("id=\"recovery-repeat\""));
     assert!(html.contains("Создать профиль и ключи…"));
     assert!(!html.contains("lock-emblem"));
+    assert!(!html.contains("id=\"recovery-words\""));
+    assert!(!html.contains("id=\"recovery-saved\""));
 }
 
 #[test]
-fn joining_starts_at_connection_setup_without_creating_a_named_space() {
+fn joining_sets_up_key_before_connection_without_creating_a_named_space() {
     use crate::desktop::context::edit_locked;
 
     let mut dom = mounted();
     update(&mut dom, |_| {
         runtime::set_language(crate::settings::language::Language::English);
         runtime::begin_join();
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("Set up your encryption key"));
+    assert!(!html.contains("id=\"cloud-secret\""));
+    update(&mut dom, |state| {
+        edit_locked(state, |form| {
+            form.words_saved = true;
+            form.continue_key_setup();
+        });
     });
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("Join a space"));
@@ -117,7 +148,7 @@ fn joining_starts_at_connection_setup_without_creating_a_named_space() {
             form.cloud.secret_key.push_str("fictional-secret");
             form.continue_cloud();
             assert!(form.joining);
-            assert!(form.cloud_password_step);
+            assert!(form.creation_step == crate::access::auth::CreationStep::Password);
         });
     });
     let html = dioxus_ssr::render(&dom);
@@ -125,11 +156,12 @@ fn joining_starts_at_connection_setup_without_creating_a_named_space() {
     assert!(html.contains("id=\"repeat-password\""));
     assert!(!html.contains("id=\"recovery-password\""));
     update(&mut dom, |_| runtime::begin_create());
-    assert!(dioxus_ssr::render(&dom).contains("storage-choices"));
+    assert!(!dioxus_ssr::render(&dom).contains("storage-choices"));
+    assert!(dioxus_ssr::render(&dom).contains("Set up your encryption key"));
 }
 
 #[test]
-fn recovery_words_are_hidden_until_revealed_and_removed_when_setup_is_left() {
+fn recovery_words_are_hidden_after_key_setup_and_preserved_on_back() {
     use crate::desktop::context::edit_locked;
     let mut dom = mounted();
     let words = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
@@ -139,8 +171,7 @@ fn recovery_words_are_hidden_until_revealed_and_removed_when_setup_is_left() {
     });
     update(&mut dom, |state| {
         edit_locked(state, |form| {
-            form.storage_kind = Some(crate::access::auth::StorageKind::Cloud);
-            form.cloud_password_step = true;
+            zeroize::Zeroize::zeroize(&mut form.recovery_words);
             form.recovery_words.push_str(words);
         })
     });
@@ -157,11 +188,31 @@ fn recovery_words_are_hidden_until_revealed_and_removed_when_setup_is_left() {
     assert!(html.contains(">about</span>"));
     assert!(html.contains("id=\"recovery-saved\""));
     update(&mut dom, |state| {
-        edit_locked(state, |form| form.edit_cloud_connection())
+        edit_locked(state, |form| {
+            form.words_saved = true;
+            form.continue_key_setup();
+        })
     });
     let html = dioxus_ssr::render(&dom);
     assert!(!html.contains("recovery-word-display"));
     assert!(!html.contains(">abandon</span>"));
+    assert!(html.contains("storage-choices"));
+    update(&mut dom, |state| {
+        edit_locked(state, |form| {
+            assert_eq!(form.recovery_words.as_str(), words);
+            form.edit_recovery_key();
+        })
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("Show recovery words"));
+    assert!(!html.contains(">abandon</span>"));
+    update(&mut dom, |_| runtime::begin_create());
+    update(&mut dom, |state| {
+        edit_locked(state, |form| {
+            assert_ne!(form.recovery_words.as_str(), words);
+            assert!(!form.words_saved);
+        })
+    });
 }
 
 #[test]

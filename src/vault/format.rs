@@ -22,7 +22,7 @@ use zeroize::Zeroizing;
 const MAGIC: &[u8; 4] = b"LBX1";
 // v6/v7 preserve local record history and trash. Older clients must reject
 // these files rather than silently discarding revisions on save.
-// v8 profiles add independent password and mnemonic key slots.
+// v8 local vaults and profiles add independent password and mnemonic key slots.
 pub(super) const VERSION: u16 = 6;
 pub(super) const PROFILE_VERSION: u16 = 7;
 pub(super) const RECOVERY_VERSION: u16 = 8;
@@ -148,7 +148,9 @@ pub(super) fn decrypt(data: &[u8], key: &Key) -> Option<Contents> {
 
     let version = u16::from_le_bytes([header[4], header[5]]);
 
-    if (matches!(version, 3 | 5 | PROFILE_VERSION | RECOVERY_VERSION)) != contents.profile.is_some()
+    // Recovery key slots work with either local records or a shared profile.
+    if (version != RECOVERY_VERSION
+        && matches!(version, 3 | 5 | PROFILE_VERSION) != contents.profile.is_some())
         || contents
             .profile
             .as_ref()

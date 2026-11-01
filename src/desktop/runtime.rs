@@ -1,7 +1,7 @@
 //! Dioxus lifecycle and the few actions that coordinate independent domains.
 
 use crate::{
-    access::auth::{Locked, Mode, StorageKind, with_vault_extension},
+    access::auth::{CreationStep, Locked, Mode, StorageKind},
     desktop::{
         context::{BiometricProvider, Clock, SecurityHandle, Session},
         security::{CopyField, Security, Status},
@@ -193,9 +193,7 @@ pub(crate) fn poll_workers() {
 
 pub(crate) fn begin_create() {
     let mut state = consume_context::<Session>();
-    let mut form = Locked::new(None);
-    form.mode = Mode::Create;
-    *state.write() = Screen::Locked(Box::new(form));
+    *state.write() = Screen::Locked(Box::new(Locked::begin_create()));
 }
 
 pub(crate) fn begin_join() {
@@ -234,6 +232,20 @@ pub(crate) fn pick_vault(create: bool) {
     let mut state = consume_context::<Session>();
     let settings = consume_context::<Signal<Settings>>();
     let hardware = consume_context::<BiometricProvider>();
+    if create {
+        let mut screen = state.write();
+        let Screen::Locked(form) = &mut *screen else {
+            return;
+        };
+        if form.mode != Mode::Create
+            || form.creation_step != CreationStep::Sync
+            || form.joining
+            || form.pending.is_some()
+        {
+            return;
+        }
+        form.storage_kind = Some(StorageKind::Local);
+    }
     spawn(async move {
         let dialog = rfd::AsyncFileDialog::new().add_filter("lockbox", &["lbx"]);
         let path = if create {
@@ -244,18 +256,20 @@ pub(crate) fn pick_vault(create: bool) {
 
         if let Some(path) = path {
             let path = path.path().to_path_buf();
-            let mut form = if create {
-                Locked::new(Some(with_vault_extension(path)))
-            } else {
-                Locked::new(Some(path)).offer_touch_id(&settings.peek().config, &*hardware.0, false)
-            };
-
             if create {
-                form.mode = Mode::Create;
-                form.storage_kind = Some(StorageKind::Local);
-                form.error = None;
+                if let Screen::Locked(form) = &mut *state.write()
+                    && form.storage_kind == Some(StorageKind::Local)
+                {
+                    form.choose_local_path(path);
+                }
+            } else {
+                let form = Locked::new(Some(path)).offer_touch_id(
+                    &settings.peek().config,
+                    &*hardware.0,
+                    false,
+                );
+                *state.write() = Screen::Locked(Box::new(form));
             }
-            *state.write() = Screen::Locked(Box::new(form));
         }
     });
 }

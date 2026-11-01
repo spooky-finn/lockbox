@@ -1,5 +1,5 @@
 use crate::{
-    access::auth::{Locked, Mode, StorageKind, with_vault_extension},
+    access::auth::{CreationStep, Locked, Mode, StorageKind, with_vault_extension},
     desktop::test_support::unlocked,
     platform::touchid::tests::FakeBiometrics,
     settings::config::Config,
@@ -47,9 +47,9 @@ fn picked_files_get_the_vault_extension() {
 }
 
 #[test]
-fn cloud_or_unselected_creation_cannot_write_a_legacy_vault() {
+fn creation_cannot_skip_key_setup_or_sync_selection() {
     let dir = tempfile::tempdir().unwrap();
-    for kind in [None, Some(StorageKind::Cloud)] {
+    for kind in [None, Some(StorageKind::Cloud), Some(StorageKind::Local)] {
         let path = dir.path().join("cloud.lbx");
         let mut form = Locked::new(Some(path.clone()));
         form.mode = Mode::Create;
@@ -57,16 +57,52 @@ fn cloud_or_unselected_creation_cannot_write_a_legacy_vault() {
         form.password.push_str("a long master password");
         form.repeat.push_str("a long master password");
         form.submit();
-        assert!(form.error.is_some());
         assert!(form.pending.is_none());
         assert!(!path.exists());
     }
 }
 
 #[test]
-fn identity_creation_requires_confirmed_password_and_saved_valid_recovery_words() {
-    let mut form = Locked::new(None);
-    form.mode = Mode::Create;
+fn key_setup_requires_valid_saved_words_and_preserves_them_across_sync_choices() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut form = Locked::begin_create();
+    let generated = zeroize::Zeroizing::new(form.recovery_words.to_string());
+    assert!(crate::access::mnemonic::RecoveryPhrase::parse(&generated).is_ok());
+    form.choose_local_path(dir.path().join("skipped"));
+    assert!(form.path.is_none());
+    form.continue_key_setup();
+    assert!(form.creation_step == CreationStep::EncryptionKey);
+    assert!(
+        form.error
+            .as_ref()
+            .unwrap()
+            .contains("Save your recovery words")
+    );
+
+    form.recovery_words.clear();
+    form.recovery_words.push_str("abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon");
+    form.words_saved = true;
+    form.continue_key_setup();
+    assert!(form.creation_step == CreationStep::EncryptionKey);
+    assert!(form.error.as_ref().unwrap().contains("12-word"));
+
+    form.recovery_words.clear();
+    form.recovery_words.push_str(&generated);
+    form.show_recovery_words = true;
+    form.continue_key_setup();
+    assert!(form.creation_step == CreationStep::Sync);
+    assert!(!form.show_recovery_words);
+    form.choose_local_path(dir.path().join("chosen"));
+    assert!(form.creation_step == CreationStep::Password);
+    assert_eq!(form.path, Some(dir.path().join("chosen.lbx")));
+    assert_eq!(form.recovery_words.as_str(), generated.as_str());
+    form.password.push_str("local master password");
+    form.repeat.push_str("local master password");
+    assert!(form.validate_creation());
+    form.edit_sync_setup();
+    assert!(form.path.is_none());
+    assert!(form.password.is_empty());
+    assert!(form.repeat.is_empty());
     form.storage_kind = Some(StorageKind::Cloud);
     form.cloud.username = "Alice".into();
     form.cloud.space_name = "Team".into();
@@ -75,6 +111,65 @@ fn identity_creation_requires_confirmed_password_and_saved_valid_recovery_words(
     form.cloud.access_key.push_str("test-access");
     form.cloud.secret_key.push_str("test-secret");
     form.continue_cloud();
+    assert!(form.creation_step == CreationStep::Password);
+    assert_eq!(form.recovery_words.as_str(), generated.as_str());
+    assert!(form.words_saved);
+    form.edit_recovery_key();
+    assert!(form.creation_step == CreationStep::EncryptionKey);
+    assert!(form.generate_recovery_words());
+    assert!(!form.words_saved);
+    form.continue_key_setup();
+    assert!(form.creation_step == CreationStep::EncryptionKey);
+}
+
+#[test]
+fn application_worker_creates_local_vault_with_the_confirmed_key() {
+    use crate::{access::mnemonic::RecoveryPhrase, vault::Vault};
+    use std::time::Duration;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("local.lbx");
+    let mut form = Locked::begin_create();
+    let phrase = RecoveryPhrase::parse(&form.recovery_words).unwrap();
+    form.words_saved = true;
+    form.continue_key_setup();
+    form.choose_local_path(path.clone());
+    form.password.push_str("local master password");
+    form.repeat.push_str("local master password");
+    form.words_saved = false;
+    form.submit();
+    assert!(form.pending.is_none());
+    assert!(!path.exists());
+    form.words_saved = true;
+    form.submit();
+    assert!(form.error.is_none());
+    let opened = form
+        .pending
+        .take()
+        .unwrap()
+        .recv_timeout(Duration::from_secs(30))
+        .unwrap()
+        .unwrap();
+    assert!(opened.vault.test_profile().is_none());
+    drop(opened);
+    let recovered = Vault::open_with_recovery_phrase(&path, &phrase).unwrap();
+    assert!(recovered.test_profile().is_none());
+}
+
+#[test]
+fn identity_creation_requires_confirmed_password_and_saved_valid_recovery_words() {
+    let mut form = Locked::begin_create();
+    form.words_saved = true;
+    form.continue_key_setup();
+    form.storage_kind = Some(StorageKind::Cloud);
+    form.cloud.username = "Alice".into();
+    form.cloud.space_name = "Team".into();
+    form.cloud.base_url = "https://gateway.storjshare.io".into();
+    form.cloud.bucket = "team-vault".into();
+    form.cloud.access_key.push_str("test-access");
+    form.cloud.secret_key.push_str("test-secret");
+    form.continue_cloud();
+    assert!(form.creation_step == CreationStep::Password);
+    form.words_saved = false;
     form.password.push_str("too short");
     form.repeat.push_str("too short");
     assert!(!form.validate_creation());
@@ -94,12 +189,13 @@ fn identity_creation_requires_confirmed_password_and_saved_valid_recovery_words(
     form.recovery_words.push_str(&valid_words);
     assert!(form.validate_creation());
     form.path = Some("/tmp/failed-profile.lbx".into());
-    form.edit_cloud_connection();
+    form.edit_sync_setup();
     assert!(form.path.is_none());
     assert!(form.password.is_empty());
     assert!(form.repeat.is_empty());
-    assert!(form.recovery_words.is_empty());
-    assert!(!form.words_saved);
+    assert_eq!(form.recovery_words.as_str(), valid_words);
+    assert!(form.words_saved);
+    assert!(form.creation_step == CreationStep::Sync);
 }
 
 #[test]
@@ -109,8 +205,9 @@ fn application_worker_creates_and_reopens_identity_profile() {
     use std::time::Duration;
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("profile.lbx");
-    let mut form = Locked::new(Some(path.clone()));
-    form.mode = Mode::Create;
+    let mut form = Locked::begin_create();
+    form.words_saved = true;
+    form.continue_key_setup();
     form.storage_kind = Some(StorageKind::Cloud);
     form.cloud.username = "Alice".into();
     form.cloud.space_name = "Team".into();
@@ -119,6 +216,7 @@ fn application_worker_creates_and_reopens_identity_profile() {
     form.cloud.access_key.push_str("test-access");
     form.cloud.secret_key.push_str("test-secret");
     form.continue_cloud();
+    form.path = Some(path.clone());
     form.password.push_str("local master password");
     form.repeat.push_str("local master password");
     form.words_saved = true;

@@ -43,6 +43,13 @@ pub(crate) enum StorageKind {
     Cloud,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CreationStep {
+    EncryptionKey,
+    Sync,
+    Password,
+}
+
 pub(crate) use crate::access::cloud_setup::CloudSetup;
 
 pub(crate) struct Locked {
@@ -51,7 +58,7 @@ pub(crate) struct Locked {
     pub(crate) mode: Mode,
     pub(crate) storage_kind: Option<StorageKind>,
     pub(crate) cloud: CloudSetup,
-    pub(crate) cloud_password_step: bool,
+    pub(crate) creation_step: CreationStep,
     pub(crate) joining: bool,
     pub(crate) password: Zeroizing<String>,
     pub(crate) repeat: Zeroizing<String>,
@@ -84,7 +91,7 @@ impl Locked {
             mode: Mode::Open,
             storage_kind: None,
             cloud: CloudSetup::default(),
-            cloud_password_step: false,
+            creation_step: CreationStep::EncryptionKey,
             joining: false,
             password: secret_buffer(),
             repeat: secret_buffer(),
@@ -102,9 +109,15 @@ impl Locked {
         }
     }
 
-    pub(crate) fn begin_join() -> Self {
+    pub(crate) fn begin_create() -> Self {
         let mut form = Self::new(None);
         form.mode = Mode::Create;
+        form.generate_recovery_words();
+        form
+    }
+
+    pub(crate) fn begin_join() -> Self {
+        let mut form = Self::begin_create();
         form.storage_kind = Some(StorageKind::Cloud);
         form.joining = true;
         // A local staging profile supplies independent keys until admission.
@@ -160,32 +173,69 @@ impl Locked {
     }
 
     pub(crate) fn continue_cloud(&mut self) {
-        if self.mode != Mode::Create || self.storage_kind != Some(StorageKind::Cloud) {
+        if self.mode != Mode::Create
+            || self.creation_step != CreationStep::Sync
+            || self.storage_kind != Some(StorageKind::Cloud)
+            || !self.validate_recovery_key()
+        {
             return;
         }
 
         match self.cloud.validate() {
             Ok(()) => {
-                if self.recovery_words.is_empty() && !self.generate_recovery_words() {
-                    return;
-                }
                 self.error = None;
-                self.cloud_password_step = true;
+                self.creation_step = CreationStep::Password;
             }
             Err(error) => self.error = Some(error.into()),
         }
     }
 
-    pub(crate) fn edit_cloud_connection(&mut self) {
+    pub(crate) fn edit_sync_setup(&mut self) {
         self.path = None;
-        self.cloud_password_step = false;
+        self.creation_step = CreationStep::Sync;
         self.password.zeroize();
         self.repeat.zeroize();
-        self.recovery_words.zeroize();
-        self.words_saved = false;
         self.show_recovery_words = false;
-        self.importing_words = false;
         self.error = None;
+    }
+
+    pub(crate) fn edit_recovery_key(&mut self) {
+        self.edit_sync_setup();
+        self.creation_step = CreationStep::EncryptionKey;
+    }
+
+    fn validate_recovery_key(&mut self) -> bool {
+        self.error = if let Err(error) = RecoveryPhrase::parse(&self.recovery_words) {
+            Some(error.to_string())
+        } else if !self.words_saved {
+            Some("Save your recovery words before continuing".into())
+        } else {
+            None
+        };
+        self.error.is_none()
+    }
+
+    pub(crate) fn continue_key_setup(&mut self) {
+        if self.mode == Mode::Create
+            && self.creation_step == CreationStep::EncryptionKey
+            && self.validate_recovery_key()
+        {
+            self.show_recovery_words = false;
+            self.creation_step = CreationStep::Sync;
+        }
+    }
+
+    /// Keep the confirmed key when the native save dialog returns.
+    pub(crate) fn choose_local_path(&mut self, path: PathBuf) {
+        if self.mode == Mode::Create
+            && self.creation_step == CreationStep::Sync
+            && !self.joining
+            && self.validate_recovery_key()
+        {
+            self.path = Some(with_vault_extension(path));
+            self.storage_kind = Some(StorageKind::Local);
+            self.creation_step = CreationStep::Password;
+        }
     }
 
     pub(crate) fn generate_recovery_words(&mut self) -> bool {
@@ -216,27 +266,31 @@ impl Locked {
 
     pub(crate) fn validate_creation(&mut self) -> bool {
         if self.mode != Mode::Create
-            || self.storage_kind != Some(StorageKind::Cloud)
-            || !self.cloud_password_step
+            || self.storage_kind.is_none()
+            || self.creation_step != CreationStep::Password
         {
             return false;
         }
 
-        let error = self.cloud.validate().err().map(str::to_owned).or_else(|| {
-            if self.password.chars().count() < MIN_PASSWORD_CHARS {
-                Some(format!(
-                    "Master password: at least {MIN_PASSWORD_CHARS} characters"
-                ))
-            } else if *self.password != *self.repeat {
-                Some("Passwords do not match".into())
-            } else if let Err(error) = RecoveryPhrase::parse(&self.recovery_words) {
-                Some(error.to_string())
-            } else if !self.words_saved {
-                Some("Save your recovery words before continuing".into())
-            } else {
-                None
-            }
-        });
+        let error = self
+            .storage_kind
+            .filter(|kind| *kind == StorageKind::Cloud)
+            .and_then(|_| self.cloud.validate().err().map(str::to_owned))
+            .or_else(|| {
+                if self.password.chars().count() < MIN_PASSWORD_CHARS {
+                    Some(format!(
+                        "Master password: at least {MIN_PASSWORD_CHARS} characters"
+                    ))
+                } else if *self.password != *self.repeat {
+                    Some("Passwords do not match".into())
+                } else if let Err(error) = RecoveryPhrase::parse(&self.recovery_words) {
+                    Some(error.to_string())
+                } else if !self.words_saved {
+                    Some("Save your recovery words before continuing".into())
+                } else {
+                    None
+                }
+            });
         self.error = error;
         self.error.is_none()
     }
@@ -253,7 +307,7 @@ impl Locked {
             return;
         }
 
-        if cloud && !self.validate_creation() {
+        if self.mode == Mode::Create && !self.validate_creation() {
             return;
         }
 
@@ -276,7 +330,7 @@ impl Locked {
             self.error = Some("Passwords do not match".into());
             return;
         }
-        let phrase = if cloud || self.recovering {
+        let phrase = if self.mode == Mode::Create || self.recovering {
             match RecoveryPhrase::parse(&self.recovery_words) {
                 Ok(phrase) => Some(phrase),
                 Err(error) => {
@@ -337,7 +391,12 @@ impl Locked {
                                 phrase.as_ref().expect("validated recovery phrase"),
                             )
                         } else {
-                            Vault::create(&path, &password, KdfParams::default())
+                            Vault::create_with_recovery_phrase(
+                                &path,
+                                &password,
+                                KdfParams::default(),
+                                phrase.as_ref().expect("validated recovery phrase"),
+                            )
                         }
                     }
                 }

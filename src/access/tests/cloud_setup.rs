@@ -118,23 +118,24 @@ fn form_and_transport_accept_the_same_connection_syntax_without_echoing_secrets(
 
 #[test]
 fn password_step_requires_valid_cloud_setup_and_back_wipes_passwords() {
+    use crate::access::auth::CreationStep;
     use crate::access::auth::Locked;
-    use crate::access::auth::Mode;
     use crate::access::auth::StorageKind;
-    let mut form = Locked::new(None);
-    form.mode = Mode::Create;
+    let mut form = Locked::begin_create();
+    form.words_saved = true;
+    form.continue_key_setup();
     form.storage_kind = Some(StorageKind::Cloud);
     form.continue_cloud();
-    assert!(!form.cloud_password_step);
+    assert!(form.creation_step == CreationStep::Sync);
     assert!(form.error.is_some());
     form.cloud = valid();
     form.continue_cloud();
-    assert!(form.cloud_password_step);
+    assert!(form.creation_step == CreationStep::Password);
     assert!(form.error.is_none());
     form.password.push_str("master password");
     form.repeat.push_str("master password");
-    form.edit_cloud_connection();
-    assert!(!form.cloud_password_step);
+    form.edit_sync_setup();
+    assert!(form.creation_step == CreationStep::Sync);
     assert!(form.password.is_empty());
     assert!(form.repeat.is_empty());
     assert_eq!(form.cloud.secret_key.as_str(), "example-secret");

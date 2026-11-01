@@ -1,0 +1,10 @@
+Creation flow
+
+- First step: encryption key. Generate/import 12 English BIP39 words; checksum + saved acknowledgment required.
+- Next: local/cloud sync choice. Join flow skips choice; connection follows key setup.
+- Last: master password + confirmation. Same minimum length for local/cloud.
+- Back preserves confirmed words; clears typed passwords. Key edits clear saved acknowledgment. New setup wipes previous state.
+- Local save dialog keeps setup state. No silent key regeneration after sync selection.
+- Local vaults use v8 password/recovery slots; no cloud profile/provider required. Words recover records/history; reset keeps data key and Touch ID access.
+- Existing files/API creation remain supported. Shared identity derivation/witness protection unchanged.
+- Tests: key-step gating, invalid/unsaved words, local/cloud/join order, back navigation, worker creation, local recovery/reset/reopen.

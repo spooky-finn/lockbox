@@ -1,16 +1,22 @@
 # Recovery words
 
-New desktop cloud profiles use **12 English BIP39 words**. The app generates
+New desktop vaults and cloud profiles use **12 English BIP39 words**. Creation
+starts with encryption-key setup, before selecting local or cloud sync. Generate
+new words or enter an existing valid phrase, then confirm that the words are
+saved. Joining a space follows the same key-first flow before connection setup.
+The app generates
 128 bits of operating-system randomness and the BIP39 checksum. It never derives
 these words from the master password. Save the words in order before creating
-the profile; they are hidden until requested and are not retained in the file.
+the vault; they are hidden until requested and are not retained in the file.
+Going back to sync settings preserves the confirmed phrase and clears typed
+passwords. The native local-file picker also preserves the chosen recovery key.
 The master password remains the everyday unlock credential. No additional
 BIP39 passphrase is used, so the 12 words alone reproduce the recovery keys.
 
 On the lock screen, select **Forgot master password?**, enter the words, and
 choose and confirm a new master password. The original password is not needed.
 Recovery preserves the user identity, device, records, and Touch ID data key.
-The new password also protects the root capsule. Previous backup files retain
+For cloud profiles, the new password also protects the root capsule. Previous backup files retain
 the password they had when saved.
 
 The vault file or a backup is still required: words recover keys, not records,
@@ -38,7 +44,7 @@ the input words. The UI uses no automatic clipboard export.
 
 ## File format v8
 
-Recoverable profiles use version 8; existing v1–v7 files remain readable.
+Recoverable local vaults and cloud profiles use version 8; existing v1–v7 files remain readable.
 Older clients reject v8 instead of discarding recovery slots. The original
 90-byte header is followed by two 72-byte key slots, then the encrypted payload:
 
@@ -66,7 +72,8 @@ reset requires admission of a fresh device. Device/controller recovery still
 requires independently authenticated control anchors and the established
 admission process.
 
-Hosts can use `ProfileStore::create_shared_with_phrase`,
+Hosts can use `Vault::create_with_recovery_phrase` for local vaults,
+`ProfileStore::create_shared_with_phrase` for cloud profiles,
 `ProfileStore::open_with_recovery_phrase`, and
 `Vault::reset_password_with_phrase`. The original creation/recovery APIs remain
 compatible; only the phrase-aware creation API installs v8 recovery slots.
