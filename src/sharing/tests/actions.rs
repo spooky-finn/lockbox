@@ -206,6 +206,60 @@ fn cancellation_invalidates_the_previous_output_and_an_open_export_dialog() {
 }
 
 #[test]
+fn new_recipient_review_invalidates_previous_verification_and_export_dialogs() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut owner = create(&dir, "owner");
+    let first = create(&dir, "first");
+    let second = create(&dir, "second");
+    action(&mut owner, Action::Certificate);
+    let previous = owner.sharing.output.clone().unwrap();
+    let ticket = owner.sharing.ticket(&owner.vault);
+    owner.export_sharing(
+        ticket.clone(),
+        dir.path().join("previous.json"),
+        previous.clone(),
+    );
+    finish_file_job(&mut owner);
+    assert!(owner.sharing.saved_output.is_some());
+
+    review(
+        &mut owner,
+        Kind::Certificate,
+        &canonical(&first.vault.device_certificate().unwrap()).unwrap(),
+    );
+    owner.sharing.recipient_verified = true;
+    owner.sharing.code = "previous verification code".into();
+    let certificate = second.vault.device_certificate().unwrap();
+    review(
+        &mut owner,
+        Kind::Certificate,
+        &canonical(&certificate).unwrap(),
+    );
+    assert!(matches!(
+        &owner.sharing.review,
+        Some(Artifact::Certificate(reviewed)) if reviewed.body.device == certificate.body.device
+    ));
+    assert!(!owner.sharing.recipient_verified);
+    assert!(owner.sharing.code.is_empty());
+    assert!(owner.sharing.output.is_none());
+    assert!(owner.sharing.saved_output.is_none());
+
+    let stale = dir.path().join("stale-dialog.json");
+    owner.export_sharing(ticket, stale.clone(), previous);
+    assert!(!owner.sharing.busy());
+    assert!(!stale.exists());
+    owner.sharing_action(Action::Issue(Role::Reader), 100);
+    assert_eq!(
+        owner.error.as_deref(),
+        Some("Verify the recipient fingerprints through a trusted channel first")
+    );
+    assert!(owner.vault.issued_invitations(100).is_empty());
+    owner.sharing.recipient_verified = true;
+    action(&mut owner, Action::Issue(Role::Reader));
+    assert_eq!(owner.vault.issued_invitations(100).len(), 1);
+}
+
+#[test]
 fn automatic_detection_keeps_artifact_verification_and_rejects_mixed_files() {
     let dir = tempfile::tempdir().unwrap();
     let mut owner = create(&dir, "owner");

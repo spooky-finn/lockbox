@@ -309,13 +309,10 @@ impl Unlocked {
         {
             return;
         }
-        self.sharing.review = None;
+        self.sharing.cancel_review();
+        self.sharing.cancel_output();
         self.sharing.output = Some(output.clone());
-        self.sharing.saved_output = None;
-        self.sharing.recipient_verified = false;
         self.sharing.confirm_remove = None;
-        self.sharing.code.clear();
-        self.sharing.notice = None;
         self.sharing.job = Some((
             ticket,
             Worker::spawn(move |cancel| {
@@ -357,12 +354,9 @@ impl Unlocked {
                         }
                         _ => {}
                     }
+                    self.sharing.cancel_review();
+                    self.sharing.cancel_output();
                     self.sharing.review = Some(*artifact);
-                    self.sharing.output = None;
-                    self.sharing.saved_output = None;
-                    self.sharing.recipient_verified = false;
-                    self.sharing.code.clear();
-                    self.sharing.notice = None;
                 }
             }
             Ok(())
@@ -561,9 +555,7 @@ impl Unlocked {
             bytes: Arc::new(bytes),
             code,
         });
-        self.sharing.review = None;
-        self.sharing.code.clear();
-        self.sharing.recipient_verified = false;
+        self.sharing.cancel_review();
         self.sharing.notice = Some("Sharing file ready to save");
         Ok(())
     }

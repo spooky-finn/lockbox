@@ -5,17 +5,19 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 6; 375 library, four integration, two doctests passed.
+Last full suite: cycle 10; 378 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 9: Participant alias rollback
-- Retain old alias returned by map insert/remove instead of lookup plus clone.
-- Keep validation, local-only persistence, removal and failed-save rollback.
-- File helpers reviewed; their different durability/read contracts stay explicit.
-- Verification: four alias-filtered tests, full formatting and strict all-target
-  Clippy passed in isolated snapshot. Existing rollback/reopen coverage retained.
+Cycle 10: Sharing artifact transitions
+- Successful review/export/action transitions reuse cancel_review/cancel_output.
+- Preserve ticket/Arc identity gates and verification before replacing a review.
+- Keep notice when an action invalidates old exports; resets remain distinct.
+- New flow regression passed before refactor: replacing recipient requires fresh
+  verification and invalidates a saved output's old export dialog.
+- Verification: full suite above, full formatting and strict all-target Clippy
+  passed in isolated snapshot. Workspace changes passed whitespace checks.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-9.ZKIoaU when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-10.WJtgab when workspace cannot compile.
 
-Next search: UI workflow duplication, attachment boundaries, sharing job state.
+Next search: scheduler state, attachment boundaries, read-only sync projections.
 Inspect current code and tests before choosing; no quota-driven edits.
