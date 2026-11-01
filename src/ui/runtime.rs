@@ -189,22 +189,27 @@ pub(super) fn create_cloud_profile() {
         }
     }
 
-    // Native modal dialogs can re-enter the macOS event loop. Let the Dioxus
-    // event handler return before the dialog completes and updates the session.
-    spawn(async move {
-        let path = rfd::AsyncFileDialog::new()
-            .add_filter("lockbox", &["lbx"])
-            .set_file_name("profile.lbx")
-            .save_file()
-            .await;
-
-        if let Some(path) = path
-            && let Screen::Locked(form) = &mut *state.write()
-        {
-            form.path = Some(with_vault_extension(path.path().to_path_buf()));
-            form.submit();
+    let path = dirs::home_dir()
+        .ok_or_else(|| std::io::Error::other("Cannot locate home directory"))
+        .and_then(|home| new_profile_path(&home));
+    if let Screen::Locked(form) = &mut *state.write() {
+        match path {
+            Ok(path) => {
+                form.path = Some(path);
+                form.submit();
+            }
+            Err(error) => form.error = Some(format!("Cannot create profile directory: {error}")),
         }
-    });
+    }
+}
+
+fn new_profile_path(home: &std::path::Path) -> std::io::Result<std::path::PathBuf> {
+    let directory = home.join(".lockbox");
+    std::fs::create_dir_all(&directory)?;
+    let mut random = [0u8; 16];
+    getrandom::fill(&mut random).map_err(std::io::Error::other)?;
+    let name: String = random.iter().map(|byte| format!("{byte:02x}")).collect();
+    Ok(directory.join(format!("profile-{name}.lbx")))
 }
 
 pub(super) fn pick_vault(create: bool) {
