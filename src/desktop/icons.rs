@@ -83,7 +83,7 @@ impl Catalog {
     /// otherwise a site named like an icon gets it (gitlab.com → gitlab).
     pub fn for_url(&self, url: &str) -> Option<&Icon> {
         let host = host(url)?;
-        let site = registrable(&host);
+        let site = registrable_part(&host);
         let mut candidate = host.as_str();
         loop {
             if let Some(&index) = self.by_domain.get(candidate) {
@@ -137,21 +137,30 @@ pub fn host(url: &str) -> Option<String> {
     let rest = url.split_once("://").map_or(url, |(_, rest)| rest);
     let authority = rest.split(['/', '?', '#']).next()?;
     let host = authority.rsplit('@').next()?;
-    let host = host.split(':').next()?.trim_end_matches('.').to_lowercase();
-    let host = host.strip_prefix("www.").unwrap_or(&host).to_owned();
+    let mut host = host.split(':').next()?.trim_end_matches('.').to_lowercase();
+    if host.starts_with("www.") {
+        host.replace_range(..4, "");
+    }
     (host.contains('.') && !host.starts_with('.')).then_some(host)
 }
 
 /// The registered site of a host: `mail.google.com` → `google.com`.
 pub fn registrable(host: &str) -> String {
-    let labels: Vec<&str> = host.split('.').collect();
-    let last_two = labels[labels.len().saturating_sub(2)..].join(".");
-    let keep = if TWO_LEVEL.contains(&last_two.as_str()) {
-        3
-    } else {
-        2
+    registrable_part(host).to_owned()
+}
+
+fn registrable_part(host: &str) -> &str {
+    let mut dots = host.rmatch_indices('.');
+    dots.next();
+    let Some((second, _)) = dots.next() else {
+        return host;
     };
-    labels[labels.len().saturating_sub(keep)..].join(".")
+    let last_two = &host[second + 1..];
+    if TWO_LEVEL.contains(&last_two) {
+        dots.next().map_or(host, |(third, _)| &host[third + 1..])
+    } else {
+        last_two
+    }
 }
 
 /// Lower-case Latin letters and digits only: `Mail.Ru` → `mailru`.

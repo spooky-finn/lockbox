@@ -8,16 +8,16 @@ No delegation requested. Keep unrelated work outside refactor commits.
 Last full suite: cycle 17; 386 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 19: Cache normalized icon search titles
-- Normalize immutable titles during catalog parse; searches borrow cached text.
-  Zero-result limit skips scan. Public icon/catalog APIs unchanged.
-- Regression passed before refactor: Unicode/punctuation normalization,
-  title-only match, stable rank ties, prefix priority and result limits.
-- All 11 icon tests passed, including rendering every bundled icon. Formatting
-  and strict all-target Clippy passed. Changed source byte-matches verified
-  isolated snapshot; workspace whitespace checks passed.
+Cycle 20: Borrow icon URL site suffixes
+- Find registered-site suffix with reverse dot positions. Icon URL lookup
+  borrows substring; public registrable API still returns owned String.
+- Remove www prefix inside lowercase host buffer; avoid second host copy.
+- Regression passed before refactor: short/case-sensitive/Unicode domains,
+  repeated separators, trailing dots, embedded credentials and repeated www.
+- All 12 icon tests, formatting and strict all-target Clippy passed. Changed
+  source byte-matches verified snapshot; workspace whitespace checks passed.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-19.frg0WW when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-20.XhnWk4 when workspace cannot compile.
 
-Next search: origin parsing allocations, attachment lookup, settings updates.
+Next search: attachment validation, settings updates, replay snapshots.
 Inspect current code and tests before choosing; no quota-driven edits.

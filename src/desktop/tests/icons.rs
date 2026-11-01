@@ -73,6 +73,35 @@ fn two_level_suffixes_keep_the_site_name() {
 }
 
 #[test]
+fn site_suffixes_preserve_short_unusual_and_case_sensitive_inputs() {
+    for (input, expected) in [
+        ("", ""),
+        ("local", "local"),
+        ("co.uk", "co.uk"),
+        ("a.b.example.com.au", "example.com.au"),
+        ("a.b.CO.UK", "CO.UK"),
+        ("shop.пример.рф", "пример.рф"),
+        ("a..com", ".com"),
+        ("a...co.uk", ".co.uk"),
+        ("co.uk.", "uk."),
+    ] {
+        assert_eq!(registrable(input), expected, "{input}");
+    }
+    for (input, expected) in [
+        (
+            " HTTPS://user:secret@WWW.Example.COM.:443/a?b#c ",
+            "example.com",
+        ),
+        ("WWW.WWW.Example.com", "www.example.com"),
+        ("пример.рф", "пример.рф"),
+    ] {
+        assert_eq!(host(input).as_deref(), Some(expected), "{input}");
+    }
+    assert!(host("www.").is_none());
+    assert!(host(".example.com").is_none());
+}
+
+#[test]
 fn entry_choice_beats_url_and_title_is_the_last_resort() {
     let mut entry = Entry::new();
     entry.title = "GitHub".into();
