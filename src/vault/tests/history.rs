@@ -1,6 +1,9 @@
 use crate::{
     records::{entry::Entry, folder::Folder},
-    sync::{protocol::Role, transport::Download},
+    sync::{
+        protocol::{Role, canonical},
+        transport::Download,
+    },
     vault::{KdfParams, ProfileStore, Vault, sharing_tests, witness::MemoryWitness},
 };
 use secrecy::SecretString;
@@ -41,6 +44,8 @@ fn local_trash_keeps_latest_deleted_values_sorted_by_id_without_live_records() {
         },
     )
     .unwrap();
+    assert!(vault.sync_replay_state().unwrap().is_none());
+    assert!(vault.sync_replay().unwrap().is_none());
     let mut first = entry("2", "First deleted");
     let second = entry("1", "Second deleted");
     let live = entry("3", "Live record");
@@ -74,7 +79,10 @@ fn shared_trash_excludes_delete_edit_conflicts_and_folder_tombstones_with_same_i
     let mut writer = sharing_tests::create(&store, &directory.path().join("writer.lbx"));
     sharing_tests::share(&mut owner, &mut writer, Role::Editor);
     let mut conflicted = entry("1", "Concurrent edit");
-    let deleted = entry("2", "Deleted record");
+    let mut deleted = entry("2", "Deleted record");
+    deleted
+        .add_attachment("trash.bin".into(), vec![0, 255, 42])
+        .unwrap();
     let folder = Folder {
         id: conflicted.id.clone(),
         name: "Same ID as record".into(),
@@ -94,7 +102,34 @@ fn shared_trash_excludes_delete_edit_conflicts_and_folder_tombstones_with_same_i
     owner.delete_folder(&folder.id).unwrap();
     deliver(&writer, &mut owner);
 
+    let history = canonical(&owner.record_history().unwrap()).unwrap();
+    let current = owner.sync_replay_state().unwrap().unwrap();
+    assert!(current.history.is_empty());
     let replay = owner.sync_replay().unwrap().unwrap();
+    assert_eq!(
+        canonical(&current.projection).unwrap(),
+        canonical(&replay.projection).unwrap()
+    );
+    assert_eq!(
+        (
+            current.membership,
+            current.ready,
+            current.role,
+            current.history_verified
+        ),
+        (
+            replay.membership,
+            replay.ready,
+            replay.role,
+            replay.history_verified
+        ),
+    );
+    assert!(!replay.history.is_empty());
+    assert_eq!(canonical(&replay.history).unwrap(), history);
+    assert_eq!(
+        canonical(&owner.record_history().unwrap()).unwrap(),
+        history
+    );
     assert_eq!(replay.projection.conflicts().count(), 1);
     assert!(owner.entries().is_empty());
     assert_eq!(owner.trash().unwrap(), std::slice::from_ref(&deleted));

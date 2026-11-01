@@ -91,7 +91,7 @@ impl ProfileStore {
                 .ok_or(Error::UnauthorizedDevice)?,
             &recovery.anchor,
         )?;
-        let projection = Machine::replay(state, &content.sync_secret())?.projection;
+        let projection = Machine::replay_state(state, &content.sync_secret())?.projection;
         let mut journal = state.clone();
         journal.outbox.clear();
         journal.last_exchange = None;

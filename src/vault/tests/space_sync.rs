@@ -706,6 +706,10 @@ fn failed_revocation_commit_blocks_old_epoch_publication_until_retry() {
     assert_eq!(member.sync_state().unwrap().outbox, old_outbox);
     assert_eq!(member.entries[0].title, "Late offline edit");
     assert!(matches!(
+        member.sync_replay_state(),
+        Err(VaultError::PendingSyncCommit)
+    ));
+    assert!(matches!(
         member.sync_replay(),
         Err(VaultError::PendingSyncCommit)
     ));

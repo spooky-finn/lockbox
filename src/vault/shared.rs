@@ -5,7 +5,7 @@
 //! `sync::protocol::Machine`.
 
 use crate::{
-    sync::protocol::{PreparedChange, SyncState},
+    sync::protocol::{DeviceSecret, PreparedChange, Replay, Result as ProtocolResult, SyncState},
     vault::{
         KdfParams, ProviderConfiguration, Result, Vault, VaultError, profile::BootstrapProfile,
     },
@@ -40,7 +40,8 @@ impl Vault {
                 return Err(error.into());
             }
 
-            let replay = crate::sync::protocol::Machine::replay(sync, &profile.sync_secret())?;
+            let replay =
+                crate::sync::protocol::Machine::replay_state(sync, &profile.sync_secret())?;
 
             if !replay.projection.entry_values().eq(self.entries.iter())
                 || !replay.projection.folder_values().eq(self.folders.iter())
@@ -68,7 +69,7 @@ impl Vault {
         let desired_folders = self.folders.clone();
         self.recover_sync()?;
         let sync = self.profile.as_ref().unwrap().sync.as_ref().unwrap();
-        let replay = Machine::replay(sync, &device)?;
+        let replay = Machine::replay_state(sync, &device)?;
         let transaction =
             Transaction::diff(&replay.projection, &desired_entries, &desired_folders)?;
 
@@ -145,7 +146,7 @@ impl Vault {
             Machine::complete_intent(sync, &device)?;
         }
 
-        let replay = match Machine::replay(sync, &device) {
+        let replay = match Machine::replay_state(sync, &device) {
             Ok(replay) => replay,
             Err(crate::sync::protocol::Error::MissingDependency) if !recovering => return Ok(()),
             Err(error) => return Err(error.into()),
@@ -167,15 +168,24 @@ impl Vault {
 
     /// Rebuild a verified view without changing the journal or writing files.
     /// Inspect `Replay::ready` before using it to replace a readable snapshot.
-    pub fn sync_replay(&self) -> Result<Option<crate::sync::protocol::Replay>> {
+    pub fn sync_replay(&self) -> Result<Option<Replay>> {
+        self.replay_using(crate::sync::protocol::Machine::replay)
+    }
+
+    /// Verify the complete journal with an empty display-history vector.
+    pub(crate) fn sync_replay_state(&self) -> Result<Option<Replay>> {
+        self.replay_using(crate::sync::protocol::Machine::replay_state)
+    }
+
+    fn replay_using(
+        &self,
+        replay: fn(&SyncState, &DeviceSecret) -> ProtocolResult<Replay>,
+    ) -> Result<Option<Replay>> {
         self.ensure_exchange_committed()?;
         self.profile
             .as_ref()
             .and_then(|profile| profile.sync.as_ref().map(|sync| (profile, sync)))
-            .map(|(profile, sync)| {
-                crate::sync::protocol::Machine::replay(sync, &profile.sync_secret())
-                    .map_err(VaultError::from)
-            })
+            .map(|(profile, sync)| replay(sync, &profile.sync_secret()).map_err(VaultError::from))
             .transpose()
     }
 
@@ -188,7 +198,7 @@ impl Vault {
     ) -> Result<()> {
         use crate::sync::protocol::Error;
         use crate::sync::protocol::Transaction;
-        let replay = self.sync_replay()?.ok_or(Error::UnauthorizedDevice)?;
+        let replay = self.sync_replay_state()?.ok_or(Error::UnauthorizedDevice)?;
         let value = replay
             .projection
             .records
@@ -285,7 +295,7 @@ impl Vault {
     pub fn space_anchor(&self) -> Result<crate::sync::protocol::Hash> {
         self.ensure_profile_writable()?;
         let replay = self
-            .sync_replay()?
+            .sync_replay_state()?
             .ok_or(crate::sync::protocol::Error::UnauthorizedDevice)?;
 
         if !replay.ready {

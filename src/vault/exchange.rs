@@ -56,7 +56,7 @@ impl Vault {
             return Err(Error::ResourceBudgetExceeded.into());
         }
 
-        match Machine::replay(&candidate, &device) {
+        match Machine::replay_state(&candidate, &device) {
             Ok(replay) => {
                 self.prepare_received(candidate, replay.ready.then_some(replay.projection))
             }
@@ -190,7 +190,7 @@ impl Vault {
         self.receive_sync(batch)?;
         let profile = self.profile.as_ref().unwrap();
         let state = profile.sync.as_ref().unwrap();
-        let replay = Machine::replay(state, &profile.sync_secret())?;
+        let replay = Machine::replay_state(state, &profile.sync_secret())?;
 
         if replay.role.is_none() {
             return Err(Error::UnauthorizedDevice.into());

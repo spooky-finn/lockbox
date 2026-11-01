@@ -5,35 +5,33 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 71; 417 library, four integration, two doctests passed.
+Last full suite: cycle 72; 417 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 71: Omit unused display history in Machine operations
-- Public Machine.replay and crate-private replay_state share replay_inner. Only
-  include_record_history selects infallible materialize_history; state path returns
-  empty history. Fourteen audited Machine command/invitation/authority calls use it.
-- Private EpochContext groups membership/control/baseline/successor, keeping replay
-  parameters readable. Verification, ancestry lookups/order/sort, projection,
-  readiness, history_verified and all diagnostics run identically in both modes.
-- Exact normalized comparison confirms epoch verification/order body and materializer
-  unchanged. Public replay/Vault history behavior preserved; no Vault call switched.
-- Two regression fixtures passed before refactor through old replay, then compare
-  all non-history Replay fields (destructuring forces future field audits) against
-  new state path. Covers closed epochs, attachment conflicts, before/after history,
-  new member unable to decrypt prior epochs, outsider, missing closure/parents,
-  rejected signatures, persisted fault, malformed encoding/hash and bad checkpoint.
+Cycle 72: Use state-only replay for Vault operations
+- Seven direct state-only Machine calls in save/projection/recovery, exchange,
+  sharing join and recovery-store creation omit display revisions. resolve_sync
+  and space_anchor use new crate-private Vault.sync_replay_state too.
+- Public sync_replay and private state entry share replay_using callback selector.
+  Pending-exchange guard, profile/sync Option lookup, ephemeral device secret and
+  error conversion match original after expression-closure style adaptation.
+  Public record_history/trash keep full replay; no persisted data/schema change.
+- Three boundary fixtures passed before refactor then state path: local None,
+  shared projection/status parity and exact public record-history bytes after
+  state call, attachment-backed trash restoration, both paths reject pending
+  exchange commit. Core full-vs-state diagnostics tests remain green.
 - Full suite: 417 library, four integration, two doctests passed; two OS probes
-  ignored. Formatting/strict all-target Clippy passed. All six sources match
-  verified snapshot; whitespace clean. Unrelated edits untouched.
-- Snapshot: /tmp/lockbox-refactor-71.wo_4e25n.
+  ignored. Formatting/strict all-target Clippy passed. Six sources match verified
+  snapshot; whitespace clean. Unrelated edits untouched.
+- Snapshot: /tmp/lockbox-refactor-72.n9cet12b.
 
-Next goal: audit Vault consumers for state-only replay. Direct calls in shared.rs
-(ensure projection/save/recover), exchange.rs, sharing.join and store.rs only use
-state/projection. Public Vault.sync_replay, record_history and trash must keep full
-history. resolve_sync calls sync_replay but needs only state. Consider common
-profile guard/lookup helper selected by replay function pointer, exposing private
-sync_replay_state alongside unchanged public sync_replay. Preserve pending-exchange
-checks, local-profile None behavior, error order and ephemeral device secret use.
-Audit all actual consumers before switching; add boundary coverage for full history
-remaining available after state-only calls and same pending/failure behavior.
+Next goal: remaining production non-history consumers of Vault.sync_replay are
+scheduler.downloaded/uploaded (two calls) and desktop.SyncReview (one call).
+Audit confirms current code reads role/readiness/projection/history_verified/
+excluded sets, never record history. Consider sync_replay_state for all three.
+Preserve fresh upload authorization, commit-before-plan ordering, statuses, UI
+conflict contents/reveal hooks, incomplete-history notice and recovery behavior.
+Existing scheduler, desktop rendering and integration tests cover these paths.
+Afterward grep production callers: only Vault history/trash should request full
+record history; public APIs must remain available and unchanged. Inspect first.
