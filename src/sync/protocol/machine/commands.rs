@@ -1,5 +1,6 @@
 //! Prepare commands and complete reserved signing intents without performing I/O.
 
+use crate::serialization::canonical_size;
 use crate::sync::{
     identity::Key,
     protocol::{
@@ -524,7 +525,8 @@ impl PreparedChange {
             Self::Change(body) => Object::Change(Signed { body, signature }),
             Self::Control(body) => Object::Control(Signed { body, signature }),
         };
-        capacity(state, object.bytes()?.len())?;
+        let bytes = canonical_size(&object).map_err(|_| Error::InvalidEncoding)?;
+        capacity(state, bytes)?;
         Ok(match object {
             Object::Change(signed) => Self::Change(signed.body),
             Object::Control(signed) => Self::Control(signed.body),

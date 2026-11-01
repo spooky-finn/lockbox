@@ -9,24 +9,21 @@ Last full suite: cycle 65; 415 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 65: Share serialized byte counting
-- New private serialization module exposes JSON and canonical size helpers using
-  same checked ByteCount writer. Move import's counter into shared module; retain
-  JSON encoder, exact batch limits, serialized-error fallback and boundary logic.
-- SharingState.validate uses canonical writer to count bytes instead of retaining
-  final JSON Vec. Preserve <=64 MiB limit, original serializer, structural checks
-  and short-circuit order. JCS internal object sorting buffers remain.
-- New encoder-size test covers Unicode/escapes, JSON-vs-JCS number differences and
-  nonfinite canonical rejection. Existing import exact-limit/one-byte-over tests
-  passed. Helpers remain crate-private; public serialization APIs unchanged.
-- Full suite: 415 library, four integration, two doctests passed; two OS probes
-  ignored. Formatting/strict all-target Clippy passed. Four sources match verified
-  snapshot; whitespace clean. Unrelated edits untouched.
-- Snapshot: /tmp/lockbox-refactor-65.he4phhfv.
+Cycle 66: Count prepared object capacity bytes
+- PreparedChange.check_capacity uses shared canonical_size instead of retaining
+  object.bytes Vec just to read len. Same canonical writer, same temporary signed
+  Object and dummy 64-byte signature; body moves back unchanged after success.
+- Keep serialization failure mapped to InvalidEncoding before capacity checks,
+  exact object/cache/count limits and signing only after durable reservation.
+- Formatting/strict all-target Clippy passed. 55 protocol, four vault authority,
+  two sync integration tests passed. Source matches verified snapshot;
+  whitespace clean. Unrelated edits untouched.
+- Snapshot: /tmp/lockbox-refactor-66.1jum7ip5.
 
-Next search: PreparedChange.check_capacity still allocates object.bytes Vec just
-for len. Shared canonical_size can count same temporary signed Object without
-retaining final encoding. Map serialization failure to existing InvalidEncoding,
-keep dummy signature size, capacity order and return moved body unchanged.
-Inspect exact caller and current sources/tests before changing. Last disk check:
-74 GiB free, target 52 GiB; source snapshot 7.3 MiB. No cleanup needed now.
+Next search: generator Options.sets builds Vec<Vec<char>> even when alphabet_size
+only counts characters for strength UI. Consider lazy iterator of filtered set
+iterators; alphabet_size flattens/counts without allocating. generate collects
+same Vec<Vec<char>> once for indexed random selection. Preserve all set order,
+ambiguity filtering, length/error order and OS random draw/shuffle algorithm.
+Existing seven generator tests cover lengths, alphabets, coverage, ambiguity,
+entropy and distribution; inspect before choosing. No new RNG policy.
