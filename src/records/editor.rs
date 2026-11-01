@@ -71,20 +71,18 @@ impl Draft {
             return;
         }
 
-        let text = Zeroizing::new(totp.secret.clone());
-
-        match totp::parse_link(&text) {
+        match totp::parse_link(&totp.secret) {
             Ok(link) => {
                 if self.entry.title.trim().is_empty()
-                    && let Some(issuer) = &link.issuer
+                    && let Some(issuer) = link.issuer
                 {
-                    self.entry.title = issuer.clone();
+                    self.entry.title = issuer;
                 }
 
                 if self.entry.username.trim().is_empty()
-                    && let Some(account) = &link.account
+                    && let Some(account) = link.account
                 {
-                    self.entry.username = account.clone();
+                    self.entry.username = account;
                 }
 
                 self.entry.totp = Some(link.totp);

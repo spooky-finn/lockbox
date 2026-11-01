@@ -8,18 +8,17 @@ No delegation requested. Keep unrelated work outside refactor commits.
 Last full suite: cycle 40; 404 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 40: Borrow authenticated replay headers
-- VerifiedChange retains borrowed ChangeHeader plus owned decrypted transaction.
-  Avoid cloning signed envelope, ciphertext, signature, nonce and parent vector.
-- Propagate private lifetimes through authentication/causal stages; simplify
-  repeated signed.body.header access. Decoded journal lives for whole replay.
-- Public Replay still owns projection/history. Authentication, rejection, closed
-  epoch selection, sequence checks, causal order and output logic unchanged.
-- Full suite passed above: 404 library, four integration, two doctests; two OS
-  probes ignored. Formatting and strict all-target Clippy passed. Source matches
-  verified snapshot; workspace whitespace checks passed. No new mechanical tests.
+Cycle 41: Move parsed TOTP link fields
+- Parse borrowed draft secret directly; remove temporary complete-link copy.
+  Move owned issuer/account into empty title/login instead of cloning again.
+- Keep existing fields, invalid-link text, error clearing and normalized TOTP
+  behavior. Replaced Totp still zeroizes through its existing Drop implementation.
+- All 76 record tests passed, including parser vectors, invalid-link correction,
+  existing-field preservation, editor view updates and durable normalized saves.
+- Formatting and strict all-target Clippy passed. Source byte-matches verified
+  snapshot; whitespace checks passed. No new tests for direct ownership change.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-40.7shi5rpw when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-41.9idpdjde when workspace cannot compile.
 
-Next search: TOTP link parsing copies; repeated projection-head lookups in diff.
+Next search: repeated projection lookup and owned head vectors in validation.
 Inspect current code and tests before choosing; no quota-driven edits.
