@@ -1552,9 +1552,9 @@ buffers; task lifetime cannot retain keys after lock completes unnoticed.
 
 No ordinary `Debug` for secrets. Use zeroizing buffers for plaintext and key
 material. Existing WebView limit remains: wiping Rust state does not prove all
-DOM, JavaScript, or virtual DOM copies disappeared. Existing Touch ID behavior
-also remains subject to [documented platform limits](../README.md#touch-id);
-it is not retroactively hardware-bound signing-key protection.
+DOM, JavaScript, or virtual DOM copies disappeared. Touch ID unlock uses
+[Keychain-enforced biometric access control](touch-id.md); this protects the
+stored vault unlock key, not signing operations performed by an unlocked app.
 
 ### Concurrent processes
 

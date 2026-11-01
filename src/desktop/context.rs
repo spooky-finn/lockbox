@@ -41,8 +41,12 @@ impl Biometrics for LocalizedBiometrics {
         self.inner.authenticate(self.reason)
     }
 
-    fn load(&self, account: &str) -> Option<zeroize::Zeroizing<Vec<u8>>> {
-        self.inner.load(account)
+    fn load(
+        &self,
+        account: &str,
+        _reason: &str,
+    ) -> Result<Option<zeroize::Zeroizing<Vec<u8>>>, String> {
+        self.inner.load(account, self.reason)
     }
 
     fn store(&self, account: &str, data: &[u8]) -> Result<(), String> {

@@ -1,10 +1,8 @@
-//! Touch ID unlock, simplified variant.
+//! Touch ID unlock with Keychain-enforced biometric access control.
 //!
-//! The vault key lives in the login keychain and lockbox itself asks
-//! LocalAuthentication to check the finger. macOS does not bind the keychain
-//! item to the finger: a program the user allows to read the `lockbox` item
-//! gets the key without Touch ID. Binding it needs a signing identity from an
-//! Apple Developer account (`errSecMissingEntitlement` without one).
+//! macOS stores the key in the data protection keychain, bound to the currently
+//! enrolled fingerprints. Unsupported signing configurations fail closed;
+//! there is no fallback to an unprotected login-keychain item.
 
 use crate::sync::identity::Key;
 use std::sync::Arc;
@@ -39,7 +37,9 @@ pub trait Biometrics: Send + Sync {
     fn domain_state(&self) -> Option<Vec<u8>>;
     /// Shows the Touch ID prompt; on success returns the current `domain_state`.
     fn authenticate(&self, reason: &str) -> Result<Vec<u8>, String>;
-    fn load(&self, account: &str) -> Option<Zeroizing<Vec<u8>>>;
+    /// Retrieval itself must enforce biometric authentication before releasing data.
+    /// Only a missing item returns `Ok(None)`; cancellation and OS failures are errors.
+    fn load(&self, account: &str, reason: &str) -> Result<Option<Zeroizing<Vec<u8>>>, String>;
     fn store(&self, account: &str, data: &[u8]) -> Result<(), String>;
     fn delete(&self, account: &str);
 }
@@ -87,13 +87,12 @@ pub fn unlock(
         return Err(TouchIdError::Unavailable);
     }
 
-    let fingers = biometrics
-        .authenticate(REASON)
-        .map_err(TouchIdError::Failed)?;
     let record = biometrics
-        .load(vault_id)
+        .load(vault_id, REASON)
+        .map_err(TouchIdError::Failed)?
         .and_then(|bytes| Record::decode(&bytes))
         .ok_or(TouchIdError::NoKey)?;
+    let fingers = biometrics.domain_state().ok_or(TouchIdError::Unavailable)?;
 
     if record.domain_state != fingers {
         biometrics.delete(vault_id);
@@ -161,7 +160,7 @@ fn save(
 pub fn system() -> Arc<dyn Biometrics> {
     #[cfg(target_os = "macos")]
     {
-        Arc::new(mac::MacBiometrics)
+        Arc::new(mac::MacBiometrics::new())
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -180,8 +179,8 @@ impl Biometrics for Unsupported {
     fn authenticate(&self, _reason: &str) -> Result<Vec<u8>, String> {
         Err("not supported".into())
     }
-    fn load(&self, _account: &str) -> Option<Zeroizing<Vec<u8>>> {
-        None
+    fn load(&self, _account: &str, _reason: &str) -> Result<Option<Zeroizing<Vec<u8>>>, String> {
+        Err("not supported".into())
     }
     fn store(&self, _account: &str, _data: &[u8]) -> Result<(), String> {
         Err("not supported".into())
@@ -190,89 +189,8 @@ impl Biometrics for Unsupported {
 }
 
 #[cfg(target_os = "macos")]
-mod mac {
-    use std::sync::mpsc;
-
-    use block2::RcBlock;
-    use objc2::runtime::Bool;
-    use objc2_foundation::{NSError, NSString};
-    use objc2_local_authentication::{LAContext, LAPolicy};
-    use security_framework::passwords::{
-        delete_generic_password, get_generic_password, set_generic_password,
-    };
-    use zeroize::Zeroizing;
-
-    use crate::platform::touchid::Biometrics;
-
-    const SERVICE: &str = "lockbox";
-    const POLICY: LAPolicy = LAPolicy::DeviceOwnerAuthenticationWithBiometrics;
-
-    pub struct MacBiometrics;
-
-    #[allow(deprecated)] // `domainState` replaces it only from macOS 15.
-    fn current_domain_state(context: &LAContext) -> Option<Vec<u8>> {
-        unsafe { context.evaluatedPolicyDomainState() }.map(|data| data.to_vec())
-    }
-
-    fn describe(error: &NSError) -> String {
-        // LAError codes: userCancel, systemCancel, appCancel, biometryLockout.
-        match error.code() {
-            -2 | -4 | -9 => "cancelled".to_owned(),
-            -1 => "fingerprint not recognized".to_owned(),
-            -8 => "Touch ID is locked after failed attempts — enter the master password".to_owned(),
-            _ => error.localizedDescription().to_string(),
-        }
-    }
-
-    impl Biometrics for MacBiometrics {
-        fn domain_state(&self) -> Option<Vec<u8>> {
-            let context = unsafe { LAContext::new() };
-            unsafe { context.canEvaluatePolicy_error(POLICY) }.ok()?;
-            current_domain_state(&context)
-        }
-
-        fn authenticate(&self, reason: &str) -> Result<Vec<u8>, String> {
-            let context = unsafe { LAContext::new() };
-            let (sender, receiver) = mpsc::channel();
-            let reply = RcBlock::new(move |ok: Bool, error: *mut NSError| {
-                let result = if ok.as_bool() {
-                    Ok(())
-                } else {
-                    Err(unsafe { error.as_ref() }
-                        .map(describe)
-                        .unwrap_or_else(|| "unknown error".to_owned()))
-                };
-
-                let _ = sender.send(result);
-            });
-            unsafe {
-                context.evaluatePolicy_localizedReason_reply(
-                    POLICY,
-                    &NSString::from_str(reason),
-                    &reply,
-                )
-            };
-            receiver
-                .recv()
-                .map_err(|_| "Touch ID did not respond".to_owned())??;
-            current_domain_state(&context).ok_or_else(|| "no fingerprint data".to_owned())
-        }
-
-        fn load(&self, account: &str) -> Option<Zeroizing<Vec<u8>>> {
-            get_generic_password(SERVICE, account)
-                .ok()
-                .map(Zeroizing::new)
-        }
-
-        fn store(&self, account: &str, data: &[u8]) -> Result<(), String> {
-            set_generic_password(SERVICE, account, data).map_err(|error| error.to_string())
-        }
-
-        fn delete(&self, account: &str) {
-            let _ = delete_generic_password(SERVICE, account);
-        }
-    }
-}
+#[path = "touchid/macos.rs"]
+mod mac;
 
 #[cfg(test)]
 #[path = "tests/touchid.rs"]

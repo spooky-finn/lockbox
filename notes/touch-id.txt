@@ -1,0 +1,8 @@
+- macOS: data protection Keychain; service lockbox.touch-id.v2; BIOMETRY_CURRENT_SET; unlocked, device-only, no sync.
+- Key retrieval enforces biometrics inside Security.framework. Fresh LAContext each read. Cancellation/errors release no key.
+- Startup deletes all legacy lockbox unlock items; never reads them. Read/store retry cleanup; failure stops operation. Profile witnesses untouched.
+- Migration: master-password unlock refreshes protected item. Missing signing entitlements fail closed; no insecure fallback.
+- Seven-day expiry remains app policy. Enrollment change invalidates biometric access. Root capsule retains password encryption.
+- Regression checks: direct reads require biometrics; storage failure, malformed records, expiry, changed fingers; macOS query checks.
+- Ignored OS probe: signed executable + Keychain entitlements + enrolled fingerprint; real no-interaction read must fail authentication.
+- Validation: cargo test --locked --offline passed (345 tests; 2 OS probes ignored). Formatting and all-target Clippy passed.

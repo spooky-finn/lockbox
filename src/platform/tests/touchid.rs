@@ -13,6 +13,7 @@ pub(crate) struct FakeBiometrics {
     pub(crate) finger_matches: AtomicBool,
     pub(crate) prompts: AtomicUsize,
     pub(crate) items: Mutex<HashMap<String, Vec<u8>>>,
+    pub(crate) store_error: Mutex<Option<String>>,
 }
 
 impl Default for FakeBiometrics {
@@ -22,6 +23,7 @@ impl Default for FakeBiometrics {
             finger_matches: AtomicBool::new(true),
             prompts: AtomicUsize::new(0),
             items: Mutex::new(HashMap::new()),
+            store_error: Mutex::new(None),
         }
     }
 }
@@ -37,15 +39,20 @@ impl Biometrics for FakeBiometrics {
         }
         self.domain_state().ok_or_else(|| "нет Touch ID".into())
     }
-    fn load(&self, account: &str) -> Option<Zeroizing<Vec<u8>>> {
-        self.items
+    fn load(&self, account: &str, reason: &str) -> Result<Option<Zeroizing<Vec<u8>>>, String> {
+        self.authenticate(reason)?;
+        Ok(self
+            .items
             .lock()
             .unwrap()
             .get(account)
             .cloned()
-            .map(Zeroizing::new)
+            .map(Zeroizing::new))
     }
     fn store(&self, account: &str, data: &[u8]) -> Result<(), String> {
+        if let Some(error) = &*self.store_error.lock().unwrap() {
+            return Err(error.clone());
+        }
         self.items
             .lock()
             .unwrap()
@@ -148,5 +155,42 @@ fn computer_without_touch_id_is_reported() {
     assert_eq!(
         enable(&fake, "vault", &KEY, 0).unwrap_err(),
         TouchIdError::Unavailable
+    );
+}
+
+#[test]
+fn reading_storage_directly_requires_biometrics() {
+    let fake = enabled();
+    fake.finger_matches.store(false, Ordering::SeqCst);
+    assert!(fake.load("vault", REASON).is_err());
+}
+
+#[test]
+fn failed_secure_storage_does_not_enable_an_unprotected_key() {
+    let fake = FakeBiometrics::default();
+    *fake.store_error.lock().unwrap() = Some("missing Keychain entitlement".into());
+    assert_eq!(
+        enable(&fake, "vault", &KEY, 0),
+        Err(TouchIdError::Keychain(
+            "missing Keychain entitlement".into()
+        ))
+    );
+    assert!(fake.items.lock().unwrap().is_empty());
+    assert_eq!(
+        unlock(&fake, "vault", DAY).unwrap_err(),
+        TouchIdError::NoKey
+    );
+}
+
+#[test]
+fn invalid_stored_record_never_returns_a_key() {
+    let fake = enabled();
+    fake.items
+        .lock()
+        .unwrap()
+        .insert("vault".into(), vec![0; 39]);
+    assert_eq!(
+        unlock(&fake, "vault", DAY).unwrap_err(),
+        TouchIdError::NoKey
     );
 }
