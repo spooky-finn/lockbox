@@ -8,16 +8,16 @@ No delegation requested. Keep unrelated work outside refactor commits.
 Last full suite: cycle 17; 386 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 17: Share stored-control extraction
-- Move journal decode/hash checks into history collector. Reuse for inspection,
-  candidate promotion and legacy quarantine. Keep caller resource checks.
-- Regression passed before refactor: non-control hash mismatch and invalid
-  encoding still fail public control inspection and quarantine paths.
-- Full suite passed: 386 library, four integration, two doctests; two OS probes
-  ignored. Formatting and strict all-target Clippy passed. Correct prior missed
-  line wrap; changed source byte-matches verified isolated snapshot.
+Cycle 18: One worker mailbox state
+- Store pending/completed result in one mutex-protected enum. Remove separate
+  completion atomic, Arc allocation and explicit memory ordering.
+- Keep cancellation, late-result discard, panic fault and repeated take behavior.
+- Lifecycle regression passed before refactor; all three worker tests passed
+  after. Consumer suites passed: 12 scheduler, 20 sharing, 28 import tests.
+- Formatting and strict all-target Clippy passed. Changed source byte-matches
+  verified isolated snapshot; workspace whitespace checks passed.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-17.WrzP0R when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-18.EgZYsy when workspace cannot compile.
 
-Next search: worker/mailbox state, export serialization, icon search indexing.
+Next search: export serialization, icon search indexing, attachment lookup.
 Inspect current code and tests before choosing; no quota-driven edits.

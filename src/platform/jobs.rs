@@ -1,30 +1,29 @@
 //! A cancellable thread owns only its task and one eventual result.
 
 use crate::sync::transport::Cancellation;
-use std::sync::{
-    Arc, Mutex,
-    atomic::{AtomicBool, Ordering},
-};
+use std::sync::{Arc, Mutex};
 
 /// Failure to produce a result, including a panic in a transport adapter.
 #[derive(Debug)]
 pub(crate) struct WorkerFailed;
 
+enum Mailbox<T> {
+    Pending,
+    Finished(Option<T>),
+}
+
 /// Session-owned result mailbox. Dropping it cancels subsequent task requests.
 /// A request already in progress remains subject to its provider timeout.
 pub(crate) struct Worker<T> {
-    result: Arc<Mutex<Option<T>>>,
-    finished: Arc<AtomicBool>,
+    mailbox: Arc<Mutex<Mailbox<T>>>,
     cancel: Cancellation,
 }
 
 impl<T: Send + 'static> Worker<T> {
     pub(crate) fn spawn(task: impl FnOnce(Cancellation) -> T + Send + 'static) -> Self {
-        let result = Arc::new(Mutex::new(None));
-        let finished = Arc::new(AtomicBool::new(false));
+        let mailbox = Arc::new(Mutex::new(Mailbox::Pending));
         let cancel = Cancellation::default();
-        let task_result = result.clone();
-        let task_finished = finished.clone();
+        let task_mailbox = mailbox.clone();
         let task_cancel = cancel.clone();
 
         std::thread::spawn(move || {
@@ -32,41 +31,32 @@ impl<T: Send + 'static> Worker<T> {
                 task(task_cancel.clone())
             }));
 
-            if task_cancel.check().is_ok()
-                && let Ok(reply) = reply
-            {
-                *task_result.lock().unwrap_or_else(|p| p.into_inner()) = Some(reply);
-            }
-            task_finished.store(true, Ordering::Release);
+            let reply = reply.ok().filter(|_| task_cancel.check().is_ok());
+            *task_mailbox.lock().unwrap_or_else(|p| p.into_inner()) = Mailbox::Finished(reply);
         });
 
-        Self {
-            result,
-            finished,
-            cancel,
-        }
+        Self { mailbox, cancel }
     }
 
     pub(crate) fn is_finished(&self) -> bool {
-        self.finished.load(Ordering::Acquire)
+        matches!(
+            *self.mailbox.lock().unwrap_or_else(|p| p.into_inner()),
+            Mailbox::Finished(_)
+        )
     }
 
     /// `None` means pending; an absent result after completion is a worker fault.
     pub(crate) fn take(&mut self) -> Option<Result<T, WorkerFailed>> {
-        self.is_finished().then(|| {
-            self.result
-                .lock()
-                .unwrap_or_else(|p| p.into_inner())
-                .take()
-                .ok_or(WorkerFailed)
-        })
+        match &mut *self.mailbox.lock().unwrap_or_else(|p| p.into_inner()) {
+            Mailbox::Pending => None,
+            Mailbox::Finished(result) => Some(result.take().ok_or(WorkerFailed)),
+        }
     }
 
     #[cfg(test)]
     pub(crate) fn ready(result: T) -> Self {
         Self {
-            result: Arc::new(Mutex::new(Some(result))),
-            finished: Arc::new(AtomicBool::new(true)),
+            mailbox: Arc::new(Mutex::new(Mailbox::Finished(Some(result)))),
             cancel: Cancellation::default(),
         }
     }
@@ -87,6 +77,25 @@ mod tests {
     };
 
     #[test]
+    fn pending_and_consumed_mailboxes_keep_distinct_outcomes() {
+        let (release, wait) = mpsc::channel();
+        let mut worker = Worker::spawn(move |_| {
+            wait.recv_timeout(Duration::from_secs(2)).unwrap();
+            42
+        });
+        assert!(!worker.is_finished());
+        assert!(worker.take().is_none());
+        release.send(()).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while !worker.is_finished() && Instant::now() < deadline {
+            std::thread::yield_now();
+        }
+        assert!(matches!(worker.take(), Some(Ok(42))));
+        assert!(worker.is_finished());
+        assert!(matches!(worker.take(), Some(Err(WorkerFailed))));
+    }
+
+    #[test]
     fn dropping_a_mailbox_cancels_and_discards_a_late_result() {
         let (release, wait) = mpsc::channel();
         let worker = Worker::spawn(move |_| {
@@ -94,18 +103,16 @@ mod tests {
             42
         });
         let cancel = worker.cancel.clone();
-        let result = worker.result.clone();
-        let finished = worker.finished.clone();
+        let mailbox = worker.mailbox.clone();
         drop(worker);
         assert!(cancel.check().is_err());
         release.send(()).unwrap();
         let deadline = Instant::now() + Duration::from_secs(2);
 
-        while !finished.load(Ordering::Acquire) && Instant::now() < deadline {
+        while matches!(*mailbox.lock().unwrap(), Mailbox::Pending) && Instant::now() < deadline {
             std::thread::yield_now();
         }
-        assert!(finished.load(Ordering::Acquire));
-        assert!(result.lock().unwrap().is_none());
+        assert!(matches!(*mailbox.lock().unwrap(), Mailbox::Finished(None)));
     }
 
     #[test]
