@@ -1,5 +1,4 @@
-//! Brand icons from Simple Icons, built into the binary: lockbox never
-//! downloads them. Matching is by the domain of an entry's URL.
+//! Bundled brand icons used as fallbacks for website favicons.
 
 use std::{collections::HashMap, sync::OnceLock};
 
@@ -223,3 +222,24 @@ pub fn letter(title: &str) -> String {
 #[cfg(test)]
 #[path = "tests/icons.rs"]
 mod tests;
+
+/// Fetch only the website origin's favicon; never include credentials or record paths.
+pub fn favicon_url(input: &str) -> Option<String> {
+    let input = input.trim();
+    if input.is_empty() {
+        return None;
+    }
+    let input = if input.contains("://") {
+        input.to_owned()
+    } else {
+        format!("https://{input}")
+    };
+    let url = url::Url::parse(&input).ok()?;
+    if !matches!(url.scheme(), "http" | "https") || url.host_str().is_none() {
+        return None;
+    }
+    Some(format!(
+        "{}/favicon.ico",
+        url.origin().ascii_serialization()
+    ))
+}

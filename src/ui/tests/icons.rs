@@ -103,3 +103,27 @@ fn glyph_contrast_follows_the_background() {
     assert!(glyph_is_dark(rgb("F0B90B")));
     assert!(!glyph_is_dark(rgb("181717")));
 }
+
+#[test]
+fn favicon_uses_only_http_origin() {
+    assert_eq!(
+        favicon_url("https://user:secret@example.com:8443/login?q=secret#token"),
+        Some("https://example.com:8443/favicon.ico".into())
+    );
+    assert_eq!(
+        favicon_url("example.com/login"),
+        Some("https://example.com/favicon.ico".into())
+    );
+    assert_eq!(
+        favicon_url("http://localhost:8080/login"),
+        Some("http://localhost:8080/favicon.ico".into())
+    );
+    for input in [
+        "",
+        "file:///tmp/icon",
+        "javascript://example.com/test",
+        "https://",
+    ] {
+        assert_eq!(favicon_url(input), None);
+    }
+}

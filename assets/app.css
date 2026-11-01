@@ -210,9 +210,9 @@ input.switch:disabled { opacity: .45; cursor: default; }
 .tree-disclosure:hover:not(:disabled), .folder-label:hover:not(:disabled) { background: transparent; box-shadow: none; }
 .tree-disclosure:active:not(:disabled), .folder-label:active:not(:disabled), .entry-row:active:not(:disabled) { transform: none; }
 .tree-empty { padding: 8px 18px; color: var(--muted); font-size: 11px; font-style: italic; }
-.entry-icon { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; font-weight: 600; font-size: 19px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 5%), 0 2px 4px rgb(0 0 0 / 5%); }
+.entry-icon { width: 24px; height: 24px; flex: 0 0 24px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 5%), 0 2px 4px rgb(0 0 0 / 5%); }
 .entry-icon svg { width: 60%; height: 60%; }
-.entry-icon.large { width: 60px; height: 60px; flex-basis: 60px; font-size: 29px; border-radius: 17px; }
+.entry-icon.large { width: 36px; height: 36px; flex-basis: 36px; font-size: 20px; border-radius: 8px; }
 .empty-list { padding: 22px 10px; font-size: 12px; text-align: center; }
 
 .sidebar-heading .icon-button.primary { color: #fff; }
@@ -345,7 +345,7 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 99px; }
 .draft .select-field > select { padding-right: 32px; }
 .draft textarea { min-height: 64px; padding: 6px 10px; line-height: 18px; }
 .draft .icon-button { width: 30px; height: 30px; min-height: 30px; flex-basis: 30px; padding: 6px; }
-.draft .entry-icon { width: 28px; height: 28px; flex-basis: 28px; border-radius: 8px; font-size: 16px; }
+.draft .entry-icon { width: 24px; height: 24px; flex-basis: 24px; border-radius: 6px; font-size: 14px; }
 .input-actions { gap: 6px; }
 .input-actions > input:not([type=checkbox]) { flex: 1; width: 160px; }
 .icon-actions { margin: 6px 0 0; font-size: 11px; }
@@ -431,7 +431,7 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 99px; }
     .entry-actions { margin-left: 64px; }
     .sync-status { margin-bottom: 24px; flex-wrap: wrap; }
     .detail-heading h1 { font-size: 25px; }
-    .entry-icon.large { width: 52px; height: 52px; flex-basis: 52px; border-radius: 15px; }
+    .entry-icon.large { width: 32px; height: 32px; flex-basis: 32px; border-radius: 8px; }
     .field-row { grid-template-columns: 1fr; gap: 6px; padding: 13px 0; }
     .field-row dd { min-height: 30px; }
     .lock-screen { padding: 40px 24px 64px; }
@@ -489,3 +489,12 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 99px; }
 .history-fields dd { margin: 4px 0 16px; }
 .fingerprint { overflow-wrap: anywhere; font-size: 12px; }
 @media (max-width: 640px) { .history-diff { grid-template-columns: 1fr; } }
+
+.entry-icon.favicon { background: transparent; box-shadow: none; }
+.entry-icon img { width: 100%; height: 100%; object-fit: contain; border-radius: inherit; }
+
+/* Record values copy with pointer or keyboard activation. */
+button.copy-value { justify-content: flex-start; text-align: left; font: inherit; padding: 4px 6px; margin-left: -6px; border-radius: 5px; transition: color 140ms, background 140ms; }
+button.copy-value:active:not(:disabled) { transform: none; }
+button.copy-value.copied { color: var(--accent); background: var(--selected); }
+button.copy-value:disabled { opacity: 1; }

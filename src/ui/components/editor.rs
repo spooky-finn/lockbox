@@ -30,6 +30,7 @@ pub(super) fn DraftView() -> Element {
 
     let entry = &draft.entry;
     let icon = icons::catalog().for_entry(entry);
+    let automatic_favicon = entry.icon.is_none() && icons::favicon_url(&entry.url).is_some();
     rsx! {
         form { class: "draft stack", onsubmit: move |event| { event.prevent_default(); edit_unlocked(state, |u| u.error = u.save_draft().err()); },
             div { class: "form-heading",
@@ -61,8 +62,8 @@ pub(super) fn DraftView() -> Element {
             label { r#for: "entry-url", "URL" }
             input { id: "entry-url", value: "{entry.url}", oninput: move |e| set_field(state, Field::Url, e.value()) }
             div { class: "input-actions icon-actions",
-                EntryIcon { title: entry.title.clone(), slug: icon.map(|i| i.slug.clone()) }
-                span { if let Some(icon) = icon { if entry.icon.is_none() { {language.text(Text::Auto)} } "{icon.title}" } else { {language.text(Text::AutoInitial)} } }
+                EntryIcon { title: entry.title.clone(), slug: entry.icon.clone(), url: entry.url.clone() }
+                span { if automatic_favicon { {language.text(Text::Auto)} } else if let Some(icon) = icon { if entry.icon.is_none() { {language.text(Text::Auto)} } "{icon.title}" } else { {language.text(Text::AutoInitial)} } }
                 IconButton { icon: Icon::Image, label: language.text(Text::ChooseIcon), expanded: Some(draft.icon_picker_open),
                     onclick: move |_| edit_draft(state, |d| d.icon_picker_open = !d.icon_picker_open),
                 }

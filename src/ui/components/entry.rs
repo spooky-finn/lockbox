@@ -8,7 +8,6 @@ use crate::ui::runtime;
 use crate::{
     app::{security::CopyField, session::Screen},
     core::totp,
-    ui::icons,
 };
 use dioxus::prelude::*;
 
@@ -17,6 +16,7 @@ pub(super) fn EntryView() -> Element {
     let language = crate::ui::i18n::use_language();
     let state = use_context::<Session>();
     let now = (use_context::<Clock>().0)();
+    let copied = use_signal(|| None::<(String, CopyField, std::time::Instant)>);
     let screen = state.read();
     let Screen::Unlocked(unlocked) = &*screen else {
         return rsx! {};
@@ -31,10 +31,22 @@ pub(super) fn EntryView() -> Element {
     } else {
         "••••••••"
     };
+    let copied_class = |field| {
+        if copied.read().as_ref().is_some_and(|(id, last, at)| {
+            id == &entry.id && *last == field && at.elapsed().as_secs_f32() < 2.0
+        }) {
+            "copied"
+        } else {
+            ""
+        }
+    };
+    let username_class = copied_class(CopyField::Username);
+    let password_class = copied_class(CopyField::Password);
+    let url_class = copied_class(CopyField::Url);
     rsx! {
         article { class: "entry-detail",
             div { class: "detail-heading",
-                EntryIcon { title: entry.title.clone(), slug: icons::catalog().for_entry(entry).map(|i| i.slug.clone()), large: true }
+                EntryIcon { title: entry.title.clone(), slug: entry.icon.clone(), url: entry.url.clone(), large: true }
                 div { class: "detail-title", p { class: "detail-kind", {language.text(Text::Password)} } h1 { "{entry.title}" } }
                 if !unlocked.confirm_delete {
                     div { class: "actions entry-actions",
@@ -47,17 +59,17 @@ pub(super) fn EntryView() -> Element {
             dl { class: "fields",
                 div { class: "field-row",
                     dt { {language.text(Text::Username2)} }
-                    dd { span { class: "field-value", "{entry.username}" }
+                    dd { button { class: "quiet field-value copy-value {username_class}", disabled: entry.username.is_empty(), aria_label: language.text(Text::CopyUsername), onclick: move |_| copy_value(state, copied, CopyField::Username), "{entry.username}" }
                         if !entry.username.is_empty() {
                             IconButton { class: "quiet", label: language.text(Text::CopyUsername), icon: Icon::Copy,
-                                onclick: move |_| runtime::copy(CopyField::Username),
+                                onclick: move |_| copy_value(state, copied, CopyField::Username),
                             }
                         }
                     }
                 }
                 div { class: "field-row",
                     dt { {language.text(Text::Password)} }
-                    dd { code { class: "field-value password-value", "{password}" }
+                    dd { button { class: "quiet field-value copy-value {password_class}", disabled: entry.password.is_empty(), aria_label: language.text(Text::CopyPassword), onclick: move |_| copy_value(state, copied, CopyField::Password), code { class: "password-value", "{password}" } }
                         IconButton { class: "quiet", label: if unlocked.show_password { language.text(Text::HidePassword) } else { language.text(Text::ShowPassword) },
                             icon: if unlocked.show_password { Icon::EyeOff } else { Icon::Eye },
                             pressed: Some(unlocked.show_password),
@@ -66,12 +78,12 @@ pub(super) fn EntryView() -> Element {
 
                         if !entry.password.is_empty() {
                             IconButton { class: "quiet", label: language.text(Text::CopyPassword), icon: Icon::Copy,
-                                onclick: move |_| runtime::copy(CopyField::Password),
+                                onclick: move |_| copy_value(state, copied, CopyField::Password),
                             }
                         }
                     }
                 }
-                div { class: "field-row", dt { {language.text(Text::Website)} } dd { span { class: "field-value website-value", "{entry.url}" } } }
+                div { class: "field-row", dt { {language.text(Text::Website)} } dd { button { class: "quiet field-value copy-value website-value {url_class}", disabled: entry.url.is_empty(), title: language.text(Text::Website), onclick: move |_| copy_value(state, copied, CopyField::Url), "{entry.url}" } } }
                 if let Some(settings) = &entry.totp {
                     div { class: "field-row totp-field",
                         dt { {language.text(Text::TOTPCode)} }
@@ -86,7 +98,7 @@ pub(super) fn EntryView() -> Element {
                                         }
                                     }
                                     IconButton { class: "quiet", label: language.text(Text::CopyTOTPCode), icon: Icon::Copy,
-                                        onclick: move |_| runtime::copy(CopyField::Totp),
+                                        onclick: move |_| { runtime::copy(CopyField::Totp); },
                                     }
                                 },
                                 Err(error) => rsx! { span { class: "error", {language.message(&error.to_string())} } },
@@ -125,6 +137,23 @@ pub(super) fn EntryView() -> Element {
                 }
             }
         }
+    }
+}
+
+// Store only record identity and timing; resolve clipboard contents at click time.
+fn copy_value(
+    state: Session,
+    mut copied: Signal<Option<(String, CopyField, std::time::Instant)>>,
+    field: CopyField,
+) {
+    if runtime::copy(field) {
+        if let Screen::Unlocked(workspace) = &*state.read()
+            && let Some(entry) = workspace.selected_entry()
+        {
+            copied.set(Some((entry.id.clone(), field, std::time::Instant::now())));
+        }
+    } else {
+        copied.set(None);
     }
 }
 

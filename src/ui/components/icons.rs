@@ -9,9 +9,17 @@ use dioxus::prelude::*;
 pub(super) fn EntryIcon(
     title: String,
     slug: Option<String>,
+    #[props(default)] url: String,
     #[props(default = false)] large: bool,
 ) -> Element {
-    let icon = slug.as_deref().and_then(|slug| icons::catalog().get(slug));
+    let mut failed_favicon = use_signal(|| None::<String>);
+    let favicon = slug.is_none().then(|| icons::favicon_url(&url)).flatten();
+    let favicon = favicon.filter(|url| failed_favicon.read().as_ref() != Some(url));
+    let icon = slug
+        .as_deref()
+        .and_then(|slug| icons::catalog().get(slug))
+        .or_else(|| icons::catalog().for_url(&url))
+        .or_else(|| icons::catalog().get(&icons::normalized(&title)));
     let (background, foreground) = match icon {
         Some(icon) => (
             format!("#{}", icon.hex),
@@ -26,6 +34,14 @@ pub(super) fn EntryIcon(
             (format!("#{r:02x}{g:02x}{b:02x}"), "#fff")
         }
     };
+    if let Some(favicon) = favicon {
+        return rsx! {
+            span { class: if large { "entry-icon favicon large" } else { "entry-icon favicon" }, aria_hidden: "true",
+                img { src: "{favicon}", alt: "", referrerpolicy: "no-referrer",
+                    onerror: move |_| failed_favicon.set(Some(favicon.clone())) }
+            }
+        };
+    }
     rsx! {
         span { class: if large { "entry-icon large" } else { "entry-icon" }, style: "background:{background};color:{foreground}", aria_hidden: "true",
             if let Some(icon) = icon {

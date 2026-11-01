@@ -7,7 +7,7 @@ publish = false
 default-run = "lockbox"
 description = "Local password manager with TOTP"
 
-# UI assets are bundled locally; no remote content is loaded.
+# Brand fallback assets are bundled locally; record favicons load from website origins.
 [dependencies]
 arboard = "3.7.0"
 argon2 = "0.5"
