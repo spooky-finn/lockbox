@@ -3,11 +3,11 @@
 //! ciphertext provenance, not historical plaintext correctness.
 
 use crate::sync::protocol::{
-    Error, Hash, Object, Result, Role, Signed, crypto, decode,
+    Error, Hash, Object, Result, Role, crypto, decode,
     machine::{
         Machine,
         history::with_history,
-        protocol::{Change, Control},
+        protocol::{ChangeHeader, Control},
         state::SyncState,
     },
     wire::sorted_unique,
@@ -23,8 +23,7 @@ impl Machine {
                 let frontier = &pair[1].1.body.closed_frontier;
                 let nodes = closed_nodes(state, membership, &previous.body, frontier)?;
                 let mut slots = BTreeMap::new();
-                for (hash, node) in &nodes {
-                    let header = &node.body.header;
+                for (hash, header) in &nodes {
                     if slots
                         .insert((header.author, header.sequence), *hash)
                         .is_some()
@@ -35,7 +34,7 @@ impl Machine {
                     match (header.sequence.0, header.previous) {
                         (1, None) => {}
                         (sequence, Some(previous)) if sequence > 1 && past.contains(&previous) => {
-                            let prior = &nodes[&previous].body.header;
+                            let prior = &nodes[&previous];
                             if prior.author != header.author
                                 || prior.sequence.0.checked_add(1) != Some(sequence)
                             {
@@ -59,7 +58,7 @@ fn closed_nodes(
     membership: Hash,
     control: &Control,
     frontier: &[Hash],
-) -> Result<BTreeMap<Hash, Signed<Change>>> {
+) -> Result<BTreeMap<Hash, ChangeHeader>> {
     let mut pending = frontier.to_vec();
     let mut nodes = BTreeMap::new();
     while let Some(hash) = pending.pop() {
@@ -97,12 +96,12 @@ fn closed_nodes(
             crypto::CHANGE_DOMAIN,
         )?;
         pending.extend(h.parents.iter().copied());
-        nodes.insert(hash, change);
+        nodes.insert(hash, change.body.header);
     }
     Ok(nodes)
 }
 
-fn ancestors(parents: &[Hash], nodes: &BTreeMap<Hash, Signed<Change>>) -> Result<BTreeSet<Hash>> {
+fn ancestors(parents: &[Hash], nodes: &BTreeMap<Hash, ChangeHeader>) -> Result<BTreeSet<Hash>> {
     let mut pending = parents.to_vec();
     let mut found = BTreeSet::new();
     while let Some(hash) = pending.pop() {
@@ -116,8 +115,6 @@ fn ancestors(parents: &[Hash], nodes: &BTreeMap<Hash, Signed<Change>>) -> Result
             nodes
                 .get(&hash)
                 .ok_or(Error::MissingDependency)?
-                .body
-                .header
                 .parents
                 .iter()
                 .copied(),
@@ -126,15 +123,10 @@ fn ancestors(parents: &[Hash], nodes: &BTreeMap<Hash, Signed<Change>>) -> Result
     Ok(found)
 }
 
-fn antichain(heads: &[Hash], nodes: &BTreeMap<Hash, Signed<Change>>) -> Result<()> {
+fn antichain(heads: &[Hash], nodes: &BTreeMap<Hash, ChangeHeader>) -> Result<()> {
     for hash in heads {
         let past = ancestors(
-            &nodes
-                .get(hash)
-                .ok_or(Error::MissingDependency)?
-                .body
-                .header
-                .parents,
+            &nodes.get(hash).ok_or(Error::MissingDependency)?.parents,
             nodes,
         )?;
         if heads.iter().any(|other| past.contains(other)) {

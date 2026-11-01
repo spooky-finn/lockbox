@@ -9,22 +9,22 @@ Last full suite: cycle 60; 413 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 60: Derive device identity before collection searches
-- Replay derives device ID once after control verification and reuses it for
-  current role plus each epoch grant/member search. epoch_key derives once for
-  both grant/member lookups; join_admission derives before its roster search.
-- prepare_transaction derives once before accepted-change scan, then reuses ID
-  in header. Remove per-item Ed25519 public-key derivation, no cross-call cache.
-- Preserve guard/decode/validation/error order, role/grant selection, nonce timing,
-  author bytes and durable intent behavior. All local IDs remain immutable.
-- Full suite: 413 library, four integration, two doctests passed; two OS probes
-  ignored. Formatting/strict all-target Clippy passed. Four sources match verified
-  snapshot; whitespace checks passed. Unrelated edits untouched.
-- Snapshot: /tmp/lockbox-refactor-60.spj1_ca2.
+Cycle 61: Retain relay headers after authentication
+- closed_nodes moves verified ChangeHeader into graph map instead of retaining
+  Signed<Change>. Drop decoded ciphertext/signature after each full verification;
+  later sequence/ancestor/antichain checks read headers directly.
+- Keep header/ciphertext shape and role checks, signed-body verification before
+  extraction, pending dependency traversal, object budgets and error order.
+  Durable journal and final publication bytes remain owned by original state.
+- Formatting/strict all-target Clippy passed. 16 transport, four vault authority,
+  two sync integration tests passed, including exact publication bytes/order and
+  recovery relay dependencies. Source matches verified snapshot; whitespace clean.
+- Snapshot: /tmp/lockbox-refactor-61.g4kchvl8. Unrelated edits untouched.
 
-Next search: relay.closed_nodes owns BTreeMap<Hash, Signed<Change>>, but all graph
-checks after public signature verification use only ChangeHeader. Consider moving
-header into map after verification, dropping decoded ciphertext/signature early.
-Keep full signed-body validation before extraction, dependency traversal, error
-order, object limits and publication bytes unchanged. Check transport publication
-and recovery relay tests; no need to retain or clone ciphertext in graph metadata.
+Next search: candidates.authenticate_change, replay.authenticate_changes and
+relay.closed_nodes repeat space/epoch/sequence/parent-count/order checks. Consider
+private ChangeHeader.validate(space, epoch) for this common shape only. Preserve
+separate membership filtering, nonce/ciphertext checks and role/signature order:
+replay checks nonce after signature; candidate/relay check before. Relay compares
+space to state.space, others control.epoch.space. Public error precedence matters;
+inspect coverage and establish baseline cases before extracting shared checks.
