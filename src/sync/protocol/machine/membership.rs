@@ -21,12 +21,13 @@ pub(super) fn grant_aad(epoch: &Epoch, certificate: &Signed<Certificate>) -> Res
 }
 
 pub(super) fn epoch_key(control: &Control, device: &DeviceSecret) -> Result<Zeroizing<Key>> {
+    let device_id = device.id();
     let grant = control
         .grants
         .iter()
-        .find(|g| g.device == device.id())
+        .find(|g| g.device == device_id)
         .ok_or(Error::KeyUnavailable)?;
-    let member = Roster(&control.members).member(device.id())?;
+    let member = Roster(&control.members).member(device_id)?;
     device.open_grant(
         &grant.enc,
         &grant.ciphertext,

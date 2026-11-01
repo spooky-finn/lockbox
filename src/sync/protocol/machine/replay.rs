@@ -66,11 +66,12 @@ impl Machine {
         let history = ControlHistory::verify(&controls, state)?;
         let chain = &history.chain;
         let (tip, current) = history.tip();
+        let device_id = device.id();
         let role = current
             .body
             .members
             .iter()
-            .find(|m| m.certificate.body.device == device.id())
+            .find(|m| m.certificate.body.device == device_id)
             .map(|m| m.role);
         let mut result = Replay {
             history: Vec::new(),
@@ -100,7 +101,7 @@ impl Machine {
 
         for (index, (membership, signed)) in chain.iter().enumerate() {
             let control = &signed.body;
-            let Some(grant) = control.grants.iter().find(|g| g.device == device.id()) else {
+            let Some(grant) = control.grants.iter().find(|g| g.device == device_id) else {
                 previous_epoch_verified = false;
                 result.history_verified = false;
                 continue;
@@ -109,7 +110,7 @@ impl Machine {
             let member = control
                 .members
                 .iter()
-                .find(|m| m.certificate.body.device == device.id())
+                .find(|m| m.certificate.body.device == device_id)
                 .ok_or(Error::UnauthorizedDevice)?;
             let key = device.open_grant(
                 &grant.enc,

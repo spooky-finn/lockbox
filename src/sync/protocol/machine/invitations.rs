@@ -256,11 +256,12 @@ impl Machine {
             if canonical(found)? != canonical(admission)? {
                 return Err(Error::InvalidInvitation);
             }
+            let device_id = device.id();
             let member = current
                 .body
                 .members
                 .iter()
-                .find(|m| m.certificate.body.device == device.id())
+                .find(|m| m.certificate.body.device == device_id)
                 .ok_or(Error::RetiredDevice)?;
 
             if certificate_hash(&member.certificate)? != certificate_hash(admission.recipient())? {

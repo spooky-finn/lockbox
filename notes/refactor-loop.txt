@@ -5,25 +5,26 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 58; 413 library, four integration, two doctests passed.
+Last full suite: cycle 60; 413 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 59: Reuse derived device public key
-- Certificate creation hashes its already-derived signing_key instead of deriving
-  Ed25519 key again through self.id. Certificate matching derives once and uses
-  same bytes for both identity hash and explicit signing-key comparison.
-- Private device_id centralizes unchanged device hash domain across creation,
-  public id, certificate verification and matching. Keep HPKE parse/comparison,
-  root binding, weak-key rejection and signature verification order.
-- Formatting/strict all-target Clippy passed. 54 protocol, two sync identity,
-  six vault identity, two sync integration tests passed. Source matches verified
+Cycle 60: Derive device identity before collection searches
+- Replay derives device ID once after control verification and reuses it for
+  current role plus each epoch grant/member search. epoch_key derives once for
+  both grant/member lookups; join_admission derives before its roster search.
+- prepare_transaction derives once before accepted-change scan, then reuses ID
+  in header. Remove per-item Ed25519 public-key derivation, no cross-call cache.
+- Preserve guard/decode/validation/error order, role/grant selection, nonce timing,
+  author bytes and durable intent behavior. All local IDs remain immutable.
+- Full suite: 413 library, four integration, two doctests passed; two OS probes
+  ignored. Formatting/strict all-target Clippy passed. Four sources match verified
   snapshot; whitespace checks passed. Unrelated edits untouched.
-- Snapshot: /tmp/lockbox-refactor-59.wf3jt_fu.
+- Snapshot: /tmp/lockbox-refactor-60.spj1_ca2.
 
-Next search: device.id() inside find/accepted-change loop predicates repeats
-Ed25519 public-key derivation per item. Replay has three searches across every
-control epoch; epoch_key, prepare_transaction and join_admission also repeat it.
-Consider one immutable local device_id per function before first lookup, reused
-for subsequent comparisons/header. Keep guard/decode/error ordering and keys
-uncached across calls. Inspect actual scopes before choosing all affected paths.
+Next search: relay.closed_nodes owns BTreeMap<Hash, Signed<Change>>, but all graph
+checks after public signature verification use only ChangeHeader. Consider moving
+header into map after verification, dropping decoded ciphertext/signature early.
+Keep full signed-body validation before extraction, dependency traversal, error
+order, object limits and publication bytes unchanged. Check transport publication
+and recovery relay tests; no need to retain or clone ciphertext in graph metadata.

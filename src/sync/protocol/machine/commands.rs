@@ -223,6 +223,7 @@ impl Machine {
         let control = control_at(state, replay.membership)?;
         let key = epoch_key(&control.body, device)?;
         let content_key = crypto::content_key(&key, state.space, control.body.epoch.context, false);
+        let device_id = device.id();
         let mut previous = None;
         let mut sequence: u64 = 0;
 
@@ -232,7 +233,7 @@ impl Machine {
             };
 
             if change.body.header.membership == replay.membership
-                && change.body.header.author == device.id()
+                && change.body.header.author == device_id
                 && change.body.header.sequence.0 > sequence
             {
                 previous = Some(*hash);
@@ -252,7 +253,7 @@ impl Machine {
             space: state.space,
             membership: replay.membership,
             epoch: Counter(replay.epoch),
-            author: device.id(),
+            author: device_id,
             sequence: Counter(
                 sequence
                     .checked_add(1)
