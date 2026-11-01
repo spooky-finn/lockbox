@@ -4,7 +4,7 @@
 use super::{
     Machine,
     commands::capacity,
-    history::ControlHistory,
+    history::{ControlHistory, controls},
     membership::validate_control,
     protocol::{Change, Control},
     state::SyncState,
@@ -13,7 +13,6 @@ use crate::sync::protocol::{
     Blob, Error, Hash, MAX_CANDIDATE_BYTES, MAX_CANDIDATES, Object, Result, Role, Signed, crypto,
     decode, wire::sorted_unique,
 };
-use std::collections::BTreeMap;
 
 pub(super) fn insert(state: &mut SyncState, hash: Hash, bytes: Blob) {
     let mut size: usize = state.candidates.values().map(|bytes| bytes.0.len()).sum();
@@ -26,20 +25,6 @@ pub(super) fn insert(state: &mut SyncState, hash: Hash, bytes: Blob) {
         size = size.saturating_sub(removed.0.len());
     }
     state.candidates.insert(hash, bytes);
-}
-
-pub(super) fn controls(state: &SyncState) -> Result<BTreeMap<Hash, Signed<Control>>> {
-    let mut controls = BTreeMap::new();
-    for (hash, bytes) in &state.objects {
-        let object: Object = decode(&bytes.0)?;
-        if object.hash()? != *hash {
-            return Err(Error::HashMismatch);
-        }
-        if let Object::Control(control) = object {
-            controls.insert(*hash, control);
-        }
-    }
-    Ok(controls)
 }
 
 // Ok(false) means dependencies are still unknown, not rejected authority.

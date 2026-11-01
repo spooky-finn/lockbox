@@ -5,19 +5,19 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 12; 382 library, four integration, two doctests passed.
+Last full suite: cycle 17; 386 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 16: Index control-history successors
-- Bucket borrowed controls by predecessor once; remove whole-map scan per epoch.
-- Keep sibling hash order, signature/authority validation, rejection evidence,
-  fork detection and pinned genesis behavior.
-- Regression passed before refactor: valid three-step chain, invalid sibling,
-  unreachable child, disconnected control and extra root.
-- Verification: all 43 protocol tests, full formatting and strict all-target
-  Clippy passed in isolated snapshot. Workspace whitespace checks passed.
+Cycle 17: Share stored-control extraction
+- Move journal decode/hash checks into history collector. Reuse for inspection,
+  candidate promotion and legacy quarantine. Keep caller resource checks.
+- Regression passed before refactor: non-control hash mismatch and invalid
+  encoding still fail public control inspection and quarantine paths.
+- Full suite passed: 386 library, four integration, two doctests; two OS probes
+  ignored. Formatting and strict all-target Clippy passed. Correct prior missed
+  line wrap; changed source byte-matches verified isolated snapshot.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-16.yVSST0 when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-17.WrzP0R when workspace cannot compile.
 
-Next search: control extraction duplication, worker/mailbox state, exports.
+Next search: worker/mailbox state, export serialization, icon search indexing.
 Inspect current code and tests before choosing; no quota-driven edits.

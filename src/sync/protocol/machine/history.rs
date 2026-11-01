@@ -27,7 +27,10 @@ impl<'a> ControlHistory<'a> {
         let mut successors = BTreeMap::<_, Vec<_>>::new();
         for (hash, control) in controls {
             if let Some(previous) = control.body.epoch.previous {
-                successors.entry(previous).or_default().push((*hash, control));
+                successors
+                    .entry(previous)
+                    .or_default()
+                    .push((*hash, control));
             }
         }
 
@@ -75,12 +78,16 @@ pub(super) fn with_history<T>(
     state: &SyncState,
     visit: impl FnOnce(&ControlHistory<'_>) -> Result<T>,
 ) -> Result<T> {
-    let mut controls = BTreeMap::new();
-
     if state.objects.len() > crate::sync::protocol::MAX_OBJECTS {
         return Err(Error::ResourceBudgetExceeded);
     }
 
+    let controls = controls(state)?;
+    visit(&ControlHistory::verify(&controls, state)?)
+}
+
+pub(super) fn controls(state: &SyncState) -> Result<BTreeMap<Hash, Signed<Control>>> {
+    let mut controls = BTreeMap::new();
     for (hash, bytes) in &state.objects {
         let object: Object = decode(&bytes.0)?;
 
@@ -91,5 +98,5 @@ pub(super) fn with_history<T>(
             controls.insert(*hash, control);
         }
     }
-    visit(&ControlHistory::verify(&controls, state)?)
+    Ok(controls)
 }

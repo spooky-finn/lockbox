@@ -1,4 +1,7 @@
-use crate::sync::protocol::machine::{candidates::controls, history::ControlHistory, tests::*};
+use crate::sync::protocol::machine::{
+    history::{ControlHistory, controls},
+    tests::*,
+};
 use std::collections::BTreeMap;
 
 #[test]
@@ -45,4 +48,28 @@ fn verified_chain_rejects_invalid_siblings_without_following_unreachable_control
         BTreeMap::from([(invalid_hash, Error::InvalidSignature)])
     );
     assert!(!history.contains(child_hash));
+}
+
+#[test]
+fn control_inspection_checks_hashes_and_encoding_of_content_objects_too() {
+    let (mut state, device) = owner();
+    let change = edit(&mut state, &device, vec![entry(1, "content")]);
+    assert_eq!(controls(&state).unwrap().len(), 1);
+    assert_eq!(Machine::controller(&state), Ok(device.id()));
+
+    let mut wrong_hash = state.clone();
+    let bytes = wrong_hash.objects.remove(&change).unwrap();
+    wrong_hash.objects.insert(Hash([99; 32]), bytes);
+    assert_eq!(Machine::controller(&wrong_hash), Err(Error::HashMismatch));
+    assert_eq!(
+        Machine::quarantine_unverified(&mut wrong_hash),
+        Err(Error::HashMismatch)
+    );
+
+    state.objects.insert(change, Blob(b"{".to_vec()));
+    assert_eq!(Machine::controller(&state), Err(Error::InvalidEncoding));
+    assert_eq!(
+        Machine::quarantine_unverified(&mut state),
+        Err(Error::InvalidEncoding)
+    );
 }
