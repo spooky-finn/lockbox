@@ -8,16 +8,15 @@ No delegation requested. Keep unrelated work outside refactor commits.
 Last full suite: cycle 23; 391 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 25: Share canonical record ID predicate
-- Put exact 32-byte lowercase-hex rule beside ID generator. Attachments and
-  shared entity/parent validation reuse predicate; caller errors unchanged.
-- Leave permissive local record/folder IDs and 64-byte hash schema unchanged.
-- Two regressions passed before refactor: reject empty/wrong-length/uppercase/
-  nonhex/Unicode IDs; accept mixed hex; retain legacy local entry ID.
-- Three attachment and nine model tests, formatting and strict all-target Clippy
-  passed. Source byte-matches snapshot; workspace whitespace checks passed.
+Cycle 26: Format random IDs once
+- Render 16 random bytes as zero-padded big-endian u128 hex; remove temporary
+  per-byte formatted Strings. Profile filename formats prefix/ID/suffix together.
+- Preserve 32 lowercase characters, byte order, randomness calls and errors.
+- Existing 74 record tests and profile-path test passed. Formatting and strict
+  all-target Clippy passed. No new tests for straightforward formatting change.
+- Source byte-matches snapshot; workspace whitespace checks passed.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-25.XTWpmO when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-26.dXFT4X when workspace cannot compile.
 
-Next search: ID encoding allocation, settings, conflict display lookups.
+Next search: conflict rendering, generic hex duplication, settings.
 Inspect current code and tests before choosing; no quota-driven edits.

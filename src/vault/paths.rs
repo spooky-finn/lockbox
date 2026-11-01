@@ -5,6 +5,6 @@ pub(crate) fn new_profile_path(home: &std::path::Path) -> std::io::Result<std::p
     std::fs::create_dir_all(&directory)?;
     let mut random = [0u8; 16];
     getrandom::fill(&mut random).map_err(std::io::Error::other)?;
-    let name: String = random.iter().map(|byte| format!("{byte:02x}")).collect();
-    Ok(directory.join(format!("profile-{name}.lbx")))
+    let id = u128::from_be_bytes(random);
+    Ok(directory.join(format!("profile-{id:032x}.lbx")))
 }
