@@ -189,44 +189,52 @@ pub(super) fn create_cloud_profile() {
         }
     }
 
-    let path = rfd::FileDialog::new()
-        .add_filter("lockbox", &["lbx"])
-        .set_file_name("profile.lbx")
-        .save_file();
+    // Native modal dialogs can re-enter the macOS event loop. Let the Dioxus
+    // event handler return before the dialog completes and updates the session.
+    spawn(async move {
+        let path = rfd::AsyncFileDialog::new()
+            .add_filter("lockbox", &["lbx"])
+            .set_file_name("profile.lbx")
+            .save_file()
+            .await;
 
-    if let Some(path) = path
-        && let Screen::Locked(form) = &mut *state.write()
-    {
-        form.path = Some(with_vault_extension(path));
-        form.submit();
-    }
+        if let Some(path) = path
+            && let Screen::Locked(form) = &mut *state.write()
+        {
+            form.path = Some(with_vault_extension(path.path().to_path_buf()));
+            form.submit();
+        }
+    });
 }
 
 pub(super) fn pick_vault(create: bool) {
-    let dialog = rfd::FileDialog::new().add_filter("lockbox", &["lbx"]);
-    let path = if create {
-        dialog.set_file_name("vault.lbx").save_file()
-    } else {
-        dialog.pick_file()
-    };
-
-    if let Some(path) = path {
-        let mut state = consume_context::<Session>();
-        let settings = consume_context::<Signal<Settings>>();
-        let hardware = consume_context::<BiometricProvider>();
-        let mut form = if create {
-            Locked::new(Some(with_vault_extension(path)))
+    let mut state = consume_context::<Session>();
+    let settings = consume_context::<Signal<Settings>>();
+    let hardware = consume_context::<BiometricProvider>();
+    spawn(async move {
+        let dialog = rfd::AsyncFileDialog::new().add_filter("lockbox", &["lbx"]);
+        let path = if create {
+            dialog.set_file_name("vault.lbx").save_file().await
         } else {
-            Locked::new(Some(path)).offer_touch_id(&settings.peek().config, &*hardware.0, false)
+            dialog.pick_file().await
         };
 
-        if create {
-            form.mode = Mode::Create;
-            form.storage_kind = Some(StorageKind::Local);
-            form.error = None;
+        if let Some(path) = path {
+            let path = path.path().to_path_buf();
+            let mut form = if create {
+                Locked::new(Some(with_vault_extension(path)))
+            } else {
+                Locked::new(Some(path)).offer_touch_id(&settings.peek().config, &*hardware.0, false)
+            };
+
+            if create {
+                form.mode = Mode::Create;
+                form.storage_kind = Some(StorageKind::Local);
+                form.error = None;
+            }
+            *state.write() = Screen::Locked(Box::new(form));
         }
-        *state.write() = Screen::Locked(Box::new(form));
-    }
+    });
 }
 
 pub(super) fn forget_path() {
