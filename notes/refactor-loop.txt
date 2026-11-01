@@ -8,15 +8,14 @@ No delegation requested. Keep unrelated work outside refactor commits.
 Last full suite: cycle 6; 375 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 8: Record draft ownership
-- Draft initializes editor flags and prepares validated, normalized save snapshots.
-- Desktop coordinates persistence/selection; field defaults and error order kept.
-- Draft remains unchanged on failed validation/save; cancellation still drops it.
-- Link-only editor tests now use pure Draft fixtures, without vault file setup.
-- Verification: nine editor-filtered and 11 workspace-filtered tests passed;
-  full formatting and strict all-target Clippy passed in isolated snapshot.
+Cycle 9: Participant alias rollback
+- Retain old alias returned by map insert/remove instead of lookup plus clone.
+- Keep validation, local-only persistence, removal and failed-save rollback.
+- File helpers reviewed; their different durability/read contracts stay explicit.
+- Verification: four alias-filtered tests, full formatting and strict all-target
+  Clippy passed in isolated snapshot. Existing rollback/reopen coverage retained.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-8.gByoW2 when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-9.ZKIoaU when workspace cannot compile.
 
-Next search: vault file helpers, UI workflow duplication, attachment boundaries.
+Next search: UI workflow duplication, attachment boundaries, sharing job state.
 Inspect current code and tests before choosing; no quota-driven edits.

@@ -57,12 +57,11 @@ impl Vault {
         let Some(profile) = self.profile.as_mut() else {
             return Ok(());
         };
-        let previous = profile.participant_names.get(&user).cloned();
-        if name.is_empty() {
-            profile.participant_names.remove(&user);
+        let previous = if name.is_empty() {
+            profile.participant_names.remove(&user)
         } else {
-            profile.participant_names.insert(user, name.to_owned());
-        }
+            profile.participant_names.insert(user, name.to_owned())
+        };
         if let Err(error) = self.save() {
             let profile = self.profile.as_mut().expect("profile retained during save");
             if let Some(previous) = previous {
