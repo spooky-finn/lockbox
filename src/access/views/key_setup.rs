@@ -30,25 +30,27 @@ pub(crate) fn KeySetupView() -> Element {
                     readonly: !locked.importing_words, disabled: busy,
                 }
             }
-            if !locked.importing_words {
-                button { r#type: "button", class: "quiet", disabled: busy,
-                    onclick: move |_| edit_locked(state, |locked| locked.show_recovery_words = !locked.show_recovery_words),
-                    if locked.show_recovery_words { {language.text(Text::HideRecoveryWords)} }
-                    else { {language.text(Text::ShowRecoveryWords)} }
-                }
-            }
-            button { r#type: "button", class: "quiet", disabled: busy,
-                onclick: move |_| edit_locked(state, |locked| {
-                    if locked.importing_words { locked.generate_recovery_words(); }
-                    else {
-                        locked.recovery_words.zeroize();
-                        locked.importing_words = true;
-                        locked.words_saved = false;
-                        locked.show_recovery_words = false;
+            div { class: "recovery-actions",
+                if !locked.importing_words {
+                    button { r#type: "button", class: "setup-button", disabled: busy,
+                        onclick: move |_| edit_locked(state, |locked| locked.show_recovery_words = !locked.show_recovery_words),
+                        if locked.show_recovery_words { {language.text(Text::HideRecoveryWords)} }
+                        else { {language.text(Text::ShowRecoveryWords)} }
                     }
-                }),
-                if locked.importing_words { {language.text(Text::GenerateRecoveryWords)} }
-                else { {language.text(Text::UseRecoveryWords)} }
+                }
+                button { r#type: "button", class: "setup-button", disabled: busy,
+                    onclick: move |_| edit_locked(state, |locked| {
+                        if locked.importing_words { locked.generate_recovery_words(); }
+                        else {
+                            locked.recovery_words.zeroize();
+                            locked.importing_words = true;
+                            locked.words_saved = false;
+                            locked.show_recovery_words = false;
+                        }
+                    }),
+                    if locked.importing_words { {language.text(Text::GenerateRecoveryWords)} }
+                    else { {language.text(Text::UseRecoveryWords)} }
+                }
             }
             label { class: "recovery-saved",
                 input { id: "recovery-saved", r#type: "checkbox", disabled: busy || (!locked.show_recovery_words && !locked.importing_words), checked: locked.words_saved,

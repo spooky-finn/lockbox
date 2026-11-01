@@ -1,0 +1,2 @@
+Recovery setup: show/hide words + import words buttons share row.
+Use bordered setup-button style; both actions visible.
