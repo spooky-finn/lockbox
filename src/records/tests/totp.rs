@@ -91,6 +91,27 @@ fn broken_secrets_are_rejected() {
 }
 
 #[test]
+fn generation_rejects_invalid_settings_in_validation_order() {
+    for (secret, digits, period, expected) in [
+        (" ", 0, 0, TotpError::EmptySecret),
+        ("JBSWY3D0", 0, 0, TotpError::InvalidSecret),
+        ("JBSWY3DPEHPK3PXP", 5, 0, TotpError::InvalidDigits),
+        ("JBSWY3DPEHPK3PXP", 9, 30, TotpError::InvalidDigits),
+        ("JBSWY3DPEHPK3PXP", 6, 0, TotpError::InvalidPeriod),
+        ("JBSWY3DPEHPK3PXP", 6, 301, TotpError::InvalidPeriod),
+    ] {
+        let totp = Totp {
+            secret: secret.into(),
+            algorithm: TotpAlgorithm::Sha1,
+            digits,
+            period,
+        };
+        assert_eq!(validate(&totp).unwrap_err(), expected);
+        assert_eq!(code(&totp, 59).unwrap_err(), expected);
+    }
+}
+
+#[test]
 fn full_link_is_parsed() {
     let link = parse_link(
         "otpauth://totp/GitLab%20Inc:a8ee%40example.com?secret=jbswy3dpehpk3pxp\

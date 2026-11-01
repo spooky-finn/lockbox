@@ -79,7 +79,11 @@ pub fn decode_base32(secret: &str) -> Result<Zeroizing<Vec<u8>>, TotpError> {
 
 /// Checks the secret, digit count, and period before generating a code.
 pub fn validate(totp: &Totp) -> Result<(), TotpError> {
-    decode_base32(&totp.secret)?;
+    validated_key(totp).map(|_| ())
+}
+
+fn validated_key(totp: &Totp) -> Result<Zeroizing<Vec<u8>>, TotpError> {
+    let key = decode_base32(&totp.secret)?;
 
     if !DIGITS.contains(&totp.digits) {
         return Err(TotpError::InvalidDigits);
@@ -89,13 +93,12 @@ pub fn validate(totp: &Totp) -> Result<(), TotpError> {
         return Err(TotpError::InvalidPeriod);
     }
 
-    Ok(())
+    Ok(key)
 }
 
 /// The code valid at `unix_time`, zero-padded to the configured length.
 pub fn code(totp: &Totp, unix_time: u64) -> Result<String, TotpError> {
-    validate(totp)?;
-    let key = decode_base32(&totp.secret)?;
+    let key = validated_key(totp)?;
     let counter = unix_time / u64::from(totp.period);
     let digest = hmac(totp.algorithm, &key, counter);
     // RFC 4226 dynamic truncation.
