@@ -11,6 +11,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Config {
+    #[serde(default)]
+    pub language: crate::core::language::Language,
     pub last_vault: Option<PathBuf>,
     /// Vaults (by `Vault::id`) whose owner turned Touch ID on.
     #[serde(default)]
@@ -27,6 +29,7 @@ fn default_auto_lock() -> u32 {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            language: crate::core::language::Language::default(),
             last_vault: None,
             touch_id: Vec::new(),
             auto_lock_minutes: default_auto_lock(),

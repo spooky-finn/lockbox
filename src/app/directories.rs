@@ -1,4 +1,5 @@
 //! Folder navigation and transactional hierarchy changes; no UI dependencies.
+
 use super::workspace::Unlocked;
 use crate::{
     core::folder::{self, Folder},
@@ -122,6 +123,7 @@ impl Unlocked {
         if self.is_editing() {
             return;
         }
+        self.page = super::workspace::Page::Vault;
         self.selected = None;
         self.show_password = false;
         self.confirm_delete = false;
@@ -135,6 +137,7 @@ impl Unlocked {
         if self.is_editing() {
             return;
         }
+        self.page = super::workspace::Page::Vault;
         self.selected = None;
         self.show_password = false;
         self.directories.draft = Some(DirectoryDraft {

@@ -1,4 +1,5 @@
 //! Small, bundled line icons shared by the interface.
+
 use dioxus::prelude::*;
 
 #[derive(Clone, Copy, PartialEq)]

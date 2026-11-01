@@ -5,6 +5,7 @@ fn remembered_path_survives_a_restart() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("lockbox").join("config.json");
     let config = Config {
+        language: crate::core::language::Language::English,
         last_vault: Some("/tmp/vault.lbx".into()),
         touch_id: vec!["00ff".into()],
         auto_lock_minutes: 15,
@@ -23,6 +24,7 @@ fn config_from_before_touch_id_still_loads() {
         config.last_vault.as_deref(),
         Some(Path::new("/tmp/vault.lbx"))
     );
+    assert_eq!(config.language, crate::core::language::Language::English);
     assert!(config.touch_id.is_empty());
     assert_eq!(
         config.auto_lock_minutes,
@@ -48,4 +50,19 @@ fn config_file_is_private_to_the_owner() {
     Config::default().save(&path).unwrap();
     let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
     assert_eq!(mode, 0o600);
+}
+
+#[test]
+fn language_defaults_to_english_and_preserves_explicit_russian() {
+    use crate::core::language::Language;
+
+    assert_eq!(Config::default().language, Language::English);
+    for (code, expected) in [
+        ("en", Language::English),
+        ("ru", Language::Russian),
+        ("unknown", Language::English),
+    ] {
+        let config: Config = serde_json::from_value(serde_json::json!({"language": code})).unwrap();
+        assert_eq!(config.language, expected);
+    }
 }

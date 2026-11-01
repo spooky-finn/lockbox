@@ -1,9 +1,12 @@
+use crate::ui::i18n::Text;
+
 use crate::app::{security::Status, session::Screen};
 use crate::ui::context::Session;
 use dioxus::prelude::*;
 
 #[component]
 pub(super) fn StatusBar() -> Element {
+    let language = crate::ui::i18n::use_language();
     let state = use_context::<Session>();
     let status = use_context::<Signal<Status>>();
     let status = status.read();
@@ -14,12 +17,12 @@ pub(super) fn StatusBar() -> Element {
     rsx! {
         footer { class: "status", aria_live: "polite",
             if let Some(seconds) = status.lock_seconds {
-                span { class: "notice", "Автоблокировка через {seconds} с"
-                    if editing { " — несохранённая правка будет сброшена" }
+                span { class: "notice", {language.format(Text::AutoLockInS, &[seconds.to_string()])}
+                    if editing { {language.text(Text::UnsavedChangesWillBeDiscarded)} }
                 }
             }
             if let Some(seconds) = status.clipboard_seconds {
-                span { "Скопировано · буфер очистится через {seconds} с" }
+                span { {language.format(Text::CopiedClipboardClearsInS, &[seconds.to_string()])} }
             }
         }
     }

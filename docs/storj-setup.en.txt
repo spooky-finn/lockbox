@@ -1,0 +1,13 @@
+1. Create a project in the Storj console and a separate bucket for Lockbox. Use 3–63 characters for a new bucket: lowercase Latin letters, digits, and hyphens; start and end with a letter or digit.
+
+2. Under Access Keys, choose New Access Key and the S3 Credentials type. Give the access a name that distinguishes it from other applications.
+
+3. Choose Advanced and restrict access to the selected bucket. Lockbox needs Read, Write, and List for object exchange. Set an expiration that suits your needs.
+
+4. Complete the Storj encryption passphrase step. This passphrase belongs to Storj; the master password for your local Lockbox profile is set separately.
+
+5. Save the Access Key, Secret Key, and Endpoint. In Lockbox, Base URL is the gateway Endpoint, without a bucket name or path. Enter the bucket separately in the Bucket field.
+
+6. Enter your username and the vault's display name in Lockbox. The vault name can differ from the bucket name and does not grant access rights.
+
+After validating the fields, choose a master password for the local profile and a separate recovery password for the root key, then choose a location for the .lbx file. Names, credentials, and keys are stored inside the encrypted profile. Once opened, new profiles exchange encrypted, signed events through Storj; network errors leave changes saved on your device. The form checks syntax; actual permissions are checked during sync. Do not upload the local profile to a shared bucket or copy it to another device for collaboration. Adding members is available through the engine API; invitation screens are not yet implemented. The LBX-SYNC-0 exchange format is experimental.

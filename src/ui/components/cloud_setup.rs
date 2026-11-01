@@ -1,3 +1,5 @@
+use crate::ui::i18n::Text;
+
 use crate::app::editor::replace_secret;
 use crate::app::session::Screen;
 use crate::ui::context::{Session, edit_locked};
@@ -6,6 +8,7 @@ use zeroize::Zeroizing;
 
 #[component]
 pub(super) fn CloudSetupView() -> Element {
+    let language = crate::ui::i18n::use_language();
     let state = use_context::<Session>();
     let mut show_help = use_signal(|| false);
     let screen = state.read();
@@ -14,11 +17,16 @@ pub(super) fn CloudSetupView() -> Element {
     };
     if show_help() {
         return rsx! {
-            section { class: "cloud-setup", aria_label: "Подготовка Storj",
-                h2 { "Подготовка Storj" }
-                pre { class: "storj-guide", {include_str!("../../../docs/storj-setup.txt")} }
-                a { href: "https://storj.dev/dcs/api/s3/credentials", target: "_blank", rel: "noopener noreferrer", "Документация Storj" }
-                button { r#type: "button", class: "setup-button", onclick: move |_| show_help.set(false), "Вернуться к настройке" }
+            section { class: "cloud-setup", aria_label: language.text(Text::StorjSetup),
+                h2 { {language.text(Text::StorjSetup)} }
+                pre { class: "storj-guide",
+                    {match language {
+                        crate::core::language::Language::English => include_str!("../../../docs/storj-setup.en.txt"),
+                        crate::core::language::Language::Russian => include_str!("../../../docs/storj-setup.txt"),
+                    }}
+                }
+                a { href: "https://storj.dev/dcs/api/s3/credentials", target: "_blank", rel: "noopener noreferrer", {language.text(Text::StorjDocumentation)} }
+                button { r#type: "button", class: "setup-button", onclick: move |_| show_help.set(false), {language.text(Text::BackToSetup)} }
             }
         };
     }
@@ -27,12 +35,12 @@ pub(super) fn CloudSetupView() -> Element {
                 event.prevent_default();
                 edit_locked(state, |locked| locked.continue_cloud());
             },
-            p { class: "muted", "Подключите подготовленное хранилище Storj." }
-            button { r#type: "button", class: "setup-button", onclick: move |_| show_help.set(true), "Как подготовить Storj" }
-            label { r#for: "cloud-username", "Имя пользователя" }
+            p { class: "muted", {language.text(Text::ConnectYourStorjStorage)} }
+            button { r#type: "button", class: "setup-button", onclick: move |_| show_help.set(true), {language.text(Text::HowToSetUpStorj)} }
+            label { r#for: "cloud-username", {language.text(Text::Username)} }
             input { id: "cloud-username", value: "{locked.cloud.username}", autocomplete: "off",
                 oninput: move |event| edit_locked(state, |locked| locked.cloud.username = event.value()), }
-            label { r#for: "cloud-space", "Имя хранилища" }
+            label { r#for: "cloud-space", {language.text(Text::VaultName)} }
             input { id: "cloud-space", value: "{locked.cloud.space_name}", autocomplete: "off",
                 oninput: move |event| edit_locked(state, |locked| locked.cloud.space_name = event.value()), }
             label { r#for: "cloud-url", "Base URL" }
@@ -53,8 +61,8 @@ pub(super) fn CloudSetupView() -> Element {
                     let value = Zeroizing::new(event.value());
                     edit_locked(state, |locked| replace_secret(&mut locked.cloud.secret_key, &value));
                 }, }
-            p { class: "muted", "Проверка полей не обращается к Storj." }
-            button { r#type: "submit", class: "setup-button", "Продолжить" }
+            p { class: "muted", {language.text(Text::FieldValidationDoesNotConnectToStorj)} }
+            button { r#type: "submit", class: "setup-button", {language.text(Text::Continue)} }
         }
     }
 }

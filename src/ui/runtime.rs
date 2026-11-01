@@ -1,4 +1,5 @@
 //! Dioxus lifecycle and the few actions that coordinate independent domains.
+
 use super::context::{BiometricProvider, Clock, SecurityHandle, Session};
 use crate::app::{
     auth::{Locked, Mode, StorageKind, with_vault_extension},
@@ -138,7 +139,8 @@ pub(super) fn poll_workers() {
     let mut screen = state.write();
     match &mut *screen {
         Screen::Locked(form) => {
-            if let Some(opened) = form.poll(hardware.0.clone()) {
+            let language = settings.peek().config.language;
+            if let Some(opened) = form.poll(hardware.for_language(language)) {
                 screen.open(
                     opened,
                     &mut settings.write(),
@@ -225,11 +227,12 @@ pub(super) fn set_touch_id(wanted: bool) {
     let mut state = consume_context::<Session>();
     let mut settings = consume_context::<Signal<Settings>>();
     let hardware = consume_context::<BiometricProvider>();
+    let biometrics = hardware.for_language(settings.peek().config.language);
     if let Screen::Unlocked(workspace) = &mut *state.write() {
         workspace.error =
             workspace
                 .touch_id
-                .set(&workspace.vault, &mut settings.write(), hardware.0, wanted);
+                .set(&workspace.vault, &mut settings.write(), biometrics, wanted);
     }
 }
 
@@ -249,6 +252,18 @@ pub(super) fn set_auto_lock(minutes: u32) {
         workspace.error = settings.peek().save().err();
     }
     publish_status();
+}
+
+pub(super) fn set_language(language: crate::core::language::Language) {
+    let mut settings = consume_context::<Signal<Settings>>();
+    let mut state = consume_context::<Session>();
+    settings.write().config.language = language;
+    if let Err(error) = settings.peek().save() {
+        match &mut *state.write() {
+            Screen::Locked(form) => form.error = Some(error),
+            Screen::Unlocked(workspace) => workspace.error = Some(error),
+        }
+    }
 }
 
 pub(super) fn copy(field: CopyField) {

@@ -1,4 +1,5 @@
 //! System appearance stays separate from vault and editor state.
+
 use dioxus::{
     desktop::{
         DesktopContext,

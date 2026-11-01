@@ -168,6 +168,14 @@ cargo run --bin build-icons -- package
 Набор распространяется под CC0, но сами логотипы — товарные знаки их
 владельцев: см. `assets/DISCLAIMER-simple-icons.md`.
 
+## Interface and settings
+
+Choose **English** or **Русский** on the dedicated **Settings** page, available
+from the sidebar or the toolbar. The preference is saved and applies immediately;
+the language selector is also available on the locked screen. Settings also
+contains the auto-lock timeout and Touch ID toggle. Use the **+** button in the
+sidebar to add a password entry.
+
 ## Touch ID
 
 Включается переключателем «Touch ID» в настройках открытого хранилища
@@ -189,6 +197,11 @@ cargo run --bin build-icons -- package
 подробный проект протокола на английском: идентичности и устройства, приглашения,
 подписанные изменения, шифрование, отзыв доступа и обмен через стороннее облако. Описанные
 в предложении возможности пока не реализованы.
+
+## For developers
+
+See the [developer guide](docs/development.md) for conventions, checks, and module boundaries.
+English is the default interface language; an explicitly saved language is preserved.
 
 ## Тесты
 

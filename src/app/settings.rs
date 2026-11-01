@@ -1,4 +1,5 @@
 //! Preference persistence. Contains no vault, editor or native handles.
+
 use crate::infra::config::Config;
 use std::path::PathBuf;
 
@@ -33,12 +34,5 @@ impl Settings {
             self.config.touch_id.push(id.to_owned());
         }
         self.save()
-    }
-}
-
-pub(crate) fn minutes_label(minutes: u32) -> String {
-    match minutes {
-        0 => "никогда".to_owned(),
-        minutes => format!("{minutes} мин"),
     }
 }

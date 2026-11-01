@@ -1,8 +1,17 @@
 //! Entry collection, selection and transactional save/delete.
+
 use super::{biometrics::TouchId, directories::Directories, editor::Draft};
 use crate::{core::entry::Entry, core::generator, core::totp, infra::vault::Vault};
 
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum Page {
+    #[default]
+    Vault,
+    Settings,
+}
+
 pub(crate) struct Unlocked {
+    pub(crate) page: Page,
     pub(crate) sync: super::space_sync::SpaceSync,
     pub(crate) sync_recovery: zeroize::Zeroizing<String>,
     pub(crate) vault: Vault,
@@ -21,6 +30,7 @@ pub(crate) struct Unlocked {
 impl Unlocked {
     pub(crate) fn new(vault: Vault) -> Self {
         Self {
+            page: Page::Vault,
             sync: super::space_sync::SpaceSync::default(),
             sync_recovery: zeroize::Zeroizing::new(String::new()),
             vault,
@@ -54,6 +64,7 @@ impl Unlocked {
     }
 
     pub(crate) fn select(&mut self, id: String) {
+        self.page = Page::Vault;
         if let Some(entry) = self.vault.entries.iter().find(|entry| entry.id == id) {
             self.directories.selected = entry.folder_id.clone();
             self.directories.reveal(&self.vault);
@@ -85,6 +96,7 @@ impl Unlocked {
     }
 
     pub(crate) fn start_draft(&mut self, entry: Entry, is_new: bool) {
+        self.page = Page::Vault;
         self.draft = Some(Draft {
             entry,
             is_new,
@@ -98,6 +110,13 @@ impl Unlocked {
         });
         self.confirm_delete = false;
         self.error = None;
+    }
+
+    pub(crate) fn open_settings(&mut self) {
+        self.page = Page::Settings;
+        self.show_password = false;
+        self.confirm_delete = false;
+        self.directories.confirm_delete = false;
     }
 
     /// Writes the draft to disk. On failure the vault is unchanged and the draft is kept.

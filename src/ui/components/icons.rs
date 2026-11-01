@@ -1,3 +1,5 @@
+use crate::ui::i18n::Text;
+
 use super::{button::IconButton, symbol::Icon};
 use crate::ui::context::{Session, edit_draft};
 use crate::{app::session::Screen, ui::icons};
@@ -32,8 +34,10 @@ pub(super) fn EntryIcon(
         }
     }
 }
+
 #[component]
 pub(super) fn IconPicker() -> Element {
+    let language = crate::ui::i18n::use_language();
     let state = use_context::<Session>();
     let screen = state.read();
     let Screen::Unlocked(unlocked) = &*screen else {
@@ -44,13 +48,13 @@ pub(super) fn IconPicker() -> Element {
     };
     let found = icons::catalog().search(&draft.icon_query, 60);
     rsx! {
-        section { class: "subpanel stack", aria_label: "Выбор иконки",
+        section { class: "subpanel stack", aria_label: language.text(Text::ChooseIcon2),
             div { class: "input-actions",
-                input { aria_label: "Название сервиса", placeholder: "Название сервиса", value: "{draft.icon_query}", oninput: move |e| edit_draft(state, |d| d.icon_query = e.value()) }
-                IconButton { icon: Icon::Close, label: "Закрыть выбор иконки", onclick: move |_| edit_draft(state, |d| d.icon_picker_open = false) }
+                input { aria_label: language.text(Text::ServiceName), placeholder: language.text(Text::ServiceName), value: "{draft.icon_query}", oninput: move |e| edit_draft(state, |d| d.icon_query = e.value()) }
+                IconButton { icon: Icon::Close, label: language.text(Text::CloseIconPicker), onclick: move |_| edit_draft(state, |d| d.icon_picker_open = false) }
             }
-            if draft.icon_query.trim().is_empty() { p { class: "muted", "Начните вводить название — в наборе {icons::catalog().len()} иконок." } }
-            else if found.is_empty() { p { class: "muted", "Ничего не найдено" } }
+            if draft.icon_query.trim().is_empty() { p { class: "muted", {language.format(Text::StartTypingANameIconsAvailable, &[icons::catalog().len().to_string()])} } }
+            else if found.is_empty() { p { class: "muted", {language.text(Text::NoResults)} } }
             div { class: "icon-grid",
                 for icon in found {
                     {

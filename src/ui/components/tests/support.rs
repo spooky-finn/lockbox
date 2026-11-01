@@ -1,4 +1,5 @@
 //! Shared VirtualDom fixture for component tests.
+
 use super::*;
 use crate::infra::touchid::tests::FakeBiometrics;
 use crate::ui::context::{BiometricProvider, Clock, Session};
@@ -65,7 +66,10 @@ fn fixture() -> Element {
         Screen::Unlocked(Box::new(unlocked))
     });
     let settings = use_signal(|| Settings {
-        config: Config::default(),
+        config: Config {
+            language: crate::core::language::Language::Russian,
+            ..Config::default()
+        },
         path: None,
     });
     let status = use_signal(Status::default);

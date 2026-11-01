@@ -1,3 +1,5 @@
+use crate::ui::i18n::Text;
+
 use super::button::IconButton;
 use super::icons::EntryIcon;
 use super::symbol::Icon;
@@ -12,6 +14,7 @@ use dioxus::prelude::*;
 
 #[component]
 pub(super) fn EntryView() -> Element {
+    let language = crate::ui::i18n::use_language();
     let state = use_context::<Session>();
     let now = (use_context::<Clock>().0)();
     let screen = state.read();
@@ -31,73 +34,73 @@ pub(super) fn EntryView() -> Element {
         article { class: "entry-detail",
             div { class: "detail-heading",
                 EntryIcon { title: entry.title.clone(), slug: icons::catalog().for_entry(entry).map(|i| i.slug.clone()), large: true }
-                div { p { class: "detail-kind", "Пароль" } h1 { "{entry.title}" } }
+                div { p { class: "detail-kind", {language.text(Text::Password)} } h1 { "{entry.title}" } }
             }
             dl { class: "fields",
                 div { class: "field-row",
-                    dt { "Логин" }
+                    dt { {language.text(Text::Username2)} }
                     dd { span { class: "field-value", "{entry.username}" }
                         if !entry.username.is_empty() {
-                            IconButton { class: "quiet", label: "Скопировать логин", icon: Icon::Copy,
+                            IconButton { class: "quiet", label: language.text(Text::CopyUsername), icon: Icon::Copy,
                                 onclick: move |_| runtime::copy(CopyField::Username),
                             }
                         }
                     }
                 }
                 div { class: "field-row",
-                    dt { "Пароль" }
+                    dt { {language.text(Text::Password)} }
                     dd { code { class: "field-value password-value", "{password}" }
-                        IconButton { class: "quiet", label: if unlocked.show_password { "Скрыть пароль" } else { "Показать пароль" },
+                        IconButton { class: "quiet", label: if unlocked.show_password { language.text(Text::HidePassword) } else { language.text(Text::ShowPassword) },
                             icon: if unlocked.show_password { Icon::EyeOff } else { Icon::Eye },
                             pressed: Some(unlocked.show_password),
                             onclick: move |_| edit_unlocked(state, |u| u.show_password = !u.show_password),
                         }
                         if !entry.password.is_empty() {
-                            IconButton { class: "quiet", label: "Скопировать пароль", icon: Icon::Copy,
+                            IconButton { class: "quiet", label: language.text(Text::CopyPassword), icon: Icon::Copy,
                                 onclick: move |_| runtime::copy(CopyField::Password),
                             }
                         }
                     }
                 }
-                div { class: "field-row", dt { "Веб-сайт" } dd { span { class: "field-value website-value", "{entry.url}" } } }
+                div { class: "field-row", dt { {language.text(Text::Website)} } dd { span { class: "field-value website-value", "{entry.url}" } } }
                 if let Some(settings) = &entry.totp {
                     div { class: "field-row totp-field",
-                        dt { "Код TOTP" }
+                        dt { {language.text(Text::TOTPCode)} }
                         dd {
                             match totp::code(settings, now) {
                                 Ok(code) => rsx! {
                                     div { class: "field-value totp-value",
                                         code { class: "totp-code", "{totp::group(&code)}" }
                                         div { class: "totp-countdown",
-                                            progress { aria_label: "Время действия кода", max: "{settings.period}", value: "{totp::seconds_left(settings, now)}" }
-                                            span { class: "muted", "{totp::seconds_left(settings, now)} с" }
+                                            progress { aria_label: language.text(Text::CodeValidity), max: "{settings.period}", value: "{totp::seconds_left(settings, now)}" }
+                                            span { class: "muted", {language.format(Text::S, &[totp::seconds_left(settings, now).to_string()])} }
                                         }
                                     }
-                                    IconButton { class: "quiet", label: "Скопировать код TOTP", icon: Icon::Copy,
+                                    IconButton { class: "quiet", label: language.text(Text::CopyTOTPCode), icon: Icon::Copy,
                                         onclick: move |_| runtime::copy(CopyField::Totp),
                                     }
                                 },
-                                Err(error) => rsx! { span { class: "error", "{error}" } },
+                                Err(error) => rsx! { span { class: "error", {language.message(&error.to_string())} } },
                             }
                         }
                     }
                 }
                 if !entry.notes.is_empty() {
-                    div { class: "field-row notes-row", dt { "Заметка" } dd { class: "notes", "{entry.notes}" } }
+                    div { class: "field-row notes-row", dt { {language.text(Text::Note)} } dd { class: "notes", "{entry.notes}" } }
                 }
             }
             if unlocked.confirm_delete {
                 div { class: "delete-confirm", role: "alert",
-                    p { "Удалить запись «{entry.title}»? Это нельзя отменить." }
+                    p { {language.format(Text::DeleteEntryThisCannotBeUndone, &[entry.title.to_string()])} }
                     div { class: "actions",
-                        IconButton { class: "danger", icon: Icon::Trash, label: "Удалить запись", onclick: move |_| edit_unlocked(state, |u| u.error = u.delete_selected().err()) }
-                        IconButton { icon: Icon::Close, label: "Отмена", onclick: move |_| edit_unlocked(state, |u| u.confirm_delete = false) }
+                        IconButton { class: "danger", icon: Icon::Trash, label: language.text(Text::DeleteEntry), onclick: move |_| edit_unlocked(state, |u| u.error = u.delete_selected().err()) }
+                        IconButton { icon: Icon::Close, label: language.text(Text::Cancel), onclick: move |_| edit_unlocked(state, |u| u.confirm_delete = false) }
                     }
                 }
             } else {
                 div { class: "actions entry-actions",
-                    IconButton { icon: Icon::Edit, label: "Изменить", onclick: move |_| edit_unlocked(state, |u| u.start_edit()) }
-                    IconButton { class: "danger quiet", icon: Icon::Trash, label: "Удалить", onclick: move |_| edit_unlocked(state, |u| u.confirm_delete = true) }
+                    IconButton { icon: Icon::Edit, label: language.text(Text::Edit), onclick: move |_| edit_unlocked(state, |u| u.start_edit()) }
+                    IconButton { class: "danger quiet", icon: Icon::Trash, label: language.text(Text::Delete), onclick: move |_| edit_unlocked(state, |u| u.confirm_delete = true) }
                 }
             }
         }

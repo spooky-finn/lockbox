@@ -1,9 +1,16 @@
+use crate::ui::i18n::Text;
+
 use super::symbol::{Icon, Symbol};
 use crate::app::{tree::Node, workspace::Unlocked};
 use crate::ui::context::{Session, edit_unlocked};
 use dioxus::prelude::*;
 
-pub(super) fn nodes_ui(nodes: &[Node<'_>], workspace: &Unlocked, state: Session) -> Element {
+pub(super) fn nodes_ui(
+    nodes: &[Node<'_>],
+    workspace: &Unlocked,
+    state: Session,
+    language: crate::core::language::Language,
+) -> Element {
     let editing = workspace.is_editing();
     let searching = !workspace.search.trim().is_empty();
     rsx! {
@@ -11,7 +18,7 @@ pub(super) fn nodes_ui(nodes: &[Node<'_>], workspace: &Unlocked, state: Session)
             {match node {
                 Node::Record(entry) => {
                     let id = entry.id.clone();
-                    let selected = workspace.selected.as_ref() == Some(&id);
+                    let selected = workspace.page == crate::app::workspace::Page::Vault && workspace.selected.as_ref() == Some(&id);
                     rsx! {
                         li { class: "tree-leaf", key: "entry-{id}",
                             button { class: if selected { "entry-row selected" } else { "entry-row" },
@@ -28,7 +35,7 @@ pub(super) fn nodes_ui(nodes: &[Node<'_>], workspace: &Unlocked, state: Session)
                     let select = id.clone();
                     let keyboard = id.clone();
                     let expanded = !workspace.directories.collapsed.contains(&id) || !workspace.search.trim().is_empty();
-                    let selected = workspace.selected.is_none() && workspace.directories.selected.as_ref() == Some(&id);
+                    let selected = workspace.page == crate::app::workspace::Page::Vault && workspace.selected.is_none() && workspace.directories.selected.as_ref() == Some(&id);
                     rsx! {
                         li { class: "tree-folder", key: "folder-{id}",
                             div { class: if selected { "folder-row selected" } else { "folder-row" },
@@ -42,8 +49,8 @@ pub(super) fn nodes_ui(nodes: &[Node<'_>], workspace: &Unlocked, state: Session)
                                 },
                                 button { class: if expanded { "tree-disclosure expanded" } else { "tree-disclosure" },
                                     r#type: "button", disabled: editing || searching,
-                                    title: if expanded { "Свернуть папку" } else { "Развернуть папку" },
-                                    aria_label: if expanded { format!("Свернуть папку {}", folder.name) } else { format!("Развернуть папку {}", folder.name) },
+                                    title: if expanded { language.text(Text::CollapseFolder) } else { language.text(Text::ExpandFolder) },
+                                    aria_label: if expanded { language.format(Text::CollapseFolder2, std::slice::from_ref(&folder.name)) } else { language.format(Text::ExpandFolder2, std::slice::from_ref(&folder.name)) },
                                     aria_expanded: "{expanded}", aria_controls: "folder-{id}",
                                     onclick: move |_| edit_unlocked(state, |u| u.directories.toggle(toggle.clone())),
                                     Symbol { icon: Icon::ChevronRight }
@@ -57,8 +64,8 @@ pub(super) fn nodes_ui(nodes: &[Node<'_>], workspace: &Unlocked, state: Session)
                             }
                             if expanded {
                                 ul { class: "tree-branch", id: "folder-{id}",
-                                    if children.is_empty() { li { class: "tree-empty", "Пустая папка" } }
-                                    {nodes_ui(children, workspace, state)}
+                                    if children.is_empty() { li { class: "tree-empty", {language.text(Text::EmptyFolder)} } }
+                                    {nodes_ui(children, workspace, state, language)}
                                 }
                             }
                         }

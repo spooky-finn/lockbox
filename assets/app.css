@@ -123,7 +123,7 @@ h2 { font-size: 15px; font-weight: 600; letter-spacing: -.2px; }
 .app.macos.is-locked { padding-top: 36px; }
 .window-drag-region { position: absolute; inset: 0 0 auto; height: 28px; }
 .is-locked .window-drag-region { height: 36px; }
-.sidebar, .preferences-panel, .toolbar > .actions {
+.sidebar, .toolbar > .actions {
     -webkit-backdrop-filter: blur(28px) saturate(145%);
     backdrop-filter: blur(28px) saturate(145%);
     background: var(--glass);
@@ -175,11 +175,7 @@ h2 { font-size: 15px; font-weight: 600; letter-spacing: -.2px; }
 .toolbar .icon-button { width: 30px; height: 30px; min-height: 30px; flex-basis: 30px; padding: 6px; }
 .toolbar .symbol { width: 16px; height: 16px; flex-basis: 16px; }
 .toolbar .icon-button:not(.primary) { background: transparent; box-shadow: none; border-color: transparent; }
-.preferences { position: static; }
 summary { cursor: pointer; }
-.preferences > summary:hover, .preferences[open] > summary { background: var(--control); }
-.preferences-panel { position: absolute; right: 0; top: calc(100% + 10px); width: 290px; padding: 18px; border-radius: 20px; z-index: 4; }
-.preferences-panel h2 { margin-bottom: 7px; }
 .preference-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 36px; font-size: 12px; }
 input.switch { appearance: none; -webkit-appearance: none; position: relative; width: 34px; height: 21px; flex: 0 0 34px; border: 0; border-radius: 99px; background: var(--muted); cursor: pointer; transition: background 150ms; }
 input.switch::after { content: ""; position: absolute; left: 2px; top: 2px; width: 17px; height: 17px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgb(0 0 0 / 15%); transition: transform 150ms; }
@@ -221,6 +217,22 @@ input.switch:disabled { opacity: .45; cursor: default; }
 .entry-icon svg { width: 60%; height: 60%; }
 .entry-icon.large { width: 60px; height: 60px; flex-basis: 60px; font-size: 29px; border-radius: 17px; }
 .empty-list { padding: 22px 10px; font-size: 12px; text-align: center; }
+
+.sidebar-heading .icon-button.primary { color: #fff; }
+.sidebar-footer { border-top: 1px solid var(--separator); margin: 8px 3px 0; padding-top: 6px; }
+.sidebar-settings { width: 100%; justify-content: flex-start; border-radius: 9px; padding: 7px 9px; font-size: 12px; color: var(--muted); }
+.sidebar-settings .symbol { width: 15px; height: 15px; flex-basis: 15px; }
+.sidebar-settings[aria-current="page"] { background: var(--selected); color: var(--selected-text); }
+
+/* Preferences use a full page, with the same surfaces as vault details. */
+.settings-page { max-width: 720px; margin: 0 auto; padding: 8px 6px 20px; gap: 18px; }
+.settings-page .detail-heading { margin: 0 0 4px; }
+.settings-page > p, .settings-section > p { font-size: 12px; line-height: 1.6; }
+.settings-section { border: 1px solid var(--border); border-radius: 18px; padding: 20px; background: var(--surface); box-shadow: var(--shadow); }
+.settings-section h2 { margin-bottom: 4px; }
+.settings-section select { max-width: 50%; }
+.settings-back { align-self: flex-start; }
+.lock-actions select { max-width: 95px; min-height: 30px; border-color: transparent; background: transparent; color: var(--lock-secondary); font-size: 11px; cursor: pointer; }
 
 /* Credentials */
 .detail { min-width: 0; min-height: 0; overflow: auto; padding: 12px 0 16px; }
@@ -364,7 +376,6 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 99px; }
     .brand { flex: 1; }
     .toolbar > .actions { gap: 2px; padding: 2px; }
     .toolbar .icon-button { width: 30px; height: 30px; flex-basis: 30px; }
-    .preferences-panel { width: min(290px, calc(100vw - 28px)); }
     .workspace { display: flex; flex-direction: column; padding: 0 8px 4px; gap: 0; }
     .sidebar { flex: 1; min-height: 0; }
     .workspace:not(.has-detail) .detail { display: none; }
@@ -386,7 +397,7 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 99px; }
     .status { padding: 9px 17px 11px; }
 }
 @media (prefers-reduced-transparency: reduce) {
-    .sidebar, .preferences-panel, .toolbar > .actions {
+    .sidebar, .toolbar > .actions {
         -webkit-backdrop-filter: none;
         backdrop-filter: none;
         background: var(--glass-solid);
@@ -395,7 +406,7 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 99px; }
 }
 @media (prefers-contrast: more) {
     :root { --border: currentColor; --separator: var(--muted); }
-    .sidebar, .preferences-panel, .toolbar > .actions { border-color: var(--muted); background: var(--glass-solid); }
+    .sidebar, .toolbar > .actions { border-color: var(--muted); background: var(--glass-solid); }
     .entry-row.selected, .folder-row.selected { outline: 2px solid var(--accent); outline-offset: -2px; }
     .unlock-input { border-color: var(--lock-ink); }
     .lock-actions > .icon-button { opacity: 1; }
