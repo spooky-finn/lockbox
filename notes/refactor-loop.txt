@@ -9,19 +9,19 @@ Last full suite: cycle 48; 411 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 53: Remove duplicate browser lock route
-- Delete unreachable lock case from queued handler. Trusted popup listener owns
-  immediate lock and returns before queue creation. Clarify queue comments so
-  future edits preserve cancellation while earlier work is stalled.
-- Existing pending-inspection test now checks exact immediate locked reply;
-  all eight background tests passed before refactor with this assertion.
-- npm run check: nineteen Node tests, syntax checks and both builds passed.
-  Two optional real-browser probes skipped (no configured binaries). No Rust,
-  permissions, native registration, page-fill or packaging behavior changes.
-- Both sources match verified snapshot; whitespace checks passed. Unrelated
-  edits untouched. Snapshot: /tmp/lockbox-refactor-53.tbsdylab/browser-extension.
+Cycle 54: Borrow value identity checks
+- ValueRef exposes borrowed kind/ID parts internally. Projection and transaction
+  validation compare those parts without allocating temporary Entity IDs.
+  Public Value::entity and diff keys still return/copy owned Entity values.
+- New regression passed before refactor: both entry/folder kinds accept exact
+  identity and reject wrong kind, wrong ID or both in each validator; public
+  owned getter returns expected identity. Validation order unchanged.
+- All 53 protocol tests and both sync integration tests passed. Formatting and
+  strict all-target Clippy passed. Both sources match verified snapshot;
+  workspace whitespace checks passed. Unrelated edits untouched.
+- Snapshot: /tmp/lockbox-refactor-54.bxoanqhn. Last full suite remains cycle 48.
 
-Next search: return to Rust value/entity validation copies and vault opening
-checks, plus common encrypted-file write/sync sequence. Popup and build scripts
-already short; avoid helpers without a clear improvement.
+Next search: file::create/replace repeat header write, ciphertext write and sync;
+share sequence while retaining file lifetime, cleanup, size checks and backup/
+rename order. Identity persistence shares these helpers too; verify its coverage.
 Inspect current code and tests before choosing; no quota-driven edits.

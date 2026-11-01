@@ -65,6 +65,50 @@ fn projection(mut records: Vec<Record>) -> Projection {
 }
 
 #[test]
+fn value_identity_requires_matching_entity_kind_and_id() {
+    for (value, kind) in [
+        (Value::Entry(entry(1, None)), EntityKind::Entry),
+        (Value::Folder(folder(1, "Folder", None)), EntityKind::Folder),
+    ] {
+        let expected = entity(kind, 1);
+        assert_eq!(value.entity(), expected);
+        let matching = projection(vec![live(value.clone(), 1)]);
+        matching.validate().unwrap();
+        let mut transaction = Transaction {
+            mutations: vec![Mutation {
+                entity: expected.clone(),
+                bases: vec![],
+                action: Action::Put,
+                value: Some(value.clone()),
+            }],
+            rebased_from: None,
+        };
+        transaction.validate(&Projection::default()).unwrap();
+        let other_kind = match kind {
+            EntityKind::Entry => EntityKind::Folder,
+            EntityKind::Folder => EntityKind::Entry,
+        };
+        for wrong in [
+            entity(other_kind, 1),
+            entity(kind, 2),
+            entity(other_kind, 2),
+        ] {
+            let mut mismatched = matching.clone();
+            mismatched.records[0].entity = wrong.clone();
+            assert!(matches!(
+                mismatched.validate(),
+                Err(Error::InvalidTransaction)
+            ));
+            transaction.mutations[0].entity = wrong;
+            assert!(matches!(
+                transaction.validate(&Projection::default()),
+                Err(Error::InvalidTransaction)
+            ));
+        }
+    }
+}
+
+#[test]
 fn owned_views_keep_single_live_heads_and_preserve_decrypted_payloads() {
     let mut account = entry(1, Some(11));
     account

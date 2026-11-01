@@ -45,17 +45,19 @@ enum ValueRef<'a> {
     Folder(&'a Folder),
 }
 
-impl ValueRef<'_> {
-    fn entity(self) -> Entity {
+impl<'a> ValueRef<'a> {
+    fn entity_parts(self) -> (EntityKind, &'a str) {
         match self {
-            Self::Entry(entry) => Entity {
-                kind: EntityKind::Entry,
-                id: entry.id.clone(),
-            },
-            Self::Folder(folder) => Entity {
-                kind: EntityKind::Folder,
-                id: folder.id.clone(),
-            },
+            Self::Entry(entry) => (EntityKind::Entry, &entry.id),
+            Self::Folder(folder) => (EntityKind::Folder, &folder.id),
+        }
+    }
+
+    fn entity(self) -> Entity {
+        let (kind, id) = self.entity_parts();
+        Entity {
+            kind,
+            id: id.to_owned(),
         }
     }
 
@@ -70,6 +72,10 @@ impl ValueRef<'_> {
 impl Value {
     pub fn entity(&self) -> Entity {
         self.as_ref().entity()
+    }
+
+    fn matches_entity(&self, entity: &Entity) -> bool {
+        self.as_ref().entity_parts() == (entity.kind, entity.id.as_str())
     }
 
     fn as_ref(&self) -> ValueRef<'_> {
@@ -304,7 +310,7 @@ impl Projection {
                 }
 
                 if let Some(value) = &version.value {
-                    if value.entity() != record.entity {
+                    if !value.matches_entity(&record.entity) {
                         return Err(Error::InvalidTransaction);
                     }
                     value.validate()?;
@@ -382,7 +388,7 @@ impl Transaction {
             }
 
             if let Some(value) = &mutation.value {
-                if value.entity() != mutation.entity {
+                if !value.matches_entity(&mutation.entity) {
                     return Err(Error::InvalidTransaction);
                 }
                 value.validate()?;
