@@ -47,6 +47,105 @@ fn picked_files_get_the_vault_extension() {
 }
 
 #[test]
+fn new_password_flows_preserve_error_order_and_count_unicode_characters() {
+    let directory = tempfile::tempdir().unwrap();
+    let minimum = "Master password: at least 12 characters";
+    let phrase_error = crate::access::mnemonic::RecoveryPhrase::parse("")
+        .err()
+        .unwrap()
+        .to_string();
+    let short = "界".repeat(11);
+    let enough = "界".repeat(12);
+    for flow in ["create", "recover", "identity"] {
+        for (password, repeat, expected) in [
+            (
+                "",
+                "",
+                if flow == "create" {
+                    minimum
+                } else {
+                    "Enter master password"
+                },
+            ),
+            (short.as_str(), "different", minimum),
+            (enough.as_str(), "different", "Passwords do not match"),
+            (enough.as_str(), enough.as_str(), phrase_error.as_str()),
+        ] {
+            let path = directory.path().join("vault.lbx");
+            let mut form = Locked::new(Some(path.clone()));
+            if flow == "recover" {
+                form.recovering = true;
+            } else {
+                form.mode = Mode::Create;
+                form.storage_kind = Some(StorageKind::Local);
+                form.creation_step = CreationStep::Password;
+                if flow == "identity" {
+                    form.creation_step = CreationStep::Identity;
+                    form.identity_path = Some(directory.path().join("identity.key"));
+                }
+            }
+            form.password.push_str(password);
+            form.repeat.push_str(repeat);
+            form.submit();
+            assert_eq!(form.error.as_deref(), Some(expected), "{flow}");
+            assert!(!form.busy());
+            assert!(!path.exists());
+            assert_eq!(form.password.as_str(), password);
+            if flow == "create" {
+                form.storage_kind = Some(StorageKind::Cloud);
+                form.submit();
+                assert_eq!(form.error.as_deref(), form.cloud.validate().err());
+                assert!(!form.busy());
+            }
+        }
+    }
+}
+
+#[test]
+fn existing_vault_and_identity_unlock_accept_short_unconfirmed_passwords() {
+    use crate::{
+        access::mnemonic::RecoveryPhrase,
+        vault::{KdfParams, identity::Identity},
+    };
+    use secrecy::SecretString;
+    let directory = tempfile::tempdir().unwrap();
+    let fixture = unlocked(&directory);
+    let path = fixture.vault.path().to_path_buf();
+    drop(fixture);
+    let mut form = Locked::new(Some(path.clone()));
+    form.password.push_str("master");
+    form.submit();
+    let opened = wait_for_opened(&mut form);
+    assert!(opened.with_password);
+    assert_eq!(opened.vault.path(), path);
+
+    let path = directory.path().join("identity.key");
+    let identity = Identity::from_phrase(&RecoveryPhrase::generate().unwrap());
+    identity
+        .save_new(
+            &path,
+            &SecretString::from("master".to_owned()),
+            KdfParams {
+                memory_kib: 8192,
+                passes: 1,
+                lanes: 1,
+            },
+        )
+        .unwrap();
+    let bytes = std::fs::read(&path).unwrap();
+    let mut form = Locked::begin_join().with_identity_path(Some(path.clone()), None);
+    form.password.push_str("master");
+    form.submit();
+    wait_for_identity(&mut form);
+    assert!(form.error.is_none(), "{:?}", form.error);
+    assert_eq!(
+        form.identity.as_ref().unwrap().signing_key().to_bytes(),
+        identity.signing_key().to_bytes()
+    );
+    assert_eq!(std::fs::read(path).unwrap(), bytes);
+}
+
+#[test]
 fn creation_cannot_skip_key_setup_or_sync_selection() {
     let dir = tempfile::tempdir().unwrap();
     for kind in [None, Some(StorageKind::Cloud), Some(StorageKind::Local)] {

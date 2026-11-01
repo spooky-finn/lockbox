@@ -365,19 +365,21 @@ impl Locked {
             .storage_kind
             .filter(|kind| *kind == StorageKind::Cloud)
             .and_then(|_| self.cloud.validate().err().map(str::to_owned))
-            .or_else(|| {
-                if self.password.chars().count() < MIN_PASSWORD_CHARS {
-                    Some(format!(
-                        "Master password: at least {MIN_PASSWORD_CHARS} characters"
-                    ))
-                } else if *self.password != *self.repeat {
-                    Some("Passwords do not match".into())
-                } else {
-                    None
-                }
-            });
+            .or_else(|| self.new_password_error());
         self.error = error;
         self.error.is_none() && self.validate_recovery_key()
+    }
+
+    fn new_password_error(&self) -> Option<String> {
+        if self.password.chars().count() < MIN_PASSWORD_CHARS {
+            Some(format!(
+                "Master password: at least {MIN_PASSWORD_CHARS} characters"
+            ))
+        } else if *self.password != *self.repeat {
+            Some("Passwords do not match".into())
+        } else {
+            None
+        }
     }
 
     pub(crate) fn submit(&mut self) {
@@ -410,14 +412,10 @@ impl Locked {
             return;
         }
 
-        if self.recovering && self.password.chars().count() < MIN_PASSWORD_CHARS {
-            self.error = Some(format!(
-                "Master password: at least {MIN_PASSWORD_CHARS} characters"
-            ));
-            return;
-        }
-        if (self.mode == Mode::Create || self.recovering) && *self.password != *self.repeat {
-            self.error = Some("Passwords do not match".into());
+        if self.recovering
+            && let Some(error) = self.new_password_error()
+        {
+            self.error = Some(error);
             return;
         }
         let identity = self.identity.clone();
@@ -518,14 +516,8 @@ impl Locked {
             return;
         }
         if !unlocking {
-            if self.password.chars().count() < MIN_PASSWORD_CHARS {
-                self.error = Some(format!(
-                    "Master password: at least {MIN_PASSWORD_CHARS} characters"
-                ));
-                return;
-            }
-            if *self.password != *self.repeat {
-                self.error = Some("Passwords do not match".into());
+            if let Some(error) = self.new_password_error() {
+                self.error = Some(error);
                 return;
             }
             if !self.recovering && !self.validate_recovery_key() {
