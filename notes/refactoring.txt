@@ -15,3 +15,20 @@ Scope
 - Shared failure retains full readable snapshot and reserved signing intent.
 - Validation: 23 import tests passed. Added local folder/entry/mixed write-failure
   cases and shared retry/reopen check; retry emits one event.
+
+3. Trash selection
+- Borrow local/shared revision history; clone only returned records.
+- Index live IDs and verified single-tombstone entry IDs once per selection.
+- Borrowed map retains latest recoverable value per ID in stable ID order.
+- Validation: five Trash tests passed. Added repeated delete/restore with latest
+  attachments, live-record exclusion, concurrent delete/edit conflict and folder
+  tombstone sharing an entry ID. Conflict remains excluded after another restore.
+
+Final validation
+- cargo test --locked -- --quiet: 364 library, four integration, two doctests
+  passed. Two explicit OS probes ignored.
+- Initial full run denied localhost socket binds in sandbox. Full rerun with
+  socket access passed; no live cloud used.
+- cargo clippy --locked --all-targets -- -D warnings passed.
+- cargo fmt --all -- --check and git diff --check passed.
+- Five regression tests added. Existing unrelated edits remain outside commits.
