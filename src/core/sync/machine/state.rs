@@ -53,7 +53,7 @@ pub struct SyncState {
 
 /// Public join metadata. Authenticate the complete value independently before use;
 /// it contains no provider credentials, private identity, or epoch key.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SpaceDescriptor {
     pub space: Hash,

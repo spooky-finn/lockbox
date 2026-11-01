@@ -14,6 +14,10 @@ use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
+mod sharing;
+pub use sharing::InvitationStatus;
+pub(crate) use sharing::{AcceptedInvitation, IssuedInvitation, SharingState};
+
 #[derive(Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 pub struct ProviderConfiguration {
     pub base_url: String,
@@ -38,6 +42,9 @@ pub(crate) struct BootstrapProfile {
     #[serde(default)]
     #[zeroize(skip)]
     pub(crate) certificate: Option<crate::core::sync::Signed<crate::core::sync::Certificate>>,
+    #[serde(default)]
+    #[zeroize(skip)]
+    pub(crate) sharing: SharingState,
     root_capsule: RootCapsule,
 }
 
@@ -93,7 +100,7 @@ impl BootstrapProfile {
             crate::core::sync::Hash(space.epoch_context),
         )?;
         Ok(Self {
-            schema_version: 3,
+            schema_version: 4,
             username,
             space_name,
             identity,
@@ -102,15 +109,18 @@ impl BootstrapProfile {
             provider,
             sync: Some(sync),
             certificate: Some(certificate),
+            sharing: SharingState::default(),
             root_capsule,
         })
     }
 
     pub(crate) fn validate(&self) -> bool {
         ((self.schema_version == 1 && self.sync.is_none())
-            || ((self.schema_version == 2 || self.schema_version == 3)
+            || ((2..=4).contains(&self.schema_version)
                 && self.sync.is_some()
                 && self.certificate.is_some()))
+            && (self.schema_version == 4 || self.sharing.is_empty())
+            && self.sharing.validate()
             && self.device.matches(&self.identity)
             && self.root_capsule.version == 1
             && self.root_capsule.kdf.validate().is_ok()
@@ -135,7 +145,11 @@ impl BootstrapProfile {
     }
 
     pub(crate) fn requires_witness(&self) -> bool {
-        self.schema_version == 3
+        matches!(self.schema_version, 3 | 4)
+    }
+
+    pub(crate) fn enable_sharing(&mut self) {
+        self.schema_version = 4;
     }
 
     pub(crate) fn recover_identity(
@@ -185,7 +199,7 @@ impl BootstrapProfile {
         self.sync = Some(sync);
         self.device = keys;
         self.identity = identity;
-        self.schema_version = 3;
+        self.schema_version = 4;
         Ok(())
     }
 

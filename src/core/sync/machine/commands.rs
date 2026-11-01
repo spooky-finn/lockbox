@@ -3,14 +3,18 @@
 use super::super::{
     Blob, Certificate, Counter, DeviceSecret, Error, Hash, Object, Projection, Result, Role,
     Signed, Transaction, canonical,
-    crypto::{self, CHANGE_DOMAIN, CONTROL_DOMAIN, nonce},
+    crypto::{self, nonce},
     decode,
 };
-use super::membership::{build_control, epoch_key, validate_control, validate_control_body};
 use super::{
     Machine,
     protocol::{Change, ChangeHeader, Control, Epoch, Member, PROFILE},
     state::{ExcludedEdit, PreparedChange, Replay, SyncState},
+};
+use super::{
+    history::with_history,
+    membership::{build_control, epoch_key, validate_control_body},
+    profile::Profile,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use zeroize::Zeroizing;
@@ -26,10 +30,32 @@ impl Machine {
         epoch_key: &[u8; 32],
         context: Hash,
     ) -> Result<SyncState> {
+        Self::create_with_profile(
+            space,
+            namespace,
+            certificate,
+            device,
+            epoch_key,
+            context,
+            PROFILE,
+        )
+    }
+
+    pub(super) fn create_with_profile(
+        space: Hash,
+        namespace: Hash,
+        certificate: Signed<Certificate>,
+        device: &DeviceSecret,
+        epoch_key: &[u8; 32],
+        context: Hash,
+        profile: &str,
+    ) -> Result<SyncState> {
         certificate.verify()?;
-        if certificate.body.device != device.id() {
+
+        if !device.matches_certificate(&certificate.body) {
             return Err(Error::UnauthorizedDevice);
         }
+
         let root = certificate.body.root_key;
         let owner = certificate.body.user;
         let members = vec![Member {
@@ -37,12 +63,13 @@ impl Machine {
             role: Role::Owner,
         }];
         let epoch = Epoch {
-            profile: PROFILE.into(),
+            profile: profile.into(),
             space,
             number: Counter(0),
             context,
             previous: None,
         };
+
         let control = build_control(
             epoch,
             owner,
@@ -52,7 +79,11 @@ impl Machine {
             &Projection::default(),
             epoch_key,
         )?;
-        let object = Object::Control(crypto::sign(control, &device.signer(), CONTROL_DOMAIN)?);
+        let object = Object::Control(crypto::sign(
+            control,
+            &device.signer(),
+            Profile::parse(profile)?.control_domain(),
+        )?);
         let genesis = object.hash()?;
         Ok(SyncState {
             space,
@@ -101,9 +132,11 @@ impl Machine {
     /// Idempotent insertion. Membership and plaintext are verified only in replay.
     pub fn receive(state: &mut SyncState, expected: Hash, bytes: Vec<u8>) -> Result<bool> {
         let object: Object = decode(&bytes)?;
+
         if object.hash()? != expected {
             return Err(Error::HashMismatch);
         }
+
         if let Some(existing) = state.objects.get(&expected) {
             if existing.0 != bytes {
                 return Err(Error::HashMismatch);
@@ -129,6 +162,7 @@ impl Machine {
         if state.intent.is_some() {
             return Err(Error::PendingIntent);
         }
+
         let replay = Self::replay(state, device)?;
         require_writer(&replay)?;
         Self::prepare_transaction(state, device, transaction, replay, false)
@@ -146,8 +180,10 @@ impl Machine {
         if state.intent.is_some() {
             return Err(Error::PendingIntent);
         }
+
         let replay = Self::replay(state, device)?;
         require_writer(&replay)?;
+
         if replay.frontier.len() <= super::super::MAX_PARENTS {
             return Ok(None);
         }
@@ -173,21 +209,26 @@ impl Machine {
     ) -> Result<PreparedChange> {
         transaction.validate(&replay.projection)?;
         let plaintext = Zeroizing::new(canonical(&transaction)?);
+
         if plaintext.len() > super::super::MAX_TRANSACTION_BYTES {
             return Err(Error::ResourceBudgetExceeded);
         }
+
         if !folding && replay.frontier.len() > super::super::MAX_PARENTS {
             return Err(Error::FrontierTooWide);
         }
+
         let control = control_at(state, replay.membership)?;
         let key = epoch_key(&control.body, device)?;
         let content_key = crypto::content_key(&key, state.space, control.body.epoch.context, false);
         let mut previous = None;
         let mut sequence: u64 = 0;
+
         for hash in &replay.accepted {
             let Object::Change(change) = decode::<Object>(&state.objects[hash].0)? else {
                 continue;
             };
+
             if change.body.header.membership == replay.membership
                 && change.body.header.author == device.id()
                 && change.body.header.sequence.0 > sequence
@@ -196,15 +237,17 @@ impl Machine {
                 sequence = change.body.header.sequence.0;
             }
         }
+
         let parents = if folding {
             super::parents::fold_parents(state, &replay, previous)?
         } else {
             replay.frontier.into_iter().collect()
         };
+
         let mut nonce = [0; 24];
         getrandom::fill(&mut nonce).map_err(|_| Error::Random)?;
         let header = ChangeHeader {
-            profile: PROFILE.into(),
+            profile: control.body.epoch.profile.clone(),
             space: state.space,
             membership: replay.membership,
             epoch: Counter(replay.epoch),
@@ -218,6 +261,7 @@ impl Machine {
             parents,
             nonce: Blob(nonce.to_vec()),
         };
+
         let ciphertext = crypto::encrypt(&content_key, &nonce, &plaintext, &canonical(&header)?)?;
         let change = Change { header, ciphertext };
         capacity(
@@ -240,18 +284,31 @@ impl Machine {
         device: &DeviceSecret,
         members: Vec<(Signed<Certificate>, Role)>,
     ) -> Result<PreparedChange> {
+        Self::prepare_membership_with_admissions(state, device, members, vec![])
+    }
+
+    pub(super) fn prepare_membership_with_admissions(
+        state: &SyncState,
+        device: &DeviceSecret,
+        members: Vec<(Signed<Certificate>, Role)>,
+        admissions: Vec<crate::core::sync::Admission>,
+    ) -> Result<PreparedChange> {
         if state.intent.is_some() {
             return Err(Error::PendingIntent);
         }
+
         let replay = Self::replay(state, device)?;
         require_writer(&replay)?;
         let previous = control_at(state, replay.membership)?;
+
         if previous.body.controller != device.id() {
             return Err(Error::InsufficientRole);
         }
+
         if replay.frontier.len() > super::super::MAX_PARENTS {
             return Err(Error::FrontierTooWide);
         }
+
         let mut members: Vec<_> = members
             .into_iter()
             .map(|(certificate, role)| Member { certificate, role })
@@ -269,7 +326,17 @@ impl Machine {
             context: Hash(*crypto::random32()?),
             previous: Some(replay.membership),
         };
-        let control = build_control(
+
+        let epoch = Epoch {
+            profile: if admissions.is_empty() {
+                previous.body.epoch.profile.clone()
+            } else {
+                PROFILE.into()
+            },
+            ..epoch
+        };
+
+        let mut control = build_control(
             epoch,
             previous.body.owner,
             device.id(),
@@ -278,9 +345,12 @@ impl Machine {
             &replay.projection,
             &*crypto::random32()?,
         )?;
+        control.admissions = admissions;
         // Validate shape and authority without producing a signature before the
         // caller has durably reserved this successor slot.
-        validate_control_body(&control, Some(&previous), state)?;
+        with_history(state, |history| {
+            validate_control_body(&control, Some(&previous), state, &history.chain)
+        })?;
         capacity(
             state,
             Object::Control(Signed {
@@ -306,21 +376,29 @@ impl Machine {
                 {
                     return Err(Error::UnauthorizedDevice);
                 }
-                Object::Change(crypto::sign(change, &device.signer(), CHANGE_DOMAIN)?)
+
+                let domain = Profile::parse(&change.header.profile)?.change_domain();
+                Object::Change(crypto::sign(change, &device.signer(), domain)?)
             }
             PreparedChange::Control(control) => {
                 if control.epoch.previous != Some(replay.membership) {
                     return Err(Error::UnauthorizedDevice);
                 }
+
                 let previous = control_at(state, replay.membership)?;
+
                 if previous.body.controller != device.id() {
                     return Err(Error::InsufficientRole);
                 }
-                let signed = crypto::sign(control, &device.signer(), CONTROL_DOMAIN)?;
-                validate_control(&signed, Some(&previous), state)?;
+                with_history(state, |history| {
+                    validate_control_body(&control, Some(&previous), state, &history.chain)
+                })?;
+                let domain = Profile::parse(&control.epoch.profile)?.control_domain();
+                let signed = crypto::sign(control, &device.signer(), domain)?;
                 Object::Control(signed)
             }
         };
+
         let hash = object.hash()?;
         let is_control = matches!(object, Object::Control(_));
         let inserted = Self::receive(state, hash, object.bytes()?)?;
@@ -331,8 +409,10 @@ impl Machine {
             {
                 return Err(Error::InvalidTransaction);
             }
+
             Ok(())
         });
+
         if let Err(error) = check {
             if inserted {
                 state.objects.remove(&hash);
@@ -366,10 +446,12 @@ impl Machine {
     pub fn excluded_edits(state: &SyncState, device: &DeviceSecret) -> Result<Vec<ExcludedEdit>> {
         let replay = Self::replay(state, device)?;
         let mut edits = Vec::new();
+
         for hash in replay.excluded {
             let Object::Change(signed) = decode::<Object>(&state.objects[&hash].0)? else {
                 continue;
             };
+
             let header = &signed.body.header;
             let control = control_at(state, header.membership)?;
             let epoch_key = epoch_key(&control.body, device)?;
@@ -388,6 +470,7 @@ impl Machine {
                 transaction,
             });
         }
+
         Ok(edits)
     }
 
@@ -407,6 +490,7 @@ impl Machine {
             .find(|edit| edit.hash == excluded)
             .ok_or(Error::InvalidTransaction)?;
         let mut mutations = Vec::new();
+
         for old in edit.transaction.mutations {
             let bases = replay.projection.heads(&old.entity);
             let live = replay
@@ -456,6 +540,7 @@ fn capacity(state: &SyncState, bytes: usize) -> Result<()> {
     {
         return Err(Error::ResourceBudgetExceeded);
     }
+
     Ok(())
 }
 
@@ -463,6 +548,7 @@ fn require_writer(replay: &Replay) -> Result<()> {
     if !replay.ready {
         return Err(Error::MissingDependency);
     }
+
     match replay.role {
         Some(Role::Owner | Role::Editor) => Ok(()),
         Some(Role::Reader) => Err(Error::InsufficientRole),

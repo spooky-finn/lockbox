@@ -2,8 +2,9 @@
 
 The synchronization engine keeps the `Machine` and `Vault` facades while
 separating protocol rules, durable storage, transport construction and session
-scheduling. The experimental `LBX-SYNC-0` remote wire schema is retained. Protected
-shared profiles use local bootstrap schema 3 with independent witness evidence.
+scheduling. New spaces use experimental `LBX-SYNC-1`; `LBX-SYNC-0` histories retain
+their original rules. Protected shared profiles use bootstrap schema 4 with an
+invitation ledger and independent witness evidence.
 See [sync-engine.md](sync-engine.md) for protocol behavior and
 [profile-protection.md](profile-protection.md) for durability and recovery rules.
 
@@ -38,6 +39,9 @@ flowchart TD
 | `core/sync/machine/state.rs` | Serialized ciphertext journal, trust anchors, replay result contracts | Persistence or automatic recovery |
 | `core/sync/machine/commands.rs` | Command validation, encryption, reserved-intent completion | When the host has durably saved a body |
 | `core/sync/machine/membership.rs` | Owner authority, certificates, rosters, grants and epoch checkpoints | Provider permissions or discovery |
+| `core/sync/invitation.rs` | Canonical public invitation, consent and receipt artifacts | Local cancellation policy or persistence |
+| `core/sync/machine/invitations.rs` | Addressed signature proofs, consent-bound admission and receipt verification | Clock-based expiry or artifact export |
+| `core/sync/machine/profile.rs` | Explicit protocol versions and signature domains | Implicit upgrade or downgrade |
 | `core/sync/machine/replay.rs` | Verified history, epoch closure, causal validation and projection | Disk writes or timestamp winners |
 | `core/sync/machine/parents.rs` | Bounded causal merge parent selection, including prior local sequence ancestry | Conflict resolution or membership authority |
 | `infra/vault.rs` | Public facade, profile lifecycle and file/witness commit ordering | Membership and mutation authorization |
@@ -48,6 +52,8 @@ flowchart TD
 | `infra/witness/` | Exclusive device leases, Keychain/directory storage and injected memory adapter | Signing keys or membership |
 | `infra/vault/store.rs` | Host witness composition and new-device identity recovery | Automatic admission or controller recovery |
 | `infra/vault/shared.rs` | Application operations and the durable signing-intent boundary | Alternate protocol rules |
+| `infra/vault/sharing.rs` | Durable artifact export, local issuance policy and join installation | Independent protocol authority |
+| `infra/profile/sharing.rs` | Bounded encrypted ledger and invitation status | Provider access or replicated event authority |
 | `infra/vault/exchange.rs` | Candidate receive commits, acknowledgement rollback and retained pending commits | Signing new local mutations |
 | `infra/sync.rs` | Bounded discovery, publication order and provider contracts | Which decrypted mutation is authorized |
 | `infra/sync/discovery.rs` | Ciphertext-only discovery requests, recursive reference GETs and paginated scans | Admission, signatures or plaintext validation |

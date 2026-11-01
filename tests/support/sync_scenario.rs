@@ -48,8 +48,11 @@ pub fn exercise(
     entry.password = "fictional initial value".into();
     owner.entries.push(entry);
     owner.save_changes()?;
-    owner.set_space_members(roster(Role::Editor))?;
-    editor.join_space(owner.space_descriptor().ok_or("missing descriptor")?)?;
+    let descriptor = owner.space_descriptor().ok_or("missing descriptor")?;
+    let invitation = owner.issue_invitation(editor_certificate.clone(), Role::Editor, None)?;
+    let admission = editor.accept_invitation(invitation, &descriptor)?;
+    let receipt = owner.admit_invitation(admission, 0)?;
+    editor.join_invitation(receipt)?;
     owner.synchronize(owner_storage)?;
     editor.synchronize(editor_storage)?;
     check(

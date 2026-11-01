@@ -2,25 +2,19 @@
 
 use super::super::{
     Blob, Certificate, DeviceSecret, Error, Hash, Object, Projection, Result, Role, Signed,
-    canonical,
-    crypto::{self, CONTROL_DOMAIN},
-    wire::sorted_unique,
+    canonical, crypto, wire::sorted_unique,
 };
 use super::{
-    protocol::{Control, Epoch, Grant, Member, PROFILE},
+    invitations::verify_admissions,
+    profile::Profile,
+    protocol::{Control, Epoch, Grant, Member},
     state::SyncState,
 };
 use std::collections::BTreeMap;
 use zeroize::Zeroizing;
 
 pub(super) fn grant_aad(epoch: &Epoch, certificate: &Signed<Certificate>) -> Result<Vec<u8>> {
-    canonical(&(
-        epoch,
-        Hash::digest(
-            b"lockbox.sync.certificate-object.v0\0",
-            &canonical(certificate)?,
-        ),
-    ))
+    canonical(&(epoch, certificate.hash()?))
 }
 
 pub(super) fn epoch_key(control: &Control, device: &DeviceSecret) -> Result<Zeroizing<[u8; 32]>> {
@@ -61,6 +55,7 @@ pub(super) fn build_control(
         grants,
         checkpoint_nonce,
         checkpoint,
+        admissions: vec![],
     })
 }
 
@@ -68,17 +63,25 @@ pub(super) fn validate_control(
     control: &Signed<Control>,
     previous: Option<&Signed<Control>>,
     state: &SyncState,
+    ancestors: &[(Hash, &Signed<Control>)],
 ) -> Result<()> {
-    let key = validate_control_body(&control.body, previous, state)?;
-    crypto::verify(control, &key, CONTROL_DOMAIN)
+    let key = validate_control_body(&control.body, previous, state, ancestors)?;
+    crypto::verify(
+        control,
+        &key,
+        Profile::parse(&control.body.epoch.profile)?.control_domain(),
+    )
 }
 
 pub(super) fn validate_control_body(
     body: &Control,
     previous: Option<&Signed<Control>>,
     state: &SyncState,
+    ancestors: &[(Hash, &Signed<Control>)],
 ) -> Result<[u8; 32]> {
-    ControlAuthority::new(body, state).signing_key(previous)
+    let key = ControlAuthority::new(body, state).signing_key(previous)?;
+    verify_admissions(body, previous, state, ancestors)?;
+    Ok(key)
 }
 
 /// Recipient grants and checkpoint encryption share one immutable epoch scope.
@@ -116,9 +119,13 @@ impl EpochEncryption<'_> {
 struct Roster<'a>(&'a [Member]);
 
 impl<'a> Roster<'a> {
+    const MAX_DEVICES: usize = 512;
+    const MAX_USERS: usize = 128;
+    const MAX_DEVICES_PER_USER: usize = 16;
+
     fn is_canonical(&self) -> bool {
         !self.0.is_empty()
-            && self.0.len() <= 512
+            && self.0.len() <= Self::MAX_DEVICES
             && self
                 .0
                 .windows(2)
@@ -134,17 +141,25 @@ impl<'a> Roster<'a> {
 
     fn controller(&self, device: Hash) -> Result<&'a Member> {
         let member = self.member(device)?;
+
         if member.role != Role::Owner {
             return Err(Error::UnauthorizedDevice);
         }
+
         Ok(member)
     }
 
     fn verify(&self, owner: Hash, grants: &[Grant]) -> Result<()> {
+        if !self.is_canonical() || grants.len() != self.0.len() {
+            return Err(Error::InvalidEncoding);
+        }
+
         let mut users = BTreeMap::new();
+
         for (member, grant) in self.0.iter().zip(grants) {
             member.certificate.verify()?;
             let certificate = &member.certificate.body;
+
             if (member.role == Role::Owner) != (certificate.user == owner)
                 || grant.device != certificate.device
                 || grant.enc.0.len() != 32
@@ -152,18 +167,23 @@ impl<'a> Roster<'a> {
             {
                 return Err(Error::UnauthorizedDevice);
             }
+
             let user = users.entry(certificate.user).or_insert((member.role, 0));
+
             if user.0 != member.role {
                 return Err(Error::UnauthorizedDevice);
             }
             user.1 += 1;
-            if user.1 > 16 {
+
+            if user.1 > Self::MAX_DEVICES_PER_USER {
                 return Err(Error::ResourceBudgetExceeded);
             }
         }
-        if users.len() > 128 {
+
+        if users.len() > Self::MAX_USERS {
             return Err(Error::ResourceBudgetExceeded);
         }
+
         Ok(())
     }
 }
@@ -188,6 +208,7 @@ impl<'a> ControlAuthority<'a> {
         self.validate_shape()?;
         self.roster.verify(self.body.owner, &self.body.grants)?;
         let controller = self.roster.controller(self.body.controller)?;
+
         match previous {
             None => self.genesis_key(controller),
             Some(previous) => self.successor_key(previous),
@@ -196,13 +217,10 @@ impl<'a> ControlAuthority<'a> {
 
     fn validate_shape(&self) -> Result<()> {
         let body = self.body;
-        if body.epoch.profile != PROFILE {
-            return Err(Error::UnsupportedProtocol);
-        }
+        Profile::parse(&body.epoch.profile)?;
+
         if body.epoch.space != self.state.space
             || body.owner != Hash::digest(b"lockbox.user.v1\0", &self.state.owner_root)
-            || !self.roster.is_canonical()
-            || body.grants.len() != body.members.len()
             || body.closed_frontier.len() > super::super::MAX_PARENTS
             || !sorted_unique(&body.closed_frontier)
             || body.checkpoint_nonce.0.len() != 24
@@ -210,11 +228,13 @@ impl<'a> ControlAuthority<'a> {
         {
             return Err(Error::InvalidEncoding);
         }
+
         Ok(())
     }
 
     fn genesis_key(&self, controller: &Member) -> Result<[u8; 32]> {
         let body = self.body;
+
         if body.epoch.number.0 != 0
             || body.epoch.previous.is_some()
             || !body.closed_frontier.is_empty()
@@ -222,12 +242,20 @@ impl<'a> ControlAuthority<'a> {
         {
             return Err(Error::UnauthorizedDevice);
         }
+
         Ok(controller.certificate.body.signing_key)
     }
 
     fn successor_key(&self, previous: &Signed<Control>) -> Result<[u8; 32]> {
         let body = self.body;
+
+        if Profile::parse(&previous.body.epoch.profile)? == Profile::Current
+            && Profile::parse(&body.epoch.profile)? != Profile::Current
+        {
+            return Err(Error::UnsupportedProtocol);
+        }
         let author = Roster(&previous.body.members).member(previous.body.controller)?;
+
         if previous.body.epoch.number.0.checked_add(1) != Some(body.epoch.number.0)
             || body.owner != previous.body.owner
             || body.controller != previous.body.controller
@@ -236,6 +264,7 @@ impl<'a> ControlAuthority<'a> {
         {
             return Err(Error::UnauthorizedDevice);
         }
+
         Ok(author.certificate.body.signing_key)
     }
 }

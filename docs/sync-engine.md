@@ -1,6 +1,7 @@
 # Shared-space synchronization engine
 
-The implementation uses the experimental **LBX-SYNC-0** profile. It implements
+New spaces use the experimental **LBX-SYNC-1** profile; existing **LBX-SYNC-0**
+histories remain supported. Profile 1 adds signed recipient consent. It implements
 the deterministic event model from [the proposal](lockbox-protocol.md), with a
 smaller, separately versioned wire schema. It does not claim proposal-v1
 interoperability or a completed security review.
@@ -190,9 +191,11 @@ Remote paths are always `spaces/<namespace>/objects/<hash>.json`.
 ## Application API and demonstration
 
 `Vault::create_shared` creates independent locally encrypted device profiles.
-An owner retrieves `device_certificate()` values, verifies intended participant
-fingerprints, and calls `set_space_members` with the complete roster. Another
-empty profile uses `join_space(owner.space_descriptor())`. After admission,
+An owner verifies the intended participant's `device_certificate()`. The
+`issue_invitation` → `accept_invitation` → `admit_invitation` → `join_invitation`
+exchange binds both parties' signatures and a pinned control head; see
+[addressed invitations](sync-invitations.md). `set_space_members` changes existing
+roles, removes devices or rotates keys; new devices require consent. After admission,
 `synchronize(&mut dyn Storage)` downloads verified state and publishes durable
 events. `Storj` implements that contract; independent provider credentials can
 be supplied for each installation.
@@ -233,13 +236,13 @@ real independent credentials supplied locally; see [its setup](sync-live-test.md
 
 The desktop includes exchange status and conflict/rebase review. Participant
 invitation and admission screens are not implemented; membership APIs require
-explicit caller-provided, independently verified certificates. Existing v1/v2
+independently verified certificates and descriptors through the signed API. Existing v1/v2
 local vaults remain local. Older v3 bootstrap-schema-1 profiles remain readable
 and can be activated through the inline recovery-password form or
 `Vault::activate_sync`. Activation certifies a fresh device and journals
 its existing entries/folders; it preserves data on failed writes. It requires
 the separate recovery password and never silently unlocks root authority.
-New shared profiles use bootstrap schema 3 and authenticated file generations so
+New shared profiles use bootstrap schema 4 and authenticated file generations so
 older applications reject them instead of dropping their protection metadata.
 
 Ownership/control transfer, lost-controller recovery, invitation/recovery screens,

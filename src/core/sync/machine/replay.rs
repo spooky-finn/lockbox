@@ -2,14 +2,15 @@
 
 use super::super::{
     DeviceSecret, Error, Hash, Object, Projection, Result, Role, Signed, Transaction, canonical,
-    crypto::{self, CHANGE_DOMAIN, nonce},
+    crypto::{self, nonce},
     decode,
     model::project,
     wire::sorted_unique,
 };
 use super::{
     Machine,
-    protocol::{Change, Control, PROFILE},
+    profile::Profile,
+    protocol::{Change, Control},
     state::{Replay, SyncState},
 };
 use super::{history::ControlHistory, membership::grant_aad};
@@ -283,7 +284,7 @@ fn authenticate_changes(
         }
 
         let check = || -> Result<Transaction> {
-            if header.profile != PROFILE {
+            if header.profile != control.epoch.profile {
                 return Err(Error::UnsupportedProtocol);
             }
 
@@ -301,7 +302,11 @@ fn authenticate_changes(
                 .iter()
                 .find(|m| m.certificate.body.device == header.author)
                 .ok_or(Error::UnauthorizedDevice)?;
-            crypto::verify(signed, &member.certificate.body.signing_key, CHANGE_DOMAIN)?;
+            crypto::verify(
+                signed,
+                &member.certificate.body.signing_key,
+                Profile::parse(&header.profile)?.change_domain(),
+            )?;
 
             if member.role == Role::Reader {
                 return Err(Error::InsufficientRole);

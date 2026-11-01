@@ -2,7 +2,7 @@
 
 This is the release work for Lockbox's multiuser, local-first event engine over
 Storj/S3. Passing an offline demonstration does not satisfy this plan. The
-current `LBX-SYNC-0` profile remains experimental until the release gates below
+current `LBX-SYNC-1` profile and legacy `LBX-SYNC-0` remain experimental until the release gates below
 have evidence. The [protocol proposal](lockbox-protocol.md) defines the broader
 design; [sync-engine.md](sync-engine.md) describes implemented behavior.
 
@@ -38,7 +38,7 @@ design; [sync-engine.md](sync-engine.md) describes implemented behavior.
 | Replay rejection and readiness | Invalid descendants cannot masquerade as missing history; all delivery orders agree | Implemented; invalid closed history freezes as a checkpoint fault |
 | Installation and rollback protection | Backup rollback, missing binding, witness/intent crash states, lost acknowledgements, kernel leases across processes | Implemented; Keychain OS probe and fault-injection tests pass; full-machine restore remains an explicit trust boundary |
 | Fresh-device identity recovery | Independent current control pin, fresh certified keys, current checkpoint after new admission, original backup kept readable | API implemented and tested; UI and lost-controller recovery pending |
-| Addressed invitations and device lifecycle | Signed consent, cancellation, replay/idempotency, role checks, recovery and UI flows | Planned |
+| Addressed invitations and device lifecycle | Signed consent, cancellation, replay/idempotency, role checks, recovery and UI flows | Profile-1 core and durable Vault API implemented; fault-injection tests pass; UI/device-management screens pending |
 | Bounded large-history operation | Profiled maximum supported history, safe checkpoint/retention behavior and documented capacity | Planned |
 | S3 exchange | Authenticated PUT/GET/LIST with independent clients, failures and pagination | Loopback LIST/PUT/GET; reusable live probe added; real service pending |
 | Protocol release and security review | Stable versioned schema, conformance corpus, dependency review and independent cryptographic review | Pending |
@@ -63,15 +63,19 @@ tests must not be presented as an independent audit.
 
 ## Validation snapshot: 2026-11-01
 
-- `cargo test --locked --offline --all-targets --quiet`: 178 library tests and one
-  public-API acceptance test passed.
-- `cargo test --locked --offline --doc --quiet`: one doctest passed.
+- `cargo test --locked --offline --all-targets --quiet`: 222 library tests and one
+  public-API acceptance test passed; the explicit OS Keychain probe is ignored
+  by the ordinary suite.
+- `cargo test --locked --offline --doc --quiet`: two doctests passed.
 - `cargo clippy --locked --offline --all-targets -- -D warnings`: passed.
 - Formatting, diff whitespace checks and private Rustdoc link checks passed.
 - The live probe's missing-configuration guard was exercised; it exited before
   network I/O. No live Storj result is claimed.
+- `cargo run --locked --offline --example shared_space --quiet`: independent
+  profiles completed signed admission, concurrent edits, retries and resolution.
 
 Independent profile protection and fresh-device identity recovery are implemented
 in [profile-protection.md](profile-protection.md). Next implementation priority is
-authenticated invitation/admission, device management and recovery screens, plus
-explicit controller recovery and transfer rules.
+participant/device management and recovery screens, plus explicit controller
+recovery and transfer rules. Signed invitations, consent, durable issuance policy
+and receipt-based admission now have a [documented API](sync-invitations.md).

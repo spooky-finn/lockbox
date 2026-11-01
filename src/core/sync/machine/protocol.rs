@@ -1,9 +1,9 @@
 //! Wire schemas and immutable object dependencies. No authorization or I/O.
 
-use super::super::{Blob, Certificate, Counter, Hash, Object, Role, Signed};
+use super::super::{Admission, Blob, Certificate, Counter, Hash, Object, Role, Signed};
 use serde::{Deserialize, Serialize};
 
-pub(super) const PROFILE: &str = "LBX-SYNC-0";
+pub(super) use super::profile::PROFILE;
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -41,6 +41,8 @@ pub struct Control {
     pub(super) grants: Vec<Grant>,
     pub(super) checkpoint_nonce: Blob,
     pub(super) checkpoint: Blob,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(super) admissions: Vec<Admission>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]

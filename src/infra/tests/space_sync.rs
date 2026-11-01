@@ -1,4 +1,5 @@
 use super::file::sibling;
+use super::sharing_tests::{admit, share};
 use super::*;
 use crate::{
     core::sync::{Machine, Role, Transaction},
@@ -201,15 +202,34 @@ fn automatic_frontier_folding_uses_durable_intents_before_the_requested_edit() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("wide.lbx");
     let mut vault = profile_vault(&path, "Owner");
-    let mut members = vec![(vault.device_certificate().unwrap(), Role::Owner)];
+    let mut admissions = Vec::new();
+    let owner_key = vault.profile.as_ref().unwrap().sync_secret();
     let mut devices = Vec::new();
     for seed in 1..=65 {
         let (device, certificate) =
             DeviceSecret::generate(&SigningKey::from_bytes(&[seed; 32])).unwrap();
+        let invitation = Machine::offer_invitation(
+            vault.sync_state().unwrap(),
+            &owner_key,
+            certificate.clone(),
+            Role::Editor,
+            None,
+        )
+        .unwrap();
+        admissions.push(
+            Machine::accept_invitation(
+                &invitation,
+                &vault.space_descriptor().unwrap(),
+                &device,
+                &certificate,
+            )
+            .unwrap(),
+        );
         devices.push(device);
-        members.push((certificate, Role::Editor));
     }
-    vault.set_space_members(members).unwrap();
+    let prepared =
+        Machine::prepare_admissions(vault.sync_state().unwrap(), &owner_key, admissions).unwrap();
+    vault.commit_prepared(prepared).unwrap();
     let template = vault.sync_state().unwrap().clone();
     let mut objects = Vec::new();
     for device in &devices {
@@ -283,13 +303,8 @@ fn two_independent_profiles_exchange_and_reopen_without_cloned_signers() {
         .add_attachment("cloud-private.bin".into(), file_bytes.to_vec())
         .unwrap();
     alice.save_changes().unwrap();
-    let members = vec![
-        (alice.device_certificate().unwrap(), Role::Owner),
-        (bob_certificate, Role::Editor),
-    ];
-    alice.set_space_members(members).unwrap();
-    bob.join_space(alice.space_descriptor().unwrap()).unwrap();
-    // An awaiting-admission profile must remain reopenable before first download.
+    share(&mut alice, &mut bob, Role::Editor);
+    // Admission and its checkpoint remain reopenable before first download.
     drop(bob);
     let mut bob = Vault::open(&bob_path, &SecretString::from("master".to_owned())).unwrap();
     bob.receive_sync(delivery(&alice)).unwrap();
@@ -532,12 +547,7 @@ fn missing_genesis_commit_failure_restores_the_empty_join_journal() {
     let mut owner = profile_vault(&directory.path().join("owner.lbx"), "Alice");
     let path = directory.path().join("member.lbx");
     let mut member = profile_vault(&path, "Bob");
-    owner
-        .set_space_members(vec![
-            (owner.device_certificate().unwrap(), Role::Owner),
-            (member.device_certificate().unwrap(), Role::Editor),
-        ])
-        .unwrap();
+    admit(&mut owner, &mut member, Role::Editor);
     let state = owner.sync_state().unwrap();
     let successor = state
         .objects
@@ -610,15 +620,7 @@ fn failed_revocation_commit_blocks_old_epoch_publication_until_retry() {
     let mut owner = profile_vault(&directory.path().join("owner.lbx"), "Alice");
     let path = directory.path().join("member.lbx");
     let mut member = profile_vault(&path, "Bob");
-    owner
-        .set_space_members(vec![
-            (owner.device_certificate().unwrap(), Role::Owner),
-            (member.device_certificate().unwrap(), Role::Editor),
-        ])
-        .unwrap();
-    member
-        .join_space(owner.space_descriptor().unwrap())
-        .unwrap();
+    share(&mut owner, &mut member, Role::Editor);
     member.receive_sync(delivery(&owner)).unwrap();
     member.entries.push(entry("Late offline edit"));
     member.save_changes().unwrap();

@@ -6,13 +6,14 @@ pub(super) fn identity(seed: u8) -> (DeviceSecret, Signed<Certificate>) {
 
 pub(super) fn owner() -> (SyncState, DeviceSecret) {
     let (device, certificate) = identity(1);
-    let state = Machine::create(
+    let state = Machine::create_with_profile(
         Hash([1; 32]),
         Hash([2; 32]),
         certificate,
         &device,
         &[3; 32],
         Hash([4; 32]),
+        PROFILE,
     )
     .unwrap();
     (state, device)

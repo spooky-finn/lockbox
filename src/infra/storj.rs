@@ -3,22 +3,21 @@
 
 use super::sync::{Page, Result, Storage, StorageFactory, TransportError};
 use crate::core::sync::{Hash, MAX_OBJECT_BYTES};
-use reqwest::{
-    Method, StatusCode,
-    blocking::{Client, Response},
+use aws_sdk_s3::{
+    Client,
+    config::{BehaviorVersion, Credentials, Region, retry::RetryConfig},
+    primitives::ByteStream,
 };
-use rusty_s3::{Bucket, Credentials, S3Action, UrlStyle};
-use serde::Deserialize;
-use std::{io::Read, time::Duration};
+
+use tokio::runtime::Runtime;
 use zeroize::Zeroizing;
+
+mod transport;
 
 pub struct Storj {
     client: Client,
-    endpoint: url::Url,
+    runtime: Runtime,
     bucket: String,
-    access: Zeroizing<String>,
-    secret: Zeroizing<String>,
-    region: String,
 }
 
 /// Configuration-only factory; the HTTP client is created on a worker thread.
@@ -81,181 +80,169 @@ impl Storj {
     ) -> Result<Self> {
         let endpoint = super::provider::validate(endpoint, bucket, access, secret)
             .map_err(|_| TransportError::InvalidResponse)?;
+
         if region.is_empty() || region.chars().any(|c| c.is_whitespace() || c.is_control()) {
             return Err(TransportError::InvalidResponse);
         }
-        let client = Client::builder()
-            .https_only(true)
-            .redirect(reqwest::redirect::Policy::none())
-            .connect_timeout(Duration::from_secs(10))
-            .timeout(Duration::from_secs(30))
-            .build()
-            .map_err(|_| TransportError::Unavailable)?;
-        Ok(Self {
-            client,
-            endpoint,
-            bucket: bucket.into(),
-            access: Zeroizing::new(access.into()),
-            secret: Zeroizing::new(secret.into()),
-            region: region.into(),
-        })
+        Self::connect(endpoint.as_str(), bucket, access, secret, region, true)
     }
 
-    fn request(
-        &self,
-        method: Method,
-        key: Option<&str>,
-        query: Vec<(&str, &str)>,
-        body: &[u8],
-    ) -> Result<Response> {
-        let bucket = Bucket::new(
-            self.endpoint.clone(),
-            UrlStyle::Path,
-            self.bucket.clone(),
-            self.region.clone(),
-        )
-        .map_err(|_| TransportError::InvalidResponse)?;
-        let credentials = Credentials::new(self.access.as_str(), self.secret.as_str());
-        let url = match (method.clone(), key) {
-            (Method::GET, None) => {
-                let mut action = bucket.list_objects_v2(Some(&credentials));
-                for (name, value) in query {
-                    action.query_mut().insert(name, value);
-                }
-                action.sign(Duration::from_secs(60))
-            }
-            (Method::GET, Some(key)) => bucket
-                .get_object(Some(&credentials), key)
-                .sign(Duration::from_secs(60)),
-            (Method::PUT, Some(key)) => bucket
-                .put_object(Some(&credentials), key)
-                .sign(Duration::from_secs(60)),
-            _ => return Err(TransportError::InvalidResponse),
+    fn connect(
+        endpoint: &str,
+        bucket: &str,
+        access: &str,
+        secret: &str,
+        region: &str,
+        https_only: bool,
+    ) -> Result<Self> {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|_| TransportError::Unavailable)?;
+        let transport = transport::Transport::new(https_only)?;
+        let config = aws_sdk_s3::Config::builder()
+            .behavior_version(BehaviorVersion::latest())
+            .region(Region::new(region.to_owned()))
+            .credentials_provider(Credentials::new(access, secret, None, None, "lockbox"))
+            .endpoint_url(endpoint)
+            .force_path_style(true)
+            .retry_config(RetryConfig::disabled())
+            .request_checksum_calculation(
+                aws_sdk_s3::config::RequestChecksumCalculation::WhenRequired,
+            )
+            .response_checksum_validation(
+                aws_sdk_s3::config::ResponseChecksumValidation::WhenRequired,
+            )
+            .http_client(transport)
+            .build();
+        let client = {
+            let _guard = runtime.enter();
+            Client::from_conf(config)
         };
-        self.client
-            .request(method, url)
-            .header("content-type", "application/json")
-            .body(body.to_vec())
-            .send()
-            .map_err(|_| TransportError::Unavailable)
+
+        Ok(Self {
+            client,
+            runtime,
+            bucket: bucket.into(),
+        })
     }
 }
 
 impl Storage for Storj {
     fn list(&mut self, namespace: Hash, cursor: Option<&str>) -> Result<Page> {
         let prefix = format!("spaces/{namespace}/objects/");
-        let mut query = vec![
-            ("list-type", "2"),
-            ("prefix", &prefix),
-            ("max-keys", "1000"),
-        ];
-        if let Some(cursor) = cursor {
-            query.push(("continuation-token", cursor));
-        }
-        let response = self.request(Method::GET, None, query, &[])?;
-        check(response.status())?;
-        let bytes = bounded(response, 1024 * 1024)?;
-        let listing: Listing = quick_xml::de::from_reader(bytes.as_slice())
-            .map_err(|_| TransportError::InvalidResponse)?;
-        if listing.contents.len() > 1000
-            || (listing.truncated && listing.next.as_ref().is_none_or(|s| s.is_empty()))
-            || (!listing.truncated && listing.next.is_some())
+        let listing = self
+            .runtime
+            .block_on(
+                self.client
+                    .list_objects_v2()
+                    .bucket(&self.bucket)
+                    .prefix(&prefix)
+                    .max_keys(1000)
+                    .set_continuation_token(cursor.map(str::to_owned))
+                    .send(),
+            )
+            .map_err(sdk_error)?;
+        let truncated = listing
+            .is_truncated
+            .ok_or(TransportError::InvalidResponse)?;
+        let next = listing.next_continuation_token;
+        let contents = listing.contents.unwrap_or_default();
+
+        if contents.len() > 1000
+            || (truncated && next.as_ref().is_none_or(|s| s.is_empty()))
+            || (!truncated && next.is_some())
         {
             return Err(TransportError::InvalidResponse);
         }
-        let objects = listing
-            .contents
+
+        let objects = contents
             .iter()
             .filter_map(|object| {
                 object
                     .key
+                    .as_deref()?
                     .strip_prefix(&prefix)?
                     .strip_suffix(".json")?
                     .parse()
                     .ok()
             })
             .collect();
-        Ok(Page {
-            objects,
-            next: listing.next,
-        })
+        Ok(Page { objects, next })
     }
 
     fn get(&mut self, namespace: Hash, hash: Hash) -> Result<Vec<u8>> {
         let key = format!("spaces/{namespace}/objects/{hash}.json");
-        let response = self.request(Method::GET, Some(&key), vec![], &[])?;
-        check(response.status())?;
-        bounded(response, MAX_OBJECT_BYTES)
+        self.runtime.block_on(async {
+            let response = self
+                .client
+                .get_object()
+                .bucket(&self.bucket)
+                .key(key)
+                .send()
+                .await
+                .map_err(sdk_error)?;
+            // The transport has already enforced MAX_OBJECT_BYTES before the SDK sees the body.
+            response
+                .body
+                .collect()
+                .await
+                .map(|bytes| bytes.into_bytes().to_vec())
+                .map_err(|_| TransportError::Unavailable)
+        })
     }
 
     fn put(&mut self, namespace: Hash, hash: Hash, bytes: &[u8]) -> Result<()> {
         if bytes.len() > MAX_OBJECT_BYTES {
             return Err(TransportError::Budget);
         }
+
         let object: crate::core::sync::Object =
             crate::core::sync::decode(bytes).map_err(TransportError::Verification)?;
+
         if object.hash().map_err(TransportError::Verification)? != hash {
             return Err(TransportError::Verification(
                 crate::core::sync::Error::HashMismatch,
             ));
         }
+
         let key = format!("spaces/{namespace}/objects/{hash}.json");
         // Equal content always has equal key. Correctness does not depend on
         // gateway conditional-write support; hostile replacement is hash-checked.
-        check(
-            self.request(Method::PUT, Some(&key), vec![], bytes)?
-                .status(),
-        )
+        self.runtime
+            .block_on(
+                self.client
+                    .put_object()
+                    .bucket(&self.bucket)
+                    .key(key)
+                    .content_type("application/json")
+                    .body(ByteStream::from(bytes.to_vec()))
+                    .send(),
+            )
+            .map_err(sdk_error)?;
+        Ok(())
     }
 }
 
-#[derive(Deserialize)]
-struct Listing {
-    #[serde(rename = "IsTruncated")]
-    truncated: bool,
-    #[serde(rename = "NextContinuationToken")]
-    next: Option<String>,
-    #[serde(rename = "Contents", default)]
-    contents: Vec<Listed>,
-}
+fn sdk_error<E: std::error::Error + 'static>(
+    error: aws_sdk_s3::error::SdkError<E>,
+) -> TransportError {
+    let fallback = match &error {
+        aws_sdk_s3::error::SdkError::ResponseError(_)
+        | aws_sdk_s3::error::SdkError::ServiceError(_) => TransportError::InvalidResponse,
+        _ => TransportError::Unavailable,
+    };
 
-#[derive(Deserialize)]
-struct Listed {
-    #[serde(rename = "Key")]
-    key: String,
-}
-
-fn bounded(response: Response, max: usize) -> Result<Vec<u8>> {
-    if response
-        .content_length()
-        .is_some_and(|length| length > max as u64)
-    {
-        return Err(TransportError::Budget);
-    }
-    let mut bytes = Vec::new();
-    response
-        .take(max as u64 + 1)
-        .read_to_end(&mut bytes)
-        .map_err(|_| TransportError::Unavailable)?;
-    if bytes.len() > max {
-        return Err(TransportError::Budget);
-    }
-    Ok(bytes)
-}
-
-fn check(status: StatusCode) -> Result<()> {
-    match status {
-        StatusCode::FORBIDDEN | StatusCode::UNAUTHORIZED => Err(TransportError::AccessDenied),
-        StatusCode::NOT_FOUND => Err(TransportError::NotFound),
-        status if status.is_success() => Ok(()),
-        status
-            if status.is_server_error()
-                || status == StatusCode::TOO_MANY_REQUESTS
-                || status == StatusCode::REQUEST_TIMEOUT =>
-        {
-            Err(TransportError::Unavailable)
+    let mut source: &(dyn std::error::Error + 'static) = &error;
+    loop {
+        if let Some(error) = source.downcast_ref::<TransportError>() {
+            return *error;
         }
-        _ => Err(TransportError::InvalidResponse),
+
+        match source.source() {
+            Some(next) => source = next,
+            None => return fallback,
+        }
     }
 }
 

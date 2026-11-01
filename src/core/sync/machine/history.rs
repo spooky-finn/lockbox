@@ -1,7 +1,7 @@
 //! Authenticated control metadata, independent of content keys and projections.
 
 use super::{membership::validate_control, protocol::Control, state::SyncState};
-use crate::core::sync::{Error, Hash, Result, Signed};
+use crate::core::sync::{Error, Hash, Object, Result, Signed, decode};
 use std::collections::{BTreeMap, BTreeSet};
 
 pub(super) struct ControlHistory<'a> {
@@ -17,20 +17,23 @@ impl<'a> ControlHistory<'a> {
         let genesis = controls
             .get(&state.genesis)
             .ok_or(Error::MissingDependency)?;
-        validate_control(genesis, None, state)?;
+        validate_control(genesis, None, state, &[])?;
         let mut history = Self {
             chain: vec![(state.genesis, genesis)],
             rejected: BTreeMap::new(),
         };
+
         let mut seen = BTreeSet::from([state.genesis]);
         loop {
             let (head, previous) = history.tip();
             let mut next = None;
+
             for (hash, candidate) in controls {
                 if candidate.body.epoch.previous != Some(head) {
                     continue;
                 }
-                match validate_control(candidate, Some(previous), state) {
+
+                match validate_control(candidate, Some(previous), state, &history.chain) {
                     Ok(()) if next.is_some() => return Err(Error::ControlFork),
                     Ok(()) => next = Some((*hash, candidate)),
                     Err(error) => {
@@ -38,14 +41,17 @@ impl<'a> ControlHistory<'a> {
                     }
                 }
             }
+
             let Some((hash, control)) = next else {
                 break;
             };
+
             if !seen.insert(hash) {
                 return Err(Error::ControlFork);
             }
             history.chain.push((hash, control));
         }
+
         Ok(history)
     }
 
@@ -59,4 +65,27 @@ impl<'a> ControlHistory<'a> {
     pub(super) fn contains(&self, hash: Hash) -> bool {
         self.chain.iter().any(|(known, _)| *known == hash)
     }
+}
+
+pub(super) fn with_history<T>(
+    state: &SyncState,
+    visit: impl FnOnce(&ControlHistory<'_>) -> Result<T>,
+) -> Result<T> {
+    let mut controls = BTreeMap::new();
+
+    if state.objects.len() > crate::core::sync::MAX_OBJECTS {
+        return Err(Error::ResourceBudgetExceeded);
+    }
+
+    for (hash, bytes) in &state.objects {
+        let object: Object = decode(&bytes.0)?;
+
+        if object.hash()? != *hash {
+            return Err(Error::HashMismatch);
+        }
+        if let Object::Control(control) = object {
+            controls.insert(*hash, control);
+        }
+    }
+    visit(&ControlHistory::verify(&controls, state)?)
 }

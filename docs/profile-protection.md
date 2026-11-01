@@ -1,10 +1,12 @@
 # Profile protection and fresh-device recovery
 
-Shared profiles use encrypted bootstrap schema **3** inside the v5
-`.lbx` container. Signed remote objects retain `LBX-SYNC-0`; local file generations
+New shared profiles use encrypted bootstrap schema **4** inside the v5
+`.lbx` container. Signed remote objects use `LBX-SYNC-1`; existing `LBX-SYNC-0`
+histories remain supported. Local file generations
 and witnesses are never uploaded. Local vaults now write v4; v1/v2 remain readable. Shared profiles also read v3.
 The file version prevents older clients from discarding entry attachments.
-The bootstrap schema and sync protocol version are unchanged.
+Schema 4 additionally preserves the [durable invitation ledger](sync-invitations.md).
+Protected schema-3 profiles retain their witness and upgrade when using sharing.
 
 ## Independent installation evidence
 
@@ -124,7 +126,8 @@ anchor is missing.
 Bootstrap-only schema-1 profiles activate using the recovery password, a fresh
 device and an atomic protected import intent. Existing schema-2 shared profiles
 open read-only and require fresh-device admission. Older applications reject
-schema 3 instead of dropping its protection metadata.
+schemas 3/4 instead of dropping their protection metadata; a schema-3 application
+also rejects schema 4 so invitation cancellations and retry artifacts survive.
 
 ## Limits and evidence
 

@@ -31,6 +31,33 @@ fn change_wire_contract_survives_internal_refactors() {
 }
 
 #[test]
+fn profile_one_change_matches_independently_generated_signature_fixture() {
+    let signing = SigningKey::from_bytes(&[11; 32]);
+    let Object::Change(legacy) =
+        decode::<Object>(include_bytes!("../fixtures/change-v0.json")).unwrap()
+    else {
+        panic!()
+    };
+    let mut body = legacy.body;
+    body.header.profile = super::super::profile::PROFILE.into();
+    let domain = super::super::profile::Profile::Current.change_domain();
+    let signed = crypto::sign(body, &signing, domain).unwrap();
+    crypto::verify(&signed, &signing.verifying_key().to_bytes(), domain).unwrap();
+    assert!(crypto::verify(&signed, &signing.verifying_key().to_bytes(), CHANGE_DOMAIN).is_err());
+    let object = Object::Change(signed);
+    let expected = include_bytes!("../fixtures/change-v1.json");
+    assert_eq!(object.bytes().unwrap(), expected);
+    assert_eq!(
+        object.hash().unwrap().to_string(),
+        "46adeabbba71ae32b44e33538681b68f351e1177b3c5fed8a0e8d2f902b9fcd6"
+    );
+    assert_eq!(
+        decode::<Object>(expected).unwrap().hash().unwrap(),
+        object.hash().unwrap()
+    );
+}
+
+#[test]
 fn wire_rejects_duplicates_unknown_fields_and_noncanonical_primitives() {
     assert!(decode::<Counter>(b"\"01\"").is_err());
     assert!(decode::<Counter>(b"\"18446744073709551616\"").is_err());

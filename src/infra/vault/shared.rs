@@ -191,8 +191,8 @@ impl Vault {
         self.commit_prepared(prepared)
     }
 
-    /// Public admission API for callers building sharing workflows. Certificates
-    /// must be verified out of band against the intended participant fingerprint.
+    /// Changes existing roles, removes devices, or rotates keys. Profile 1
+    /// requires `admit_invitation` and signed consent for adding certificates.
     pub fn set_space_members(
         &mut self,
         members: Vec<(
@@ -208,7 +208,7 @@ impl Vault {
         self.commit_prepared(prepared)
     }
 
-    fn prepare_sync_command(
+    pub(super) fn prepare_sync_command(
         &mut self,
         command: impl Fn(
             &SyncState,
@@ -378,7 +378,7 @@ impl Vault {
 
     /// Commit the exact reserved body before signing, then finish that same body.
     /// Errors retain the intent so recovery cannot silently reuse its sequence slot.
-    fn commit_prepared(&mut self, prepared: PreparedChange) -> Result<()> {
+    pub(super) fn commit_prepared(&mut self, prepared: PreparedChange) -> Result<()> {
         self.ensure_exchange_committed()?;
         self.ensure_sync_commit_allowed()?;
         use crate::core::sync::Error;

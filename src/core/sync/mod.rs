@@ -1,7 +1,8 @@
 //! Deterministic, provider-independent shared-space state machine.
 //!
-//! `LBX-SYNC-0` is an experimental, deliberately separate wire profile from the
-//! proposal in docs/lockbox-protocol.md. Only canonical objects enter replay.
+//! `LBX-SYNC-1` adds addressed consent to the experimental `LBX-SYNC-0` profile.
+//! Both are separate from the proposal in docs/lockbox-protocol.md. Only canonical
+//! objects enter replay; new spaces require signed recipient consent.
 //!
 //! # Host durability contract
 //!
@@ -35,11 +36,16 @@
 //! never construct verified transactions or choose conflict winners.
 
 mod crypto;
+mod invitation;
 mod machine;
 mod model;
 mod wire;
 
 pub use crypto::{Certificate, DeviceSecret, Signed};
+pub use invitation::{
+    Admission, AdmissionConfirmation, AdmissionReceipt, Invitation, InviteOffer, JoinRequest,
+    MAX_INVITATION_BYTES,
+};
 pub use machine::{ExcludedEdit, Machine, PreparedChange, Replay, SpaceDescriptor, SyncState};
 pub use model::{
     Action, Entity, EntityKind, Mutation, Projection, Record, Revision, Role, Transaction, Value,
@@ -92,6 +98,18 @@ pub enum Error {
     PendingIntent,
     #[error("operating system randomness unavailable")]
     Random,
+    #[error("invitation or recipient consent is invalid")]
+    InvalidInvitation,
+    #[error("a signed invitation and recipient consent are required for admission")]
+    ConsentRequired,
+    #[error("invitation was already consumed")]
+    InvitationUsed,
+    #[error("invitation expired")]
+    InvitationExpired,
+    #[error("invitation was cancelled")]
+    InvitationCancelled,
+    #[error("device keys were previously admitted; generate fresh device keys")]
+    RetiredDevice,
 }
 
 impl Error {

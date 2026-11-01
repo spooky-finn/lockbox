@@ -2,6 +2,7 @@
 
 use super::file::sibling;
 use super::format::cipher;
+use super::sharing_tests::share;
 use super::*;
 use chacha20poly1305::{
     XNonce,
@@ -304,15 +305,7 @@ fn received_revocation_survives_a_crash_before_its_witness_acknowledgement() {
     let path = directory.path().join("editor.lbx");
     let mut editor = create(&store, &path);
     add(&mut owner, "Readable before removal");
-    owner
-        .set_space_members(vec![
-            (owner.device_certificate().unwrap(), Role::Owner),
-            (editor.device_certificate().unwrap(), Role::Editor),
-        ])
-        .unwrap();
-    editor
-        .join_space(owner.space_descriptor().unwrap())
-        .unwrap();
+    share(&mut owner, &mut editor, Role::Editor);
     editor.receive_sync(delivery(&owner)).unwrap();
     owner
         .set_space_members(vec![(owner.device_certificate().unwrap(), Role::Owner)])
@@ -456,13 +449,7 @@ fn backup_recovery_creates_a_fresh_certified_device_and_requires_new_admission()
     let old_path = directory.path().join("old-device.lbx");
     let mut old = create(&old_store, &old_path);
     add(&mut owner, "Original shared record");
-    owner
-        .set_space_members(vec![
-            (owner.device_certificate().unwrap(), Role::Owner),
-            (old.device_certificate().unwrap(), Role::Editor),
-        ])
-        .unwrap();
-    old.join_space(owner.space_descriptor().unwrap()).unwrap();
+    share(&mut owner, &mut old, Role::Editor);
     old.receive_sync(delivery(&owner)).unwrap();
     let old_certificate = old.device_certificate().unwrap();
     drop(old);
@@ -542,6 +529,7 @@ fn backup_recovery_creates_a_fresh_certified_device_and_requires_new_admission()
     assert!(recovered.sync_state().unwrap().outbox.is_empty());
     assert!(recovered.sync_state().unwrap().intent.is_none());
     recovered.entries.clear();
+    share(&mut owner, &mut recovered, Role::Editor);
     owner
         .set_space_members(vec![
             (owner.device_certificate().unwrap(), Role::Owner),

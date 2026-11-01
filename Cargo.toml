@@ -17,7 +17,7 @@ dirs = "6"
 ed25519-dalek = { version = "=2.2.0", default-features = false, features = ["std", "zeroize"] }
 hpke = { version = "=0.13.0", default-features = false, features = ["alloc", "x25519"] }
 dioxus = { version = "0.7", features = ["desktop"] }
-tokio = { version = "1", features = ["time"] }
+tokio = { version = "1", features = ["time", "rt", "net"] }
 getrandom = "0.3"
 hkdf = "0.12"
 hmac = "0.12"
@@ -37,9 +37,10 @@ zeroize = { version = "1.8", features = ["derive", "serde"] }
 rmcp = { version = "3.8.0", features = ["server"] }
 rand_core = { version = "0.9", features = ["os_rng"] }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
-quick-xml = { version = "0.41", features = ["serialize"] }
 serde_jcs = "0.2"
-rusty-s3 = { version = "0.11", default-features = false, features = ["rustcrypto", "xml"] }
+aws-sdk-s3 = { version = "1", default-features = false, features = ["rt-tokio"] }
+aws-smithy-runtime-api = { version = "1", features = ["client", "http-1x"] }
+aws-smithy-types = "1"
 
 [dev-dependencies]
 dioxus-ssr = "0.7"

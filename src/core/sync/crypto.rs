@@ -64,6 +64,13 @@ pub struct Certificate {
 }
 
 impl Signed<Certificate> {
+    pub fn hash(&self) -> Result<Hash> {
+        Ok(Hash::digest(
+            b"lockbox.sync.certificate-object.v0\0",
+            &canonical(self)?,
+        ))
+    }
+
     pub fn verify(&self) -> Result<()> {
         let body = &self.body;
 
@@ -131,6 +138,14 @@ impl DeviceSecret {
         )
     }
 
+    pub(super) fn matches_certificate(&self, certificate: &Certificate) -> bool {
+        let Ok(private) = <X25519HkdfSha256 as Kem>::PrivateKey::from_bytes(&self.hpke) else {
+            return false;
+        };
+        self.id() == certificate.device
+            && self.signer().verifying_key().to_bytes() == certificate.signing_key
+            && X25519HkdfSha256::sk_to_pk(&private).to_bytes().as_slice() == certificate.hpke_key
+    }
     pub(super) fn signer(&self) -> SigningKey {
         SigningKey::from_bytes(&self.signing)
     }

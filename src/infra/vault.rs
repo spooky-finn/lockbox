@@ -137,8 +137,10 @@ use format::{
 };
 mod protection;
 mod shared;
+mod sharing;
 mod store;
 
+pub use crate::infra::profile::InvitationStatus;
 pub use store::{DeviceRecovery, ProfileStore, SharedProfile};
 
 enum Unlock<'a> {
@@ -506,3 +508,7 @@ mod sync_tests;
 #[cfg(test)]
 #[path = "tests/protection.rs"]
 mod protection_tests;
+
+#[cfg(test)]
+#[path = "tests/sharing.rs"]
+mod sharing_tests;

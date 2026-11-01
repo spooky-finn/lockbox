@@ -4,7 +4,8 @@ use super::{Machine, PreparedChange, SyncState};
 use super::{
     commands::control_at,
     membership::epoch_key,
-    protocol::{Change, ChangeHeader, PROFILE},
+    profile::LEGACY_PROFILE as PROFILE,
+    protocol::{Change, ChangeHeader},
 };
 use crate::core::sync::{
     Blob, Certificate, Counter, DeviceSecret, Error, Hash, Object, Projection, Role, Signed,
@@ -23,6 +24,7 @@ mod support;
 use support::*;
 
 mod intents;
+mod invitations;
 mod membership;
 mod replay;
 mod wire;

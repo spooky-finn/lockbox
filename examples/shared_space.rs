@@ -78,11 +78,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     alice.save_changes()?;
     // Real callers compare complete user fingerprints through an authenticated
     // channel before supplying certificates and this descriptor.
-    alice.set_space_members(vec![
-        (alice.device_certificate().unwrap(), Role::Owner),
-        (bob.device_certificate().unwrap(), Role::Editor),
-    ])?;
-    bob.join_space(alice.space_descriptor().unwrap())?;
+    let descriptor = alice.space_descriptor().unwrap();
+    let invitation =
+        alice.issue_invitation(bob.device_certificate().unwrap(), Role::Editor, None)?;
+    let admission = bob.accept_invitation(invitation, &descriptor)?;
+    let receipt = alice.admit_invitation(admission, 0)?;
+    bob.join_invitation(receipt)?;
     let mut storage = Memory::default();
     alice.synchronize(&mut storage)?;
     bob.synchronize(&mut storage)?;

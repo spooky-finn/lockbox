@@ -1,0 +1,482 @@
+//! Addressed consent and admission proofs. Verification uses authenticated public
+//! control metadata; ciphertext history and private epoch keys are unnecessary.
+
+use super::{
+    Machine,
+    history::{ControlHistory, with_history},
+    profile::Profile,
+    protocol::Control,
+    state::{PreparedChange, SpaceDescriptor, SyncState},
+};
+use crate::core::sync::{
+    Admission, AdmissionConfirmation, AdmissionReceipt, Blob, Certificate, Counter, DeviceSecret,
+    Error, Hash, Invitation, InviteOffer, JoinRequest, Object, Result, Role, Signed, canonical,
+    crypto, decode,
+    invitation::{self, JOIN_DOMAIN, OFFER_DOMAIN, RECEIPT_DOMAIN, certificate_hash, offer_hash},
+    wire::sorted_unique,
+};
+use std::collections::{BTreeMap, BTreeSet};
+
+impl Machine {
+    /// Creates an addressed offer under the current controller. Hosts persist it
+    /// before export and enforce expiry/cancellation when consuming a response.
+    pub fn offer_invitation(
+        state: &SyncState,
+        device: &DeviceSecret,
+        recipient: Signed<Certificate>,
+        role: Role,
+        expires_at: Option<u64>,
+    ) -> Result<Invitation> {
+        if state.intent.is_some() {
+            return Err(Error::PendingIntent);
+        }
+        let replay = Self::replay(state, device)?;
+
+        if !replay.ready {
+            return Err(Error::MissingDependency);
+        }
+        with_history(state, |history| {
+            let (anchor, current) = history.tip();
+
+            if current.body.controller != device.id() {
+                return Err(Error::InsufficientRole);
+            }
+            validate_recipient(&recipient, role, &current.body)?;
+
+            if was_admitted(&history.chain, recipient.body.device) {
+                return Err(Error::RetiredDevice);
+            }
+            let offer = InviteOffer {
+                profile: invitation::PROFILE.into(),
+                descriptor: state.descriptor(),
+                anchor,
+                id: Hash(*crypto::random32()?),
+                author: device.id(),
+                recipient,
+                role,
+                expires_at: expires_at.map(Counter),
+            };
+
+            let result = Invitation {
+                offer: crypto::sign(offer, &device.signer(), OFFER_DOMAIN)?,
+                history: encode_history(history)?,
+            };
+            result.bytes()?;
+            Ok(result)
+        })
+    }
+
+    /// Authenticate `expected` through an independent channel before this call.
+    /// Display names, transport access and the artifact itself cannot pin trust.
+    pub fn verify_invitation(invitation: &Invitation, expected: &SpaceDescriptor) -> Result<()> {
+        let state = metadata_state(expected, &invitation.history)?;
+        with_history(&state, |history| {
+            if history.tip().0 != invitation.anchor() || history.chain.len() != state.objects.len()
+            {
+                return Err(Error::InvalidInvitation);
+            }
+            verify_offer(&invitation.offer, &state, &history.chain)?;
+            Ok(())
+        })
+    }
+
+    /// Sign exact recipient consent. Hosts save it before handing it to the owner;
+    /// retries must reuse the stored response rather than allocate a new challenge.
+    pub fn accept_invitation(
+        invitation: &Invitation,
+        expected: &SpaceDescriptor,
+        device: &DeviceSecret,
+        certificate: &Signed<Certificate>,
+    ) -> Result<Admission> {
+        Self::verify_invitation(invitation, expected)?;
+
+        if certificate_hash(certificate)? != certificate_hash(invitation.recipient())?
+            || !device.matches_certificate(&certificate.body)
+        {
+            return Err(Error::UnauthorizedDevice);
+        }
+        let request = JoinRequest {
+            profile: invitation::PROFILE.into(),
+            offer: offer_hash(&invitation.offer)?,
+            recipient: device.id(),
+            challenge: Hash(*crypto::random32()?),
+        };
+
+        Ok(Admission {
+            offer: invitation.offer.clone(),
+            request: crypto::sign(request, &device.signer(), JOIN_DOMAIN)?,
+        })
+    }
+
+    /// Owner-authorized admission changes the epoch and binds the exact signed
+    /// consent into its control record. This does not sign until intent completion.
+    pub fn prepare_admission(
+        state: &SyncState,
+        device: &DeviceSecret,
+        admission: Admission,
+    ) -> Result<PreparedChange> {
+        Self::prepare_admissions(state, device, vec![admission])
+    }
+
+    /// Batch consent into one atomic membership transition and key rotation.
+    pub fn prepare_admissions(
+        state: &SyncState,
+        device: &DeviceSecret,
+        mut admissions: Vec<Admission>,
+    ) -> Result<PreparedChange> {
+        let mut members = Self::members(state, device)?;
+        admissions.sort_by_key(|proof| proof.recipient().body.device);
+        for admission in &admissions {
+            if members.iter().any(|(certificate, _)| {
+                certificate.body.device == admission.recipient().body.device
+            }) {
+                return Err(Error::InvitationUsed);
+            }
+            members.push((admission.recipient().clone(), admission.role()));
+        }
+        Self::prepare_membership_with_admissions(state, device, members, admissions)
+    }
+
+    pub fn admission_receipt(
+        state: &SyncState,
+        device: &DeviceSecret,
+        admission: &Admission,
+    ) -> Result<AdmissionReceipt> {
+        if state.intent.is_some() {
+            return Err(Error::PendingIntent);
+        }
+        if !Self::replay(state, device)?.ready {
+            return Err(Error::MissingDependency);
+        }
+        with_history(state, |history| {
+            find_admission(history, admission)?.ok_or(Error::InvalidInvitation)?;
+            let (control, current) = history.tip();
+            if current.body.controller != device.id() {
+                return Err(Error::InsufficientRole);
+            }
+            if !current
+                .body
+                .members
+                .iter()
+                .any(|m| m.certificate.body.device == admission.recipient().body.device)
+            {
+                return Err(Error::RetiredDevice);
+            }
+            let confirmation = AdmissionConfirmation {
+                profile: invitation::PROFILE.into(),
+                descriptor: state.descriptor(),
+                invitation: admission.id(),
+                acceptance: admission.hash()?,
+                control,
+                author: device.id(),
+            };
+            let receipt = AdmissionReceipt {
+                confirmation: crypto::sign(confirmation, &device.signer(), RECEIPT_DOMAIN)?,
+                history: encode_history(history)?,
+            };
+            receipt.bytes()?;
+            Ok(receipt)
+        })
+    }
+
+    /// Locate an exact consent proof in verified control history. A different
+    /// response for the same invitation is never equivalent to that proof.
+    pub fn admission_control(state: &SyncState, admission: &Admission) -> Result<Option<Hash>> {
+        with_history(state, |history| find_admission(history, admission))
+    }
+
+    /// Verify final admission, pin the current signed head, and bootstrap only
+    /// from public metadata. No old device key, counter or snapshot is imported.
+    pub fn join_admission(
+        invitation: &Invitation,
+        admission: &Admission,
+        receipt: &AdmissionReceipt,
+        expected: &SpaceDescriptor,
+        device: &DeviceSecret,
+    ) -> Result<SyncState> {
+        Self::verify_invitation(invitation, expected)?;
+
+        if receipt.id() != invitation.id()
+            || admission.id() != invitation.id()
+            || canonical(&admission.offer)? != canonical(&invitation.offer)?
+            || !device.matches_certificate(&admission.recipient().body)
+        {
+            return Err(Error::InvalidInvitation);
+        }
+        let mut state = metadata_state(expected, &receipt.history)?;
+        let tip = with_history(&state, |history| {
+            if history.chain.len() != state.objects.len() {
+                return Err(Error::InvalidInvitation);
+            }
+            let (tip, current) = history.tip();
+            let confirmation = &receipt.confirmation.body;
+            if confirmation.profile != invitation::PROFILE
+                || confirmation.descriptor != *expected
+                || confirmation.control != tip
+                || confirmation.acceptance != admission.hash()?
+                || confirmation.author != current.body.controller
+            {
+                return Err(Error::InvalidInvitation);
+            }
+            let controller = current
+                .body
+                .members
+                .iter()
+                .find(|m| {
+                    m.certificate.body.device == current.body.controller && m.role == Role::Owner
+                })
+                .ok_or(Error::InsufficientRole)?;
+            crypto::verify(
+                &receipt.confirmation,
+                &controller.certificate.body.signing_key,
+                RECEIPT_DOMAIN,
+            )?;
+            let found = history
+                .chain
+                .iter()
+                .flat_map(|(_, c)| &c.body.admissions)
+                .find(|proof| proof.id() == admission.id())
+                .ok_or(Error::InvalidInvitation)?;
+
+            if canonical(found)? != canonical(admission)? {
+                return Err(Error::InvalidInvitation);
+            }
+            let member = current
+                .body
+                .members
+                .iter()
+                .find(|m| m.certificate.body.device == device.id())
+                .ok_or(Error::RetiredDevice)?;
+
+            if certificate_hash(&member.certificate)? != certificate_hash(admission.recipient())? {
+                return Err(Error::RetiredDevice);
+            }
+            Ok((tip, member.role))
+        })?;
+        state.required_control = Some(tip.0);
+        // Writers can relay owner-signed metadata received out of band before
+        // publishing their own events. Readers need no provider PUT permission.
+        if matches!(tip.1, Role::Owner | Role::Editor) {
+            state.outbox.extend(state.objects.keys().copied());
+        }
+        Ok(state)
+    }
+}
+
+pub(super) fn verify_admissions(
+    body: &Control,
+    previous: Option<&Signed<Control>>,
+    state: &SyncState,
+    ancestors: &[(Hash, &Signed<Control>)],
+) -> Result<()> {
+    if Profile::parse(&body.epoch.profile)? == Profile::Legacy {
+        return if body.admissions.is_empty() {
+            Ok(())
+        } else {
+            Err(Error::InvalidInvitation)
+        };
+    }
+
+    let Some(previous) = previous else {
+        return if body.admissions.is_empty() && body.members.len() == 1 {
+            Ok(())
+        } else {
+            Err(Error::ConsentRequired)
+        };
+    };
+
+    let mut added = BTreeMap::new();
+
+    for member in &body.members {
+        let previous_member = previous
+            .body
+            .members
+            .iter()
+            .find(|m| m.certificate.body.device == member.certificate.body.device);
+
+        if let Some(old) = previous_member
+            && certificate_hash(&old.certificate)? == certificate_hash(&member.certificate)?
+        {
+            continue;
+        }
+        if was_admitted(ancestors, member.certificate.body.device) {
+            return Err(Error::RetiredDevice);
+        }
+        added.insert(member.certificate.body.device, member);
+    }
+
+    if added.len() != body.admissions.len() {
+        return Err(Error::ConsentRequired);
+    }
+    if !sorted_unique(
+        &body
+            .admissions
+            .iter()
+            .map(|proof| proof.recipient().body.device)
+            .collect::<Vec<_>>(),
+    ) {
+        return Err(Error::InvalidInvitation);
+    }
+
+    let mut consumed: BTreeSet<_> = ancestors
+        .iter()
+        .flat_map(|(_, c)| c.body.admissions.iter().map(Admission::id))
+        .collect();
+
+    for proof in &body.admissions {
+        if !consumed.insert(proof.id()) {
+            return Err(Error::InvitationUsed);
+        }
+        let member = added
+            .get(&proof.recipient().body.device)
+            .ok_or(Error::InvalidInvitation)?;
+
+        if member.role != proof.role()
+            || certificate_hash(&member.certificate)? != certificate_hash(proof.recipient())?
+        {
+            return Err(Error::InvalidInvitation);
+        }
+        verify_offer(&proof.offer, state, ancestors)?;
+
+        if proof.offer.body.author != previous.body.controller {
+            return Err(Error::InvalidInvitation);
+        }
+        if previous.body.members.iter().any(|m| {
+            m.certificate.body.user == member.certificate.body.user && m.role != member.role
+        }) {
+            return Err(Error::InsufficientRole);
+        }
+        verify_request(proof)?;
+    }
+
+    Ok(())
+}
+
+fn verify_offer(
+    offer: &Signed<InviteOffer>,
+    state: &SyncState,
+    ancestors: &[(Hash, &Signed<Control>)],
+) -> Result<()> {
+    let body = &offer.body;
+
+    if body.profile != invitation::PROFILE || body.descriptor != state.descriptor() {
+        return Err(Error::InvalidInvitation);
+    }
+    let index = ancestors
+        .iter()
+        .position(|(hash, _)| *hash == body.anchor)
+        .ok_or(Error::InvalidInvitation)?;
+    let anchor = &ancestors[index].1.body;
+
+    if body.author != anchor.controller {
+        return Err(Error::InsufficientRole);
+    }
+    let author = anchor
+        .members
+        .iter()
+        .find(|m| m.certificate.body.device == body.author && m.role == Role::Owner)
+        .ok_or(Error::InsufficientRole)?;
+    crypto::verify(offer, &author.certificate.body.signing_key, OFFER_DOMAIN)?;
+    validate_recipient(&body.recipient, body.role, anchor)?;
+
+    if was_admitted(&ancestors[..=index], body.recipient.body.device) {
+        return Err(Error::RetiredDevice);
+    }
+    Ok(())
+}
+
+fn validate_recipient(
+    certificate: &Signed<Certificate>,
+    role: Role,
+    anchor: &Control,
+) -> Result<()> {
+    certificate.verify()?;
+
+    if (role == Role::Owner) != (certificate.body.user == anchor.owner)
+        || anchor.members.iter().any(|member| {
+            member.certificate.body.user == certificate.body.user && member.role != role
+        })
+    {
+        return Err(Error::InsufficientRole);
+    }
+    Ok(())
+}
+
+fn verify_request(proof: &Admission) -> Result<()> {
+    let request = &proof.request.body;
+
+    if request.profile != invitation::PROFILE
+        || request.offer != offer_hash(&proof.offer)?
+        || request.recipient != proof.recipient().body.device
+    {
+        return Err(Error::InvalidInvitation);
+    }
+    crypto::verify(
+        &proof.request,
+        &proof.recipient().body.signing_key,
+        JOIN_DOMAIN,
+    )
+}
+
+fn was_admitted(ancestors: &[(Hash, &Signed<Control>)], device: Hash) -> bool {
+    ancestors.iter().any(|(_, c)| {
+        c.body
+            .members
+            .iter()
+            .any(|m| m.certificate.body.device == device)
+    })
+}
+
+fn find_admission(history: &ControlHistory<'_>, admission: &Admission) -> Result<Option<Hash>> {
+    for (hash, control) in &history.chain {
+        if let Some(found) = control
+            .body
+            .admissions
+            .iter()
+            .find(|proof| proof.id() == admission.id())
+        {
+            if canonical(found)? != canonical(admission)? {
+                return Err(Error::InvitationUsed);
+            }
+            return Ok(Some(*hash));
+        }
+    }
+    Ok(None)
+}
+
+fn encode_history(history: &ControlHistory<'_>) -> Result<Vec<Blob>> {
+    history
+        .chain
+        .iter()
+        .map(|(_, control)| Object::Control((*control).clone()).bytes().map(Blob))
+        .collect()
+}
+
+fn metadata_state(descriptor: &SpaceDescriptor, bytes: &[Blob]) -> Result<SyncState> {
+    if bytes.len() > crate::core::sync::MAX_OBJECTS
+        || bytes.iter().map(|blob| blob.0.len()).sum::<usize>() > crate::core::sync::MAX_CACHE_BYTES
+    {
+        return Err(Error::ResourceBudgetExceeded);
+    }
+    let mut state = Machine::join(
+        descriptor.space,
+        descriptor.namespace,
+        descriptor.genesis,
+        descriptor.owner_root,
+    );
+
+    for blob in bytes {
+        let object: Object = decode(&blob.0)?;
+
+        if !matches!(object, Object::Control(_)) {
+            return Err(Error::InvalidInvitation);
+        }
+        let hash = object.hash()?;
+
+        if !Machine::receive(&mut state, hash, blob.0.clone())? {
+            return Err(Error::InvalidInvitation);
+        }
+    }
+
+    Ok(state)
+}

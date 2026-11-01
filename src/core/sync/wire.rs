@@ -138,7 +138,14 @@ pub fn canonical<T: Serialize>(value: &T) -> Result<Vec<u8>> {
 /// value rejects duplicate keys, unknown nested fields, omitted fields and all
 /// alternate spellings before any verification or state mutation can occur.
 pub fn decode<T: DeserializeOwned + Serialize>(bytes: &[u8]) -> Result<T> {
-    if bytes.len() > super::MAX_OBJECT_BYTES {
+    decode_bounded(bytes, super::MAX_OBJECT_BYTES)
+}
+
+pub(super) fn decode_bounded<T: DeserializeOwned + Serialize>(
+    bytes: &[u8],
+    max: usize,
+) -> Result<T> {
+    if bytes.len() > max {
         return Err(Error::ResourceBudgetExceeded);
     }
 
