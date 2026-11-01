@@ -1,7 +1,10 @@
 //! Durable local issuance policy and exact retry artifacts. Shared authority is
 //! established by signed controls, never by this installation-local ledger.
 
-use crate::sync::protocol::{Admission, AdmissionReceipt, Hash, Invitation, canonical};
+use crate::{
+    serialization::canonical_size,
+    sync::protocol::{Admission, AdmissionReceipt, Hash, Invitation},
+};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -75,7 +78,7 @@ impl SharingState {
                 .accepted
                 .iter()
                 .all(|(id, record)| *id == record.invitation.id() && record.admission.id() == *id)
-            && canonical(self).is_ok_and(|bytes| bytes.len() <= Self::MAX_BYTES)
+            && canonical_size(self).is_ok_and(|bytes| bytes <= Self::MAX_BYTES)
     }
 }
 

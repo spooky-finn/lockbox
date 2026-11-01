@@ -11,6 +11,7 @@ pub mod sync;
 pub mod vault;
 
 mod compatibility;
+mod serialization;
 pub use compatibility::{app, core, infra, ui};
 
 // Established short imports remain available to library consumers.

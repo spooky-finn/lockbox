@@ -5,26 +5,28 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 62; 414 library, four integration, two doctests passed.
+Last full suite: cycle 65; 415 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 64: Borrow reviewed artifacts before cloning payload
-- Issue/Accept/Admit/Join match review.as_ref, then clone only matching payload
-  at owned Vault call. Wrong variant avoids unrelated large artifact clone;
-  issue deadline and acceptance verification-code failures avoid payload clone.
-- Remove unused Artifact Clone derive. Preserve review on error, guard/error
-  precedence, owned Vault API, durable sharing operations and success resets.
-- Formatting/strict all-target Clippy passed. 14 sharing, five vault sharing,
-  six protocol invitation tests passed. Source matches verified snapshot;
-  whitespace clean. Unrelated edits untouched.
-- Snapshot: /tmp/lockbox-refactor-64.km9nbviz.
+Cycle 65: Share serialized byte counting
+- New private serialization module exposes JSON and canonical size helpers using
+  same checked ByteCount writer. Move import's counter into shared module; retain
+  JSON encoder, exact batch limits, serialized-error fallback and boundary logic.
+- SharingState.validate uses canonical writer to count bytes instead of retaining
+  final JSON Vec. Preserve <=64 MiB limit, original serializer, structural checks
+  and short-circuit order. JCS internal object sorting buffers remain.
+- New encoder-size test covers Unicode/escapes, JSON-vs-JCS number differences and
+  nonfinite canonical rejection. Existing import exact-limit/one-byte-over tests
+  passed. Helpers remain crate-private; public serialization APIs unchanged.
+- Full suite: 415 library, four integration, two doctests passed; two OS probes
+  ignored. Formatting/strict all-target Clippy passed. Four sources match verified
+  snapshot; whitespace clean. Unrelated edits untouched.
+- Snapshot: /tmp/lockbox-refactor-65.he4phhfv.
 
-Next search: SharingState.validate canonical(self) allocates full JSON only to
-check <=64 MiB. records.import already has ByteCount writer to measure JSON
-without retaining final buffer. Inspect existing tests/architecture; consider
-shared private serialization size helpers using serde_json/serde_jcs writers,
-then reuse for import batches and canonical sharing budget. Keep exact serializer,
-byte limits, failure fallback and validation short-circuit order. JCS still has
-internal sorting buffers; claim only removed final output Vec, no streaming-memory
-promise. Avoid custom schema or JSON-vs-JCS size assumptions. No edits chosen yet.
+Next search: PreparedChange.check_capacity still allocates object.bytes Vec just
+for len. Shared canonical_size can count same temporary signed Object without
+retaining final encoding. Map serialization failure to existing InvalidEncoding,
+keep dummy signature size, capacity order and return moved body unchanged.
+Inspect exact caller and current sources/tests before changing. Last disk check:
+74 GiB free, target 52 GiB; source snapshot 7.3 MiB. No cleanup needed now.
