@@ -389,6 +389,59 @@ fn transaction_requires_strict_entity_order() {
 }
 
 #[test]
+fn transaction_bases_require_every_head_in_exact_order() {
+    let before = projection(vec![
+        live(Value::Entry(entry(1, None)), 1),
+        deleted(EntityKind::Entry, 2, 2),
+        conflict(
+            Value::Entry(entry(3, None)),
+            Value::Entry(entry(3, None)),
+            3,
+        ),
+    ]);
+    before.validate().unwrap();
+    let transaction = Transaction {
+        mutations: [
+            (1, Action::Delete),
+            (2, Action::Restore),
+            (3, Action::Resolve),
+            (4, Action::Put),
+        ]
+        .into_iter()
+        .map(|(id, action)| {
+            let entity = entity(EntityKind::Entry, id);
+            Mutation {
+                bases: before.heads(&entity),
+                entity,
+                action,
+                value: (action != Action::Delete).then(|| Value::Entry(entry(id, None))),
+            }
+        })
+        .collect(),
+        rebased_from: None,
+    };
+    transaction.validate(&before).unwrap();
+    for (index, mutation) in transaction.mutations.iter().enumerate() {
+        let mut reversed = mutation.bases.clone();
+        reversed.reverse();
+        let mut extra = mutation.bases.clone();
+        extra.push(version(99, None).revision);
+        let truncated = mutation.bases[..mutation.bases.len().saturating_sub(1)].to_vec();
+        for bases in [reversed, extra, truncated] {
+            if bases == mutation.bases {
+                continue;
+            }
+            let mut invalid = transaction.clone();
+            invalid.mutations[index].bases = bases;
+            assert!(matches!(
+                invalid.validate(&before),
+                Err(Error::InvalidTransaction)
+            ));
+        }
+    }
+}
+
+#[test]
 fn shared_entry_and_folder_ids_require_canonical_hex() {
     let before = Projection::default();
     for invalid in [

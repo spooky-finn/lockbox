@@ -352,14 +352,22 @@ impl Transaction {
 
         for mutation in &self.mutations {
             validate_entity(&mutation.entity)?;
-            let heads = before.heads(&mutation.entity);
+            let heads = before
+                .records
+                .iter()
+                .find(|record| record.entity == mutation.entity)
+                .map(|record| record.versions.as_slice())
+                .unwrap_or_default();
 
-            if heads != mutation.bases {
+            if !heads
+                .iter()
+                .map(|version| version.revision)
+                .eq(mutation.bases.iter().copied())
+            {
                 return Err(Error::InvalidTransaction);
             }
 
-            let old = before.records.iter().find(|r| r.entity == mutation.entity);
-            let live = old.is_some_and(|r| r.versions.len() == 1 && r.versions[0].value.is_some());
+            let live = heads.len() == 1 && heads[0].value.is_some();
             let valid = match mutation.action {
                 Action::Put => {
                     (heads.is_empty() || (heads.len() == 1 && live)) && mutation.value.is_some()

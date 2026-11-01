@@ -8,17 +8,18 @@ No delegation requested. Keep unrelated work outside refactor commits.
 Last full suite: cycle 40; 404 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 41: Move parsed TOTP link fields
-- Parse borrowed draft secret directly; remove temporary complete-link copy.
-  Move owned issuer/account into empty title/login instead of cloning again.
-- Keep existing fields, invalid-link text, error clearing and normalized TOTP
-  behavior. Replaced Totp still zeroizes through its existing Drop implementation.
-- All 76 record tests passed, including parser vectors, invalid-link correction,
-  existing-field preservation, editor view updates and durable normalized saves.
-- Formatting and strict all-target Clippy passed. Source byte-matches verified
-  snapshot; whitespace checks passed. No new tests for direct ownership change.
+Cycle 42: Borrow transaction validation heads
+- Find prior record once; compare borrowed revisions directly with mutation bases.
+  Reuse borrowed head slice for action validation. Remove one lookup and one
+  temporary revision vector per mutation; public Projection::heads unchanged.
+- Keep first matching record, empty heads, deep base order/length, validation
+  precedence and action rules. Regression passed before refactor for Delete,
+  Restore, Resolve and Put; reject reversed, extra and truncated base lists.
+- All 51 protocol tests and both sync integration tests passed. Formatting and
+  strict all-target Clippy passed. Both sources match verified snapshot;
+  workspace whitespace checks passed.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-41.9idpdjde when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-42.ppr3lrlr when workspace cannot compile.
 
-Next search: repeated projection lookup and owned head vectors in validation.
+Next search: repeated canonical encoding for local object hash plus stored bytes.
 Inspect current code and tests before choosing; no quota-driven edits.
