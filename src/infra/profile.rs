@@ -15,8 +15,8 @@ use sha2::Sha256;
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 mod sharing;
-pub use sharing::InvitationStatus;
 pub(crate) use sharing::{AcceptedInvitation, IssuedInvitation, SharingState};
+pub use sharing::{AcceptedInvitationInfo, InvitationStatus, IssuedInvitationInfo};
 
 #[derive(Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 pub struct ProviderConfiguration {

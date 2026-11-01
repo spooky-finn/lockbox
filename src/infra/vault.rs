@@ -140,7 +140,7 @@ mod shared;
 mod sharing;
 mod store;
 
-pub use crate::infra::profile::InvitationStatus;
+pub use crate::infra::profile::{AcceptedInvitationInfo, InvitationStatus, IssuedInvitationInfo};
 pub use store::{DeviceRecovery, ProfileStore, SharedProfile};
 
 enum Unlock<'a> {

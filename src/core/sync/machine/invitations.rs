@@ -18,6 +18,10 @@ use crate::core::sync::{
 use std::collections::{BTreeMap, BTreeSet};
 
 impl Machine {
+    pub fn controller(state: &SyncState) -> Result<Hash> {
+        with_history(state, |history| Ok(history.tip().1.body.controller))
+    }
+
     /// Creates an addressed offer under the current controller. Hosts persist it
     /// before export and enforce expiry/cancellation when consuming a response.
     pub fn offer_invitation(
@@ -346,7 +350,7 @@ pub(super) fn verify_admissions(
         }) {
             return Err(Error::InsufficientRole);
         }
-        verify_request(proof)?;
+        proof.verify_consent()?;
     }
 
     Ok(())
@@ -400,22 +404,6 @@ fn validate_recipient(
         return Err(Error::InsufficientRole);
     }
     Ok(())
-}
-
-fn verify_request(proof: &Admission) -> Result<()> {
-    let request = &proof.request.body;
-
-    if request.profile != invitation::PROFILE
-        || request.offer != offer_hash(&proof.offer)?
-        || request.recipient != proof.recipient().body.device
-    {
-        return Err(Error::InvalidInvitation);
-    }
-    crypto::verify(
-        &proof.request,
-        &proof.recipient().body.signing_key,
-        JOIN_DOMAIN,
-    )
 }
 
 fn was_admitted(ancestors: &[(Hash, &Signed<Control>)], device: Hash) -> bool {

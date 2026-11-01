@@ -13,3 +13,4 @@ pub(crate) mod profile;
 pub(crate) mod provider;
 
 pub(crate) mod attachments;
+pub(crate) mod sharing_files;

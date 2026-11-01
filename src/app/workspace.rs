@@ -8,11 +8,13 @@ pub(crate) enum Page {
     #[default]
     Vault,
     Settings,
+    Sharing,
 }
 
 pub(crate) struct Unlocked {
     pub(crate) page: Page,
     pub(crate) sync: super::space_sync::SpaceSync,
+    pub(crate) sharing: super::sharing::Sharing,
     pub(crate) sync_recovery: zeroize::Zeroizing<String>,
     pub(crate) vault: Vault,
     pub(crate) touch_id: TouchId,
@@ -32,6 +34,7 @@ impl Unlocked {
         Self {
             page: Page::Vault,
             sync: super::space_sync::SpaceSync::default(),
+            sharing: super::sharing::Sharing::default(),
             sync_recovery: zeroize::Zeroizing::new(String::new()),
             vault,
             touch_id: TouchId::default(),

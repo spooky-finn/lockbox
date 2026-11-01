@@ -11,6 +11,119 @@ use crate::{
 };
 
 impl Vault {
+    /// Read-only inspection before the UI asks the controller to admit a device.
+    /// Actual admission revalidates current history and durable local policy.
+    pub fn verify_invitation_response(&self, response: &Admission, now: u64) -> Result<()> {
+        let record = self.profile.as_ref().and_then(|p| p.sharing.issued.get(&response.id()))
+            .ok_or(Error::InvalidInvitation)?;
+        if canonical(&record.invitation.offer)? != canonical(&response.offer)? {
+            return Err(Error::InvalidInvitation.into());
+        }
+        match record.status(now) {
+            InvitationStatus::Cancelled => return Err(Error::InvitationCancelled.into()),
+            InvitationStatus::Expired => return Err(Error::InvitationExpired.into()),
+            _ => {}
+        }
+        response.verify_consent()?;
+        Ok(())
+    }
+
+    pub fn verify_join_receipt(&self, receipt: &AdmissionReceipt) -> Result<SpaceDescriptor> {
+        let profile = self.profile.as_ref().ok_or(Error::UnauthorizedDevice)?;
+        let record = profile.sharing.accepted.get(&receipt.id()).ok_or(Error::InvalidInvitation)?;
+        let state = Machine::join_admission(&record.invitation, &record.admission, receipt,
+            record.invitation.descriptor(), &profile.sync_secret())?;
+        if let Some(previous) = &profile.sync
+            && previous.descriptor() == state.descriptor()
+            && let Some(anchor) = previous.required_control
+            && !state.objects.contains_key(&anchor) {
+            return Err(Error::MissingDependency.into());
+        }
+        Ok(state.descriptor())
+    }
+
+    pub fn space_members(&self) -> Result<Vec<(Signed<Certificate>, Role)>> {
+        let profile = self.profile.as_ref().ok_or(Error::UnauthorizedDevice)?;
+        Ok(Machine::members(
+            profile.sync.as_ref().ok_or(Error::UnauthorizedDevice)?,
+            &profile.sync_secret(),
+        )?)
+    }
+
+    pub fn space_controller(&self) -> Result<Hash> {
+        Ok(Machine::controller(
+            self.sync_state().ok_or(Error::UnauthorizedDevice)?,
+        )?)
+    }
+
+    pub fn issued_invitations(&self, now: u64) -> Vec<super::IssuedInvitationInfo> {
+        self.profile
+            .as_ref()
+            .map(|profile| {
+                profile
+                    .sharing
+                    .issued
+                    .values()
+                    .map(|record| super::IssuedInvitationInfo {
+                        id: record.invitation.id(),
+                        user: record.invitation.recipient().body.user,
+                        device: record.invitation.recipient().body.device,
+                        role: record.invitation.role(),
+                        status: record.status(now),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    pub fn accepted_invitations(&self) -> Vec<super::AcceptedInvitationInfo> {
+        self.profile
+            .as_ref()
+            .map(|profile| {
+                profile
+                    .sharing
+                    .accepted
+                    .values()
+                    .map(|record| super::AcceptedInvitationInfo {
+                        id: record.invitation.id(),
+                        role: record.invitation.role(),
+                        joined: record.joined.is_some(),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Re-export a durable offer without allocating a new invitation ID.
+    pub fn export_invitation(&mut self, id: Hash) -> Result<Invitation> {
+        self.ensure_profile_writable()?;
+        self.ensure_sync_projection()?;
+        let invitation = self
+            .profile
+            .as_ref()
+            .and_then(|p| p.sharing.issued.get(&id))
+            .ok_or(Error::InvalidInvitation)?
+            .invitation
+            .clone();
+        self.save_inner(false)?;
+        Ok(invitation)
+    }
+
+    /// Resume sharing after restart without producing a different signed response.
+    pub fn export_invitation_response(&mut self, id: Hash) -> Result<Admission> {
+        self.ensure_profile_writable()?;
+        self.ensure_sharing_view()?;
+        let admission = self
+            .profile
+            .as_ref()
+            .and_then(|p| p.sharing.accepted.get(&id))
+            .ok_or(Error::InvalidInvitation)?
+            .admission
+            .clone();
+        self.save_inner(false)?;
+        Ok(admission)
+    }
+
     /// The caller independently verifies the intended recipient certificate.
     /// Expiry uses an explicit owner-side clock; replay never consults time.
     pub fn issue_invitation(

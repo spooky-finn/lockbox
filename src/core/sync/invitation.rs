@@ -86,6 +86,15 @@ impl AdmissionReceipt {
 }
 
 impl Invitation {
+    /// Compare through an independent channel. Includes the entire descriptor
+    /// and signed control anchor, not only a displayed owner name or root key.
+    pub fn verification_code(&self) -> Result<Hash> {
+        Ok(Hash::digest(
+            b"lockbox.sync.invitation-verification.v1\0",
+            &canonical(&(self.descriptor(), self.anchor()))?,
+        ))
+    }
+
     pub fn id(&self) -> Hash {
         self.offer.body.id
     }
@@ -114,6 +123,18 @@ impl Invitation {
 }
 
 impl Admission {
+    /// Verifies the recipient's exact signed consent. Controller authority and
+    /// single use additionally require the authenticated control history.
+    pub fn verify_consent(&self) -> Result<()> {
+        self.recipient().verify()?;
+        let request = &self.request.body;
+        if request.profile != PROFILE || request.offer != self.offer_hash()?
+            || request.recipient != self.recipient().body.device {
+            return Err(Error::InvalidInvitation);
+        }
+        super::crypto::verify(&self.request, &self.recipient().body.signing_key, JOIN_DOMAIN)
+    }
+
     pub fn id(&self) -> Hash {
         self.offer.body.id
     }

@@ -14,6 +14,20 @@ pub enum InvitationStatus {
     Admitted,
 }
 
+pub struct IssuedInvitationInfo {
+    pub id: Hash,
+    pub user: Hash,
+    pub device: Hash,
+    pub role: crate::core::sync::Role,
+    pub status: InvitationStatus,
+}
+
+pub struct AcceptedInvitationInfo {
+    pub id: Hash,
+    pub role: crate::core::sync::Role,
+    pub joined: bool,
+}
+
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct SharingState {

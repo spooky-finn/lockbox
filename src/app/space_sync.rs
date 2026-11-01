@@ -106,6 +106,12 @@ impl SpaceSync {
         }
     }
 
+    /// A membership action must discard replies and pending publication plans
+    /// prepared for the previous roster before committing the new epoch.
+    pub fn suspend(&mut self) {
+        self.worker = None;
+    }
+
     pub fn needs_tick(&self, editing: bool) -> bool {
         !editing
             && !self.stopped
