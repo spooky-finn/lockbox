@@ -9,22 +9,22 @@ Last full suite: cycle 62; 414 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 63: Separate artifact kind detection
-- Move size/JSON/structure hint selection into private Kind.detect. Artifact.detect
-  passes resulting Kind to existing strict decoder. Untyped serde_json tree drops
-  when kind detection returns, before second typed parse and verification start.
-- Preserve 96 MiB preparse limit, confirmation/request/offer/body precedence,
-  JSON/unrecognized errors, canonical decoding and signature checks. No new parser
-  or weaker structural-only acceptance; filenames still supply no authority.
+Cycle 64: Borrow reviewed artifacts before cloning payload
+- Issue/Accept/Admit/Join match review.as_ref, then clone only matching payload
+  at owned Vault call. Wrong variant avoids unrelated large artifact clone;
+  issue deadline and acceptance verification-code failures avoid payload clone.
+- Remove unused Artifact Clone derive. Preserve review on error, guard/error
+  precedence, owned Vault API, durable sharing operations and success resets.
 - Formatting/strict all-target Clippy passed. 14 sharing, five vault sharing,
-  six protocol invitation tests passed. Existing detection coverage accepts all
-  four artifacts and rejects mixed/tampered/invalid inputs. Source matches verified
-  snapshot; whitespace clean. Unrelated edits untouched.
-- Snapshot: /tmp/lockbox-refactor-63.ehbivbod.
+  six protocol invitation tests passed. Source matches verified snapshot;
+  whitespace clean. Unrelated edits untouched.
+- Snapshot: /tmp/lockbox-refactor-64.km9nbviz.
 
-Next search: apply_sharing clones entire review enum before matching required
-variant in Issue/Accept/Admit/Join. Borrow review via as_ref, perform cheap guards,
-clone only matched payload at owned Vault API call. Wrong-type and invalid-code
-paths should avoid copying large unrelated artifacts. Check all Artifact clone
-uses; enum derive(Clone) may become unnecessary. Preserve review on failures and
-all guards, durable operations and success resets; use existing workflow tests.
+Next search: SharingState.validate canonical(self) allocates full JSON only to
+check <=64 MiB. records.import already has ByteCount writer to measure JSON
+without retaining final buffer. Inspect existing tests/architecture; consider
+shared private serialization size helpers using serde_json/serde_jcs writers,
+then reuse for import batches and canonical sharing budget. Keep exact serializer,
+byte limits, failure fallback and validation short-circuit order. JCS still has
+internal sorting buffers; claim only removed final output Vec, no streaming-memory
+promise. Avoid custom schema or JSON-vs-JCS size assumptions. No edits chosen yet.

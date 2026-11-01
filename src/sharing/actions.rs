@@ -62,7 +62,6 @@ impl Kind {
     }
 }
 
-#[derive(Clone)]
 pub(crate) enum Artifact {
     Certificate(Signed<Certificate>),
     Invitation(Invitation),
@@ -408,7 +407,7 @@ impl Unlocked {
                         "Verify the recipient fingerprints through a trusted channel first".into(),
                     );
                 }
-                let Some(Artifact::Certificate(certificate)) = self.sharing.review.clone() else {
+                let Some(Artifact::Certificate(certificate)) = self.sharing.review.as_ref() else {
                     return Err("Import the recipient device file first".into());
                 };
                 let seconds = self
@@ -421,7 +420,7 @@ impl Unlocked {
                     .ok_or("Invalid invitation deadline")?;
                 let invitation = self
                     .vault
-                    .issue_invitation(certificate, role, Some(expires))
+                    .issue_invitation(certificate.clone(), role, Some(expires))
                     .map_err(|e| e.to_string())?;
                 code = Some(invitation.verification_code().map_err(|e| e.to_string())?);
                 (
@@ -430,7 +429,7 @@ impl Unlocked {
                 )
             }
             Action::Accept => {
-                let Some(Artifact::Invitation(invitation)) = self.sharing.review.clone() else {
+                let Some(Artifact::Invitation(invitation)) = self.sharing.review.as_ref() else {
                     return Err("Import an invitation first".into());
                 };
                 let supplied = self
@@ -446,26 +445,26 @@ impl Unlocked {
                 let expected = invitation.descriptor().clone();
                 let response = self
                     .vault
-                    .accept_invitation(invitation, &expected)
+                    .accept_invitation(invitation.clone(), &expected)
                     .map_err(|e| e.to_string())?;
                 (Kind::Response, response.bytes().map_err(|e| e.to_string())?)
             }
             Action::Admit => {
-                let Some(Artifact::Response(response)) = self.sharing.review.clone() else {
+                let Some(Artifact::Response(response)) = self.sharing.review.as_ref() else {
                     return Err("Import a signed response first".into());
                 };
                 let receipt = self
                     .vault
-                    .admit_invitation(response, now)
+                    .admit_invitation(response.clone(), now)
                     .map_err(|e| e.to_string())?;
                 (Kind::Receipt, receipt.bytes().map_err(|e| e.to_string())?)
             }
             Action::Join => {
-                let Some(Artifact::Receipt(receipt)) = self.sharing.review.clone() else {
+                let Some(Artifact::Receipt(receipt)) = self.sharing.review.as_ref() else {
                     return Err("Import an admission confirmation first".into());
                 };
                 self.vault
-                    .join_invitation(receipt)
+                    .join_invitation(receipt.clone())
                     .map_err(|e| e.to_string())?;
                 self.selected = None;
                 self.directories = Default::default();
