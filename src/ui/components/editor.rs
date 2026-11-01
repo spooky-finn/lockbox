@@ -68,6 +68,21 @@ pub(super) fn DraftView() -> Element {
             if draft.icon_picker_open { IconPicker {} }
             label { r#for: "entry-notes", {language.text(Text::Note)} }
             textarea { id: "entry-notes", rows: 3, value: "{entry.notes}", oninput: move |e| set_field(state, Field::Notes, e.value()) }
+            fieldset { class: "stack",
+                legend { {language.text(Text::Attachments)} }
+                p { class: "muted", {language.text(Text::AttachmentLimit)} }
+                for file in &entry.attachments {
+                    div { class: "input-actions", key: "{file.id}",
+                        span { "{file.name} ({file.data.len()} B)" }
+                        IconButton { icon: Icon::Trash, label: language.text(Text::RemoveAttachment),
+                            onclick: { let id = file.id.clone(); move |_| edit_draft(state, |d| d.entry.attachments.retain(|f| f.id != id)) },
+                        }
+                    }
+                }
+                IconButton { icon: Icon::Plus, label: language.text(Text::AddAttachment),
+                    onclick: move |_| crate::ui::runtime::add_attachment(),
+                }
+            }
             TotpEditor {}
             div { class: "actions form-actions",
                 IconButton { class: "primary", kind: "submit", icon: Icon::Save, label: language.text(Text::Save) }

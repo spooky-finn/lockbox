@@ -247,3 +247,33 @@ fn vault_file_is_private_to_the_owner() {
     let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
     assert_eq!(mode, 0o600);
 }
+
+#[test]
+fn attachments_are_encrypted_locally_and_survive_reopen_and_removal() {
+    let dir = tempfile::tempdir().unwrap();
+    let (path, mut vault) = new_vault(&dir);
+    let contents = b"private attachment contents \x00\xff";
+    vault.entries[0]
+        .add_attachment("private-document.bin".into(), contents.to_vec())
+        .unwrap();
+    vault.save().unwrap();
+    let bytes = fs::read(&path).unwrap();
+    for marker in [
+        b"private-document.bin".as_slice(),
+        contents.as_slice(),
+        b"cHJpdmF0ZSBhdHRhY2htZW50".as_slice(),
+    ] {
+        assert!(!bytes.windows(marker.len()).any(|w| w == marker));
+    }
+    drop(vault);
+    let mut vault = Vault::open(&path, &password("master")).unwrap();
+    assert_eq!(vault.entries[0].attachments[0].data, contents);
+    vault.entries[0].attachments.clear();
+    vault.save().unwrap();
+    drop(vault);
+    assert!(
+        Vault::open(&path, &password("master")).unwrap().entries[0]
+            .attachments
+            .is_empty()
+    );
+}

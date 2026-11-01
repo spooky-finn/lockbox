@@ -1,8 +1,10 @@
 # Profile protection and fresh-device recovery
 
-Shared profiles use encrypted bootstrap schema **3** inside the existing v3
+Shared profiles use encrypted bootstrap schema **3** inside the v5
 `.lbx` container. Signed remote objects retain `LBX-SYNC-0`; local file generations
-and witnesses are never uploaded. Local v1/v2 vault behavior is unchanged.
+and witnesses are never uploaded. Local vaults now write v4; v1/v2 remain readable. Shared profiles also read v3.
+The file version prevents older clients from discarding entry attachments.
+The bootstrap schema and sync protocol version are unchanged.
 
 ## Independent installation evidence
 

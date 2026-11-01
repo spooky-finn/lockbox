@@ -53,6 +53,9 @@ impl Value {
     fn validate(&self) -> Result<()> {
         match self {
             Self::Entry(entry) => {
+                entry
+                    .validate_attachments()
+                    .map_err(|_| Error::InvalidTransaction)?;
                 if trim_whitespace(&entry.title).is_empty()
                     || entry.title.len() > 1024
                     || entry.username.len() > 4096

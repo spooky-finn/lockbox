@@ -2,6 +2,12 @@
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Text {
+    Attachments,
+    AddAttachment,
+    RemoveAttachment,
+    SaveAttachment,
+    AttachmentLimit,
+
     StorjSetup,
     StorjDocumentation,
     BackToSetup,
@@ -307,6 +313,11 @@ impl Text {
             Self::AutoInitial => ("авто: буква", "auto: initial"),
             Self::ChooseIcon => ("Выбрать иконку…", "Choose icon…"),
             Self::ChooseIconAutomatically => ("Подобрать иконку автоматически", "Choose icon automatically"),
+            Self::Attachments => ("Файлы", "Files"),
+            Self::AddAttachment => ("Добавить файл", "Add file"),
+            Self::RemoveAttachment => ("Удалить файл", "Remove file"),
+            Self::SaveAttachment => ("Сохранить файл", "Save file"),
+            Self::AttachmentLimit => ("До 16 файлов, суммарно 1 МиБ. Сохраняйте файлы в новое место.", "Up to 16 files, 1 MiB total. Save files to a new location."),
             Self::Note => ("Заметка", "Note"),
             Self::Save => ("Сохранить", "Save"),
             Self::CopyUsername => ("Скопировать логин", "Copy username"),
@@ -572,6 +583,11 @@ pub(super) const CATALOG: &[Text] = &[
     Text::AutoInitial,
     Text::ChooseIcon,
     Text::ChooseIconAutomatically,
+    Text::Attachments,
+    Text::AddAttachment,
+    Text::RemoveAttachment,
+    Text::SaveAttachment,
+    Text::AttachmentLimit,
     Text::Note,
     Text::Save,
     Text::CopyUsername,

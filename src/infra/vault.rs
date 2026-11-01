@@ -49,10 +49,10 @@ use crate::{
 };
 
 const MAGIC: &[u8; 4] = b"LBX1";
-// v2 adds folders. Accept v1 on read, but keep old clients from silently
-// discarding folder metadata when they re-save a new vault.
-const VERSION: u16 = 2;
-const PROFILE_VERSION: u16 = 3;
+// v4/v5 add attachments to local vaults/shared profiles. Read older versions,
+// but prevent old clients from silently discarding files when re-saving.
+const VERSION: u16 = 4;
+const PROFILE_VERSION: u16 = 5;
 const SALT_LEN: usize = 16;
 const CHECK_LEN: usize = 32;
 const NONCE_LEN: usize = 24;
@@ -270,12 +270,12 @@ impl Vault {
         let path = path.to_path_buf();
         let data = fs::read(&path)?;
         let header = Header::parse(&data)?;
-        let path = if header.version == PROFILE_VERSION {
+        let path = if matches!(header.version, 3 | PROFILE_VERSION) {
             path.canonicalize()?
         } else {
             path
         };
-        let profile_lock = if header.version == PROFILE_VERSION {
+        let profile_lock = if matches!(header.version, 3 | PROFILE_VERSION) {
             Some(lock_profile(&path)?)
         } else {
             None
@@ -342,6 +342,11 @@ impl Vault {
     }
 
     fn save_inner(&self, create_new: bool) -> Result<()> {
+        for entry in &self.entries {
+            entry
+                .validate_attachments()
+                .map_err(|_| VaultError::Corrupted)?;
+        }
         if self
             .profile
             .as_ref()
@@ -532,7 +537,7 @@ impl Header {
             return Err(VaultError::NotAVault);
         }
         let version = u16::from_le_bytes([data[4], data[5]]);
-        if version != 1 && version != VERSION && version != PROFILE_VERSION {
+        if !(1..=PROFILE_VERSION).contains(&version) {
             return Err(VaultError::UnsupportedVersion(version));
         }
         let kdf = KdfParams {
@@ -590,11 +595,14 @@ fn decrypt(data: &[u8], key: &[u8; 32]) -> Option<Contents> {
             .ok()?,
     );
     let contents: Contents = serde_json::from_slice(&plaintext).ok()?;
+    for entry in &contents.entries {
+        entry.validate_attachments().ok()?;
+    }
     if contents.profile.as_ref().is_none_or(|p| p.sync.is_none()) {
         folder::validate(&contents.folders, &contents.entries).ok()?;
     }
     let version = u16::from_le_bytes([header[4], header[5]]);
-    if (version == PROFILE_VERSION) != contents.profile.is_some()
+    if (matches!(version, 3 | PROFILE_VERSION)) != contents.profile.is_some()
         || contents
             .profile
             .as_ref()
@@ -681,7 +689,7 @@ fn refresh_profile_snapshot(
     }
     let data = fs::read(path)?;
     let header = Header::parse(&data)?;
-    if header.version != PROFILE_VERSION {
+    if !matches!(header.version, 3 | PROFILE_VERSION) {
         return Err(VaultError::Corrupted);
     }
     Ok((data, header))

@@ -53,3 +53,44 @@ fn deleted_entry_is_removed_from_disk() {
     assert_eq!(saved.entries.len(), 1);
     assert_eq!(saved.entries[0].title, "GitLab");
 }
+
+#[test]
+fn attachment_drafts_cancel_save_and_rollback_with_the_entry() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut unlocked = unlocked(&dir);
+    add(&mut unlocked, "Files", "", "");
+    unlocked.start_edit();
+    unlocked
+        .draft
+        .as_mut()
+        .unwrap()
+        .entry
+        .add_attachment("cancel.bin".into(), vec![0, 255])
+        .unwrap();
+    unlocked.draft = None;
+    assert!(reopen(&unlocked).entries[0].attachments.is_empty());
+    unlocked.start_edit();
+    unlocked
+        .draft
+        .as_mut()
+        .unwrap()
+        .entry
+        .add_attachment("saved.bin".into(), vec![0, 255])
+        .unwrap();
+    unlocked.save_draft().unwrap();
+    assert_eq!(reopen(&unlocked).entries[0].attachments[0].data, [0, 255]);
+    unlocked.start_edit();
+    unlocked.draft.as_mut().unwrap().entry.attachments.clear();
+    std::fs::remove_dir_all(dir.path()).unwrap();
+    assert!(unlocked.save_draft().is_err());
+    assert!(
+        unlocked
+            .draft
+            .as_ref()
+            .unwrap()
+            .entry
+            .attachments
+            .is_empty()
+    );
+    assert_eq!(unlocked.vault.entries[0].attachments[0].data, [0, 255]);
+}

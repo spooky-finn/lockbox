@@ -277,6 +277,10 @@ fn two_independent_profiles_exchange_and_reopen_without_cloned_signers() {
         bob_certificate.body.device
     );
     alice.entries.push(entry("Before admission"));
+    let file_bytes = b"private cloud attachment contents \x00\xff";
+    alice.entries[0]
+        .add_attachment("cloud-private.bin".into(), file_bytes.to_vec())
+        .unwrap();
     alice.save_changes().unwrap();
     let members = vec![
         (alice.device_certificate().unwrap(), Role::Owner),
@@ -289,6 +293,24 @@ fn two_independent_profiles_exchange_and_reopen_without_cloned_signers() {
     let mut bob = Vault::open(&bob_path, &SecretString::from("master".to_owned())).unwrap();
     bob.receive_sync(delivery(&alice)).unwrap();
     assert_eq!(bob.entries[0].title, "Before admission");
+    assert_eq!(bob.entries[0].attachments[0].data, file_bytes);
+    for (_, bytes) in &alice
+        .profile
+        .as_ref()
+        .unwrap()
+        .sync
+        .as_ref()
+        .unwrap()
+        .objects
+    {
+        for marker in [
+            b"cloud-private.bin".as_slice(),
+            file_bytes.as_slice(),
+            b"cHJpdmF0ZSBjbG91ZCBhdHRhY2htZW50".as_slice(),
+        ] {
+            assert!(!bytes.0.windows(marker.len()).any(|w| w == marker));
+        }
+    }
     bob.entries[0].title = "Bob changed it".into();
     bob.save_changes().unwrap();
     alice.receive_sync(delivery(&bob)).unwrap();
@@ -318,6 +340,13 @@ fn two_independent_profiles_exchange_and_reopen_without_cloned_signers() {
     let alice = Vault::open(alice_path, &SecretString::from("master".to_owned())).unwrap();
     let bob = Vault::open(bob_path, &SecretString::from("master".to_owned())).unwrap();
     assert_eq!(alice.entries, bob.entries);
+    assert_eq!(alice.entries[0].attachments[0].data, file_bytes);
+    let mut bob = bob;
+    bob.entries[0].attachments.clear();
+    bob.save_changes().unwrap();
+    let mut alice = alice;
+    alice.receive_sync(delivery(&bob)).unwrap();
+    assert!(alice.entries[0].attachments.is_empty());
     assert!(alice.sync_replay().unwrap().unwrap().history_verified);
     assert!(!bob.sync_replay().unwrap().unwrap().history_verified);
 }

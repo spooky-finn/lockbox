@@ -96,3 +96,32 @@ fn submitting_the_dioxus_form_saves_and_prevents_browser_navigation() {
         );
     });
 }
+
+#[test]
+fn attachment_controls_render_names_and_sizes_without_file_contents() {
+    let mut dom = mounted();
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| u.start_new());
+        set_field(state, Field::Title, "With file".into());
+        edit_draft(state, |d| {
+            d.entry
+                .add_attachment(
+                    "test-file.txt".into(),
+                    b"never render file contents".to_vec(),
+                )
+                .unwrap();
+        });
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("Добавить файл"));
+    assert!(html.contains("Удалить файл"));
+    assert!(html.contains("test-file.txt"));
+    assert!(!html.contains("never render file contents"));
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| u.save_draft().unwrap())
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("test-file.txt"));
+    assert!(html.contains("Сохранить файл"));
+    assert!(!html.contains("never render file contents"));
+}

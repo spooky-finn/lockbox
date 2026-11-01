@@ -89,6 +89,19 @@ pub(super) fn EntryView() -> Element {
                     div { class: "field-row notes-row", dt { {language.text(Text::Note)} } dd { class: "notes", "{entry.notes}" } }
                 }
             }
+            if !entry.attachments.is_empty() {
+                section { class: "stack",
+                    h2 { {language.text(Text::Attachments)} }
+                    for file in &entry.attachments {
+                        div { class: "input-actions", key: "{file.id}",
+                            span { "{file.name} ({file.data.len()} B)" }
+                            IconButton { icon: Icon::Save, label: language.text(Text::SaveAttachment),
+                                onclick: { let id = file.id.clone(); move |_| runtime::export_attachment(&id) },
+                            }
+                        }
+                    }
+                }
+            }
             if unlocked.confirm_delete {
                 div { class: "delete-confirm", role: "alert",
                     p { {language.format(Text::DeleteEntryThisCannotBeUndone, &[entry.title.to_string()])} }

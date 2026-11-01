@@ -10,3 +10,5 @@ pub mod vault;
 pub mod witness;
 
 pub(crate) mod profile;
+
+pub(crate) mod attachments;
