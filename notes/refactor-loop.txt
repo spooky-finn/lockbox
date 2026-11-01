@@ -6,10 +6,13 @@ Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
 
-Cycle 1: TOTP normalization
-- Trim Base32 padding in owned String; avoid second allocation/secret copy.
-- Preserve Unicode whitespace filtering, ASCII case conversion, trailing-only trim.
-- Verification: 16 TOTP-related tests, formatting, strict all-target Clippy passed.
+Cycle 2: Import duplicate selection
+- Compare mapped folder and normalized TOTP before cloning full source Entry.
+- Skipped records no longer clone passwords/attachments or allocate new IDs.
+- Preserve attachment content/order equality, source values and repeat-import rules.
+- Verification: 25 import tests, formatting, strict all-target Clippy passed.
+- Added regression coverage: mapped/normalized duplicate selection, immutable
+  sources, attachment IDs ignored but names/bytes/order retained.
 
-Next search: record import normalization/deduplication, folder traversal, history
-indexing. Inspect current code and tests before choosing; no quota-driven edits.
+Next search: folder traversal, history indexing, browser/session workflows.
+Inspect current code and tests before choosing; no quota-driven edits.

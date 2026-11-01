@@ -147,3 +147,58 @@ fn totp_secrets_are_normalized() {
         "JBSWY3DPEHPK3PXP"
     );
 }
+
+#[test]
+fn duplicate_checks_use_mapped_folders_and_normalized_totp_without_changing_sources() {
+    let folders = [folder("work", "Work", None)];
+    let source_folders = [folder("source-work", " work ", None)];
+    let mut known = entry("2fa", Some("work"));
+    known.totp = Some(Totp {
+        secret: "JBSWY3DPEHPK3PXP".into(),
+        algorithm: TotpAlgorithm::Sha256,
+        digits: 8,
+        period: 60,
+    });
+    known
+        .add_attachment("key.bin".into(), vec![0, 255, 42])
+        .unwrap();
+    let mut source = known.clone();
+    source.id = crate::records::id::new();
+    source.folder_id = Some("source-work".into());
+    source.totp.as_mut().unwrap().secret = "jbsw y3dp ehpk 3pxp====".into();
+    source.attachments[0].id = crate::records::id::new();
+    let source_entries = [source.clone(), source];
+    let before = source_entries.clone();
+
+    let repeated = plan(&folders, &[known.clone()], &source_folders, &source_entries);
+    assert!(repeated.entries.is_empty());
+    assert!(repeated.folders.is_empty());
+    assert_eq!(repeated.skipped, 2);
+
+    let first = plan(&folders, &[], &source_folders, &source_entries);
+    assert_eq!(first.entries.len(), 1);
+    assert_eq!(first.skipped, 1);
+    assert_eq!(first.entries[0].totp, known.totp);
+    assert_eq!(first.entries[0].folder_id.as_deref(), Some("work"));
+    assert_ne!(first.entries[0].id, source_entries[0].id);
+    assert_eq!(source_entries, before);
+}
+
+#[test]
+fn attachment_name_bytes_and_order_distinguish_imported_records() {
+    let mut known = entry("Files", None);
+    known.add_attachment("one.bin".into(), vec![1]).unwrap();
+    known.add_attachment("two.bin".into(), vec![2]).unwrap();
+    let mut renamed = known.clone();
+    renamed.attachments[0].name = "renamed.bin".into();
+    let mut changed = known.clone();
+    changed.attachments[0].data = vec![3];
+    let mut reordered = known.clone();
+    reordered.attachments.swap(0, 1);
+
+    for source in [renamed, changed, reordered] {
+        let imported = plan(&[], std::slice::from_ref(&known), &[], &[source]);
+        assert_eq!(imported.entries.len(), 1);
+        assert_eq!(imported.skipped, 0);
+    }
+}

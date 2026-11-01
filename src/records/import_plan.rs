@@ -6,12 +6,11 @@
 //! makes an interrupted import safe to repeat.
 
 use crate::records::{
-    entry::{Attachment, Entry},
+    entry::{Attachment, Entry, Totp},
     folder::{self, Folder},
     totp,
 };
 use std::collections::BTreeMap;
-use zeroize::Zeroize;
 
 /// Records to append to the current vault. Folders are ordered parents first.
 #[derive(Debug, Default)]
@@ -38,29 +37,33 @@ pub fn plan(
     let mapping = map_folders(folders, source_folders, &mut plan.folders);
 
     for source in source_entries {
-        let mut entry = source.clone();
-        entry.id = crate::records::id::new();
-        entry.folder_id = source
+        let folder_id = source
             .folder_id
-            .as_ref()
-            .and_then(|id| mapping.get(id.as_str()).cloned().flatten());
-
-        if let Some(totp) = &mut entry.totp {
+            .as_deref()
+            .and_then(|id| mapping.get(id))
+            .and_then(Option::as_deref);
+        let totp = source.totp.as_ref().map(|source| Totp {
             // Shared spaces accept only canonical Base32 secrets.
-            let normalized = totp::normalize_secret(&totp.secret);
-            totp.secret.zeroize();
-            totp.secret = normalized;
-        }
+            secret: totp::normalize_secret(&source.secret),
+            algorithm: source.algorithm,
+            digits: source.digits,
+            period: source.period,
+        });
 
         if entries
             .iter()
             .chain(&plan.entries)
-            .any(|known| same_entry(known, &entry))
+            .any(|known| same_entry(known, source, folder_id, totp.as_ref()))
         {
             plan.skipped += 1;
-        } else {
-            plan.entries.push(entry);
+            continue;
         }
+
+        let mut entry = source.clone();
+        entry.id = crate::records::id::new();
+        entry.folder_id = folder_id.map(str::to_owned);
+        entry.totp = totp;
+        plan.entries.push(entry);
     }
 
     plan
@@ -143,17 +146,17 @@ fn place(
     Some(id)
 }
 
-/// Equal content in the same folder; identifiers are ignored.
-fn same_entry(a: &Entry, b: &Entry) -> bool {
-    a.title == b.title
-        && a.username == b.username
-        && a.password == b.password
-        && a.url == b.url
-        && a.notes == b.notes
-        && a.totp == b.totp
-        && a.icon == b.icon
-        && a.folder_id == b.folder_id
-        && same_files(&a.attachments, &b.attachments)
+/// Compare source content after folder mapping and TOTP normalization; IDs are ignored.
+fn same_entry(known: &Entry, source: &Entry, folder_id: Option<&str>, totp: Option<&Totp>) -> bool {
+    known.title == source.title
+        && known.username == source.username
+        && known.password == source.password
+        && known.url == source.url
+        && known.notes == source.notes
+        && known.totp.as_ref() == totp
+        && known.icon == source.icon
+        && known.folder_id.as_deref() == folder_id
+        && same_files(&known.attachments, &source.attachments)
 }
 
 fn same_files(a: &[Attachment], b: &[Attachment]) -> bool {
