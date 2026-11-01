@@ -2,7 +2,7 @@
 
 use crate::{
     access::biometrics::TouchId,
-    records::{directories::Directories, editor::Draft, entry::Entry, generator, totp},
+    records::{directories::Directories, editor::Draft, entry::Entry, generator},
     vault::Vault,
 };
 
@@ -113,17 +113,7 @@ impl Unlocked {
 
     pub(crate) fn start_draft(&mut self, entry: Entry, is_new: bool) {
         self.page = Page::Vault;
-        self.draft = Some(Draft {
-            entry,
-            is_new,
-            show_password: false,
-            show_totp: false,
-            totp_error: None,
-            generator_open: false,
-            generator_error: None,
-            icon_picker_open: false,
-            icon_query: String::new(),
-        });
+        self.draft = Some(Draft::new(entry, is_new));
         self.confirm_delete = false;
         self.error = None;
     }
@@ -162,20 +152,7 @@ impl Unlocked {
             return Ok(());
         };
 
-        if draft.entry.title.trim().is_empty() {
-            return Err("Enter an entry name".into());
-        }
-
-        if let Some(totp) = &draft.entry.totp {
-            totp::validate(totp).map_err(|error| format!("TOTP: {error}"))?;
-        }
-
-        let mut entry = draft.entry.clone();
-
-        if let Some(totp) = &mut entry.totp {
-            totp.secret = totp::normalize_secret(&totp.secret);
-        }
-
+        let entry = draft.prepare_save()?;
         let id = entry.id.clone();
         self.vault
             .upsert_entry(entry)

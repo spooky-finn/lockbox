@@ -1,6 +1,9 @@
 use crate::{
     desktop::test_support::{reopen, unlocked},
-    records::entry::{Totp, TotpAlgorithm},
+    records::{
+        editor::Draft,
+        entry::{Entry, Totp, TotpAlgorithm},
+    },
 };
 
 fn totp_with(secret: &str) -> Totp {
@@ -14,10 +17,7 @@ fn totp_with(secret: &str) -> Totp {
 
 #[test]
 fn pasted_link_fills_totp_and_empty_fields_only() {
-    let dir = tempfile::tempdir().unwrap();
-    let mut unlocked = unlocked(&dir);
-    unlocked.start_new();
-    let draft = unlocked.draft.as_mut().unwrap();
+    let mut draft = Draft::new(Entry::new(), true);
     draft.entry.username = "kept".into();
     draft.entry.totp = Some(totp_with(
         "otpauth://totp/GitLab:a8ee?secret=jbsw%20y3dpehpk3pxp&digits=8",
@@ -32,10 +32,7 @@ fn pasted_link_fills_totp_and_empty_fields_only() {
 
 #[test]
 fn broken_link_is_reported_and_left_for_correction() {
-    let dir = tempfile::tempdir().unwrap();
-    let mut unlocked = unlocked(&dir);
-    unlocked.start_new();
-    let draft = unlocked.draft.as_mut().unwrap();
+    let mut draft = Draft::new(Entry::new(), true);
     draft.entry.totp = Some(totp_with("otpauth://hotp/x?secret=JBSWY3DPEHPK3PXP"));
     draft.apply_link();
     assert!(draft.totp_error.as_deref().unwrap().contains("hotp"));

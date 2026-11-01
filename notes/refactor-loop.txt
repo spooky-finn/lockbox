@@ -8,17 +8,15 @@ No delegation requested. Keep unrelated work outside refactor commits.
 Last full suite: cycle 6; 375 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 7: Import folder placement
-- Targets owns planned folders' sibling index and depth state during mapping.
-- Normalize each target name once; merge through parent/name lookup.
-- Preserve first existing match, planned aliases, invalid-name fallback, parent
-  readiness, cycle breaking and root placement beyond existing depth limit.
-- Empty source folders skip placement setup.
-- Two new merge/depth contract tests passed before refactor.
-- Verification: 27 import tests, full formatting and strict all-target Clippy
-  passed in isolated snapshot. Workspace changes passed whitespace checks.
+Cycle 8: Record draft ownership
+- Draft initializes editor flags and prepares validated, normalized save snapshots.
+- Desktop coordinates persistence/selection; field defaults and error order kept.
+- Draft remains unchanged on failed validation/save; cancellation still drops it.
+- Link-only editor tests now use pure Draft fixtures, without vault file setup.
+- Verification: nine editor-filtered and 11 workspace-filtered tests passed;
+  full formatting and strict all-target Clippy passed in isolated snapshot.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-7.QDkHR7 when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-8.gByoW2 when workspace cannot compile.
 
-Next search: record editor state, vault file helpers, UI workflow duplication.
+Next search: vault file helpers, UI workflow duplication, attachment boundaries.
 Inspect current code and tests before choosing; no quota-driven edits.

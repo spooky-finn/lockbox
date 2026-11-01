@@ -29,6 +29,37 @@ pub(crate) struct Draft {
 }
 
 impl Draft {
+    pub(crate) fn new(entry: Entry, is_new: bool) -> Self {
+        Self {
+            entry,
+            is_new,
+            show_password: false,
+            show_totp: false,
+            totp_error: None,
+            generator_open: false,
+            generator_error: None,
+            icon_picker_open: false,
+            icon_query: String::new(),
+        }
+    }
+
+    /// Validate a save snapshot without changing the draft or its revealed fields.
+    pub(crate) fn prepare_save(&self) -> Result<Entry, String> {
+        if self.entry.title.trim().is_empty() {
+            return Err("Enter an entry name".into());
+        }
+
+        if let Some(totp) = &self.entry.totp {
+            totp::validate(totp).map_err(|error| format!("TOTP: {error}"))?;
+        }
+
+        let mut entry = self.entry.clone();
+        if let Some(totp) = &mut entry.totp {
+            totp.secret = totp::normalize_secret(&totp.secret);
+        }
+        Ok(entry)
+    }
+
     /// A pasted otpauth:// link replaces the TOTP settings and fills an empty title and login.
     pub(crate) fn apply_link(&mut self) {
         let Some(totp) = &self.entry.totp else {
@@ -62,9 +93,7 @@ impl Draft {
             Err(error) => self.totp_error = Some(error.to_string()),
         }
     }
-}
 
-impl Draft {
     pub(crate) fn set_field(&mut self, field: Field, value: String) {
         let value = Zeroizing::new(value);
         let target = match field {
@@ -86,6 +115,7 @@ impl Draft {
             self.apply_link();
         }
     }
+
     pub(crate) fn generate(&mut self, options: &generator::Options) {
         match generator::generate(options) {
             Ok(password) => {
@@ -97,10 +127,12 @@ impl Draft {
         }
     }
 }
+
 pub(crate) fn replace_secret(target: &mut String, value: &str) {
     target.zeroize();
     target.push_str(value);
 }
+
 pub(crate) fn algorithm_name(algorithm: TotpAlgorithm) -> &'static str {
     match algorithm {
         TotpAlgorithm::Sha1 => "SHA1",
