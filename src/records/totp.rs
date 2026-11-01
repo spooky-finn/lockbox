@@ -34,13 +34,13 @@ pub enum TotpError {
 
 /// Uppercase, without spaces or padding: the form services print most often.
 pub fn normalize_secret(secret: &str) -> String {
-    secret
+    let mut normalized: String = secret
         .chars()
         .filter(|c| !c.is_whitespace())
         .map(|c| c.to_ascii_uppercase())
-        .collect::<String>()
-        .trim_end_matches('=')
-        .to_owned()
+        .collect();
+    normalized.truncate(normalized.trim_end_matches('=').len());
+    normalized
 }
 
 /// RFC 4648 Base32, ignoring case, spaces and trailing padding.

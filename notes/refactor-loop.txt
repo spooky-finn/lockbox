@@ -1,0 +1,15 @@
+Autonomous refactoring loop
+
+Window: 2026-11-01 19:13:13 UTC to 2026-11-02 03:13:13 UTC.
+Goal: find useful simplifications independently; preserve behavior and public APIs.
+Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
+Manual compaction tool unavailable; rolling handoff supports automatic compaction.
+No delegation requested. Keep unrelated work outside refactor commits.
+
+Cycle 1: TOTP normalization
+- Trim Base32 padding in owned String; avoid second allocation/secret copy.
+- Preserve Unicode whitespace filtering, ASCII case conversion, trailing-only trim.
+- Verification: 16 TOTP-related tests, formatting, strict all-target Clippy passed.
+
+Next search: record import normalization/deduplication, folder traversal, history
+indexing. Inspect current code and tests before choosing; no quota-driven edits.
