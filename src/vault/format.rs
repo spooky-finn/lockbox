@@ -4,6 +4,7 @@ use crate::{
     records::{
         entry::Entry,
         folder::{self, Folder},
+        history::RecordChange,
     },
     sync::identity::Key,
     vault::{KdfParams, Result, VaultError, anchor::FileGeneration, profile::BootstrapProfile},
@@ -38,7 +39,7 @@ const CHECK_INFO: &[u8] = b"lockbox v1 password check";
 pub(super) struct Contents {
     pub(super) entries: Vec<Entry>,
     #[serde(default)]
-    pub(super) history: Vec<crate::records::history::RecordChange>,
+    pub(super) history: Vec<RecordChange>,
     #[serde(default)]
     pub(super) folders: Vec<Folder>,
     #[serde(default)]
@@ -181,13 +182,22 @@ pub(super) fn decrypt(data: &[u8], key: &Key) -> Option<Contents> {
 #[derive(Serialize)]
 pub(super) struct ContentsRef<'a> {
     pub(super) entries: &'a [Entry],
-    pub(super) history: &'a [crate::records::history::RecordChange],
+    #[serde(serialize_with = "serialize_history")]
+    pub(super) history: [&'a [RecordChange]; 2],
     #[serde(skip_serializing_if = "<[Folder]>::is_empty")]
     pub(super) folders: &'a [Folder],
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(super) profile: Option<&'a BootstrapProfile>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(super) generation: Option<FileGeneration>,
+}
+
+/// Existing and pending revisions retain one flat history array on disk.
+fn serialize_history<S: serde::Serializer>(
+    history: &[&[RecordChange]; 2],
+    serializer: S,
+) -> std::result::Result<S::Ok, S::Error> {
+    serializer.collect_seq(history.iter().flat_map(|chunk| chunk.iter()))
 }
 
 /// Argon2id stretches the password; HKDF splits the result into the

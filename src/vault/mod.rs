@@ -545,19 +545,22 @@ impl Vault {
             header.extend_from_slice(&slots.password);
             header.extend_from_slice(&slots.phrase);
         }
-        let history = self.next_local_history();
-        let ciphertext = format::encrypt(
-            ContentsRef {
-                entries: &self.entries,
-                history: &history,
-                folders: &self.folders,
-                profile: self.profile.as_ref(),
-                generation,
-            },
-            &self.key,
-            &header,
-            &nonce,
-        );
+        let pending_history = self.local_history_changes();
+        let ciphertext = {
+            let history = self.history.borrow();
+            format::encrypt(
+                ContentsRef {
+                    entries: &self.entries,
+                    history: [&history, &pending_history],
+                    folders: &self.folders,
+                    profile: self.profile.as_ref(),
+                    generation,
+                },
+                &self.key,
+                &header,
+                &nonce,
+            )
+        };
 
         if create_new {
             file::create(&self.path, &header, &ciphertext)?;
@@ -568,7 +571,7 @@ impl Vault {
         if let (Some(protection), Some(generation)) = (protection.as_mut(), generation) {
             protection.committed(generation, protection::digest_parts(&header, &ciphertext));
         }
-        *self.history.borrow_mut() = history;
+        self.history.borrow_mut().extend(pending_history);
         *self.saved_entries.borrow_mut() = self.entries.clone();
         sync_dir(&self.path)?;
 

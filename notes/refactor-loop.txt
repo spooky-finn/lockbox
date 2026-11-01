@@ -5,23 +5,27 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 46; 407 library, four integration, two doctests passed.
+Last full suite: cycle 48; 411 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 47: Reuse worker for biometric enabling
-- TouchId enable uses existing Worker; remove independent channel/thread setup
-  and map worker failure to unchanged interruption text. Keep pending guard,
-  native task, disabled path and preference update timing unchanged.
-- Three regressions passed before refactor: preferences wait for poll, successful
-  disable removes key, native denial/store errors preserve disabled state and
-  disk, preference write failure retains already-enabled key/control.
-- Forty access, fourteen native Touch ID, three worker, one settings state and
-  seven runtime tests passed; one OS probe ignored. Formatting/strict all-target
-  Clippy passed. Assertion-only clone fix then passed Clippy and three regressions
-  again. Both sources match verified snapshot; whitespace checks passed.
+Cycle 48: Serialize existing history by reference
+- local_history_changes builds only new revisions. Serialize existing plus pending
+  slices through one flat array; avoid cloning all previous secrets/attachments.
+- End history borrow before file I/O; append pending revisions at unchanged point
+  after file replacement/protection commit, before saved entries/directory sync.
+- Preserve restore detection: change map emits unique IDs, so preceding pending
+  revisions cannot affect another ID's history lookup. Shared saves append none.
+- Expanded rollback/reopen regression passed before refactor with attachment and
+  exact prior-history comparisons. New format test checks identical JSON bytes
+  for empty history and every existing/pending split. Public APIs unchanged.
+- Full suite: 411 library, four integration, two doctests passed; two OS probes
+  ignored. Formatting/strict all-target Clippy passed. All four sources match
+  verified snapshot; workspace whitespace checks passed.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-47.jefk5pm7 when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-48.0fplsxou when workspace cannot compile.
 
-Next search: inspect vault save serialization for unnecessary owned snapshots;
-consider common encrypted-file write/sync sequence only if it clarifies code.
+Next search: restore_record calls owned trash() and clones every deleted payload
+before selecting one; consider shared borrowed selection while preserving order,
+Entry.id lookup (not history-map key), replay errors and folder fallback. Avoid
+skipping saved_entries snapshots without auditing cancel_activation transitions.
 Inspect current code and tests before choosing; no quota-driven edits.

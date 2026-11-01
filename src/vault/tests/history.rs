@@ -130,7 +130,10 @@ fn batch_history_orders_changed_ids_and_distinguishes_put_delete_and_restore_on_
     )
     .unwrap();
     let restored = entry("1", "Restore");
-    let original = entry("2", "Update");
+    let mut original = entry("2", "Update");
+    original
+        .add_attachment("keep.bin".into(), vec![0, 255, 42])
+        .unwrap();
     let deleted = entry("3", "Delete");
     let unchanged = entry("4", "Unchanged");
     vault
@@ -146,6 +149,7 @@ fn batch_history_orders_changed_ids_and_distinguishes_put_delete_and_restore_on_
         .unwrap();
     vault.delete_entry(&restored.id).unwrap();
     let count = vault.record_history().unwrap().len();
+    let previous = serde_json::to_vec(&vault.record_history().unwrap()).unwrap();
     let mut updated = original.clone();
     updated.password = "updated fictional password".into();
     let created = entry("5", "Create");
@@ -162,10 +166,15 @@ fn batch_history_orders_changed_ids_and_distinguishes_put_delete_and_restore_on_
 
     assert!(vault.save_changes().is_err());
     assert_eq!(vault.record_history().unwrap().len(), count);
+    assert_eq!(
+        serde_json::to_vec(&vault.record_history().unwrap()).unwrap(),
+        previous
+    );
     assert_eq!(std::fs::read(&path).unwrap(), before);
     std::fs::remove_dir(temporary).unwrap();
     vault.save_changes().unwrap();
     let history = vault.record_history().unwrap();
+    assert_eq!(serde_json::to_vec(&history[..count]).unwrap(), previous);
     let changes = &history[count..];
     assert_eq!(changes.len(), 4);
     assert_eq!(
@@ -192,8 +201,46 @@ fn batch_history_orders_changed_ids_and_distinguishes_put_delete_and_restore_on_
     drop(vault);
     let reopened = Vault::open(&path, &password).unwrap();
     assert_eq!(reopened.entries(), desired);
+    assert_eq!(
+        serde_json::to_vec(&reopened.record_history().unwrap()).unwrap(),
+        serde_json::to_vec(&history).unwrap()
+    );
     reopened.save().unwrap();
     assert_eq!(reopened.record_history().unwrap().len(), count + 4);
+}
+
+#[test]
+fn history_chunks_serialize_as_the_same_flat_json_array() {
+    use crate::{records::history::RecordChange, vault::format::ContentsRef};
+    let changes: Vec<_> = (0..3)
+        .map(|index| {
+            let mut value = entry(&index.to_string(), "Предыдущая запись");
+            value
+                .add_attachment("payload.bin".into(), vec![0, 255, index])
+                .unwrap();
+            let mut change = RecordChange::default();
+            change.id = value.id.clone();
+            change.revision = format!("revision-{index}");
+            change.before = vec![value.clone()];
+            change.after = Some(value);
+            change
+        })
+        .collect();
+    for history in [&changes[..0], changes.as_slice()] {
+        let mut expected = b"{\"entries\":[],\"history\":".to_vec();
+        expected.extend(serde_json::to_vec(history).unwrap());
+        expected.push(b'}');
+        for split in 0..=history.len() {
+            let contents = ContentsRef {
+                entries: &[],
+                history: [&history[..split], &history[split..]],
+                folders: &[],
+                profile: None,
+                generation: None,
+            };
+            assert_eq!(serde_json::to_vec(&contents).unwrap(), expected);
+        }
+    }
 }
 
 #[test]

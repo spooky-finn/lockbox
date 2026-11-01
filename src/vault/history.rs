@@ -7,11 +7,11 @@ use crate::{
 use std::collections::{BTreeMap, BTreeSet};
 
 impl Vault {
-    pub(super) fn next_local_history(&self) -> Vec<RecordChange> {
-        let mut history = self.history.borrow().clone();
+    pub(super) fn local_history_changes(&self) -> Vec<RecordChange> {
         if self.sync_state().is_some() {
-            return history;
+            return Vec::new();
         }
+        let history = self.history.borrow();
         let saved = self.saved_entries.borrow();
         let mut changes = BTreeMap::new();
         // Legacy local files may repeat IDs; history uses the first value.
@@ -24,12 +24,13 @@ impl Vault {
             let (_, after) = changes.entry(entry.id.as_str()).or_insert((None, None));
             after.get_or_insert(entry);
         }
+        let mut revisions = Vec::new();
         for (id, (before, after)) in changes {
             if before == after {
                 continue;
             }
             let restored = before.is_none() && history.iter().any(|h| h.id == id);
-            history.push(RecordChange {
+            revisions.push(RecordChange {
                 id: id.to_owned(),
                 revision: crate::records::id::new(),
                 actor: "Local user".into(),
@@ -52,7 +53,7 @@ impl Vault {
                 after: after.cloned(),
             });
         }
-        history
+        revisions
     }
 
     /// Shared revisions are included only after signature, membership and causal validation.
