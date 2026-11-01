@@ -387,3 +387,36 @@ fn transaction_requires_strict_entity_order() {
         Err(Error::InvalidTransaction)
     ));
 }
+
+#[test]
+fn shared_entry_and_folder_ids_require_canonical_hex() {
+    let before = Projection::default();
+    for invalid in [
+        String::new(),
+        "a".repeat(31),
+        "a".repeat(33),
+        "A".repeat(32),
+        "g".repeat(32),
+        "é".repeat(16),
+    ] {
+        let mut account = entry(1, None);
+        account.id = invalid.clone();
+        let mut directory = folder(1, "Folder", None);
+        directory.id = invalid;
+        for transaction in [
+            Transaction::diff(&before, &[account], &[]).unwrap(),
+            Transaction::diff(&before, &[], &[directory]).unwrap(),
+        ] {
+            assert!(matches!(
+                transaction.validate(&before),
+                Err(Error::InvalidTransaction)
+            ));
+        }
+    }
+    let mut account = entry(1, None);
+    account.id = "0123456789abcdef0123456789abcdef".into();
+    Transaction::diff(&before, &[account], &[])
+        .unwrap()
+        .validate(&before)
+        .unwrap();
+}

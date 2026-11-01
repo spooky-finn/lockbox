@@ -4,3 +4,11 @@ pub(crate) fn new() -> String {
     getrandom::fill(&mut bytes).expect("operating system random generator");
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
+
+/// Canonical IDs used by shared entities and attachments.
+pub(crate) fn is_valid(id: &str) -> bool {
+    id.len() == 32
+        && id
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}

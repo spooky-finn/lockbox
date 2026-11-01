@@ -86,11 +86,7 @@ impl Entry {
         let mut total = 0usize;
 
         for file in &self.attachments {
-            if file.id.len() != 32
-                || !file
-                    .id
-                    .bytes()
-                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+            if !crate::records::id::is_valid(&file.id)
                 || !ids.insert(&file.id)
                 || file.name.trim().is_empty()
                 || file.name.len() > 255

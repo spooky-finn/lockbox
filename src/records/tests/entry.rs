@@ -39,3 +39,29 @@ fn invalid_names_counts_and_total_size_leave_entry_unchanged() {
     entry.attachments[1] = duplicate;
     assert!(entry.validate_attachments().is_err());
 }
+
+#[test]
+fn attachment_ids_require_canonical_hex_without_restricting_legacy_entry_ids() {
+    let mut entry = Entry::default();
+    entry.id = "legacy-local-id".into();
+    entry
+        .add_attachment("key.bin".into(), vec![0, 255])
+        .unwrap();
+    for invalid in [
+        String::new(),
+        "a".repeat(31),
+        "a".repeat(33),
+        "A".repeat(32),
+        "g".repeat(32),
+        "é".repeat(16),
+    ] {
+        entry.attachments[0].id = invalid;
+        assert_eq!(
+            entry.validate_attachments(),
+            Err("Invalid attachment name or identifier")
+        );
+    }
+    entry.attachments[0].id = "0123456789abcdef0123456789abcdef".into();
+    entry.validate_attachments().unwrap();
+    assert_eq!(entry.id, "legacy-local-id");
+}

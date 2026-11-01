@@ -328,11 +328,7 @@ fn validate_entity(entity: &Entity) -> Result<()> {
 }
 
 fn validate_id(id: &str) -> Result<()> {
-    if id.len() != 32
-        || !id
-            .bytes()
-            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-    {
+    if !crate::records::id::is_valid(id) {
         return Err(Error::InvalidTransaction);
     }
 

@@ -8,16 +8,16 @@ No delegation requested. Keep unrelated work outside refactor commits.
 Last full suite: cycle 23; 391 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 24: Stream strict ordering checks
-- Generalize internal sorted_unique to iterators with strict pair comparison.
-  Remove mapped key vectors in projection, revision, mutation and admission
-  validation. Roster uses same checker. Wire/public contracts unchanged.
-- Two regressions passed before refactor: empty/ordered values accepted;
-  duplicate/reversed record, revision and mutation keys rejected.
-- All 48 protocol tests, formatting and strict all-target Clippy passed. Changed
-  source byte-matches verified snapshot; workspace whitespace checks passed.
+Cycle 25: Share canonical record ID predicate
+- Put exact 32-byte lowercase-hex rule beside ID generator. Attachments and
+  shared entity/parent validation reuse predicate; caller errors unchanged.
+- Leave permissive local record/folder IDs and 64-byte hash schema unchanged.
+- Two regressions passed before refactor: reject empty/wrong-length/uppercase/
+  nonhex/Unicode IDs; accept mixed hex; retain legacy local entry ID.
+- Three attachment and nine model tests, formatting and strict all-target Clippy
+  passed. Source byte-matches snapshot; workspace whitespace checks passed.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-24.Zx09JZ when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-25.XTWpmO when workspace cannot compile.
 
-Next search: attachment identifiers, settings, conflict display lookups.
+Next search: ID encoding allocation, settings, conflict display lookups.
 Inspect current code and tests before choosing; no quota-driven edits.
