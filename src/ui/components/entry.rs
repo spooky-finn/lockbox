@@ -31,18 +31,14 @@ pub(super) fn EntryView() -> Element {
     } else {
         "••••••••"
     };
-    let copied_class = |field| {
-        if copied.read().as_ref().is_some_and(|(id, last, at)| {
+    let is_copied = |field| {
+        copied.read().as_ref().is_some_and(|(id, last, at)| {
             id == &entry.id && *last == field && at.elapsed().as_secs_f32() < 2.0
-        }) {
-            "copied"
-        } else {
-            ""
-        }
+        })
     };
-    let username_class = copied_class(CopyField::Username);
-    let password_class = copied_class(CopyField::Password);
-    let url_class = copied_class(CopyField::Url);
+    let username_copied = is_copied(CopyField::Username);
+    let password_copied = is_copied(CopyField::Password);
+    let url_copied = is_copied(CopyField::Url);
     rsx! {
         article { class: "entry-detail",
             div { class: "detail-heading",
@@ -59,7 +55,7 @@ pub(super) fn EntryView() -> Element {
             dl { class: "fields",
                 div { class: "field-row",
                     dt { {language.text(Text::Username2)} }
-                    dd { button { class: "quiet field-value copy-value {username_class}", disabled: entry.username.is_empty(), aria_label: language.text(Text::CopyUsername), onclick: move |_| copy_value(state, copied, CopyField::Username), "{entry.username}" }
+                    dd { span { class: "field-value copy-value-group", button { class: "quiet copy-value", disabled: entry.username.is_empty(), aria_label: language.text(Text::CopyUsername), onclick: move |_| copy_value(state, copied, CopyField::Username), "{entry.username}" } if username_copied { span { class: "copy-indicator", role: "status", {language.text(Text::Copied)} } } }
                         if !entry.username.is_empty() {
                             IconButton { class: "quiet", label: language.text(Text::CopyUsername), icon: Icon::Copy,
                                 onclick: move |_| copy_value(state, copied, CopyField::Username),
@@ -69,7 +65,7 @@ pub(super) fn EntryView() -> Element {
                 }
                 div { class: "field-row",
                     dt { {language.text(Text::Password)} }
-                    dd { button { class: "quiet field-value copy-value {password_class}", disabled: entry.password.is_empty(), aria_label: language.text(Text::CopyPassword), onclick: move |_| copy_value(state, copied, CopyField::Password), code { class: "password-value", "{password}" } }
+                    dd { span { class: "field-value copy-value-group", button { class: "quiet copy-value", disabled: entry.password.is_empty(), aria_label: language.text(Text::CopyPassword), onclick: move |_| copy_value(state, copied, CopyField::Password), code { class: "password-value", "{password}" } } if password_copied { span { class: "copy-indicator", role: "status", {language.text(Text::Copied)} } } }
                         IconButton { class: "quiet", label: if unlocked.show_password { language.text(Text::HidePassword) } else { language.text(Text::ShowPassword) },
                             icon: if unlocked.show_password { Icon::EyeOff } else { Icon::Eye },
                             pressed: Some(unlocked.show_password),
@@ -83,7 +79,7 @@ pub(super) fn EntryView() -> Element {
                         }
                     }
                 }
-                div { class: "field-row", dt { {language.text(Text::Website)} } dd { button { class: "quiet field-value copy-value website-value {url_class}", disabled: entry.url.is_empty(), title: language.text(Text::Website), onclick: move |_| copy_value(state, copied, CopyField::Url), "{entry.url}" } } }
+                div { class: "field-row", dt { {language.text(Text::Website)} } dd { span { class: "field-value copy-value-group", button { class: "quiet copy-value website-value", disabled: entry.url.is_empty(), title: language.text(Text::Website), onclick: move |_| copy_value(state, copied, CopyField::Url), "{entry.url}" } if url_copied { span { class: "copy-indicator", role: "status", {language.text(Text::Copied)} } } } } }
                 if let Some(settings) = &entry.totp {
                     div { class: "field-row totp-field",
                         dt { {language.text(Text::TOTPCode)} }

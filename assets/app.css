@@ -495,6 +495,10 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 99px; }
 
 /* Record values copy with pointer or keyboard activation. */
 button.copy-value { justify-content: flex-start; text-align: left; font: inherit; padding: 4px 6px; margin-left: -6px; border-radius: 5px; transition: color 140ms, background 140ms; }
+button.copy-value:hover:not(:disabled) { background: transparent; box-shadow: none; }
 button.copy-value:active:not(:disabled) { transform: none; }
-button.copy-value.copied { color: var(--accent); background: var(--selected); }
+.copy-value-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.copy-value-group button.copy-value { min-width: 0; overflow-wrap: anywhere; }
+.copy-indicator { color: #248a3d; font-size: 12px; white-space: nowrap; }
+@media (prefers-color-scheme: dark) { .copy-indicator { color: #32d74b; } }
 button.copy-value:disabled { opacity: 1; }
