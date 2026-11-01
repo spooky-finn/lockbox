@@ -8,17 +8,16 @@ No delegation requested. Keep unrelated work outside refactor commits.
 Last full suite: cycle 23; 391 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 23: Borrow desired transaction values
-- Private ValueRef compares input entries/folders against projection; clone only
-  mutation payloads. Reuse entity extraction; public Value/API/wire unchanged.
-- Two regressions passed before refactor: mixed action/order/base/payload cases,
-  unchanged/conflicted omission, duplicate rejection and same ID across kinds.
-- Owned mutation payloads remain independent of later password/file/folder edits.
-- Full suite passed: 391 library, four integration, two doctests; two OS probes
-  ignored. Formatting and strict all-target Clippy passed. Changed source
-  byte-matches verified snapshot; workspace whitespace checks passed.
+Cycle 24: Stream strict ordering checks
+- Generalize internal sorted_unique to iterators with strict pair comparison.
+  Remove mapped key vectors in projection, revision, mutation and admission
+  validation. Roster uses same checker. Wire/public contracts unchanged.
+- Two regressions passed before refactor: empty/ordered values accepted;
+  duplicate/reversed record, revision and mutation keys rejected.
+- All 48 protocol tests, formatting and strict all-target Clippy passed. Changed
+  source byte-matches verified snapshot; workspace whitespace checks passed.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-23.5rCwdB when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-24.Zx09JZ when workspace cannot compile.
 
-Next search: mapped ordering checks, attachment identifiers, settings.
+Next search: attachment identifiers, settings, conflict display lookups.
 Inspect current code and tests before choosing; no quota-driven edits.

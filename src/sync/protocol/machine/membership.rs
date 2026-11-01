@@ -131,10 +131,7 @@ impl<'a> Roster<'a> {
     fn is_canonical(&self) -> bool {
         !self.0.is_empty()
             && self.0.len() <= Self::MAX_DEVICES
-            && self
-                .0
-                .windows(2)
-                .all(|pair| pair[0].certificate.body.device < pair[1].certificate.body.device)
+            && sorted_unique(self.0.iter().map(|member| member.certificate.body.device))
     }
 
     fn member(&self, device: Hash) -> Result<&'a Member> {

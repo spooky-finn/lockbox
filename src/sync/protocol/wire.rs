@@ -158,6 +158,6 @@ pub(super) fn decode_bounded<T: DeserializeOwned + Serialize>(
     Ok(value)
 }
 
-pub(super) fn sorted_unique<T: Ord>(items: &[T]) -> bool {
-    items.windows(2).all(|pair| pair[0] < pair[1])
+pub(super) fn sorted_unique<T: Ord>(items: impl IntoIterator<Item = T>) -> bool {
+    items.into_iter().is_sorted_by(|a, b| a < b)
 }

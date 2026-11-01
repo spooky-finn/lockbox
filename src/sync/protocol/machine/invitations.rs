@@ -322,11 +322,9 @@ pub(super) fn verify_admissions(
         return Err(Error::ConsentRequired);
     }
     if !sorted_unique(
-        &body
-            .admissions
+        body.admissions
             .iter()
-            .map(|proof| proof.recipient().body.device)
-            .collect::<Vec<_>>(),
+            .map(|proof| proof.recipient().body.device),
     ) {
         return Err(Error::InvalidInvitation);
     }

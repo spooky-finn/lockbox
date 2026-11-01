@@ -1,6 +1,6 @@
 use crate::{
     records::{entry::Entry, folder::Folder, totp},
-    sync::protocol::{Error, Hash, MAX_MUTATIONS, Result, canonical},
+    sync::protocol::{Error, Hash, MAX_MUTATIONS, Result, canonical, wire::sorted_unique},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -282,9 +282,7 @@ impl Projection {
             return Err(Error::ResourceBudgetExceeded);
         }
 
-        if !crate::sync::protocol::wire::sorted_unique(
-            &self.records.iter().map(|r| &r.entity).collect::<Vec<_>>(),
-        ) {
+        if !sorted_unique(self.records.iter().map(|r| &r.entity)) {
             return Err(Error::InvalidTransaction);
         }
 
@@ -295,13 +293,7 @@ impl Projection {
 
             if record.versions.is_empty()
                 || record.versions.len() > crate::sync::protocol::MAX_OBJECTS
-                || !crate::sync::protocol::wire::sorted_unique(
-                    &record
-                        .versions
-                        .iter()
-                        .map(|v| v.revision)
-                        .collect::<Vec<_>>(),
-                )
+                || !sorted_unique(record.versions.iter().map(|v| v.revision))
             {
                 return Err(Error::InvalidTransaction);
             }
@@ -358,9 +350,7 @@ impl Transaction {
             return Err(Error::ResourceBudgetExceeded);
         }
 
-        if !crate::sync::protocol::wire::sorted_unique(
-            &self.mutations.iter().map(|m| &m.entity).collect::<Vec<_>>(),
-        ) {
+        if !sorted_unique(self.mutations.iter().map(|m| &m.entity)) {
             return Err(Error::InvalidTransaction);
         }
 

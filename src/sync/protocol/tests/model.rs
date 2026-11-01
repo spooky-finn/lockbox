@@ -323,3 +323,67 @@ fn diff_rejects_duplicate_and_conflicted_entities_but_distinguishes_kinds() {
     assert_eq!(transaction.mutations.len(), 2);
     transaction.validate(&before).unwrap();
 }
+
+#[test]
+fn projection_requires_strict_record_and_revision_order() {
+    Projection::default().validate().unwrap();
+    let ordered = projection(vec![
+        live(Value::Entry(entry(1, None)), 1),
+        live(Value::Entry(entry(2, None)), 2),
+    ]);
+    ordered.validate().unwrap();
+    let mut reversed = ordered.clone();
+    reversed.records.reverse();
+    assert!(matches!(
+        reversed.validate(),
+        Err(Error::InvalidTransaction)
+    ));
+    let mut duplicate = ordered;
+    duplicate.records[1] = duplicate.records[0].clone();
+    assert!(matches!(
+        duplicate.validate(),
+        Err(Error::InvalidTransaction)
+    ));
+
+    let ordered = projection(vec![conflict(
+        Value::Entry(entry(1, None)),
+        Value::Entry(entry(1, None)),
+        1,
+    )]);
+    ordered.validate().unwrap();
+    let mut reversed = ordered.clone();
+    reversed.records[0].versions.reverse();
+    assert!(matches!(
+        reversed.validate(),
+        Err(Error::InvalidTransaction)
+    ));
+    let mut duplicate = ordered;
+    duplicate.records[0].versions[1] = duplicate.records[0].versions[0].clone();
+    assert!(matches!(
+        duplicate.validate(),
+        Err(Error::InvalidTransaction)
+    ));
+}
+
+#[test]
+fn transaction_requires_strict_entity_order() {
+    let before = Projection::default();
+    Transaction::diff(&before, &[], &[])
+        .unwrap()
+        .validate(&before)
+        .unwrap();
+    let ordered = Transaction::diff(&before, &[entry(1, None), entry(2, None)], &[]).unwrap();
+    ordered.validate(&before).unwrap();
+    let mut reversed = ordered.clone();
+    reversed.mutations.reverse();
+    assert!(matches!(
+        reversed.validate(&before),
+        Err(Error::InvalidTransaction)
+    ));
+    let mut duplicate = ordered;
+    duplicate.mutations[1] = duplicate.mutations[0].clone();
+    assert!(matches!(
+        duplicate.validate(&before),
+        Err(Error::InvalidTransaction)
+    ));
+}
