@@ -198,6 +198,12 @@ impl Unlocked {
         {
             return;
         }
+        self.sharing.review = None;
+        self.sharing.output = None;
+        self.sharing.recipient_verified = false;
+        self.sharing.confirm_remove = None;
+        self.sharing.code.clear();
+        self.sharing.notice = None;
         self.sharing.job = Some((
             ticket,
             Worker::spawn(move |cancel| {
@@ -266,6 +272,9 @@ impl Unlocked {
         if !matches!(action, Action::Certificate) {
             self.vault.reconcile_profile().map_err(|e| e.to_string())?;
         }
+        // A revoked/cancelled admission must not remain available through an
+        // older open export dialog or the previous output panel.
+        self.sharing.output = None;
         self.sync.suspend();
         let mut code = None;
         let (kind, bytes) = match action {

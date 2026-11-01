@@ -300,6 +300,30 @@ fn a_verified_fault_cancels_a_pending_job_even_while_editing() {
 }
 
 #[test]
+fn unadmitted_device_waits_for_the_owner_without_reporting_removal() {
+    let owner_dir = tempfile::tempdir().unwrap();
+    let guest_dir = tempfile::tempdir().unwrap();
+    let owner = vault(&owner_dir);
+    let mut guest = vault(&guest_dir);
+    guest.join_space(owner.space_descriptor().unwrap()).unwrap();
+    let batch = Download {
+        incomplete: false,
+        objects: owner
+            .sync_state()
+            .unwrap()
+            .objects
+            .iter()
+            .map(|(hash, bytes)| (*hash, bytes.0.clone()))
+            .collect(),
+    };
+    let mut session = SpaceSync::default();
+    session.downloaded(&mut guest, batch).unwrap();
+    assert_eq!(session.status, Status::Waiting);
+    assert!(session.worker.is_none());
+    assert!(guest.sync_state().unwrap().outbox.is_empty());
+}
+
+#[test]
 fn changing_spaces_discards_a_completed_old_reply() {
     let directory = tempfile::tempdir().unwrap();
     let mut vault = vault(&directory);

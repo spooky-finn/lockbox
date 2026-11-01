@@ -71,6 +71,10 @@ pub struct AdmissionReceipt {
 }
 
 impl AdmissionReceipt {
+    pub fn descriptor(&self) -> &SpaceDescriptor {
+        &self.confirmation.body.descriptor
+    }
+
     pub fn id(&self) -> Hash {
         self.confirmation.body.invitation
     }

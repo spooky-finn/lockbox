@@ -234,9 +234,10 @@ real independent credentials supplied locally; see [its setup](sync-live-test.md
 
 ## Remaining boundaries
 
-The desktop includes exchange status and conflict/rebase review. Participant
-invitation and admission screens are not implemented; membership APIs require
-independently verified certificates and descriptors through the signed API. Existing v1/v2
+The desktop includes exchange status, conflict/rebase review, and the signed
+[invitation and participant workflow](sync-invitations.md#desktop-workflow).
+The controller can manage user-wide roles and remove devices; trust confirmation
+uses independently verified fingerprints and an invitation code. Existing v1/v2
 local vaults remain local. Older v3 bootstrap-schema-1 profiles remain readable
 and can be activated through the inline recovery-password form or
 `Vault::activate_sync`. Activation certifies a fresh device and journals
@@ -245,7 +246,7 @@ the separate recovery password and never silently unlocks root authority.
 New shared profiles use bootstrap schema 4 and authenticated file generations so
 older applications reject them instead of dropping their protection metadata.
 
-Ownership/control transfer, lost-controller recovery, invitation/recovery screens,
+Ownership/control transfer, lost-controller recovery, a desktop recovery wizard,
 multipart checkpoints, compaction and external audit remain unfinished. The local
 witness is not a hardware monotonic counter: full machine rollback including all
 witnesses still requires independently authenticated peer history or fresh-device

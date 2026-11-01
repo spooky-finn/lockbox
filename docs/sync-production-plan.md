@@ -38,7 +38,7 @@ design; [sync-engine.md](sync-engine.md) describes implemented behavior.
 | Replay rejection and readiness | Invalid descendants cannot masquerade as missing history; all delivery orders agree | Implemented; invalid closed history freezes as a checkpoint fault |
 | Installation and rollback protection | Backup rollback, missing binding, witness/intent crash states, lost acknowledgements, kernel leases across processes | Implemented; Keychain OS probe and fault-injection tests pass; full-machine restore remains an explicit trust boundary |
 | Fresh-device identity recovery | Independent current control pin, fresh certified keys, current checkpoint after new admission, original backup kept readable | API implemented and tested; UI and lost-controller recovery pending |
-| Addressed invitations and device lifecycle | Signed consent, cancellation, replay/idempotency, role checks, recovery and UI flows | Profile-1 core and durable Vault API implemented; fault-injection tests pass; UI/device-management screens pending |
+| Addressed invitations and device lifecycle | Signed consent, cancellation, replay/idempotency, role checks, recovery and UI flows | Profile-1 core, durable Vault API and desktop sharing/member screens implemented; file, session, trust-code and rendering tests pass; full recovery wizard pending |
 | Bounded large-history operation | Profiled maximum supported history, safe checkpoint/retention behavior and documented capacity | Planned |
 | S3 exchange | Authenticated PUT/GET/LIST with independent clients, failures and pagination | Loopback LIST/PUT/GET; reusable live probe added; real service pending |
 | Protocol release and security review | Stable versioned schema, conformance corpus, dependency review and independent cryptographic review | Pending |
@@ -76,6 +76,6 @@ tests must not be presented as an independent audit.
 
 Independent profile protection and fresh-device identity recovery are implemented
 in [profile-protection.md](profile-protection.md). Next implementation priority is
-participant/device management and recovery screens, plus explicit controller
-recovery and transfer rules. Signed invitations, consent, durable issuance policy
-and receipt-based admission now have a [documented API](sync-invitations.md).
+the identity-recovery wizard and explicit controller recovery/transfer rules.
+Signed invitations, consent, durable issuance policy, receipt-based admission and
+desktop member management have a [documented workflow](sync-invitations.md).

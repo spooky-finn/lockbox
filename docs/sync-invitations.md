@@ -3,8 +3,50 @@
 New spaces use experimental `LBX-SYNC-1`. It retains the causal event, HPKE,
 checkpoint and durability rules of `LBX-SYNC-0` and requires signed consent for
 every added device certificate. These profiles remain separate from the broader
-[protocol proposal](lockbox-protocol.md); the desktop sharing screens and the
-production release gates are still unfinished.
+[protocol proposal](lockbox-protocol.md). The desktop implements the invitation
+and member-management flows below; other production release gates remain open.
+
+## Desktop workflow
+
+Open **Sharing and participants** from an unlocked cloud profile's sidebar.
+The joining device starts with an empty independent cloud profile and its own
+provider credentials. Existing records or signing history cannot be discarded
+to join another space.
+
+1. Recipient selects **Prepare device file**, then **Save sharing file** and
+   sends that file to the owner. Compare the displayed user and device
+   fingerprints through a trusted channel.
+2. Owner selects **Open recipient device file**, confirms the fingerprints,
+   chooses the deadline and invites the device with read or edit access. An
+   additional device of the owner's own identity uses the owner-device option.
+3. Owner saves and sends the invitation file. Share its 64-digit verification
+   code through a separate trusted channel. This code binds the full space
+   descriptor and signed control anchor. The recipient screen intentionally does
+   not display the expected code for copying into its own verification field.
+4. Recipient selects **Open invitation**, enters the code received from the
+   owner, selects **Sign consent**, and sends the saved response file back.
+5. Owner selects **Open signed response**, reviews the verified device/role and
+   selects **Admit device**. Save and send the resulting confirmation file.
+6. Recipient selects **Open admission confirmation** and **Complete connection**.
+   The app installs the verified checkpoint and begins normal synchronization.
+
+The page lists devices and pending invitations after restart. The controller can
+change a participant's role across all its devices, cancel a pending invitation,
+re-export saved artifacts, refresh an admission confirmation, and remove a
+specific device after explicit confirmation. The controlling device cannot be
+removed. Removing a device rotates the key; data already received remains on that
+device. A removed device needs fresh keys and a new invitation to rejoin.
+
+Save or cancel an active entry/folder draft before changing access. File reads,
+parsing and exports run in cancellable workers tied to the originating unlocked
+profile. Locking or switching spaces discards stale replies. Exports require a
+new filename and never overwrite an existing profile, file or symlink. Access
+changes/cancellation clear prior output, including a still-open export dialog.
+Record passwords and provider credentials do not appear on the sharing page.
+
+An unadmitted recovered device shows **Waiting for owner admission**, distinct
+from removal. Recovery of a copied/read-only profile still uses the fresh-device
+API; a complete desktop identity-recovery wizard is pending.
 
 ## Exchange
 
@@ -126,6 +168,6 @@ and a witness acknowledgement failure after the receipt file
 commit. The shared memory/live acceptance scenario now uses the full invitation
 exchange before concurrent edits, resolution, reader restrictions and revocation.
 
-The API does not replace desktop invitation/member/recovery screens, controller
-transfer/recovery, scalable proof compaction, a live Storj run or independent
-security review. Those remain [production release work](sync-production-plan.md).
+Controller transfer/recovery, the desktop identity-recovery wizard, scalable
+proof compaction, a live Storj run and independent security review remain
+[production release work](sync-production-plan.md).

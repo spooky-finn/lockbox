@@ -150,7 +150,7 @@ fn Review(blocked: bool) -> Element {
                     p { {language.text(role_text(invitation.role()))} }
                     p { {language.text(Text::SharingCodeHint)} }
                     label { r#for: "invitation-code", {language.text(Text::SharingVerificationCode)} }
-                    input { id: "invitation-code", autocomplete: "off", spellcheck: false, value: "{u.sharing.code}",
+                    input { id: "invitation-code", autocomplete: "off", spellcheck: false, maxlength: 64, value: "{u.sharing.code}",
                         oninput: move |event| edit_unlocked(state, |u| u.sharing.code = event.value()), }
                     button { disabled: blocked, onclick: move |_| act(Action::Accept), {language.text(Text::SharingAccept)} }
                 },
@@ -163,7 +163,8 @@ fn Review(blocked: bool) -> Element {
                 },
                 Artifact::Receipt(receipt) => rsx! {
                     p { {language.text(Text::SharingConfirmationReview)} }
-                    code { class: "sharing-code", "{receipt.id()}" }
+                    p { {language.text(Text::SharingSpace)} }
+                    code { class: "sharing-code", "{receipt.descriptor().space}" }
                     button { disabled: blocked, onclick: move |_| act(Action::Join), {language.text(Text::SharingJoin)} }
                 },
             }

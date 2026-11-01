@@ -45,6 +45,7 @@ pub(super) fn UnlockedView() -> Element {
                 }
 
                 if let Some(error) = &unlocked.error { p { class: "error", role: "alert", {language.message(error)} } }
+                if let Some(error) = unlocked.vault.signing_error() { ProtectionNotice { error } }
                 if settings_open { super::settings::SettingsView {} }
                 else if sharing_open { super::sharing::SharingView {} }
                 else { VaultContent {} }
@@ -66,7 +67,6 @@ fn VaultContent() -> Element {
         return rsx! {};
     };
     rsx! {
-        if let Some(error) = unlocked.vault.signing_error() { ProtectionNotice { error } }
         if let Some(profile) = &unlocked.vault.profile {
             if let Some(sync) = &profile.sync {
                 p { class: "notice", aria_live: "polite", {language.format(Text::PendingUpload, &[language.message(unlocked.sync.status.label()), sync.outbox.len().to_string()])} }
@@ -208,7 +208,18 @@ fn ProtectionNotice(error: crate::core::anchor::Error) -> Element {
         Error::InUse => Text::SigningDeviceAlreadyOpen,
         Error::Exhausted => Text::ProfileRequiresReplacement,
     };
-    rsx! { p { class: "notice", role: "status", {language.text(text)} } }
+    let state = use_context::<Session>();
+    rsx! {
+        p { class: "notice", role: "status", {language.text(text)} }
+        if error == Error::Unavailable {
+            button { class: "quiet", onclick: move |_| edit_unlocked(state, |u| {
+                match u.vault.reconcile_profile() {
+                    Ok(()) => { u.error = None; u.sync.retry(); }
+                    Err(error) => u.error = Some(error.to_string()),
+                }
+            }), {language.text(Text::RetrySync)} }
+        }
+    }
 }
 
 #[cfg(test)]

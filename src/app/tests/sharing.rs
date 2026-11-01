@@ -176,3 +176,26 @@ fn stale_dialogs_and_worker_results_cannot_cross_unlocked_sessions() {
     assert!(!u.sharing.busy());
     assert!(!path.exists());
 }
+
+#[test]
+fn cancellation_invalidates_the_previous_output_and_an_open_export_dialog() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut owner = create(&dir, "owner");
+    let guest = create(&dir, "guest");
+    review(
+        &mut owner,
+        Kind::Certificate,
+        &canonical(&guest.vault.device_certificate().unwrap()).unwrap(),
+    );
+    owner.sharing.recipient_verified = true;
+    action(&mut owner, Action::Issue(Role::Reader));
+    let output = owner.sharing.output.clone().unwrap();
+    let ticket = owner.sharing.ticket(&owner.vault);
+    let id = owner.vault.issued_invitations(100)[0].id;
+    action(&mut owner, Action::Cancel(id));
+    assert!(owner.sharing.output.is_none());
+    let path = dir.path().join("cancelled-invitation.json");
+    owner.export_sharing(ticket, path.clone(), output);
+    assert!(!owner.sharing.busy());
+    assert!(!path.exists());
+}
