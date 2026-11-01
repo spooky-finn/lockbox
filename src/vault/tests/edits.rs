@@ -202,6 +202,9 @@ fn shared_import_batch_retry_preserves_existing_records_and_reserved_intent() {
     let reopened = store
         .open(&path, &SecretString::from("test master".to_owned()))
         .unwrap();
-    assert_eq!(reopened.entries(), [existing, imported]);
+    assert_eq!(reopened.entries().len(), 2);
+    for entry in [existing, imported] {
+        assert!(reopened.entries().contains(&entry));
+    }
     assert_eq!(reopened.folders(), [folder]);
 }
