@@ -3,3 +3,4 @@ Header status
 - Visible across vault, settings, sharing, history, editing. Narrow windows wrap below brand/actions.
 - Retry keeps reconciliation and draft-safe sync behavior. Legacy sync setup stays in vault content.
 - Header compact: 2px vertical padding, 28px actions, inline security/sync status; narrow layout uses 2px row gap and inline filename.
+- Header bottom divider removed: workspace top border gone.

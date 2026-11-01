@@ -67,6 +67,16 @@ fn twelve_words_recover_records_and_reset_password_without_old_password() {
     );
     let records = Vault::read_records(&path, &password("original password")).unwrap();
     assert_eq!(records.entries[0].password, entry.password);
+    // Check decrypted profile too; scanning ciphertext cannot catch an
+    // accidental phrase field inside the encrypted payload.
+    let opened = store.open(&path, &password("original password")).unwrap();
+    let profile_json = serde_json::to_vec(&opened.profile).unwrap();
+    drop(opened);
+    assert!(
+        !profile_json
+            .windows(WORDS.len())
+            .any(|w| w == WORDS.as_bytes())
+    );
     let recovered = store.open_with_recovery_phrase(&path, &phrase).unwrap();
     assert_eq!(recovered.entries[0].password, entry.password);
     let recovered = recovered

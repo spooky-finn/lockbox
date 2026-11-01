@@ -16,3 +16,4 @@ Recovery words
 - Mnemonic/entropy/seed/key Rust buffers zeroized. No word logging or automatic clipboard export.
 - Specs: docs/recovery-words.md. Vector, tamper, failed-write, reset/reopen, UI/worker tests.
 - Validation: 321 unit checks pass; 1 OS probe ignored. Integration 4/4; doc 2/2. Clippy, formatting, diff checks pass. Clipboard handler checked; desktop/narrow previews inspected. Local-server fixtures require sandbox exception.
+- Persistence audit: RecoveryPhrase has no serialization/Debug. Files keep wrapped data keys, never words. Regression checks decrypted profile plus raw file. OS swap/crash dumps outside app guarantee.
