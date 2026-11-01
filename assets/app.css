@@ -151,9 +151,9 @@ h2 { font-size: 15px; font-weight: 600; letter-spacing: -.2px; }
 .recovery-word-cell { position: relative; min-width: 0; }
 .recovery-word-number { color: var(--lock-secondary); font-size: 11px; font-variant-numeric: tabular-nums; user-select: none; }
 .recovery-word-cell > label { position: absolute; z-index: 1; left: 10px; top: 50%; transform: translateY(-50%); pointer-events: none; }
-.recovery-word-cell > input[type=text] { padding: 10px 8px 10px 32px; border: 1px solid var(--lock-field-border); border-radius: 8px; color: var(--lock-ink); background: var(--lock-field); box-shadow: none; font-size: 12px; }
-.recovery-word-cell > input[aria-invalid=true] { border-color: var(--error); }
-.recovery-word-cell > input:focus-visible { outline: none; border-color: var(--lock-focus); box-shadow: 0 0 0 2px rgb(174 136 67 / 35%); }
+.recovery-word-grid .recovery-word-cell > input[type=text], .recovery-word-grid .recovery-word-cell > input[type=password] { padding: 10px 8px 10px 32px; border: 1px solid var(--lock-field-border); border-radius: 8px; color: var(--lock-ink); background: var(--lock-field); box-shadow: none; font-size: 12px; }
+.recovery-word-grid .recovery-word-cell > input[aria-invalid=true] { border-color: var(--error); }
+.recovery-word-grid .recovery-word-cell > input:focus-visible { outline: none; border-color: var(--lock-focus); box-shadow: 0 0 0 2px rgb(174 136 67 / 35%); }
 .recovery-word-cell:focus-within { z-index: 2; }
 .recovery-suggestions { position: absolute; z-index: 3; top: calc(100% + 4px); left: 0; min-width: 100%; width: max-content; margin: 0; padding: 4px; list-style: none; border: 1px solid var(--lock-field-border); border-radius: 8px; color: var(--lock-ink); background: var(--lock-canvas); box-shadow: var(--shadow); font-size: 12px; }
 .recovery-suggestions > li { padding: 6px 10px; border-radius: 4px; cursor: pointer; }

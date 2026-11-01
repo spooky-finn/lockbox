@@ -79,7 +79,7 @@ fn focus_word(index: usize) {
             .into()
     };
     document::eval(&format!(
-        "requestAnimationFrame(() => {{ const field = {target}; field?.focus(); if (field?.type === 'text') field.select(); }});"
+        "requestAnimationFrame(() => {{ const field = {target}; field?.focus(); if (field?.type === 'text' || field?.type === 'password') field.select(); }});"
     ));
 }
 
@@ -87,6 +87,7 @@ fn focus_word(index: usize) {
 pub(super) fn RecoveryWordsInput(readonly: bool, disabled: bool) -> Element {
     let language = crate::desktop::i18n::use_language();
     let state = use_context::<Session>();
+    let mut focused = use_signal(|| None::<usize>);
     let mut active = use_signal(|| None::<usize>);
     let mut highlighted = use_signal(|| 0usize);
     let mut overflow = use_signal(|| false);
@@ -127,20 +128,21 @@ pub(super) fn RecoveryWordsInput(readonly: bool, disabled: bool) -> Element {
                         let selected = highlighted().min(matches.len().saturating_sub(1));
                         let keyboard_matches = matches.clone();
                         let unknown = !word.is_empty() && Language::English.find_word(word).is_none() && active() != Some(index);
+                        let concealed = !word.is_empty() && focused().is_some_and(|position| position != index);
                         rsx! {
                             div { class: "recovery-word-cell", key: "{index}-{revision()}",
                                 label { class: "recovery-word-number", r#for: "recovery-word-{index}",
                                     span { aria_hidden: "true", "{index + 1}" }
                                     span { class: "sr-only", {language.format(Text::RecoveryWord, &[(index + 1).to_string()])} }
                                 }
-                                input { id: "recovery-word-{index}", r#type: "text", role: "combobox",
+                                input { id: "recovery-word-{index}", r#type: if concealed { "password" } else { "text" }, role: "combobox",
                                     value: "{word}", disabled, autocomplete: "off", autocapitalize: "none", spellcheck: "false",
                                     "autocorrect": "off", aria_autocomplete: "list", aria_expanded: expanded,
                                     aria_controls: expanded.then(|| format!("recovery-suggestions-{index}")),
                                     aria_activedescendant: expanded.then(|| format!("recovery-option-{index}-{selected}")),
                                     aria_invalid: unknown,
-                                    onfocus: move |_| { active.set(Some(index)); highlighted.set(0); },
-                                    onblur: move |_| { active.set(None); highlighted.set(0); },
+                                    onfocus: move |_| { focused.set(Some(index)); active.set(Some(index)); highlighted.set(0); },
+                                    onblur: move |_| { focused.set(None); active.set(None); highlighted.set(0); },
                                     oninput: move |event| {
                                         let input = Zeroizing::new(event.value());
                                         let mut next = index;
@@ -159,6 +161,7 @@ pub(super) fn RecoveryWordsInput(readonly: bool, disabled: bool) -> Element {
                                                 focus_word(index);
                                             }
                                         });
+                                        focused.set(Some(index));
                                         active.set(Some(index));
                                         highlighted.set(0);
                                         if next != index { focus_word(next); }

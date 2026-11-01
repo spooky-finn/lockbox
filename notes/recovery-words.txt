@@ -6,6 +6,8 @@ Recovery words
 - Back preserves confirmed words across local/cloud choices; passwords cleared. Fresh setup generates new words and clears saved acknowledgment.
 - Setup password step: header icon removed. Generated words: numbered grid; hidden until revealed.
 - Import/recovery: 12 numbered fields, local BIP39 suggestions, arrows/Enter/Tab/space selection, whole-phrase paste, checksum feedback. No network lookup. Position gaps preserved; oversized paste rejected.
+- Word focus: other entered words masked; focused word stays readable. Escape closes suggestions without revealing neighbors. Leaving word fields restores phrase review.
+- Word-group label: Mnemonic; Russian: Мнемоника.
 - Forgot master password: words + existing profile/backup recover data. Original password unnecessary.
 - v8 local vaults/cloud profiles: random data key; independent password/recovery key slots; whole header authenticated. Local recovery preserves records/history without sync profile. New local files require v8-capable clients.
 - Password reset preserves salt, identity, device, data key, witnesses. Atomic save; fresh slot nonce/root capsule.

@@ -225,6 +225,52 @@ mod interaction {
     }
 
     #[test]
+    fn focusing_a_word_masks_other_words_without_changing_the_phrase() {
+        use kuchikiki::traits::TendrilSink;
+
+        let mut editor = Editor::new();
+        let field_types = |editor: &Editor| {
+            let document = kuchikiki::parse_html().one(dioxus_ssr::render(&editor.dom));
+            (0..WORD_COUNT)
+                .map(|index| {
+                    document
+                        .document_node
+                        .select_first(&format!("#recovery-word-{index}"))
+                        .unwrap()
+                        .attributes
+                        .borrow()
+                        .get("type")
+                        .unwrap()
+                        .to_owned()
+                })
+                .collect::<Vec<_>>()
+        };
+        let expected_types = |focused| {
+            (0..WORD_COUNT)
+                .map(|index| if index == focused { "text" } else { "password" })
+                .collect::<Vec<_>>()
+        };
+
+        editor.input(0, PHRASE);
+        editor.send("blur", 0, EventData::Focus(SerializedFocusData {}));
+        assert!(field_types(&editor).iter().all(|kind| kind == "text"));
+
+        editor.send("focus", 4, EventData::Focus(SerializedFocusData {}));
+        assert_eq!(field_types(&editor), expected_types(4));
+        editor.key(4, Key::Escape);
+        assert_eq!(field_types(&editor), expected_types(4));
+        assert!(!dioxus_ssr::render(&editor.dom).contains("role=\"listbox\""));
+
+        editor.send("blur", 4, EventData::Focus(SerializedFocusData {}));
+        editor.send("focus", 9, EventData::Focus(SerializedFocusData {}));
+        assert_eq!(field_types(&editor), expected_types(9));
+        assert_eq!(editor.words().as_str(), PHRASE);
+
+        editor.send("blur", 9, EventData::Focus(SerializedFocusData {}));
+        assert!(field_types(&editor).iter().all(|kind| kind == "text"));
+    }
+
+    #[test]
     fn oversized_paste_restores_fields_and_editor_remains_usable() {
         let mut editor = Editor::new();
         editor.input(0, PHRASE);

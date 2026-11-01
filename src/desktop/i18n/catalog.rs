@@ -458,7 +458,7 @@ impl Text {
             Self::RecoverVault => ("Восстановить доступ", "Recover access"),
             Self::RecoveryUnlockHint => ("Введите 12 слов восстановления и задайте новый мастер-пароль.", "Enter your 12 recovery words and choose a new master password."),
             Self::NewMasterPassword => ("Новый мастер-пароль", "New master password"),
-            Self::RecoveryWords => ("12 слов восстановления", "12 recovery words"),
+            Self::RecoveryWords => ("Мнемоника", "Mnemonic"),
             Self::RecoveryWordsHint => ("Запишите слова по порядку и храните в тайне. Слова и файл хранилища или его резервная копия восстановят доступ без старого пароля.", "Write these words down in order and keep them secret. The words and your vault file or backup recover access without the old password."),
             Self::RecoveryWord => ("Слово {0}", "Word {0}"),
             Self::RecoveryInputHint => ("Введите слово или вставьте все 12. Выберите подсказку стрелками и нажмите Enter или Tab.", "Type a word or paste all 12. Use arrow keys and Enter or Tab to choose a suggestion."),
