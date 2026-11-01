@@ -125,7 +125,6 @@ fn key_setup_requires_valid_saved_words_and_preserves_them_across_sync_choices()
 #[test]
 fn application_worker_creates_local_vault_with_the_confirmed_key() {
     use crate::{access::mnemonic::RecoveryPhrase, vault::Vault};
-    use std::time::Duration;
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("local.lbx");
     let mut form = Locked::begin_create();
@@ -142,13 +141,7 @@ fn application_worker_creates_local_vault_with_the_confirmed_key() {
     form.words_saved = true;
     form.submit();
     assert!(form.error.is_none());
-    let opened = form
-        .pending
-        .take()
-        .unwrap()
-        .recv_timeout(Duration::from_secs(30))
-        .unwrap()
-        .unwrap();
+    let opened = wait_for_opened(&mut form);
     assert!(opened.vault.test_profile().is_none());
     drop(opened);
     let recovered = Vault::open_with_recovery_phrase(&path, &phrase).unwrap();
@@ -202,7 +195,6 @@ fn identity_creation_requires_confirmed_password_and_saved_valid_recovery_words(
 fn application_worker_creates_and_reopens_identity_profile() {
     use crate::vault::Vault;
     use secrecy::SecretString;
-    use std::time::Duration;
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("profile.lbx");
     let mut form = Locked::begin_create();
@@ -230,13 +222,7 @@ fn application_worker_creates_and_reopens_identity_profile() {
     assert!(form.error.is_none());
     assert!(form.password.is_empty());
     assert!(form.repeat.is_empty());
-    let opened = form
-        .pending
-        .take()
-        .unwrap()
-        .recv_timeout(Duration::from_secs(30))
-        .unwrap()
-        .unwrap();
+    let opened = wait_for_opened(&mut form);
     let profile = opened.vault.test_profile().unwrap();
     assert_eq!(profile.identity.root_key, expected_root);
     assert_eq!(profile.username, "Alice");
@@ -280,13 +266,7 @@ fn application_worker_creates_and_reopens_identity_profile() {
     recovery.recovery_words.push_str(&words);
     recovery.submit();
     assert!(recovery.error.is_none());
-    let recovered = recovery
-        .pending
-        .take()
-        .unwrap()
-        .recv_timeout(Duration::from_secs(30))
-        .unwrap()
-        .unwrap();
+    let recovered = wait_for_opened(&mut recovery);
     assert!(recovered.with_password);
     assert!(recovered.recovery_notice.is_none());
     assert_eq!(recovered.vault.test_profile().unwrap().identity.user_id, id);
@@ -569,4 +549,21 @@ fn concurrent_identity_setup_cannot_silently_switch_the_confirmed_key() {
         .to_bytes(),
         saved.signing_key().to_bytes()
     );
+}
+
+fn wait_for_opened(form: &mut Locked) -> crate::access::auth::Opened {
+    use std::{
+        sync::Arc,
+        time::{Duration, Instant},
+    };
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        if let Some(opened) = form.poll(Arc::new(FakeBiometrics::default())) {
+            form.pending = None;
+            return opened;
+        }
+        assert!(form.error.is_none(), "{:?}", form.error);
+        assert!(Instant::now() < deadline, "unlock worker timed out");
+        std::thread::sleep(Duration::from_millis(10));
+    }
 }

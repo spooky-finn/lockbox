@@ -3,19 +3,15 @@
 use crate::{
     access::mnemonic::RecoveryPhrase,
     desktop::time::unix_now,
-    platform::touchid::{self, Biometrics},
+    platform::{
+        jobs::Worker,
+        touchid::{self, Biometrics},
+    },
     settings::config::Config,
     vault::{KdfParams, Vault, identity::Identity, profile::ProviderConfiguration},
 };
 use secrecy::{ExposeSecret, SecretString};
-use std::{
-    path::PathBuf,
-    sync::{
-        Arc,
-        mpsc::{self, Receiver, TryRecvError},
-    },
-    thread,
-};
+use std::{path::PathBuf, sync::Arc};
 use zeroize::{Zeroize, Zeroizing};
 
 pub(crate) const MIN_PASSWORD_CHARS: usize = 12;
@@ -75,10 +71,10 @@ pub(crate) struct Locked {
     pub(crate) identity_path: Option<PathBuf>,
     pub(crate) identity_source: Option<PathBuf>,
     pub(crate) identity: Option<Identity>,
-    pending_identity: Option<Receiver<Result<Identity, String>>>,
+    pending_identity: Option<Worker<Result<Identity, String>>>,
     pub(crate) error: Option<String>,
     /// Argon2id and Touch ID run on a worker thread so the window keeps repainting.
-    pub(crate) pending: Option<Receiver<Result<Opened, String>>>,
+    pub(crate) pending: Option<Worker<Result<Opened, String>>>,
     /// Vault identifier when Touch ID can open this file.
     pub(crate) touch_id: Option<String>,
     /// Ask for the finger right away: only when the app starts.
@@ -232,19 +228,16 @@ impl Locked {
 
         self.error = None;
         self.waiting_touch_id = true;
-        let (sender, receiver) = mpsc::channel();
-        thread::spawn(move || {
-            let result = touchid::unlock(&*biometrics, &id, unix_now())
+        self.pending = Some(Worker::spawn(move |_| {
+            touchid::unlock(&*biometrics, &id, unix_now())
                 .map_err(|error| error.to_string())
                 .and_then(|key| Vault::open_with_key(&path, &key).map_err(|e| e.to_string()))
                 .map(|vault| Opened {
                     vault,
                     with_password: false,
                     recovery_notice: None,
-                });
-            let _ = sender.send(result);
-        });
-        self.pending = Some(receiver);
+                })
+        }));
     }
 
     pub(crate) fn continue_cloud(&mut self) {
@@ -471,11 +464,10 @@ impl Locked {
                 },
             )
         });
-        let (sender, receiver) = mpsc::channel();
-        thread::spawn(move || {
+        self.pending = Some(Worker::spawn(move |_| {
             let mut recovery_notice = None;
             let mut with_password = true;
-            let result = if recovering {
+            if recovering {
                 let phrase = phrase.as_ref().expect("validated recovery phrase");
                 Vault::open_with_recovery_phrase(&path, phrase).and_then(|vault| {
                     if vault.signing_error().is_some() {
@@ -512,10 +504,8 @@ impl Locked {
                 }
             }
             .map(|vault| Opened { vault, with_password, recovery_notice })
-            .map_err(|error| error.to_string());
-            let _ = sender.send(result);
-        });
-        self.pending = Some(receiver);
+            .map_err(|error| error.to_string())
+        }));
     }
 
     fn submit_identity(&mut self) {
@@ -558,9 +548,8 @@ impl Locked {
         let password = SecretString::from(std::mem::take(&mut *self.password));
         self.repeat.zeroize();
         self.error = None;
-        let (sender, receiver) = mpsc::channel();
-        thread::spawn(move || {
-            let result = (|| {
+        self.pending_identity = Some(Worker::spawn(move |_| {
+            (|| {
                 if identity_file_present(&path) {
                     if recovering {
                         let phrase = proposed
@@ -587,50 +576,34 @@ impl Locked {
                 identity.save_new(&path, &password, KdfParams::default())?;
                 Ok(identity)
             })()
-            .map_err(|error: crate::vault::VaultError| error.to_string());
-            let _ = sender.send(result);
-        });
-        self.pending_identity = Some(receiver);
+            .map_err(|error: crate::vault::VaultError| error.to_string())
+        }));
     }
 }
 
 impl Locked {
     pub(crate) fn poll(&mut self, biometrics: Arc<dyn Biometrics>) -> Option<Opened> {
-        if let Some(receiver) = &self.pending_identity {
-            match receiver.try_recv() {
-                Ok(Ok(identity)) => {
+        if let Some(result) = self.pending_identity.as_mut().and_then(Worker::take) {
+            self.pending_identity = None;
+            match result.unwrap_or_else(|_| Err("Unlock was interrupted".into())) {
+                Ok(identity) => {
                     self.recovery_words =
                         Zeroizing::new(identity.words().unwrap_or_default().to_owned());
                     self.identity = Some(identity);
                     self.identity_source = None;
-                    self.pending_identity = None;
                     self.words_saved = true;
                     self.recovering = false;
                     self.show_recovery_words = false;
                     self.creation_step = CreationStep::Sync;
                 }
-                Ok(Err(error)) => {
-                    self.error = Some(error);
-                    self.pending_identity = None;
-                }
-                Err(TryRecvError::Disconnected) => {
-                    self.error = Some("Unlock was interrupted".into());
-                    self.pending_identity = None;
-                }
-                Err(TryRecvError::Empty) => {}
+                Err(error) => self.error = Some(error),
             }
         }
-        if let Some(receiver) = &self.pending {
-            match receiver.try_recv() {
-                Ok(Ok(opened)) => return Some(opened),
-                Ok(Err(error)) => {
+        if let Some(result) = self.pending.as_mut().and_then(Worker::take) {
+            match result.unwrap_or_else(|_| Err("Unlock was interrupted".into())) {
+                Ok(opened) => return Some(opened),
+                Err(error) => {
                     self.error = Some(error);
-                    self.pending = None;
-                    self.waiting_touch_id = false;
-                }
-                Err(TryRecvError::Empty) => {}
-                Err(TryRecvError::Disconnected) => {
-                    self.error = Some("Unlock was interrupted".into());
                     self.pending = None;
                     self.waiting_touch_id = false;
                 }

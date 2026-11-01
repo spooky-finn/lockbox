@@ -11,15 +11,21 @@ use dioxus::prelude::*;
 use std::time::{Instant, SystemTime};
 
 #[test]
-fn worker_results_open_the_vault_and_report_failure_or_disconnect() {
+fn worker_results_open_the_vault_and_report_task_or_worker_failure() {
     use crate::access::auth::Opened;
+    use crate::platform::jobs::Worker;
     use std::sync::mpsc;
+    use std::time::Duration;
     let mut dom = mounted();
     let dir = tempfile::tempdir().unwrap();
     update(&mut dom, |_| runtime::lock(None));
     update(&mut dom, |state| {
         let (sender, receiver) = mpsc::channel();
-        crate::desktop::context::edit_locked(state, |form| form.pending = Some(receiver));
+        crate::desktop::context::edit_locked(state, |form| {
+            form.pending = Some(Worker::spawn(move |_| {
+                receiver.recv_timeout(Duration::from_secs(5)).unwrap()
+            }))
+        });
         runtime::poll_workers();
         assert!(matches!(&*state.peek(), Screen::Locked(_)));
         sender
@@ -29,16 +35,18 @@ fn worker_results_open_the_vault_and_report_failure_or_disconnect() {
                 recovery_notice: None,
             }))
             .unwrap_or_else(|_| panic!("receiver dropped"));
-        runtime::poll_workers();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while matches!(&*state.peek(), Screen::Locked(_)) && Instant::now() < deadline {
+            runtime::poll_workers();
+            std::thread::yield_now();
+        }
         assert!(matches!(&*state.peek(), Screen::Unlocked(_)));
     });
     update(&mut dom, |_| runtime::lock(None));
     update(&mut dom, |state| {
-        let (sender, receiver) = mpsc::channel();
-        crate::desktop::context::edit_locked(state, |form| form.pending = Some(receiver));
-        sender
-            .send(Err("wrong password".into()))
-            .unwrap_or_else(|_| panic!("receiver dropped"));
+        crate::desktop::context::edit_locked(state, |form| {
+            form.pending = Some(Worker::ready(Err("wrong password".into())))
+        });
         runtime::poll_workers();
         let screen = state.peek();
         let Screen::Locked(form) = &*screen else {
@@ -48,9 +56,9 @@ fn worker_results_open_the_vault_and_report_failure_or_disconnect() {
         assert!(form.pending.is_none());
     });
     update(&mut dom, |state| {
-        let (sender, receiver) = mpsc::channel();
-        crate::desktop::context::edit_locked(state, |form| form.pending = Some(receiver));
-        drop(sender);
+        let mut failed = Worker::ready(Err::<Opened, String>("fixture".into()));
+        let _ = failed.take();
+        crate::desktop::context::edit_locked(state, |form| form.pending = Some(failed));
         runtime::poll_workers();
         let screen = state.peek();
         let Screen::Locked(form) = &*screen else {

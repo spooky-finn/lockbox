@@ -5,23 +5,25 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 44; 406 library, four integration, two doctests passed.
+Last full suite: cycle 46; 407 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 45: Reuse checked decoding in transport
-- Discovery fetch and Storj put delegate canonical/hash checks to Object::decode.
-  Remove duplicate hash serialization and transport error boilerplate.
-- Keep transport byte/batch guards before decoding, verification error mapping,
-  discovery dependency checks and upload request construction unchanged.
-- Regression passed before refactor: wrong canonical hash, matching noncanonical
-  hash and oversized input keep exact transport errors. Local S3 fixture confirms
-  rejected puts issue no HTTP request before valid list/put/get exchange.
-- All sixteen transport tests and both sync integration tests passed. Formatting
-  and strict all-target Clippy passed. All four sources match tested snapshot;
-  workspace whitespace checks passed.
+Cycle 46: Reuse worker lifecycle for access jobs
+- Password/profile create/open/recovery, identity setup/recovery and biometric
+  unlock use existing platform Worker. Remove three channel/thread setups and
+  repeated disconnect branches. Secret buffers and task bodies unchanged.
+- Keep pending/error/success flags and auto-biometric follow-up behavior. Dropped
+  forms discard late outputs; worker faults retain Unlock was interrupted text.
+- Adapt existing auth tests to poll real results; runtime test covers pending,
+  success, task error and absent worker result. Existing worker tests cover panic,
+  cancellation and late-result disposal. No new production behavior introduced.
+- Full suite passed above: 407 library, four integration, two doctests; two OS
+  probes ignored. Formatting and strict all-target Clippy passed. All three
+  sources match verified snapshot; workspace whitespace checks passed.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-45.8pz5awo_ when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-46.2icoyl8_ when workspace cannot compile.
 
-Next search: broaden to browser, access, settings and vault persistence; inspect
-repeated state setup, validation and unnecessary payload copies before choosing.
+Next search: access/biometrics.rs still owns an independent channel/thread for
+Touch ID enable. Consider shared Worker while preserving settings-save timing,
+pending/drop behavior and native error text; add meaningful boundary coverage.
 Inspect current code and tests before choosing; no quota-driven edits.
