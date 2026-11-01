@@ -5,25 +5,27 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 56; 413 library, four integration, two doctests passed.
+Last full suite: cycle 58; 413 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 57: Move prepared bodies through capacity check
-- PreparedChange.check_capacity wraps owned body with placeholder signature,
-  checks exact canonical Object size, returns body. Change/membership preparation
-  drop ciphertext/control clones used only to size signed envelopes.
-- Authority approval sizing reuses helper. Keep its control clone: placeholder
-  approval must mutate a separate body. Keep capacity limits and error order,
-  signature size and actual signing only after durable intent persistence.
-- Formatting/strict all-target Clippy passed. 54 protocol, four vault authority,
-  two sync integration tests passed. Both sources match verified snapshot;
-  whitespace checks passed. Unrelated edits untouched.
-- Snapshot: /tmp/lockbox-refactor-57.q6k504g_.
+Cycle 58: Stream canonical signing messages
+- Private signing_bytes helper prefixes domain, writes canonical body directly
+  into same Vec with serde_jcs::to_writer. sign/verify share exact transcript
+  setup; remove intermediate canonical Vec and whole-body copy.
+- Local serde_jcs 0.2 source confirms to_vec delegates to same to_writer.
+  Preserve InvalidEncoding mapping, key/signature rejection order, public API,
+  wire signatures and signature domain separation.
+- Full suite: 413 library, four integration, two doctests passed; two OS probes
+  ignored. Fixed wire/signature golden fixture passed. Formatting/strict
+  all-target Clippy passed. Source matches verified snapshot; whitespace clean.
+- Snapshot: /tmp/lockbox-refactor-58.mzyh9phl. Unrelated edits untouched.
 
-Next search: crypto sign/verify allocate canonical body, then copy into domain
-buffer. Local serde_jcs 0.2 to_vec delegates to to_writer. Consider private
-signing_bytes helper writing canonical body directly after domain prefix, keeping
-signature/weak-key checks and InvalidEncoding mapping in current order. Fixed
-wire fixture and signature domain tests already cover exact transcript. Inspect
-current code before editing; use existing serializer, no custom wire schema.
+Next search: DeviceSecret.certificate already derives signing_key, then self.id
+repeats Ed25519 public-key derivation. matches_certificate derives signer twice
+through id then direct comparison. Consider derive once and share private device
+ID helper across certificate creation/verification/id/matching. Keep HPKE checks
+and identity domain exact; inspect existing identity and invitation coverage.
+Rejected for now: recovery suggestions borrow API returns slice lifetime tied to
+prefix; static callback ownership prevents simply replacing Vec with slice.
+Avoid extra lifetime/range machinery for tiny suggestion lists.

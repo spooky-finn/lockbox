@@ -29,8 +29,7 @@ pub struct Signed<T> {
 }
 
 pub(super) fn sign<T: Serialize>(body: T, key: &SigningKey, domain: &[u8]) -> Result<Signed<T>> {
-    let mut bytes = domain.to_vec();
-    bytes.extend(canonical(&body)?);
+    let bytes = signing_bytes(&body, domain)?;
     Ok(Signed {
         signature: Blob(key.sign(&bytes).to_bytes().to_vec()),
         body,
@@ -46,10 +45,15 @@ pub(super) fn verify<T: Serialize>(signed: &Signed<T>, key: &Key, domain: &[u8])
 
     let signature =
         Signature::from_slice(&signed.signature.0).map_err(|_| Error::InvalidSignature)?;
-    let mut bytes = domain.to_vec();
-    bytes.extend(canonical(&signed.body)?);
+    let bytes = signing_bytes(&signed.body, domain)?;
     key.verify_strict(&bytes, &signature)
         .map_err(|_| Error::InvalidSignature)
+}
+
+fn signing_bytes<T: Serialize>(body: &T, domain: &[u8]) -> Result<Vec<u8>> {
+    let mut bytes = domain.to_vec();
+    serde_jcs::to_writer(&mut bytes, body).map_err(|_| Error::InvalidEncoding)?;
+    Ok(bytes)
 }
 
 #[derive(Clone, Serialize, Deserialize)]
