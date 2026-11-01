@@ -333,15 +333,18 @@ fn materialize_history(
     ordered: impl IntoIterator<Item = Hash>,
 ) -> Vec<RecordChange> {
     let mut history = Vec::new();
+    let mut actors = BTreeMap::new();
     for hash in ordered {
         let change = &accepted[&hash];
         let author = change.header.author;
-        let actor = control
-            .members
-            .iter()
-            .find(|m| m.certificate.body.device == author)
-            .map(|m| m.certificate.body.user.to_string())
-            .unwrap_or_else(|| author.to_string());
+        let actor = actors.entry(author).or_insert_with(|| {
+            control
+                .members
+                .iter()
+                .find(|m| m.certificate.body.device == author)
+                .map(|m| m.certificate.body.user.to_string())
+                .unwrap_or_else(|| author.to_string())
+        });
         for (index, mutation) in change.transaction.mutations.iter().enumerate() {
             if mutation.entity.kind != crate::sync::protocol::EntityKind::Entry {
                 continue;

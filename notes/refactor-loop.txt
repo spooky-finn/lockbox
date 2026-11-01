@@ -9,26 +9,26 @@ Last full suite: cycle 72; 417 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 73: Use state replay for scheduling and conflict review
-- Switch scheduler downloaded/uploaded checks and desktop SyncReview to guarded
-  Vault.sync_replay_state. All read projection/role/readiness/diagnostics, never
-  display revision records. Omit unused before/after entry and attachment clones.
-- Preserve commit-before-publication, fresh upload validation, acknowledgement
-  order/statuses, incomplete-history notice, conflict contents and reveal hooks.
-- Production caller audit now leaves only Vault record_history/trash using full
-  sync_replay. Public Machine/Vault replay APIs still return full history.
-- Formatting/strict all-target Clippy passed. 12 scheduler, 45 desktop,
-  two sync integration tests passed. Both sources match verified snapshot;
-  whitespace clean. Unrelated edits untouched.
-- Snapshot: /tmp/lockbox-refactor-73.dy1og_z5.
+Cycle 74: Reuse history actor identifiers
+- materialize_history caches derived actor String by author Hash within immutable
+  epoch roster. Repeated author changes reuse roster lookup/ID formatting; each
+  returned RecordChange still owns its required actor copy.
+- Preserve first roster match, author-ID fallback, revision order, all before/after
+  values and full/state replay behavior. Empty histories allocate no cache nodes.
+- Deferred checkpoint-version index: one fallback per epoch is possible; building
+  entire index may add work for that case. No measured benefit yet, no parser or
+  lookup semantics change forced. Existing linear fallback remains unchanged.
+- Formatting/strict all-target Clippy passed. 57 protocol, five vault history,
+  eight record rendering, two sync integration tests passed. Source matches verified
+  snapshot; whitespace clean. Unrelated edits untouched.
+- Snapshot: /tmp/lockbox-refactor-74.9cgqmz6z.
 
-Next search: materialize_history baseline fallback scans all checkpoint versions
-for every mutation base absent from current accepted changes. Consider a lazy
-OnceCell index Revision -> Option<&Value>, built only on first fallback; preserve
-first checkpoint match including None, and accepted-value precedence. No index
-needed when no history/materialization or only current-epoch values are used.
-Existing state/full replay test covers checkpoint before-values and attachment
-conflicts. Consider baseline public-history regression with multiple checkpoint
-records, delete/restore tombstone and later same-epoch edits before changing lookup.
-Keep every causal/crypto validation and history order unchanged; inspect current
-code and exact Revision type before selecting implementation.
+Next search: EpochContext.replay still collects/sorts history order metadata when
+include_record_history=false. Preserve EVERY fallible ancestry call in included
+Hash iteration order, but collect depth/hash pairs only for display mode and sort
+only when materializing. Possible Option<Vec> selected by bool.then(Vec::new),
+shared ancestry loop with conditional push, then Some branch sort/materialize.
+Avoid skipping ancestry validation/errors. Existing full/state comparison and
+wide-frontier, pending/fault, history-order tests cover parity. Inspect first.
+Later opportunity: closed-epoch frontier result is discarded by outer replay;
+consider private epoch result type before optimizing unused intermediate fields.
