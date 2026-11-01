@@ -1,0 +1,43 @@
+Security fixes 2026-11-01
+
+- Sync: public signatures/authority checked before journal admission. Unknown
+  dependencies use separate 128-object / 8 MiB quarantine. Invalid bytes dropped;
+  bounded hash/error diagnostics retained. Outbox capacity stays independent.
+- Legacy mixed journals: cleanup after witness verification; durable commit
+  before signing. Failed cleanup stays pending. Read-only backups untouched;
+  authenticated fork evidence and exact signing intents preserved.
+- Icons: bundled default. Security setting opts into selected-site lookup.
+  Same HTTPS origin, public IPv4/IPv6, pinned DNS, redirects/proxies disabled.
+  Raster MIME allowlist. Per-workspace memory cache; no new disk cache.
+  Desktop startup removes old plaintext cache, refuses symlinked components.
+- Files: bounded regular-file reads, including identity, import and Touch ID ID
+  lookup. Vault limit 256 MiB; identity limit 64 KiB. Saves respect vault limit.
+  Truncated ciphertext rejected before hashing. FIFO paths cannot block opening.
+- KDF: max 512 MiB, six passes, combined 768 MiB-passes. Creation default remains
+  256 MiB / three passes. Argon2 working arena zeroized on every exit.
+- Autofill: checks associated submit controls, including external buttons and
+  image inputs. GET overrides and cross-origin action overrides refused during
+  inspection and fill. One-use document token retained.
+
+Compatibility
+
+- Existing normal vaults keep keys and encryption format. Higher custom KDF
+  costs and oversized files require migration with a trusted compatible client.
+- Nonempty quarantine/diagnostic fields make older profile readers reject the
+  file. Remote signed-object bytes and canonical fixture unchanged.
+- Data-key rotation, dependency-stack upgrades, independent cryptographic audit,
+  signed Touch ID interaction probes and live Storj checks remain follow-up work.
+
+Validation
+
+- Working-tree Rust library: 360 passed; 2 explicit OS probes ignored. Coverage:
+  forged-object flood, byte-budget eviction, out-of-order admission, discarded
+  parent rejection, old poisoned-file reopening, failed cleanup retry, KDF
+  bounds, truncated files, sparse oversize files, FIFO rejection and cache privacy.
+- Integration: 4 passed, native browser host and sync acceptance scenarios.
+- Doctests: 2 passed. Formatting, strict Clippy all-targets, diff checks clean.
+- Browser package check: 48 passed. Disposable Chromium covers GET/image/external
+  submit controls and mutations after inspection; Firefox package/module smoke
+  passed. Service-worker smoke waits for extension API initialization.
+- Loopback fixtures and fictional data only. Real accounts, browser profiles,
+  cloud buckets and OS security settings unchanged. No publication.

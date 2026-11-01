@@ -59,6 +59,8 @@ pub const MAX_OBJECT_BYTES: usize = 4 * 1024 * 1024;
 pub const MAX_TRANSACTION_BYTES: usize = 2 * 1024 * 1024;
 pub const MAX_OBJECTS: usize = 4096;
 pub const MAX_CACHE_BYTES: usize = 64 * 1024 * 1024;
+pub const MAX_CANDIDATES: usize = 128;
+pub const MAX_CANDIDATE_BYTES: usize = 8 * 1024 * 1024;
 pub const MAX_PARENTS: usize = 64;
 pub const MAX_MUTATIONS: usize = 256;
 

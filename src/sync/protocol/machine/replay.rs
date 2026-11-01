@@ -35,11 +35,22 @@ impl Machine {
         if state.objects.len() > crate::sync::protocol::MAX_OBJECTS {
             return Err(Error::ResourceBudgetExceeded);
         }
+        if state.candidates.len() > crate::sync::protocol::MAX_CANDIDATES
+            || state.rejected_candidates.len() > crate::sync::protocol::MAX_CANDIDATES
+            || state
+                .candidates
+                .values()
+                .map(|bytes| bytes.0.len())
+                .sum::<usize>()
+                > crate::sync::protocol::MAX_CANDIDATE_BYTES
+        {
+            return Err(Error::ResourceBudgetExceeded);
+        }
 
         let mut controls = BTreeMap::new();
         let mut changes = BTreeMap::new();
 
-        for (hash, bytes) in &state.objects {
+        for (hash, bytes) in state.objects.iter().chain(&state.candidates) {
             let object: Object = decode(&bytes.0)?;
 
             if object.hash()? != *hash {
@@ -77,7 +88,12 @@ impl Machine {
                 .filter(|head| !history.contains(*head))
                 .into_iter()
                 .collect(),
-            rejected: history.rejected.clone(),
+            rejected: state
+                .rejected_candidates
+                .iter()
+                .chain(history.rejected.iter())
+                .map(|(hash, error)| (*hash, *error))
+                .collect(),
             excluded: BTreeSet::new(),
             role,
             ready: false,
@@ -128,11 +144,21 @@ impl Machine {
 
             let content_key = crypto::content_key(&key, state.space, control.epoch.context, false);
             let next = chain.get(index + 1).map(|(_, c)| &c.body);
+            let mut authenticated =
+                authenticate_changes(*membership, control, &content_key, &changes);
+            // Dropping invalid bytes must not make their known-invalid ancestry
+            // appear merely unavailable to a signed descendant.
+            authenticated.rejected.extend(
+                state
+                    .rejected_candidates
+                    .iter()
+                    .map(|(hash, error)| (*hash, *error)),
+            );
             let replayed = replay_epoch(
                 *membership,
                 control,
                 &baseline,
-                &content_key,
+                authenticated,
                 &changes,
                 &controls.keys().copied().collect(),
                 next,
@@ -170,7 +196,7 @@ fn replay_epoch(
     membership: Hash,
     control: &Control,
     baseline: &Projection,
-    key: &Key,
+    authenticated: AuthenticatedChanges,
     changes: &BTreeMap<Hash, Signed<Change>>,
     controls: &BTreeSet<Hash>,
     next: Option<&Control>,
@@ -178,7 +204,7 @@ fn replay_epoch(
     let AuthenticatedChanges {
         mut verified,
         mut rejected,
-    } = authenticate_changes(membership, control, key, changes);
+    } = authenticated;
     let ClosedHistory {
         excluded,
         missing: missing_closed,

@@ -64,6 +64,16 @@ pub(crate) fn SettingsView() -> Element {
                 h2 { {language.text(Text::Security)} }
                 div { class: "preference-row",
                     div { class: "preference-copy",
+                        label { r#for: "website-icons", {language.text(Text::WebsiteIcons)} }
+                        p { id: "website-icons-description", class: "muted", {language.text(Text::WebsiteIconsDescription)} }
+                    }
+                    input { id: "website-icons", class: "switch", r#type: "checkbox",
+                        checked: preferences.config.website_icons, aria_describedby: "website-icons-description",
+                        onchange: move |event| runtime::set_website_icons(event.checked()),
+                    }
+                }
+                div { class: "preference-row",
+                    div { class: "preference-copy",
                         label { r#for: "auto-lock", {language.text(Text::AutoLock)} }
                         p { id: "auto-lock-description", class: "muted", {language.text(Text::LockTheVaultAfterAPeriodOfInactivity)} }
                     }

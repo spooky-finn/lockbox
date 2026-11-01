@@ -45,7 +45,12 @@ export function inspectPage(expectedOrigin, mode) {
     if (!form) return true;
     // GET forms can put secrets into URLs. External submit overrides are refused too.
     if (form.method.toLowerCase() !== "post") return false;
-    const actions = [form.action, ...[...form.elements]
+    const controls = [...document.querySelectorAll('button, input[type="submit"], input[type="image"]')]
+      .filter((control) => control.form === form && !control.disabled && !["button", "reset"].includes(control.type));
+    for (const control of controls) {
+      if (control.hasAttribute("formmethod") && control.formMethod.toLowerCase() !== "post") return false;
+    }
+    const actions = [form.action, ...controls
       .filter((element) => element.hasAttribute("formaction"))
       .map((element) => element.formAction)];
     return actions.every((action) => {

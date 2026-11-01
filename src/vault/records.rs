@@ -8,7 +8,7 @@ use crate::{
     },
 };
 use secrecy::SecretString;
-use std::{fs, path::Path};
+use std::path::Path;
 
 /// Readable records of a vault. Shared-profile keys and credentials are not kept.
 #[derive(Debug, Default)]
@@ -22,7 +22,7 @@ impl Vault {
     /// process lock, recovering sync intents or writing to disk, so the file
     /// may stay open in another window. For a shared profile this is its local view.
     pub fn read_records(path: impl AsRef<Path>, password: &SecretString) -> Result<Records> {
-        let data = fs::read(path)?;
+        let data = super::file::read_bounded(path.as_ref(), super::file::MAX_VAULT_BYTES)?;
         let header = Header::parse(&data)?;
         let key = header.password_key(password)?;
 

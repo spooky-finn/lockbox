@@ -6,4 +6,4 @@
 - Record fields: single click username/password/URL copies via guarded clipboard; successful copy shows green “Copied” beside text briefly. Keyboard activation supported; password stays masked.
 - Scrolling: app stays viewport height; sidebar record tree and detail scroll independently. Toolbar, search, sidebar footer, status stay visible. Desktop/mobile layout checked.
 
-- Favicons: disk cache in OS cache dir `lockbox/favicons/v1`; SHA-256 filenames. Images expire after 30 days; failed downloads retry after 5 minutes. Per-site locks share concurrent downloads; cache write failure keeps image usable.
+- Website icons: bundled default; network opt-in under Security. Exact HTTPS origin, pinned public IPs, no redirects/proxies. Cache belongs to unlocked workspace, no disk writes; old `lockbox/favicons/v1` removed at desktop startup. Concurrent per-site requests share downloads.

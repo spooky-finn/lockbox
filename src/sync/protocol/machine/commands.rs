@@ -71,6 +71,8 @@ impl Machine {
             owner_root: root,
             required_control: None,
             objects: BTreeMap::from([(genesis, Blob(object.bytes()?))]),
+            candidates: BTreeMap::new(),
+            rejected_candidates: BTreeMap::new(),
             outbox: BTreeSet::from([genesis]),
             intent: None,
             fault: None,
@@ -88,6 +90,8 @@ impl Machine {
             owner_root,
             required_control: None,
             objects: BTreeMap::new(),
+            candidates: BTreeMap::new(),
+            rejected_candidates: BTreeMap::new(),
             outbox: BTreeSet::new(),
             intent: None,
             fault: None,
@@ -111,22 +115,36 @@ impl Machine {
         state
     }
 
-    /// Idempotent insertion. Membership and plaintext are verified only in replay.
+    /// Quarantine downloads until their public authority can be authenticated.
+    /// Plaintext and causal validity remain replay's responsibility.
     pub fn receive(state: &mut SyncState, expected: Hash, bytes: Vec<u8>) -> Result<bool> {
         let object: Object = decode(&bytes)?;
 
         if object.hash()? != expected {
             return Err(Error::HashMismatch);
         }
+        if state.rejected_candidates.contains_key(&expected) {
+            return Ok(false);
+        }
 
-        if let Some(existing) = state.objects.get(&expected) {
+        if matches!(&object, Object::Control(control) if control.body.epoch.previous.is_none() && expected != state.genesis)
+        {
+            super::candidates::reject(state, expected, Error::UnauthorizedDevice);
+            return Ok(true);
+        }
+
+        if let Some(existing) = state
+            .objects
+            .get(&expected)
+            .or_else(|| state.candidates.get(&expected))
+        {
             if existing.0 != bytes {
                 return Err(Error::HashMismatch);
             }
             return Ok(false);
         }
-        capacity(state, bytes.len())?;
-        state.objects.insert(expected, Blob(bytes));
+        super::candidates::insert(state, expected, Blob(bytes));
+        super::candidates::promote(state)?;
         Ok(true)
     }
 
@@ -366,7 +384,19 @@ impl Machine {
         };
 
         let hash = object.hash()?;
-        let inserted = Self::receive(state, hash, object.bytes()?)?;
+        // This exact body was locally reserved and signed above. Insert directly
+        // and verify through replay; remote downloads take the quarantine path.
+        let bytes = object.bytes()?;
+        let inserted = if let Some(existing) = state.objects.get(&hash) {
+            if existing.0 != bytes {
+                return Err(Error::HashMismatch);
+            }
+            false
+        } else {
+            capacity(state, bytes.len())?;
+            state.objects.insert(hash, Blob(bytes));
+            true
+        };
         let check =
             Self::replay(state, device).and_then(|checked| checked.verify_applied(&object, hash));
 
@@ -376,6 +406,8 @@ impl Machine {
             }
             return Err(error);
         }
+        state.candidates.remove(&hash);
+        state.rejected_candidates.remove(&hash);
         state.outbox.insert(hash);
         state.intent = None;
         Ok(hash)

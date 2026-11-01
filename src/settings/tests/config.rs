@@ -9,6 +9,7 @@ fn remembered_path_survives_a_restart() {
         last_vault: Some("/tmp/vault.lbx".into()),
         touch_id: vec!["00ff".into()],
         auto_lock_minutes: 15,
+        website_icons: true,
         space_names: [("/tmp/vault.lbx".into(), "Family".into())].into(),
         appearance: crate::settings::appearance::Appearance::default(),
     };
@@ -32,6 +33,7 @@ fn config_from_before_touch_id_still_loads() {
     );
     assert!(config.touch_id.is_empty());
     assert!(config.space_names.is_empty());
+    assert!(!config.website_icons);
     assert_eq!(
         config.auto_lock_minutes,
         crate::platform::autolock::DEFAULT_MINUTES

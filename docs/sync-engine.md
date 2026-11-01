@@ -174,7 +174,20 @@ are intentionally separate from the draft's complete v1 schemas.
 
 Current limits are 4 MiB per complete wire object, 2 MiB transaction plaintext,
 64 parents, 256 mutations, 128 users, 16 devices per user, 512 total devices,
-64 folder levels, 4,096 cached objects and 64 MiB cached wire bytes per space.
+64 folder levels, 4,096 publicly authenticated objects and 64 MiB authenticated
+wire bytes per space. Unverified downloads use a separate evictable quarantine
+of 128 objects / 8 MiB. Proven-invalid objects are discarded; at most 128 hash/error
+diagnostics remain. Neither pool consumes the journal capacity for local edits.
+Unknown dependencies still drive bounded discovery. Exact authenticated bytes,
+signed fork evidence, reserved intents and outbox objects remain protected.
+
+Opening an older protected profile separates unverified candidates from its
+mixed journal and durably commits cleanup through the installation witness
+before signing. Read-only backups are not rewritten or enrolled by this cleanup.
+Nonempty quarantine/diagnostic fields require this reader; older clients reject
+the local profile rather than silently dropping them. Remote object encoding is
+unchanged.
+
 Each discovery batch downloads at most 128 new objects / 16 MiB and bounds page
 count, response size, cursor repetition and GET attempts (256 including missing
 objects). Availability hints never expand more than the protocol's parent limit.

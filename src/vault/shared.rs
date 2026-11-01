@@ -86,6 +86,34 @@ impl Vault {
 
     pub(super) fn recover_sync(&mut self) -> Result<()> {
         use crate::sync::protocol::Machine;
+        if !matches!(self.journal_check, super::JournalCheck::Ready)
+            && self
+                .protection
+                .as_ref()
+                .is_some_and(|p| p.borrow().has_file())
+        {
+            self.ensure_profile_writable()?;
+            if matches!(self.journal_check, super::JournalCheck::Unchecked) {
+                let changed = self
+                    .profile
+                    .as_mut()
+                    .and_then(|p| p.sync.as_mut())
+                    .map(Machine::quarantine_unverified)
+                    .transpose()?
+                    .unwrap_or(false);
+                self.journal_check = if changed {
+                    super::JournalCheck::PendingCommit
+                } else {
+                    super::JournalCheck::Ready
+                };
+            }
+            if matches!(self.journal_check, super::JournalCheck::PendingCommit) {
+                // Retain the dirty state after a failed write. A retry must
+                // commit cleanup before it can sign or publish anything new.
+                self.save_inner(false)?;
+                self.journal_check = super::JournalCheck::Ready;
+            }
+        }
         // An intent may exist only in memory after its first write failed.
         // Reserve it successfully before any retry is allowed to sign it.
         if self

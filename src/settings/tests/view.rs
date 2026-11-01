@@ -30,6 +30,7 @@ fn settings_is_a_page_and_returning_restores_the_selected_entry() {
     assert!(html.contains("settings-theme"));
     assert!(html.contains("settings-accent"));
     assert!(html.contains("settings-background"));
+    assert!(html.contains("website-icons"));
     assert!(html.contains("Время автоблокировки"));
     assert!(html.contains("workspace has-detail"));
     assert!(!html.contains("entry-detail"));
@@ -39,6 +40,31 @@ fn settings_is_a_page_and_returning_restores_the_selected_entry() {
         edit_unlocked(state, |u| u.page = Page::Vault)
     });
     assert!(dioxus_ssr::render(&dom).contains("entry-detail"));
+}
+
+#[test]
+fn website_icon_downloads_default_off_and_disabling_discards_session_cache() {
+    let mut dom = mounted();
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| u.open_settings())
+    });
+    update(&mut dom, |state| {
+        let settings = consume_context::<Signal<Settings>>();
+        assert!(!settings.read().config.website_icons);
+        let previous = match &*state.read() {
+            Screen::Unlocked(u) => u.favicon_cache.clone(),
+            _ => panic!(),
+        };
+        runtime::set_website_icons(true);
+        assert!(settings.read().config.website_icons);
+        runtime::set_website_icons(false);
+        assert!(!settings.read().config.website_icons);
+        let screen = state.read();
+        let Screen::Unlocked(u) = &*screen else {
+            panic!()
+        };
+        assert!(previous != u.favicon_cache);
+    });
 }
 
 #[test]

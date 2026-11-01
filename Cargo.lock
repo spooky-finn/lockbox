@@ -141,6 +141,7 @@ dependencies = [
  "blake2",
  "cpufeatures 0.2.17",
  "password-hash",
+ "zeroize",
 ]
 
 [[package]]
@@ -3379,6 +3380,7 @@ dependencies = [
  "hmac 0.12.1",
  "hpke",
  "kuchikiki",
+ "libc",
  "objc2",
  "objc2-foundation",
  "objc2-local-authentication",

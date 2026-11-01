@@ -71,9 +71,22 @@ test("real Chromium: document binding and safe form filling", { skip: !process.e
       }
       assert.ok(worker, "extension service worker must start without manifest or CSP errors");
       const { sessionId: workerSession } = await send("Target.attachToTarget", { targetId: worker.targetId, flatten: true }, null);
-      const { result } = await send("Runtime.evaluate", { expression: "typeof chrome.runtime.onMessage.addListener === 'function' && typeof chrome.idle.setDetectionInterval === 'function'", returnByValue: true }, workerSession);
-      assert.equal(result.value, true);
-      await send("Target.detachFromTarget", { sessionId: workerSession }, null);
+      try {
+        // A worker target can appear before its extension execution context is
+        // initialized. Wait for APIs rather than testing an uninitialized realm.
+        let ready = false;
+        let diagnostic;
+        for (let attempt = 0; attempt < 30 && !ready; attempt++) {
+          const evaluated = await send("Runtime.evaluate", {
+            expression: "globalThis.chrome?.runtime?.getManifest?.().name === 'Lockbox · Browser companion' && typeof globalThis.chrome?.runtime?.onMessage?.addListener === 'function' && typeof globalThis.chrome?.idle?.setDetectionInterval === 'function'",
+            returnByValue: true,
+          }, workerSession);
+          ready = evaluated.result?.value === true;
+          diagnostic = evaluated.exceptionDetails || evaluated.result;
+          if (!ready) await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+        assert.equal(ready, true, JSON.stringify(diagnostic));
+      } finally { await send("Target.detachFromTarget", { sessionId: workerSession }, null); }
     });
     await send("Page.navigate", { url: `${testOrigin}/login` });
     const { frameTree } = await send("Page.getFrameTree");
@@ -114,6 +127,10 @@ test("real Chromium: document binding and safe form filling", { skip: !process.e
       ["read-only field", '<form method="post"><input type="password" readonly></form>'],
       ["offscreen field", '<form method="post"><input type="password" style="position:absolute;left:-500px"></form>'],
       ["GET form", '<form method="get"><input type="password"></form>'],
+      ["GET submit override", '<form method="post"><input type="password"><button formmethod="get">Submit</button></form>'],
+      ["external associated GET submit", '<form id="login" method="post"><input type="password"></form><button form="login" formmethod="get">Submit</button>'],
+      ["GET image submit override", '<form method="post"><input type="password"><input type="image" formmethod="get"></form>'],
+      ["external image submit action", '<form method="post"><input type="password"><input type="image" formaction="https://attacker.test"></form>'],
       ["external action", '<form method="post" action="https://attacker.test"><input type="password"></form>'],
       ["HTTP action", '<form method="post" action="http://accounts.example"><input type="password"></form>'],
       ["external submit override", '<form method="post"><input type="password"><button formaction="https://attacker.test">Submit</button></form>'],
@@ -142,6 +159,7 @@ test("real Chromium: document binding and safe form filling", { skip: !process.e
     });
     for (const [name, mutation] of [
       ["changed action", "document.querySelector('form').action='https://attacker.test'"],
+      ["GET method override", "document.querySelector('form').insertAdjacentHTML('beforeend','<button formmethod=get>Submit</button>')"],
       ["detached input", "document.querySelector('input').remove()"],
       ["hidden input", "document.querySelector('input').style.opacity=0"],
       ["shortened field", "document.querySelector('input').maxLength=3"],

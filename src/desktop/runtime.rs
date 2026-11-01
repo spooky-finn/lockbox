@@ -19,6 +19,7 @@ use std::{
 };
 
 pub(crate) fn use_runtime() -> Session {
+    use_hook(crate::records::favicon::cleanup_legacy_cache);
     let settings = use_signal(Settings::load);
     let hardware = use_hook(|| BiometricProvider(touchid::system()));
     let native = use_hook(|| {
@@ -347,6 +348,16 @@ pub(crate) fn set_auto_lock(minutes: u32) {
 
 pub(crate) fn set_language(language: crate::settings::language::Language) {
     update_preferences(|config| config.language = language);
+}
+
+pub(crate) fn set_website_icons(enabled: bool) {
+    update_preferences(|config| config.website_icons = enabled);
+    if !enabled {
+        let mut state = consume_context::<Session>();
+        if let Screen::Unlocked(workspace) = &mut *state.write() {
+            workspace.favicon_cache = Default::default();
+        }
+    }
 }
 
 pub(crate) fn set_theme(theme: crate::settings::appearance::ThemeMode) {

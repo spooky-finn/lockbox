@@ -22,6 +22,7 @@ mod support;
 use support::*;
 
 mod authority;
+mod candidates;
 mod intents;
 mod invitations;
 mod membership;

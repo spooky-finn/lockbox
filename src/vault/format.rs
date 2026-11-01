@@ -8,7 +8,7 @@ use crate::{
     sync::identity::Key,
     vault::{KdfParams, Result, VaultError, anchor::FileGeneration, profile::BootstrapProfile},
 };
-use argon2::{Algorithm, Argon2, Params, Version};
+use argon2::{Algorithm, Argon2, Block, Params, Version};
 use chacha20poly1305::{
     XChaCha20Poly1305, XNonce,
     aead::{Aead, KeyInit, Payload},
@@ -110,6 +110,15 @@ impl Header {
         } else {
             None
         };
+        let len = HEADER_LEN
+            + if recovery.is_some() {
+                crate::vault::recovery::SLOTS_LEN
+            } else {
+                0
+            };
+        if data.len() < len + 16 {
+            return Err(VaultError::NotAVault);
+        }
         Ok(Self {
             recovery,
             version,
@@ -188,12 +197,7 @@ pub(super) fn derive(
     salt: &[u8; SALT_LEN],
     kdf: KdfParams,
 ) -> Result<(Zeroizing<Key>, [u8; CHECK_LEN])> {
-    let params = Params::new(kdf.memory_kib, kdf.passes, kdf.lanes, Some(32))
-        .map_err(|_| VaultError::InvalidKdfParams)?;
-    let mut master = Zeroizing::new([0u8; 32]);
-    Argon2::new(Algorithm::Argon2id, Version::V0x13, params)
-        .hash_password_into(password.expose_secret().as_bytes(), salt, master.as_mut())
-        .map_err(|_| VaultError::InvalidKdfParams)?;
+    let master = stretch(password, salt, kdf)?;
     let hkdf = Hkdf::<Sha256>::new(None, master.as_ref());
     let mut key = Zeroizing::new([0u8; 32]);
     let mut check = [0u8; CHECK_LEN];
@@ -202,6 +206,34 @@ pub(super) fn derive(
     hkdf.expand(CHECK_INFO, &mut check)
         .expect("32 bytes is a valid HKDF-SHA256 length");
     Ok((key, check))
+}
+
+/// Wipe the complete Argon2 arena, including error paths, rather than leaving
+/// password-derived blocks in an ordinary allocator buffer after unlock.
+pub(super) fn stretch(
+    password: &SecretString,
+    salt: &[u8],
+    kdf: KdfParams,
+) -> Result<Zeroizing<Key>> {
+    let kdf = kdf.validate()?;
+    let params = Params::new(kdf.memory_kib, kdf.passes, kdf.lanes, Some(32))
+        .map_err(|_| VaultError::InvalidKdfParams)?;
+    let count = params.block_count();
+    let mut blocks = Zeroizing::new(Vec::new());
+    blocks
+        .try_reserve_exact(count)
+        .map_err(|_| VaultError::ResourceLimit)?;
+    blocks.resize(count, Block::default());
+    let mut key = Zeroizing::new([0u8; 32]);
+    Argon2::new(Algorithm::Argon2id, Version::V0x13, params)
+        .hash_password_into_with_memory(
+            password.expose_secret().as_bytes(),
+            salt,
+            key.as_mut(),
+            blocks.as_mut_slice(),
+        )
+        .map_err(|_| VaultError::InvalidKdfParams)?;
+    Ok(key)
 }
 
 pub(super) fn cipher(key: &Key) -> XChaCha20Poly1305 {

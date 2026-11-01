@@ -21,9 +21,11 @@
 //! The public [`Vault`] facade retains the existing import paths for both modes.
 
 use crate::sync::identity::Key;
+#[cfg(test)]
+use std::fs;
 use std::{
     cell::RefCell,
-    fs, io,
+    io,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -60,6 +62,8 @@ pub enum VaultError {
     UnsupportedVersion(u16),
     #[error("invalid Argon2id parameters in the header")]
     InvalidKdfParams,
+    #[error("file exceeds supported resource limits")]
+    ResourceLimit,
     #[error("incorrect master password")]
     WrongPassword,
     #[error("vault file is corrupted")]
@@ -112,18 +116,19 @@ impl Default for KdfParams {
 }
 
 impl KdfParams {
-    /// Bounds checked before running Argon2id, so a crafted header cannot
-    /// make the app allocate gigabytes or spin for minutes.
+    /// Bound both peak allocation and combined work before authentication.
     pub(crate) fn validate(self) -> Result<Self> {
-        let ok = (8 * 1024..=4 * 1024 * 1024).contains(&self.memory_kib)
-            && (1..=20).contains(&self.passes)
-            && (1..=16).contains(&self.lanes);
+        let ok = (8 * 1024..=512 * 1024).contains(&self.memory_kib)
+            && (1..=6).contains(&self.passes)
+            && (1..=16).contains(&self.lanes)
+            && u64::from(self.memory_kib) * u64::from(self.passes) <= 768 * 1024;
         ok.then_some(self).ok_or(VaultError::InvalidKdfParams)
     }
 }
 
 /// An unlocked vault. The derived key and all entries are wiped when it is dropped.
 pub struct Vault {
+    journal_check: JournalCheck,
     path: PathBuf,
     kdf: KdfParams,
     salt: [u8; SALT_LEN],
@@ -139,6 +144,14 @@ pub struct Vault {
     _profile_lock: Option<crate::vault::lease::ExclusiveFile>,
     witnesses: Arc<dyn WitnessStore>,
     protection: Option<RefCell<protection::Protection>>,
+}
+
+#[derive(Default)]
+enum JournalCheck {
+    #[default]
+    Unchecked,
+    PendingCommit,
+    Ready,
 }
 
 mod exchange;
@@ -223,6 +236,7 @@ impl Vault {
             None
         };
         let vault = Self {
+            journal_check: Default::default(),
             path,
             kdf,
             salt,
@@ -317,6 +331,7 @@ impl Vault {
         };
 
         let vault = Self {
+            journal_check: Default::default(),
             path,
             kdf,
             salt,
@@ -352,7 +367,7 @@ impl Vault {
         witnesses: Arc<dyn WitnessStore>,
     ) -> Result<Self> {
         let path = path.to_path_buf();
-        let data = fs::read(&path)?;
+        let data = file::read_bounded(&path, file::MAX_VAULT_BYTES)?;
         let header = Header::parse(&data)?;
         let path = if matches!(header.version, 3 | 5 | PROFILE_VERSION | RECOVERY_VERSION) {
             path.canonicalize()?
@@ -459,7 +474,7 @@ impl Vault {
 
     /// Reads the identifier without the password, to find a saved Touch ID key.
     pub fn peek_id(path: impl AsRef<Path>) -> Result<String> {
-        let data = fs::read(path)?;
+        let data = file::read_header(path.as_ref())?;
         Ok(hex(&Header::parse(&data)?.salt))
     }
 
@@ -625,6 +640,7 @@ impl Header {
         witnesses: Arc<dyn WitnessStore>,
     ) -> Vault {
         Vault {
+            journal_check: Default::default(),
             path,
             kdf: self.kdf,
             salt: self.salt,

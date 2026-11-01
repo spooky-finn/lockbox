@@ -85,8 +85,8 @@ impl Identity {
         password: Option<&SecretString>,
         phrase: Option<&RecoveryPhrase>,
     ) -> Result<Self> {
-        let data = fs::read(path)?;
-        if data.len() < HEADER_LEN + 16 || &data[..6] != MAGIC {
+        let data = file::read_bounded(path, file::MAX_IDENTITY_BYTES)?;
+        if data.len() < HEADER_LEN + super::recovery::SLOTS_LEN + 16 || &data[..6] != MAGIC {
             return Err(VaultError::NotAVault);
         }
         let number = |offset| u32::from_le_bytes(data[offset..offset + 4].try_into().unwrap());

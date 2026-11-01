@@ -17,6 +17,72 @@ const FAST: KdfParams = KdfParams {
     lanes: 1,
 };
 
+#[test]
+fn reopening_an_old_poisoned_journal_quarantines_junk_before_signing() {
+    use crate::sync::protocol::{Blob, MAX_CANDIDATES, MAX_OBJECTS, Object, decode};
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("old-profile.lbx");
+    let mut vault = profile_vault(&path, "Owner");
+    vault.upsert_entry(entry("Existing account")).unwrap();
+    let state = vault.profile.as_mut().unwrap().sync.as_mut().unwrap();
+    let template: Object = decode(&state.objects[&state.genesis].0).unwrap();
+    for index in 0..MAX_OBJECTS - state.objects.len() {
+        let mut object = template.clone();
+        let Object::Control(control) = &mut object else {
+            unreachable!()
+        };
+        control.signature = Blob(vec![0; 64]);
+        control.signature.0[..8].copy_from_slice(&(index as u64).to_le_bytes());
+        state
+            .objects
+            .insert(object.hash().unwrap(), Blob(object.bytes().unwrap()));
+    }
+    assert_eq!(state.objects.len(), MAX_OBJECTS);
+    vault.save_inner(false).unwrap();
+    drop(vault);
+    let mut reopened = Vault::open(&path, &SecretString::from("master".to_owned())).unwrap();
+    assert_eq!(reopened.entries()[0].title, "Existing account");
+    assert_eq!(reopened.sync_state().unwrap().objects.len(), 2);
+    assert!(reopened.sync_state().unwrap().candidates.len() <= MAX_CANDIDATES);
+    reopened.upsert_entry(entry("New account")).unwrap();
+    drop(reopened);
+    let reopened = Vault::open(&path, &SecretString::from("master".to_owned())).unwrap();
+    assert_eq!(reopened.entries().len(), 2);
+}
+
+#[test]
+fn failed_journal_cleanup_remains_pending_before_any_new_signing_intent() {
+    use crate::sync::protocol::{Blob, Object, decode};
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("cleanup-retry.lbx");
+    let mut vault = profile_vault(&path, "Owner");
+    let state = vault.profile.as_mut().unwrap().sync.as_mut().unwrap();
+    let mut junk: Object = decode(&state.objects[&state.genesis].0).unwrap();
+    let Object::Control(control) = &mut junk else {
+        unreachable!()
+    };
+    control.signature = Blob(vec![0; 64]);
+    state
+        .objects
+        .insert(junk.hash().unwrap(), Blob(junk.bytes().unwrap()));
+    vault.save_inner(false).unwrap();
+    let previous = fs::read(&path).unwrap();
+    vault.journal_check = JournalCheck::Unchecked;
+    fs::create_dir(sibling(&path, "tmp")).unwrap();
+    assert!(vault.recover_sync().is_err());
+    assert!(matches!(vault.journal_check, JournalCheck::PendingCommit));
+    assert!(vault.upsert_entry(entry("Blocked edit")).is_err());
+    assert!(vault.sync_state().unwrap().intent.is_none());
+    assert_eq!(fs::read(&path).unwrap(), previous);
+    fs::remove_dir(sibling(&path, "tmp")).unwrap();
+    vault.upsert_entry(entry("Saved after cleanup")).unwrap();
+    assert!(matches!(vault.journal_check, JournalCheck::Ready));
+    assert_eq!(vault.sync_state().unwrap().objects.len(), 2);
+    drop(vault);
+    let reopened = Vault::open(&path, &SecretString::from("master".to_owned())).unwrap();
+    assert_eq!(reopened.entries()[0].title, "Saved after cleanup");
+}
+
 fn profile_vault(path: &Path, name: &str) -> Vault {
     let profile = BootstrapProfile::generate(
         name.into(),

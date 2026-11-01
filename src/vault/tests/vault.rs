@@ -168,6 +168,90 @@ fn oversized_kdf_params_are_rejected_before_hashing() {
 }
 
 #[test]
+fn kdf_limits_bound_both_memory_and_total_work() {
+    assert!(KdfParams::default().validate().is_ok());
+    for (memory_kib, passes) in [
+        (4 * 1024 * 1024, 20),
+        (512 * 1024, 3),
+        (256 * 1024, 6),
+        (8192, 20),
+    ] {
+        assert!(
+            KdfParams {
+                memory_kib,
+                passes,
+                lanes: 1
+            }
+            .validate()
+            .is_err()
+        );
+    }
+    assert!(
+        KdfParams {
+            memory_kib: 512 * 1024,
+            passes: 1,
+            lanes: 1
+        }
+        .validate()
+        .is_ok()
+    );
+}
+
+#[test]
+fn truncated_ciphertext_is_rejected_before_password_derivation() {
+    let dir = tempfile::tempdir().unwrap();
+    let (path, vault) = new_vault(&dir);
+    drop(vault);
+    let data = fs::read(&path).unwrap();
+    fs::write(&path, &data[..HEADER_LEN + 15]).unwrap();
+    assert!(matches!(
+        Vault::open(&path, &password("wrong")),
+        Err(VaultError::NotAVault)
+    ));
+    assert!(matches!(
+        Vault::read_records(&path, &password("wrong")),
+        Err(VaultError::NotAVault)
+    ));
+}
+
+#[test]
+fn oversized_sparse_files_and_nonregular_inputs_are_rejected_before_reading() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("oversized.lbx");
+    fs::File::create(&path)
+        .unwrap()
+        .set_len(super::file::MAX_VAULT_BYTES as u64 + 1)
+        .unwrap();
+    assert!(matches!(
+        Vault::peek_id(&path),
+        Err(VaultError::ResourceLimit)
+    ));
+    assert!(matches!(
+        Vault::read_records(&path, &password("master")),
+        Err(VaultError::ResourceLimit)
+    ));
+    assert!(matches!(
+        Vault::open(&path, &password("master")),
+        Err(VaultError::ResourceLimit)
+    ));
+    assert!(matches!(
+        Vault::open(dir.path(), &password("master")),
+        Err(VaultError::NotAVault)
+    ));
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStrExt;
+        let fifo = dir.path().join("fifo.lbx");
+        let name = std::ffi::CString::new(fifo.as_os_str().as_bytes()).unwrap();
+        assert_eq!(unsafe { libc::mkfifo(name.as_ptr(), 0o600) }, 0);
+        assert!(matches!(
+            Vault::open(&fifo, &password("master")),
+            Err(VaultError::NotAVault)
+        ));
+    }
+}
+
+#[test]
 fn every_save_uses_a_new_nonce() {
     let dir = tempfile::tempdir().unwrap();
     let (path, vault) = new_vault(&dir);

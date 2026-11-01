@@ -4,14 +4,13 @@ use crate::{
     sync::identity::{DeviceKeys, Key, PublicIdentity, SpaceKeys},
     vault::{KdfParams, Result, VaultError},
 };
-use argon2::{Algorithm, Argon2, Params, Version};
 use chacha20poly1305::{
     XChaCha20Poly1305, XNonce,
     aead::{Aead, KeyInit, Payload},
 };
 use ed25519_dalek::SigningKey;
 use hkdf::Hkdf;
-use secrecy::{ExposeSecret, SecretString};
+use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
@@ -292,17 +291,7 @@ impl BootstrapProfile {
 
 impl RootCapsule {
     fn key(&self, password: &SecretString) -> Result<Zeroizing<Key>> {
-        let kdf = self.kdf.validate()?;
-        let params = Params::new(kdf.memory_kib, kdf.passes, kdf.lanes, Some(32))
-            .map_err(|_| VaultError::InvalidKdfParams)?;
-        let mut stretched = Zeroizing::new([0u8; 32]);
-        Argon2::new(Algorithm::Argon2id, Version::V0x13, params)
-            .hash_password_into(
-                password.expose_secret().as_bytes(),
-                &self.salt,
-                stretched.as_mut(),
-            )
-            .map_err(|_| VaultError::InvalidKdfParams)?;
+        let stretched = super::format::stretch(password, &self.salt, self.kdf)?;
         let mut key = Zeroizing::new([0u8; 32]);
         Hkdf::<Sha256>::new(None, stretched.as_ref())
             .expand(b"lockbox.root-capsule.v1\0", key.as_mut())

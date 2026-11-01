@@ -4,6 +4,7 @@
 //! This facade never owns a provider, filesystem handle, clock, or UI state.
 
 mod authority;
+mod candidates;
 mod commands;
 mod history;
 mod invitations;

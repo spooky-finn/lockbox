@@ -19,6 +19,22 @@ host. Exact HTTPS origin matching, explicit fill actions and native session
 timeouts limit credential access. Passwords and vault keys are never persisted
 in browser storage. See the [installation and security guide](browser-extension/README.md).
 
+## Website icon privacy and resource limits
+
+Bundled icons are used by default. **Settings → Security → Download website icons**
+opts into contacting the selected record's website. Downloads use the exact HTTPS
+origin, public IP addresses pinned for the connection, no redirects, and no
+system proxy. Website-provided cross-origin icons are ignored. Icons are cached
+only in the unlocked workspace's memory; locking discards that cache. The desktop
+removes its obsolete plaintext `lockbox/favicons/v1` cache on startup.
+
+Vault reads and writes are limited to 256 MiB; identity files to 64 KiB. Argon2id
+keeps its creation default of 256 MiB and three passes. Readers accept at most
+512 MiB, six passes, and 768 MiB-passes of combined work. Files with higher custom
+costs are rejected before hashing; they need migration using a trusted compatible
+client. Truncated ciphertext and nonregular files are rejected before hashing.
+The complete Argon2 working memory is wiped after use.
+
 ## Файлы в записи
 
 В редакторе записи выберите «Добавить файл». Доступны до 16 файлов,

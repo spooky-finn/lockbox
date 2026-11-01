@@ -8,9 +8,57 @@ use crate::vault::{
 };
 use std::{
     fs::{self, File, OpenOptions},
-    io::{self, Write},
+    io::{self, Read, Write},
     path::{Path, PathBuf},
 };
+
+pub(super) const MAX_VAULT_BYTES: usize = 256 * 1024 * 1024;
+pub(super) const MAX_IDENTITY_BYTES: usize = 64 * 1024;
+
+fn regular_file(path: &Path, max: usize) -> Result<File> {
+    let metadata = fs::metadata(path)?;
+    if !metadata.is_file() {
+        return Err(VaultError::NotAVault);
+    }
+    if metadata.len() > max as u64 {
+        return Err(VaultError::ResourceLimit);
+    }
+    let mut options = OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        // A pathname replaced with a FIFO between stat/open must not block.
+        options.custom_flags(libc::O_NONBLOCK);
+    }
+    let file = options.open(path)?;
+    let metadata = file.metadata()?;
+    if !metadata.is_file() {
+        return Err(VaultError::NotAVault);
+    }
+    if metadata.len() > max as u64 {
+        return Err(VaultError::ResourceLimit);
+    }
+    Ok(file)
+}
+
+pub(super) fn read_bounded(path: &Path, max: usize) -> Result<Vec<u8>> {
+    let file = regular_file(path, max)?;
+    let mut bytes = Vec::new();
+    file.take(max as u64 + 1).read_to_end(&mut bytes)?;
+    if bytes.len() > max {
+        return Err(VaultError::ResourceLimit);
+    }
+    Ok(bytes)
+}
+
+pub(super) fn read_header(path: &Path) -> Result<Vec<u8>> {
+    let file = regular_file(path, MAX_VAULT_BYTES)?;
+    let mut bytes = Vec::new();
+    let max = super::format::HEADER_LEN + super::recovery::SLOTS_LEN + 16;
+    file.take(max as u64).read_to_end(&mut bytes)?;
+    Ok(bytes)
+}
 
 pub(super) fn sibling(path: &Path, extension: &str) -> PathBuf {
     let mut name = path.file_name().unwrap_or_default().to_os_string();
@@ -29,7 +77,7 @@ pub(super) fn refresh_profile_snapshot(
         return Ok((data, header));
     }
 
-    let data = fs::read(path)?;
+    let data = read_bounded(path, MAX_VAULT_BYTES)?;
     let header = Header::parse(&data)?;
 
     if !matches!(header.version, 3 | 5 | PROFILE_VERSION | RECOVERY_VERSION) {
@@ -102,6 +150,7 @@ pub(super) fn sync_dir(path: &Path) -> io::Result<()> {
 }
 
 pub(super) fn create(path: &Path, header: &[u8], ciphertext: &[u8]) -> Result<()> {
+    check_size(header, ciphertext)?;
     let mut options = OpenOptions::new();
     options.write(true).create_new(true);
     #[cfg(unix)]
@@ -131,6 +180,7 @@ pub(super) fn create(path: &Path, header: &[u8], ciphertext: &[u8]) -> Result<()
 }
 
 pub(super) fn replace(path: &Path, header: &[u8], ciphertext: &[u8]) -> Result<()> {
+    check_size(header, ciphertext)?;
     let tmp = sibling(path, "tmp");
     {
         let mut file = private_file(&tmp)?;
@@ -149,5 +199,12 @@ pub(super) fn replace(path: &Path, header: &[u8], ciphertext: &[u8]) -> Result<(
         fs::rename(&backup_tmp, &backup)?;
     }
     fs::rename(&tmp, path)?;
+    Ok(())
+}
+
+fn check_size(header: &[u8], ciphertext: &[u8]) -> Result<()> {
+    if header.len().saturating_add(ciphertext.len()) > MAX_VAULT_BYTES {
+        return Err(VaultError::ResourceLimit);
+    }
     Ok(())
 }

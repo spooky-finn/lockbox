@@ -88,7 +88,8 @@ writes. Each browser has its own session; lock one before using the other.
    the previous saved password is available in desktop **Record history**.
 
 Only visible fields in the top-level page are supported. For multiple forms,
-focus the desired password field first. Cross-origin actions, GET forms,
+focus the desired password field first. Cross-origin actions, GET forms and
+submit-button method overrides (including external and image submit controls),
 iframes, hidden/disabled/read-only/offscreen fields, ambiguous password forms
 and fields that would truncate the credential are refused. SPA forms without
 a `<form>` element are supported when fields are unambiguous. Shadow DOM and

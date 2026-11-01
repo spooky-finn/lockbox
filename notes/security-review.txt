@@ -1,0 +1,176 @@
+Lockbox security review
+2026-11-01. Reviewed working tree at commit 3863a74.
+
+Historical findings, reproduced before remediation. Five primary fixes now
+implemented; see security-fixes.txt for behavior and validation. Severity below
+reflects prerequisites and demonstrated impact, not a formal CVSS score.
+Additional improvements remain separate follow-up work.
+
+1. HIGH: Unauthenticated objects exhaust durable sync journal
+
+Locations: src/sync/protocol/machine/commands.rs:115, :128, :488;
+src/vault/exchange.rs:45, :59, :86;
+src/sync/protocol/machine/history.rs:30.
+
+Machine::receive checks canonical encoding and object hash, then inserts into
+SyncState.objects before verifying authority. Replay ignores orphan control
+objects. Vault persists the candidate journal without removing those objects.
+Untrusted candidates share the 4,096-object / 64 MiB limits with real history
+and locally generated events. No eviction or cleanup path restores capacity.
+
+A malicious provider, or someone able to write objects into the namespace, can
+copy public genesis metadata and change its outer signature repeatedly. No
+master password, epoch key, or admitted signing key needed. Distinct invalid
+signatures produce distinct content hashes and consume durable journal slots.
+
+Confirmed end to end: created fictional shared vault with independent in-memory
+witness store; published genesis and one legitimate edit; delivered 4,094 forged
+controls through ordinary Storage/Discovery/Vault::synchronize calls in batches.
+Closed vault, reopened actual .lbx with the same witness store. Existing password
+remained readable; legitimate upsert_entry failed with ResourceBudgetExceeded.
+The poisoned file remains blocked even without contacting the provider again.
+
+Fix: separate bounded, evictable candidate quarantine from authenticated durable
+history. Verify signatures/authority before promotion; discard proven-invalid
+objects and unanchored junk. Preserve authenticated fork evidence and dependencies
+still capable of verification. Reserve capacity for local commits and trusted
+dependencies. Add flood/restart tests and a safe cleanup path for poisoned files.
+Compaction of legitimate long histories remains a separate capacity requirement.
+
+2. MEDIUM: Website favicon can request local or private network services
+
+Locations: src/records/favicon.rs:12, :146, :149, :154, :165;
+src/desktop/widgets/icons.rs:19.
+
+Displaying a record without an explicitly chosen icon starts native HTTP fetches.
+Website HTML controls icon URLs, including cross-origin HTTP destinations. The
+client follows up to five redirects without destination-address restrictions.
+A controlled record website, imported/shared record, or HTTP network response
+can cause GET requests to loopback, LAN, or link-local HTTP services. Browser
+cross-origin protections do not restrict these native requests. Response MIME
+checks happen after the request and cannot prevent its side effects.
+
+Confirmed with three disposable loopback fixtures: source HTML selected a second
+origin's icon URL; that service redirected to a third origin's /private-probe.
+The third service received the GET and its image response was accepted. No real
+internal services contacted. This proves request capability, not password theft
+or arbitrary local-file access.
+
+Fix: offer bundled icons without network access by default. If downloads remain,
+require HTTPS, restrict origins, reject non-public IPv4/IPv6 destinations, and
+connect to the validated address while preserving TLS hostname verification.
+Disable redirects or repeat validation at every hop and retry; account for DNS
+rebinding and IPv4-mapped IPv6. Avoid forwarding provider credentials or cookies.
+Reference: [OWASP SSRF prevention](https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html).
+
+3. MEDIUM: Plaintext favicon cache reveals vault website metadata after locking
+
+Locations: src/records/favicon.rs:71, :97, :117, :124, :129.
+
+Cache files live outside encrypted vaults. Filenames are unkeyed
+SHA256("<origin>/favicon.ico"); contents contain a plaintext image data URL and
+fetched_at timestamp. Someone with cache/backup access can test likely domains
+offline and recognize branding without knowing the master password. Locking or
+deleting a vault does not remove this cache. Expiry checks do not delete files.
+
+Confirmed with fictional domain: recomputed its filename, read the image and
+timestamp from JSON. Under this environment's umask, files were 0644 and cache
+directories 0755. Cross-user readability also depends on parent permissions;
+offline cache disclosure does not depend on another logged-in user.
+
+Fix: remove persistent website-specific caching or encrypt cache contents and
+identifiers with a vault-scoped key. Keyed filenames alone leave recognizable
+images exposed. Use 0600 files and 0700 directories regardless, and clean legacy
+plaintext caches. Explain any remaining outbound website lookup in settings.
+
+4. MEDIUM: Tiny crafted vault can trigger excessive work before authentication
+
+Locations: src/vault/mod.rs:117, :355, :377;
+src/vault/format.rs:86, :194;
+src/vault/identity.rs:88, :117.
+
+KdfParams::validate permits 4,194,304 KiB (4 GiB) and 20 Argon2 passes. File-supplied
+parameters run before the AEAD tag can authenticate them, even if the password is
+wrong. Opening/importing a crafted .lbx can exhaust memory or stall the process.
+The source comment claiming gigabyte allocation is prevented is incorrect.
+Vault and identity paths also read whole files before enforcing a size budget.
+
+Confirmed safely: a 90-byte synthetic v6 header with those maximum parameters
+passed Vault::peek_id's Header::parse validation. The expensive hash was
+deliberately not run. Allocation/work impact follows from the reviewed Argon2
+call; no memory-exhaustion experiment performed.
+
+Fix: bound total accepted KDF work and memory to a measured supported budget,
+while retaining strong creation defaults. Validate minimum ciphertext length and
+regular-file/size limits before allocation. Use resource-limited, terminable
+workers for untrusted imports; a background thread alone cannot cancel Argon2.
+Apply the same policy to vaults, identity files, and root-capsule parameters.
+
+5. MEDIUM: Autofill GET protection misses submit-button method overrides
+
+Location: browser-extension/src/page.js:44.
+
+safeForm checks form.method and submit-control formaction, but never formmethod.
+A form with method="post" and button formmethod="get" passes inspection. After
+filling and the user's submit action, browser rules put named credential fields
+in the URL. This can expose them through history and URL/access logs. It needs
+an unsafe form on the matching site; it does not bypass origin matching or make
+autofill safe against malicious scripts on that same site.
+
+Confirmed in a Node DOM mock: inspectPage returned a token and fillPage filled
+fictional credentials despite an associated submit button's formMethod="get".
+Actual browser submission was not exercised in this review. Method override
+semantics are documented by [MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/button#formmethod).
+
+Fix: reject effective non-POST submission methods on associated submit buttons
+and input submit/image controls, including controls outside the form. Recheck in
+safeForm at fill time. Test both initial overrides and changes after inspection
+in the real-browser suite.
+
+Additional improvements
+
+- Dependency review: RustSec database commit
+  2295466c4e9df26647fd67d8fa1c705ac2fc7f81 checked against Cargo.lock. A custom
+  package/version comparison found five informational matches; this was not a
+  cargo-audit run. Treat findings below as dependency maintenance risks, not
+  demonstrated application exploits.
+  - glib 0.18.5: RUSTSEC-2024-0429, VariantStrIter unsoundness; fixed >=0.20.0.
+    Present through Linux GTK/WebKit/Dioxus dependencies, absent from current
+    macOS target. Upgrade the compatible dependency stack or backport the fix;
+    do not blindly force incompatible glib versions. Reachability unproven.
+    [RustSec advisory](https://rustsec.org/advisories/RUSTSEC-2024-0429.html).
+  - rand 0.7.3: RUSTSEC-2026-0097. Build dependency through phf_generator,
+    phf_codegen, selectors, kuchikiki. Requires a particular custom-logger and
+    RNG re-entry configuration; exploit prerequisites not established here.
+    [RustSec advisory](https://rustsec.org/advisories/RUSTSEC-2026-0097.html).
+  - proc-macro-error 1.0.4, fxhash 0.2.1, paste 1.0.15: unmaintained notices
+    RUSTSEC-2024-0370, RUSTSEC-2025-0057, RUSTSEC-2024-0436. Update their owning
+    dependency chains. Add cargo audit / advisory checks to CI.
+- KDF memory hygiene: current argon2 0.5.3 hash_password_into allocates ordinary
+  Vec<Block> working memory. Root capsule repeats this path. For stronger
+  post-lock memory hygiene, enable Block zeroization support and supply a
+  Zeroizing<Vec<Block>> through hash_password_into_with_memory. Enabling the
+  feature alone does not wrap the internal arena. No memory-recovery exploit
+  demonstrated; WebView/JavaScript secret-copy limits still apply.
+- Add explicit encryption-key rotation for suspected compromise. Current phrase
+  password reset intentionally preserves the data key and creates a backup.
+  An old password plus an old key-slot backup can recover that same data key;
+  changing the password alone does not revoke a previously recovered key.
+  Communicate this distinction and the retention of old secrets in history.
+- Keep independent cryptographic review, fuzzing of wire/file parsing and real
+  Storj acceptance checks as release gates already tracked in the production plan.
+
+Validation
+
+- cargo test --offline --locked --lib: 351 passed, 2 explicit OS probes ignored.
+- Node policy/background suites: 8 passed.
+- Four temporary Rust security probes confirmed findings 1-4. Initial aggregate
+  run: 3 passed; loopback test denied by execution sandbox. That same loopback
+  test rerun with network permission: passed. No failed application assertion
+  remains from these probes. Durable-poisoning probe took about 196 seconds.
+- Separate Node DOM mock confirmed finding 5's missing check. No Chrome/Firefox
+  end-to-end submission run. Touch ID interaction probes and live Storj not run.
+- Only fictional records, temporary files, memory witnesses, and loopback
+  services used. Temporary integration-test source removed after validation.
+- Source review and bounded probes do not establish absence of other bugs or
+  substitute for independent security certification.

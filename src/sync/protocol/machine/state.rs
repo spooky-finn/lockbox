@@ -58,8 +58,15 @@ pub struct SyncState {
     pub required_control: Option<Hash>,
     /// Owner trust anchor, compared through an authenticated channel on join.
     pub owner_root: Key,
-    /// Immutable candidate objects; only replay establishes their authority.
+    /// Publicly authenticated objects. Replay still verifies plaintext and causality.
     pub objects: BTreeMap<Hash, Blob>,
+    /// Bounded, evictable downloads whose authority is not established yet.
+    /// These never consume the history/outbox capacity needed for local edits.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub candidates: BTreeMap<Hash, Blob>,
+    /// Bounded diagnostics retain no rejected object bytes or authority.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub rejected_candidates: BTreeMap<Hash, Error>,
     /// Locally committed objects awaiting provider acknowledgement.
     pub outbox: BTreeSet<Hash>,
     /// Exact unsigned encrypted body that must reach durable storage before signing.

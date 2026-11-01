@@ -35,11 +35,20 @@ impl Discovery {
             return Err(TransportError::Budget);
         }
 
-        let mut request = Self::new(state.namespace, state.objects.keys().copied().collect());
+        let mut request = Self::new(
+            state.namespace,
+            state
+                .objects
+                .keys()
+                .chain(state.candidates.keys())
+                .chain(state.rejected_candidates.keys())
+                .copied()
+                .collect(),
+        );
         request.required.insert(state.genesis);
         request.required.extend(state.required_control);
 
-        for bytes in state.objects.values() {
+        for bytes in state.objects.values().chain(state.candidates.values()) {
             let object: Object = decode(&bytes.0).map_err(TransportError::Verification)?;
             request.required.extend(object.dependencies());
         }
@@ -142,7 +151,9 @@ impl Batch<'_> {
                 return Err(TransportError::Verification(Error::HashMismatch));
             }
 
-            if self.request.known.len() + self.objects.len() >= MAX_OBJECTS {
+            if self.request.known.len() + self.objects.len()
+                >= MAX_OBJECTS + 2 * crate::sync::protocol::MAX_CANDIDATES
+            {
                 return Err(TransportError::Budget);
             }
 

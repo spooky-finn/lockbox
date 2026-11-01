@@ -25,6 +25,9 @@ pub struct Config {
     /// Lock after this many minutes without input; 0 means never.
     #[serde(default = "default_auto_lock")]
     pub auto_lock_minutes: u32,
+    /// Opt-in network lookups disclose the selected website to that website.
+    #[serde(default)]
+    pub website_icons: bool,
 }
 
 fn default_auto_lock() -> u32 {
@@ -40,6 +43,7 @@ impl Default for Config {
             space_names: Default::default(),
             touch_id: Vec::new(),
             auto_lock_minutes: default_auto_lock(),
+            website_icons: false,
         }
     }
 }

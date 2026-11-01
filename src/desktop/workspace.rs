@@ -17,6 +17,7 @@ pub(crate) enum Page {
 }
 
 pub(crate) struct Unlocked {
+    pub(crate) favicon_cache: crate::records::favicon::Cache,
     pub(crate) page: Page,
     pub(crate) sync: crate::sync::scheduler::SpaceSync,
     pub(crate) sharing: crate::sharing::actions::Sharing,
@@ -38,6 +39,7 @@ pub(crate) struct Unlocked {
 impl Unlocked {
     pub(crate) fn new(vault: Vault) -> Self {
         Self {
+            favicon_cache: Default::default(),
             page: Page::Vault,
             sync: crate::sync::scheduler::SpaceSync::default(),
             sharing: crate::sharing::actions::Sharing::default(),
