@@ -10,6 +10,7 @@ use crate::{
     records::{entry::Entry, history::RecordChange},
 };
 use dioxus::prelude::*;
+use std::borrow::Cow;
 
 enum Records {
     History(Vec<RecordChange>),
@@ -132,9 +133,9 @@ fn snapshot(
             fields.push((
                 language.text(label),
                 if secret && !reveal {
-                    "••••••••".to_owned()
+                    Cow::Borrowed("••••••••")
                 } else {
-                    value.to_owned()
+                    Cow::Borrowed(value)
                 },
             ));
         }
@@ -143,31 +144,33 @@ fn snapshot(
         fields.push((
             "TOTP",
             if reveal {
-                entry
-                    .totp
-                    .as_ref()
-                    .map(|t| {
-                        format!(
-                            "{} · {:?} · {} · {}",
-                            t.secret, t.algorithm, t.digits, t.period
-                        )
-                    })
-                    .unwrap_or_default()
+                Cow::Owned(
+                    entry
+                        .totp
+                        .as_ref()
+                        .map(|t| {
+                            format!(
+                                "{} · {:?} · {} · {}",
+                                t.secret, t.algorithm, t.digits, t.period
+                            )
+                        })
+                        .unwrap_or_default(),
+                )
             } else {
-                "••••••••".into()
+                Cow::Borrowed("••••••••")
             },
         ));
     }
     if other.is_none_or(|e| e.folder_id != entry.folder_id) {
         fields.push((
             language.text(Text::Folder),
-            entry.folder_id.clone().unwrap_or_default(),
+            Cow::Borrowed(entry.folder_id.as_deref().unwrap_or_default()),
         ));
     }
     if other.is_none_or(|e| e.icon != entry.icon) {
         fields.push((
             language.text(Text::ChooseIcon),
-            entry.icon.clone().unwrap_or_default(),
+            Cow::Borrowed(entry.icon.as_deref().unwrap_or_default()),
         ));
     }
     let files_changed = other.is_none_or(|e| e.attachments != entry.attachments);

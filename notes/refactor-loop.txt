@@ -8,21 +8,19 @@ No delegation requested. Keep unrelated work outside refactor commits.
 Last full suite: cycle 48; 411 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 49: Select borrowed trash before restoring
-- Extract private select_trash callback over same verified borrowed map. Public
-  trash still returns owned sorted values; restore clones only selected payload.
-- Preserve history-map sort order, first matching Entry.id (not map key), replay
-  errors, missing-ID Corrupted error and missing-folder fallback before upsert.
-- Expanded existing regression passed before refactor: two deleted attachments,
-  failed write, absent ID, unchanged history/trash/disk, retry, removed folder
-  fallback, only chosen entry restored and durable reopen with other trash intact.
-- Five history, 22 vault and eight record-view tests plus both sync integration
-  tests passed. Formatting and strict all-target Clippy passed. Both sources match
-  verified snapshot; workspace whitespace checks passed.
-- Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-49.2qn8pf8a when workspace cannot compile.
+Cycle 50: Borrow history render field text
+- Snapshot field list uses Cow: borrow ordinary fields, secret placeholders,
+  folder IDs and icon slugs; own only formatted TOTP text. Avoid intermediate
+  String copies before Dioxus formats text into owned nodes.
+- Preserve field order, difference filtering, secret reveal checks, placeholders,
+  Unicode/escaping, empty values and attachment rendering. No hook/state changes.
+- Eight record-view and 45 desktop tests passed. Formatting and strict all-target
+  Clippy passed. Source matches verified snapshot; whitespace checks passed.
+  No new tests for direct ownership change. Icon ID lookup already indexed;
+  leave it and concurrent favicon work unchanged.
+- Validate isolated snapshot at /tmp/lockbox-refactor-50.cv5n4iq5 when workspace
+  cannot compile due to concurrent edits.
 
-Next search: inspect icon ID lookups and record-view payload copies, plus vault
-file write/sync duplication. Avoid skipped saved_entries snapshots without a full
-cancel_activation transition audit; shared state can become bootstrap on failure.
+Next search: broaden to browser extension and asset JavaScript, build scripts,
+plus encrypted-file write/sync duplication. Inspect existing tests and guidance.
 Inspect current code and tests before choosing; no quota-driven edits.
