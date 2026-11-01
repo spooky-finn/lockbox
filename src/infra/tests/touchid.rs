@@ -1,5 +1,5 @@
-use crate::core::identity::Key;
 use super::*;
+use crate::core::identity::Key;
 use std::{
     collections::HashMap,
     sync::{

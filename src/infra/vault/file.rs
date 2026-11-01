@@ -3,7 +3,7 @@
 
 use super::{
     Result, VaultError,
-    format::{Header, PROFILE_VERSION},
+    format::{Header, PROFILE_VERSION, RECOVERY_VERSION},
 };
 use crate::infra::lease::ExclusiveFile;
 use std::{
@@ -32,7 +32,7 @@ pub(super) fn refresh_profile_snapshot(
     let data = fs::read(path)?;
     let header = Header::parse(&data)?;
 
-    if !matches!(header.version, 3 | 5 | PROFILE_VERSION) {
+    if !matches!(header.version, 3 | 5 | PROFILE_VERSION | RECOVERY_VERSION) {
         return Err(VaultError::Corrupted);
     }
 

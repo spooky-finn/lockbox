@@ -70,7 +70,11 @@ impl Screen {
             unlocked.sharing.joining = true;
             unlocked.open_sharing();
         }
-        let errors: Vec<_> = biometric_error.into_iter().chain(config_error).collect();
+        let errors: Vec<_> = biometric_error
+            .into_iter()
+            .chain(config_error)
+            .chain(opened.recovery_notice)
+            .collect();
         unlocked.error = (!errors.is_empty()).then(|| errors.join("; "));
         *self = Self::Unlocked(Box::new(unlocked));
         security.activity();

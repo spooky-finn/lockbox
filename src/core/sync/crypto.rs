@@ -1,5 +1,5 @@
-use crate::core::identity::Key;
 use super::{Blob, Error, Hash, Result, canonical};
+use crate::core::identity::Key;
 use chacha20poly1305::{
     XChaCha20Poly1305, XNonce,
     aead::{Aead, KeyInit, Payload},
@@ -35,11 +35,7 @@ pub(super) fn sign<T: Serialize>(body: T, key: &SigningKey, domain: &[u8]) -> Re
     })
 }
 
-pub(super) fn verify<T: Serialize>(
-    signed: &Signed<T>,
-    key: &Key,
-    domain: &[u8],
-) -> Result<()> {
+pub(super) fn verify<T: Serialize>(signed: &Signed<T>, key: &Key, domain: &[u8]) -> Result<()> {
     let key = VerifyingKey::from_bytes(key).map_err(|_| Error::InvalidSignature)?;
 
     if key.is_weak() {

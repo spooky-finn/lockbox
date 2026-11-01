@@ -1,6 +1,5 @@
 //! Owner authority, roster validation, HPKE grants, and epoch checkpoints.
 
-use crate::core::identity::Key;
 use super::super::{
     Blob, Certificate, DeviceSecret, Error, Hash, Object, Projection, Result, Role, Signed,
     canonical, crypto, wire::sorted_unique,
@@ -10,6 +9,7 @@ use super::{
     protocol::{Control, ControlTransition, Epoch, Grant, Member},
     state::SyncState,
 };
+use crate::core::identity::Key;
 use std::collections::BTreeMap;
 use zeroize::Zeroizing;
 

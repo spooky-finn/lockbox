@@ -30,6 +30,7 @@ pub(super) fn LockedView() -> Element {
     let busy = locked.pending.is_some();
     let create = locked.mode == Mode::Create;
     let cloud_password = create && locked.cloud_password_step;
+    let recovering = locked.recovering;
     let ready = cloud_password
         || locked
             .path
@@ -47,7 +48,7 @@ pub(super) fn LockedView() -> Element {
         .as_ref()
         .map(|path| path.display().to_string())
         .unwrap_or_default();
-    let weak_password = create
+    let weak_password = (create || recovering)
         && !locked.password.is_empty()
         && locked.password.chars().count() < MIN_PASSWORD_CHARS;
     let submit = move |event: FormEvent| {
@@ -64,7 +65,7 @@ pub(super) fn LockedView() -> Element {
         });
     };
     rsx! {
-        section { class: "lock-screen", aria_label: language.text(Text::UnlockVault),
+        section { class: if cloud_password || recovering { "lock-screen recovery-screen" } else { "lock-screen" }, aria_label: language.text(Text::UnlockVault),
             div { class: "unlock-content",
                 LockMark {
                     if touch_id {
@@ -79,13 +80,15 @@ pub(super) fn LockedView() -> Element {
                     }
                 }
                 h1 { class: "unlock-title",
-                    if create && locked.joining { {language.text(Text::SharingConnect)} }
+                    if recovering { {language.text(Text::RecoverVault)} }
+                    else if create && locked.joining { {language.text(Text::SharingConnect)} }
                     else if create { {language.text(Text::CreateAVault)} }
                     else if ready { {language.text(Text::VaultIsLocked)} }
                     else { {language.text(Text::YourPasswordsLockedAway)} }
                 }
                 p { class: "unlock-description", title: "{path}",
-                    if create && locked.joining && !cloud_password { {language.text(Text::SharingJoinSetup)} }
+                    if recovering { {language.text(Text::RecoveryUnlockHint)} }
+                    else if create && locked.joining && !cloud_password { {language.text(Text::SharingJoinSetup)} }
                     else if cloud_password { {language.text(Text::ChooseAMasterPasswordToProtectYourLocalProfile)} }
                     else if create && locked.path.is_none() { {language.text(Text::ChooseAVaultType)} }
                     else if create { {language.format(Text::ChooseAMasterPasswordForTheNewVault, &[filename.to_string()])} }
@@ -124,10 +127,10 @@ pub(super) fn LockedView() -> Element {
 
                 if ready {
                     form { class: "unlock-form", onsubmit: submit,
-                        label { class: "sr-only", r#for: "master-password", {language.text(Text::MasterPassword)} }
+                        label { class: "sr-only", r#for: "master-password", {language.text(if recovering { Text::NewMasterPassword } else { Text::MasterPassword })} }
                         div { class: "unlock-input",
                             input { id: "master-password", r#type: "password", autocomplete: "off", autofocus: true,
-                                placeholder: if create { language.text(Text::MasterPassword) } else { language.text(Text::EnterMasterPassword) },
+                                placeholder: if recovering { language.text(Text::NewMasterPassword) } else if create { language.text(Text::MasterPassword) } else { language.text(Text::EnterMasterPassword) },
                                 disabled: busy, value: locked.password.as_str(),
                                 oninput: move |event| {
                                     let value = Zeroizing::new(event.value());
@@ -135,12 +138,12 @@ pub(super) fn LockedView() -> Element {
                                 },
                             }
 
-                            if !create {
+                            if !create && !recovering {
                                 IconButton { class: "unlock-submit quiet", kind: "submit", icon: Icon::ArrowRight, label: language.text(Text::Unlock), disabled: busy }
                             }
                         }
 
-                        if create {
+                        if create || recovering {
                             label { class: "sr-only", r#for: "repeat-password", {language.text(Text::RepeatMasterPassword)} }
                             div { class: "unlock-input",
                                 input { id: "repeat-password", r#type: "password", autocomplete: "off", disabled: busy,
@@ -151,36 +154,71 @@ pub(super) fn LockedView() -> Element {
                                     },
                                 }
 
-                                if !cloud_password {
+                                if !cloud_password && !recovering {
                                     IconButton { class: "unlock-submit quiet", kind: "submit", icon: Icon::ArrowRight, label: language.text(Text::CreateVault), disabled: busy }
                                 }
                             }
                         }
 
+                        if cloud_password || recovering {
+                            label { r#for: "recovery-words", {language.text(Text::RecoveryWords)} }
+                            p { class: "muted", {language.text(Text::RecoveryWordsHint)} }
+                            if recovering || locked.importing_words || locked.show_recovery_words {
+                                textarea { id: "recovery-words", rows: 4, autocomplete: "off", spellcheck: "false",
+                                    readonly: !recovering && !locked.importing_words, disabled: busy,
+                                    value: locked.recovery_words.as_str(),
+                                    oninput: move |event| {
+                                        let value = Zeroizing::new(event.value());
+                                        edit_locked(state, |locked| {
+                                            replace_secret(&mut locked.recovery_words, &value);
+                                            locked.words_saved = false;
+                                        });
+                                    },
+                                }
+                            }
+                            if cloud_password {
+                                if !locked.importing_words {
+                                    button { r#type: "button", class: "quiet", disabled: busy,
+                                        onclick: move |_| edit_locked(state, |locked| locked.show_recovery_words = !locked.show_recovery_words),
+                                        if locked.show_recovery_words { {language.text(Text::HideRecoveryWords)} }
+                                        else { {language.text(Text::ShowRecoveryWords)} }
+                                    }
+                                }
+                                button { r#type: "button", class: "quiet", disabled: busy,
+                                    onclick: move |_| edit_locked(state, |locked| {
+                                        if locked.importing_words { locked.generate_recovery_words(); }
+                                        else {
+                                            zeroize::Zeroize::zeroize(&mut locked.recovery_words);
+                                            locked.importing_words = true;
+                                            locked.words_saved = false;
+                                            locked.show_recovery_words = false;
+                                        }
+                                    }),
+                                    if locked.importing_words { {language.text(Text::GenerateRecoveryWords)} }
+                                    else { {language.text(Text::UseRecoveryWords)} }
+                                }
+                                label { class: "recovery-saved",
+                                    input { id: "recovery-saved", r#type: "checkbox", disabled: busy || (!locked.show_recovery_words && !locked.importing_words), checked: locked.words_saved,
+                                        onchange: move |event| edit_locked(state, |locked| locked.words_saved = event.checked()),
+                                    }
+                                    {language.text(Text::RecoveryWordsSaved)}
+                                }
+                            }
+                        }
+                        if recovering {
+                            button { r#type: "submit", class: "setup-button", disabled: busy, {language.text(Text::ResetPasswordAndUnlock)} }
+                        }
                         if cloud_password {
-                            p { class: "notice", {language.text(Text::ASeparateRecoveryPasswordProtectsYourRootKeyKeepItInASafePlace)} }
-                            label { r#for: "recovery-password", {language.text(Text::RecoveryPassword)} }
-                            div { class: "unlock-input",
-                                input { id: "recovery-password", r#type: "password", autocomplete: "off", disabled: busy,
-                                    value: locked.recovery_password.as_str(),
-                                    oninput: move |event| {
-                                        let value = Zeroizing::new(event.value());
-                                        edit_locked(state, |locked| replace_secret(&mut locked.recovery_password, &value));
-                                    },
-                                }
-                            }
-                            label { r#for: "recovery-repeat", {language.text(Text::RepeatRecoveryPassword)} }
-                            div { class: "unlock-input",
-                                input { id: "recovery-repeat", r#type: "password", autocomplete: "off", disabled: busy,
-                                    value: locked.recovery_repeat.as_str(),
-                                    oninput: move |event| {
-                                        let value = Zeroizing::new(event.value());
-                                        edit_locked(state, |locked| replace_secret(&mut locked.recovery_repeat, &value));
-                                    },
-                                }
-                            }
                             button { r#type: "submit", class: "setup-button", disabled: busy, {language.text(Text::CreateProfileAndKeys)} }
                         }
+                    }
+                }
+
+                if ready && !create {
+                    button { r#type: "button", class: "quiet", disabled: busy,
+                        onclick: move |_| edit_locked(state, |locked| locked.toggle_recovery()),
+                        if recovering { {language.text(Text::BackToPasswordUnlock)} }
+                        else { {language.text(Text::ForgotMasterPassword)} }
                     }
                 }
 

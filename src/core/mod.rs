@@ -7,6 +7,7 @@ pub mod history;
 pub(crate) mod id;
 pub mod import;
 pub mod language;
+pub mod mnemonic;
 pub mod sync;
 pub mod totp;
 

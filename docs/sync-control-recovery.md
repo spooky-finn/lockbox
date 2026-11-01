@@ -41,7 +41,8 @@ fixed close frontier remain as excluded drafts for explicit review/rebase.
 ## Lost-controller recovery
 
 Three distinct capabilities are required: owner authority (a root capsule and
-its separate recovery password), current readable content, and an independently
+its password: the master password for new desktop profiles, or the original
+recovery password for older profiles), current readable content, and an independently
 authenticated `RecoveryAnchor`. The anchor contains the complete descriptor,
 current control hash and exact data frontier. A stale backup with the same
 control head but older data fails the frontier comparison.

@@ -2,12 +2,11 @@
 
 use super::{
     Result, Vault, VaultError,
-    format::{Header, decrypt, derive},
+    format::{Header, decrypt},
 };
 use crate::core::{entry::Entry, folder::Folder};
 use secrecy::SecretString;
 use std::{fs, path::Path};
-use subtle::ConstantTimeEq;
 
 /// Readable records of a vault. Shared-profile keys and credentials are not kept.
 #[derive(Debug, Default)]
@@ -23,11 +22,7 @@ impl Vault {
     pub fn read_records(path: impl AsRef<Path>, password: &SecretString) -> Result<Records> {
         let data = fs::read(path)?;
         let header = Header::parse(&data)?;
-        let (key, check) = derive(password, &header.salt, header.kdf)?;
-
-        if !bool::from(check.ct_eq(&header.check)) {
-            return Err(VaultError::WrongPassword);
-        }
+        let key = header.password_key(password)?;
 
         let contents = decrypt(&data, &key).ok_or(VaultError::Corrupted)?;
         Ok(Records {

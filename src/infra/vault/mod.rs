@@ -1,6 +1,7 @@
 //! Encrypted vault file.
 //!
-//! Layout (little-endian), 90-byte header followed by the ciphertext:
+//! Layout (little-endian), 90-byte base header followed by the ciphertext.
+//! Version 8 inserts two authenticated 72-byte key slots after the base header:
 //!
 //! | offset | size | field                                   |
 //! |--------|------|-----------------------------------------|
@@ -74,6 +75,12 @@ pub enum VaultError {
     Transport(#[from] crate::infra::sync::TransportError),
     #[error("could not unlock the root key: check the recovery password")]
     RecoveryFailed,
+    #[error("Recovery words do not match this vault")]
+    WrongRecoveryPhrase,
+    #[error("This vault does not have recovery words")]
+    RecoveryUnavailable,
+    #[error("{0}")]
+    Mnemonic(#[from] crate::core::mnemonic::Error),
     #[error("received changes await a durable commit; retry synchronization")]
     PendingSyncCommit,
     #[error("{0}")]
@@ -119,6 +126,7 @@ pub struct Vault {
     salt: [u8; SALT_LEN],
     check: [u8; CHECK_LEN],
     key: Zeroizing<Key>,
+    recovery: Option<recovery::RecoverySlots>,
     pub(in crate::infra) entries: Vec<Entry>,
     history: RefCell<Vec<crate::core::history::RecordChange>>,
     saved_entries: RefCell<Vec<Entry>>,
@@ -135,9 +143,11 @@ mod file;
 mod format;
 
 use file::{lock_profile, refresh_profile_snapshot, sync_dir};
+#[cfg(test)]
+use format::HEADER_LEN;
 use format::{
-    CHECK_LEN, Contents, ContentsRef, HEADER_LEN, Header, NONCE_LEN, PROFILE_VERSION, SALT_LEN,
-    decrypt, derive,
+    CHECK_LEN, Contents, ContentsRef, Header, NONCE_LEN, PROFILE_VERSION, RECOVERY_VERSION,
+    SALT_LEN, decrypt, derive,
 };
 mod authority;
 mod edits;
@@ -146,6 +156,7 @@ pub use metadata::ProfileSummary;
 mod history;
 mod protection;
 mod records;
+mod recovery;
 mod root_journal;
 mod shared;
 mod sharing;
@@ -158,6 +169,7 @@ pub use store::{ControllerRecovery, DeviceRecovery, ProfileStore, SharedProfile}
 enum Unlock<'a> {
     Password(&'a SecretString),
     Key(&'a Key),
+    Recovery(&'a crate::core::mnemonic::RecoveryPhrase),
 }
 
 impl Vault {
@@ -182,6 +194,7 @@ impl Vault {
             salt,
             check,
             key,
+            recovery: None,
             entries: Vec::new(),
             history: RefCell::default(),
             saved_entries: RefCell::default(),
@@ -219,7 +232,7 @@ impl Vault {
             kdf,
             profile,
             witnesses,
-            (Vec::new(), Vec::new()),
+            (Vec::new(), Vec::new(), None),
         )
     }
 
@@ -229,7 +242,11 @@ impl Vault {
         kdf: KdfParams,
         profile: BootstrapProfile,
         witnesses: Arc<dyn WitnessStore>,
-        snapshot: (Vec<Entry>, Vec<crate::core::folder::Folder>),
+        snapshot: (
+            Vec<Entry>,
+            Vec<crate::core::folder::Folder>,
+            Option<&crate::core::mnemonic::RecoveryPhrase>,
+        ),
     ) -> Result<Self> {
         let path = path.to_path_buf();
 
@@ -245,7 +262,16 @@ impl Vault {
         let kdf = kdf.validate()?;
         let mut salt = [0; SALT_LEN];
         getrandom::fill(&mut salt).map_err(|_| VaultError::Random)?;
-        let (key, check) = derive(password, &salt, kdf)?;
+        let (mut key, check) = derive(password, &salt, kdf)?;
+        let recovery = if let Some(phrase) = snapshot.2 {
+            let mut data_key = Zeroizing::new([0u8; 32]);
+            getrandom::fill(data_key.as_mut()).map_err(|_| VaultError::Random)?;
+            let slots = recovery::RecoverySlots::create(&data_key, &key, phrase, &salt)?;
+            key = data_key;
+            Some(slots)
+        } else {
+            None
+        };
         let protection = if profile.requires_witness() {
             Some(RefCell::new(protection::Protection::create(
                 witnesses.clone(),
@@ -262,6 +288,7 @@ impl Vault {
             salt,
             check,
             key,
+            recovery,
             history: RefCell::default(),
             saved_entries: RefCell::new(snapshot.0.clone()),
             entries: snapshot.0,
@@ -293,13 +320,13 @@ impl Vault {
         let path = path.to_path_buf();
         let data = fs::read(&path)?;
         let header = Header::parse(&data)?;
-        let path = if matches!(header.version, 3 | 5 | PROFILE_VERSION) {
+        let path = if matches!(header.version, 3 | 5 | PROFILE_VERSION | RECOVERY_VERSION) {
             path.canonicalize()?
         } else {
             path
         };
 
-        let profile_lock = if matches!(header.version, 3 | 5 | PROFILE_VERSION) {
+        let profile_lock = if matches!(header.version, 3 | 5 | PROFILE_VERSION | RECOVERY_VERSION) {
             Some(lock_profile(&path)?)
         } else {
             None
@@ -313,19 +340,21 @@ impl Vault {
             None => Some(lock_profile(&path)?),
         };
         let (key, failed_decryption) = match unlock {
-            Unlock::Password(password) => {
-                let (key, check) = derive(password, &header.salt, header.kdf)?;
-
-                if !bool::from(check.ct_eq(&header.check)) {
-                    return Err(VaultError::WrongPassword);
-                }
-                (key, VaultError::Corrupted)
-            }
+            Unlock::Password(password) => (header.password_key(password)?, VaultError::Corrupted),
+            Unlock::Recovery(phrase) => (
+                header
+                    .recovery
+                    .as_ref()
+                    .ok_or(VaultError::RecoveryUnavailable)?
+                    .phrase_key(phrase, &header.salt)?,
+                VaultError::Corrupted,
+            ),
             Unlock::Key(key) => (Zeroizing::new(*key), VaultError::KeyMismatch),
         };
 
         let contents = decrypt(&data, &key).ok_or(failed_decryption)?;
         let generation = contents.generation;
+        let header_len = header.len();
         let mut vault = header.into_vault(path, key, contents, profile_lock, witnesses.clone());
 
         if let Some(generation) = generation {
@@ -335,7 +364,7 @@ impl Vault {
                 .ok_or(VaultError::Corrupted)?
                 .sync_secret()
                 .id();
-            let digest = protection::digest_parts(&data[..HEADER_LEN], &data[HEADER_LEN..]);
+            let digest = protection::digest_parts(&data[..header_len], &data[header_len..]);
             vault.protection = Some(RefCell::new(protection::Protection::open(
                 witnesses,
                 device,
@@ -351,6 +380,43 @@ impl Vault {
         }
 
         Ok(vault)
+    }
+
+    pub fn open_with_recovery_phrase(
+        path: impl AsRef<Path>,
+        phrase: &crate::core::mnemonic::RecoveryPhrase,
+    ) -> Result<Self> {
+        ProfileStore::default().open_with_recovery_phrase(path, phrase)
+    }
+
+    /// Change the password after recovery; the data key, salt, and signer stay stable.
+    /// Read-only backup copies must recover a fresh device before they can write.
+    pub fn reset_password_with_phrase(
+        mut self,
+        phrase: &crate::core::mnemonic::RecoveryPhrase,
+        password: &SecretString,
+    ) -> Result<Self> {
+        self.ensure_profile_writable()?;
+        self.ensure_sync_projection()?;
+        let slots = self
+            .recovery
+            .as_ref()
+            .ok_or(VaultError::RecoveryUnavailable)?;
+        let key = slots.phrase_key(phrase, &self.salt)?;
+        if !bool::from(key.as_ref().ct_eq(self.key.as_ref())) {
+            return Err(VaultError::WrongRecoveryPhrase);
+        }
+        let (password_key, check) = derive(password, &self.salt, self.kdf)?;
+        let mut slots = slots.clone();
+        slots.reset_password(&self.key, &password_key, &self.salt)?;
+        self.profile
+            .as_mut()
+            .ok_or(VaultError::Corrupted)?
+            .reset_root_password(phrase, password, self.kdf)?;
+        self.recovery = Some(slots);
+        self.check = check;
+        self.save()?;
+        Ok(self)
     }
 
     /// Stable identifier of the vault file: its random salt, which never changes.
@@ -418,13 +484,19 @@ impl Vault {
 
         let mut nonce = [0u8; NONCE_LEN];
         random(&mut nonce);
-        let header = Header::encode(
+        let mut header = Header::encode(
             self.kdf,
             &self.salt,
             &self.check,
             self.profile.is_some(),
             &nonce,
-        );
+        )
+        .to_vec();
+        if let Some(slots) = &self.recovery {
+            header[4..6].copy_from_slice(&RECOVERY_VERSION.to_le_bytes());
+            header.extend_from_slice(&slots.password);
+            header.extend_from_slice(&slots.phrase);
+        }
         let history = self.next_local_history();
         let ciphertext = format::encrypt(
             ContentsRef {
@@ -525,6 +597,7 @@ impl Header {
             salt: self.salt,
             check: self.check,
             key,
+            recovery: self.recovery,
             history: RefCell::new(contents.history),
             saved_entries: RefCell::new(contents.entries.clone()),
             entries: contents.entries,
@@ -569,3 +642,7 @@ mod authority_tests;
 #[cfg(test)]
 #[path = "tests/edits.rs"]
 mod edit_tests;
+
+#[cfg(test)]
+#[path = "tests/recovery.rs"]
+mod recovery_tests;

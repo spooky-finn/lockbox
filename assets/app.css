@@ -136,6 +136,12 @@ h2 { font-size: 15px; font-weight: 600; letter-spacing: -.2px; }
 .unlock-title { font-size: 20px; font-weight: 650; line-height: 1.25; letter-spacing: -.5px; }
 .unlock-description { max-width: 320px; margin-top: 12px; color: var(--lock-secondary); font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
 .unlock-form { display: flex; flex-direction: column; gap: 12px; width: 240px; max-width: 100%; margin-top: 28px; }
+.lock-screen.recovery-screen { display: flex; flex-direction: column; gap: 24px; }
+.recovery-screen .unlock-content { flex: 0 0 auto; }
+.recovery-screen .lock-actions { position: static; transform: none; }
+.unlock-form:has(#recovery-saved), .unlock-form:has(#recovery-words) { width: 340px; }
+.recovery-saved { display: flex; align-items: center; gap: 8px; text-align: left; }
+.unlock-form textarea { line-height: 1.6; text-align: left; }
 .unlock-input { position: relative; height: 34px; border: 1px solid var(--lock-field-border); border-radius: 8px; background: var(--lock-field); transition: border-color 140ms, box-shadow 140ms; }
 .unlock-input:focus-within { border-color: var(--lock-focus); box-shadow: 0 0 0 3px rgb(174 136 67 / 45%); }
 .unlock-input > input[type=password] { height: 100%; padding: 6px 32px 6px 10px; border: 0; border-radius: inherit; color: var(--lock-ink); background: transparent; box-shadow: none; font-size: 12px; text-align: center; caret-color: var(--lock-focus); }

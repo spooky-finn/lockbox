@@ -1,6 +1,5 @@
 //! Verify control history and causal changes, then derive the reference projection.
 
-use crate::core::identity::Key;
 use super::super::{
     DeviceSecret, Error, Hash, Object, Projection, Result, Role, Signed, Transaction, canonical,
     crypto::{self, nonce},
@@ -14,6 +13,7 @@ use super::{
     state::{Replay, SyncState},
 };
 use super::{history::ControlHistory, membership::grant_aad};
+use crate::core::identity::Key;
 use std::collections::{BTreeMap, BTreeSet};
 
 impl Machine {

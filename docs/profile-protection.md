@@ -94,7 +94,7 @@ let recovered = profiles.restore_device(
     kdf,
     DeviceRecovery {
         source: &readable_backup,
-        recovery_password: &separate_recovery_password,
+        recovery_password: &backup_master_password,
         descriptor: authenticated_descriptor,
         control_anchor: authenticated_control_hash,
         configuration: SharedProfile {
@@ -106,8 +106,11 @@ let recovered = profiles.restore_device(
 )?;
 ```
 
-The separate recovery password opens the root capsule. Fresh Ed25519 and HPKE
-device keys are certified under the same user root. The new profile contains a
+For profiles created through the desktop app, the master password also opens the
+root capsule, which retains its own Argon2id salt. Older profiles and API callers
+may use a separate recovery password; supply that original password instead.
+Normal password or Touch ID unlock does not automatically open root authority.
+Fresh Ed25519 and HPKE device keys are certified under the same user root. The new profile contains a
 new installation binding, empty join journal and pinned minimum control hash.
 It does not import old signing keys, counters, outbox, epoch keys or a readable
 backup snapshot as authoritative current content.
@@ -158,3 +161,11 @@ cargo test --locked --lib infra::witness::keychain::tests::keychain_witness_roun
 That OS round trip and cleanup passed on 2026-11-01. It verifies the actual
 Keychain adapter; it does not replace a live Storj exchange, physical power-loss
 testing or independent security review.
+
+## Twelve-word password recovery
+
+New desktop profiles use BIP39-derived roots and v8 password/recovery key slots.
+The 12 words and the profile file recover readable contents without the old
+master password. Writable installations can set a new password; imported or
+rolled-back profiles retain read-only protection. See [recovery words](recovery-words.md)
+for the user flow, key derivation, file layout, and compatibility rules.

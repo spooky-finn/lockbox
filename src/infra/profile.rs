@@ -1,8 +1,8 @@
 //! Encrypted device profile, independent root capsule, and durable sync journal.
 
-use crate::core::identity::Key;
 use super::vault::{KdfParams, Result, VaultError};
-use crate::core::identity::{DeviceKeys, PublicIdentity, SpaceKeys, random32};
+use crate::core::identity::Key;
+use crate::core::identity::{DeviceKeys, PublicIdentity, SpaceKeys};
 use argon2::{Algorithm, Argon2, Params, Version};
 use chacha20poly1305::{
     XChaCha20Poly1305, XNonce,
@@ -77,7 +77,8 @@ impl BootstrapProfile {
         recovery_password: &SecretString,
         kdf: KdfParams,
     ) -> Result<Self> {
-        let root = SigningKey::from_bytes(&*random32().map_err(|_| VaultError::Random)?);
+        let phrase = crate::core::mnemonic::RecoveryPhrase::generate()?;
+        let root = phrase.signing_key();
         Self::generate_for_root(
             &root,
             username,
@@ -86,6 +87,38 @@ impl BootstrapProfile {
             recovery_password,
             kdf,
         )
+    }
+
+    pub(crate) fn from_recovery_phrase(
+        username: String,
+        space_name: String,
+        provider: ProviderConfiguration,
+        password: &SecretString,
+        kdf: KdfParams,
+        phrase: &crate::core::mnemonic::RecoveryPhrase,
+    ) -> Result<Self> {
+        Self::generate_for_root(
+            &phrase.signing_key(),
+            username,
+            space_name,
+            provider,
+            password,
+            kdf,
+        )
+    }
+
+    pub(crate) fn reset_root_password(
+        &mut self,
+        phrase: &crate::core::mnemonic::RecoveryPhrase,
+        password: &SecretString,
+        kdf: KdfParams,
+    ) -> Result<()> {
+        let root = phrase.signing_key();
+        if root.verifying_key().to_bytes() != self.identity.root_key {
+            return Err(VaultError::WrongRecoveryPhrase);
+        }
+        self.root_capsule = RootCapsule::seal(&root, password, kdf)?;
+        Ok(())
     }
 
     fn generate_for_root(

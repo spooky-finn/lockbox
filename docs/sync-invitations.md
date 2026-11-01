@@ -11,7 +11,9 @@ and member-management flows below; other production release gates remain open.
 The owner opens **Sharing and participants** from an unlocked cloud profile's
 sidebar. A new participant selects **Join a space** on the welcome screen,
 enters their name and independent credentials for the owner's Storj storage,
-then chooses master and recovery passwords. The app creates an encrypted local
+then chooses and confirms one master password and saves 12 BIP39 recovery words.
+These words derive the user root key and, together with the local profile file or
+a backup, recover access without the master password. See [recovery words](recovery-words.md). The app creates an encrypted local
 staging profile with fresh identity/device keys and opens the joining wizard.
 The participant does not need to name or manually create a separate space.
 Provider credentials remain required and are never included in sharing files.

@@ -1,13 +1,14 @@
 //! Unlock/create form and its background worker; no UI or system-service ownership.
 
 use super::time::unix_now;
-use crate::infra::profile::{BootstrapProfile, ProviderConfiguration};
+use crate::core::mnemonic::RecoveryPhrase;
+use crate::infra::profile::ProviderConfiguration;
 use crate::{
     infra::config::Config,
     infra::touchid::{self, Biometrics},
     infra::vault::{KdfParams, Vault},
 };
-use secrecy::SecretString;
+use secrecy::{ExposeSecret, SecretString};
 use std::{
     path::PathBuf,
     sync::{
@@ -28,6 +29,7 @@ fn secret_buffer() -> Zeroizing<String> {
 pub(crate) struct Opened {
     pub(crate) vault: Vault,
     pub(crate) with_password: bool,
+    pub(crate) recovery_notice: Option<String>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -53,8 +55,11 @@ pub(crate) struct Locked {
     pub(crate) joining: bool,
     pub(crate) password: Zeroizing<String>,
     pub(crate) repeat: Zeroizing<String>,
-    pub(crate) recovery_password: Zeroizing<String>,
-    pub(crate) recovery_repeat: Zeroizing<String>,
+    pub(crate) recovery_words: Zeroizing<String>,
+    pub(crate) words_saved: bool,
+    pub(crate) show_recovery_words: bool,
+    pub(crate) importing_words: bool,
+    pub(crate) recovering: bool,
     pub(crate) error: Option<String>,
     /// Argon2id and Touch ID run on a worker thread so the window keeps repainting.
     pub(crate) pending: Option<Receiver<Result<Opened, String>>>,
@@ -82,8 +87,11 @@ impl Locked {
             joining: false,
             password: secret_buffer(),
             repeat: secret_buffer(),
-            recovery_password: secret_buffer(),
-            recovery_repeat: secret_buffer(),
+            recovery_words: secret_buffer(),
+            words_saved: false,
+            show_recovery_words: false,
+            importing_words: false,
+            recovering: false,
             error,
             pending: None,
             touch_id: None,
@@ -136,6 +144,7 @@ impl Locked {
                 .map(|vault| Opened {
                     vault,
                     with_password: false,
+                    recovery_notice: None,
                 });
             let _ = sender.send(result);
         });
@@ -149,6 +158,9 @@ impl Locked {
 
         match self.cloud.validate() {
             Ok(()) => {
+                if self.recovery_words.is_empty() && !self.generate_recovery_words() {
+                    return;
+                }
                 self.error = None;
                 self.cloud_password_step = true;
             }
@@ -161,8 +173,36 @@ impl Locked {
         self.cloud_password_step = false;
         self.password.zeroize();
         self.repeat.zeroize();
-        self.recovery_password.zeroize();
-        self.recovery_repeat.zeroize();
+        self.recovery_words.zeroize();
+        self.words_saved = false;
+        self.show_recovery_words = false;
+        self.importing_words = false;
+        self.error = None;
+    }
+
+    pub(crate) fn generate_recovery_words(&mut self) -> bool {
+        match RecoveryPhrase::generate() {
+            Ok(phrase) => {
+                self.recovery_words = Zeroizing::new(phrase.words().expose_secret().to_owned());
+                self.words_saved = false;
+                self.show_recovery_words = false;
+                self.importing_words = false;
+                self.error = None;
+                true
+            }
+            Err(error) => {
+                self.error = Some(error.to_string());
+                false
+            }
+        }
+    }
+
+    pub(crate) fn toggle_recovery(&mut self) {
+        self.recovering = !self.recovering;
+        self.auto_touch_id = false;
+        self.password.zeroize();
+        self.repeat.zeroize();
+        self.recovery_words.zeroize();
         self.error = None;
     }
 
@@ -181,14 +221,10 @@ impl Locked {
                 ))
             } else if *self.password != *self.repeat {
                 Some("Passwords do not match".into())
-            } else if self.recovery_password.chars().count() < MIN_PASSWORD_CHARS {
-                Some(format!(
-                    "Recovery password: at least {MIN_PASSWORD_CHARS} characters"
-                ))
-            } else if *self.recovery_password != *self.recovery_repeat {
-                Some("Recovery passwords do not match".into())
-            } else if *self.password == *self.recovery_password {
-                Some("Recovery password must differ from the master password".into())
+            } else if let Err(error) = RecoveryPhrase::parse(&self.recovery_words) {
+                Some(error.to_string())
+            } else if !self.words_saved {
+                Some("Save your recovery words before continuing".into())
             } else {
                 None
             }
@@ -222,10 +258,27 @@ impl Locked {
             return;
         }
 
-        if self.mode == Mode::Create && *self.password != *self.repeat {
+        if self.recovering && self.password.chars().count() < MIN_PASSWORD_CHARS {
+            self.error = Some(format!(
+                "Master password: at least {MIN_PASSWORD_CHARS} characters"
+            ));
+            return;
+        }
+        if (self.mode == Mode::Create || self.recovering) && *self.password != *self.repeat {
             self.error = Some("Passwords do not match".into());
             return;
         }
+        let phrase = if cloud || self.recovering {
+            match RecoveryPhrase::parse(&self.recovery_words) {
+                Ok(phrase) => Some(phrase),
+                Err(error) => {
+                    self.error = Some(error.to_string());
+                    return;
+                }
+            }
+        } else {
+            None
+        };
         // Move the Rust-side password buffer to the worker, which wipes it on drop.
         let password = SecretString::from(std::mem::replace(
             &mut *self.password,
@@ -235,9 +288,8 @@ impl Locked {
         self.error = None;
         self.waiting_touch_id = false;
         let mode = self.mode;
+        let recovering = self.recovering;
         let cloud_creation = cloud.then(|| {
-            let recovery = SecretString::from(std::mem::take(&mut *self.recovery_password));
-            self.recovery_repeat.zeroize();
             (
                 self.cloud.username.trim().to_owned(),
                 self.cloud.space_name.trim().to_owned(),
@@ -247,34 +299,42 @@ impl Locked {
                     access_key: self.cloud.access_key.to_string(),
                     secret_key: self.cloud.secret_key.to_string(),
                 },
-                recovery,
             )
         });
         let (sender, receiver) = mpsc::channel();
         thread::spawn(move || {
-            let result = match mode {
-                Mode::Open => Vault::open(&path, &password),
-                Mode::Create => {
-                    if let Some((username, space_name, provider, recovery)) = cloud_creation {
-                        BootstrapProfile::generate(
-                            username,
-                            space_name,
-                            provider,
-                            &recovery,
-                            KdfParams::default(),
-                        )
-                        .and_then(|profile| {
-                            Vault::create_profile(&path, &password, KdfParams::default(), profile)
-                        })
+            let mut recovery_notice = None;
+            let mut with_password = true;
+            let result = if recovering {
+                let phrase = phrase.as_ref().expect("validated recovery phrase");
+                Vault::open_with_recovery_phrase(&path, phrase).and_then(|vault| {
+                    if vault.signing_error().is_some() {
+                        with_password = false;
+                        recovery_notice = Some("Recovered read-only access. This backup must be admitted as a new device before its password can be reset.".into());
+                        Ok(vault)
                     } else {
-                        Vault::create(&path, &password, KdfParams::default())
+                        vault.reset_password_with_phrase(phrase, &password)
+                    }
+                })
+            } else {
+                match mode {
+                    Mode::Open => Vault::open(&path, &password),
+                    Mode::Create => {
+                        if let Some((username, space_name, provider)) = cloud_creation {
+                            crate::infra::vault::ProfileStore::default().create_shared_with_phrase(
+                                &path,
+                                &password,
+                                KdfParams::default(),
+                                crate::infra::vault::SharedProfile { username, space_name, provider },
+                                phrase.as_ref().expect("validated recovery phrase"),
+                            )
+                        } else {
+                            Vault::create(&path, &password, KdfParams::default())
+                        }
                     }
                 }
             }
-            .map(|vault| Opened {
-                vault,
-                with_password: true,
-            })
+            .map(|vault| Opened { vault, with_password, recovery_notice })
             .map_err(|error| error.to_string());
             let _ = sender.send(result);
         });

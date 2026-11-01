@@ -64,6 +64,7 @@ fn opening_with_password_restores_biometric_key_and_remembers_the_file() {
         Opened {
             vault: workspace.vault,
             with_password: true,
+            recovery_notice: None,
         },
         &mut settings,
         &fake,
@@ -92,6 +93,7 @@ fn joining_opens_sharing_and_survives_a_session_lock() {
         Opened {
             vault: workspace.vault,
             with_password: true,
+            recovery_notice: None,
         },
         &mut settings,
         &fake,

@@ -1,6 +1,5 @@
 //! Prepare commands and complete reserved signing intents without performing I/O.
 
-use crate::core::identity::Key;
 use super::super::{
     Blob, Certificate, Counter, DeviceSecret, Error, Hash, Object, Projection, Result, Role,
     Signed, Transaction, canonical,
@@ -16,6 +15,7 @@ use super::{
     history::with_history,
     membership::{build_control, epoch_key, validate_control_body},
 };
+use crate::core::identity::Key;
 use std::collections::{BTreeMap, BTreeSet};
 use zeroize::Zeroizing;
 

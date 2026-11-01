@@ -1,7 +1,7 @@
 //! Encrypted file format, authenticated contents and password derivation.
 
-use crate::core::identity::Key;
 use super::{KdfParams, Result, VaultError};
+use crate::core::identity::Key;
 use crate::{
     core::{
         anchor::FileGeneration,
@@ -24,8 +24,10 @@ use zeroize::Zeroizing;
 const MAGIC: &[u8; 4] = b"LBX1";
 // v6/v7 preserve local record history and trash. Older clients must reject
 // these files rather than silently discarding revisions on save.
+// v8 profiles add independent password and mnemonic key slots.
 pub(super) const VERSION: u16 = 6;
 pub(super) const PROFILE_VERSION: u16 = 7;
+pub(super) const RECOVERY_VERSION: u16 = 8;
 pub(super) const SALT_LEN: usize = 16;
 pub(super) const CHECK_LEN: usize = 32;
 pub(super) const NONCE_LEN: usize = 24;
@@ -50,12 +52,34 @@ pub(super) struct Contents {
 /// Header fields needed to unlock and later re-save a vault.
 pub(super) struct Header {
     pub(super) version: u16,
+    pub(super) recovery: Option<super::recovery::RecoverySlots>,
     pub(super) kdf: KdfParams,
     pub(super) salt: [u8; SALT_LEN],
     pub(super) check: [u8; CHECK_LEN],
 }
 
 impl Header {
+    pub(super) fn len(&self) -> usize {
+        HEADER_LEN
+            + if self.recovery.is_some() {
+                super::recovery::SLOTS_LEN
+            } else {
+                0
+            }
+    }
+
+    pub(super) fn password_key(&self, password: &SecretString) -> Result<Zeroizing<Key>> {
+        use subtle::ConstantTimeEq;
+        let (key, check) = derive(password, &self.salt, self.kdf)?;
+        if !bool::from(check.ct_eq(&self.check)) {
+            return Err(VaultError::WrongPassword);
+        }
+        match &self.recovery {
+            Some(slots) => slots.password_key(&key, &self.salt),
+            None => Ok(key),
+        }
+    }
+
     pub(super) fn parse(data: &[u8]) -> Result<Self> {
         if data.len() < HEADER_LEN || &data[..4] != MAGIC {
             return Err(VaultError::NotAVault);
@@ -63,7 +87,7 @@ impl Header {
 
         let version = u16::from_le_bytes([data[4], data[5]]);
 
-        if !(1..=PROFILE_VERSION).contains(&version) {
+        if !(1..=RECOVERY_VERSION).contains(&version) {
             return Err(VaultError::UnsupportedVersion(version));
         }
 
@@ -73,7 +97,19 @@ impl Header {
             lanes: u32_at(data, 14),
         }
         .validate()?;
+        let recovery = if version == RECOVERY_VERSION {
+            let slots = data
+                .get(HEADER_LEN..HEADER_LEN + super::recovery::SLOTS_LEN)
+                .ok_or(VaultError::NotAVault)?;
+            Some(super::recovery::RecoverySlots {
+                password: slots[..super::recovery::SLOT_LEN].try_into().unwrap(),
+                phrase: slots[super::recovery::SLOT_LEN..].try_into().unwrap(),
+            })
+        } else {
+            None
+        };
         Ok(Self {
+            recovery,
             version,
             kdf,
             salt: data[18..34].try_into().unwrap(),
@@ -84,7 +120,8 @@ impl Header {
 
 /// Authenticated decryption of the whole file; `None` if the key or data is wrong.
 pub(super) fn decrypt(data: &[u8], key: &Key) -> Option<Contents> {
-    let (header, ciphertext) = data.split_at(HEADER_LEN);
+    let parsed = Header::parse(data).ok()?;
+    let (header, ciphertext) = data.split_at(parsed.len());
     let nonce = XNonce::from_slice(&header[66..HEADER_LEN]);
     let plaintext = Zeroizing::new(
         cipher(key)
@@ -109,7 +146,7 @@ pub(super) fn decrypt(data: &[u8], key: &Key) -> Option<Contents> {
 
     let version = u16::from_le_bytes([header[4], header[5]]);
 
-    if (matches!(version, 3 | 5 | PROFILE_VERSION)) != contents.profile.is_some()
+    if (matches!(version, 3 | 5 | PROFILE_VERSION | RECOVERY_VERSION)) != contents.profile.is_some()
         || contents
             .profile
             .as_ref()
@@ -196,7 +233,7 @@ impl Header {
 pub(super) fn encrypt(
     contents: ContentsRef<'_>,
     key: &Key,
-    header: &[u8; HEADER_LEN],
+    header: &[u8],
     nonce: &[u8; NONCE_LEN],
 ) -> Vec<u8> {
     let plaintext =

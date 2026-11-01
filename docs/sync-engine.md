@@ -201,8 +201,9 @@ events. `Storj` implements that contract; independent provider credentials can
 be supplied for each installation.
 
 `ProfileStore` supports alternate witness adapters. `restore_device` requires the
-separate recovery password and an independently authenticated descriptor/control
-anchor; it generates fresh certified device keys and waits for new admission.
+root-capsule password (the master password for new desktop profiles) and an
+independently authenticated descriptor/control anchor; it generates fresh
+certified device keys and waits for new admission.
 `Machine::join_at` pins this minimum head, and `space_anchor()` exports the current
 verified head from a writable installation. Existing schema-2 cloud profiles open
 read-only rather than silently enrolling their old signer.

@@ -62,37 +62,42 @@ fn cloud_or_unselected_creation_cannot_write_a_legacy_vault() {
 }
 
 #[test]
-fn identity_creation_requires_distinct_confirmed_recovery_password() {
+fn identity_creation_requires_confirmed_password_and_saved_valid_recovery_words() {
     let mut form = Locked::new(None);
     form.mode = Mode::Create;
     form.storage_kind = Some(StorageKind::Cloud);
-    form.cloud_password_step = true;
     form.cloud.username = "Alice".into();
     form.cloud.space_name = "Team".into();
     form.cloud.base_url = "https://gateway.storjshare.io".into();
     form.cloud.bucket = "team-vault".into();
     form.cloud.access_key.push_str("test-access");
     form.cloud.secret_key.push_str("test-secret");
+    form.continue_cloud();
+    form.password.push_str("too short");
+    form.repeat.push_str("too short");
+    assert!(!form.validate_creation());
+    form.password.clear();
     form.password.push_str("local master password");
+    assert!(!form.validate_creation());
+    form.repeat.clear();
     form.repeat.push_str("local master password");
     assert!(!form.validate_creation());
-    form.recovery_password.push_str("local master password");
-    form.recovery_repeat.push_str("local master password");
+    form.words_saved = true;
+    assert!(form.validate_creation());
+    let valid_words = form.recovery_words.to_string();
+    form.recovery_words.clear();
+    form.recovery_words.push_str("abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon");
     assert!(!form.validate_creation());
-    form.recovery_password.clear();
-    form.recovery_password
-        .push_str("independent recovery password");
-    assert!(!form.validate_creation());
-    form.recovery_repeat.clear();
-    form.recovery_repeat
-        .push_str("independent recovery password");
+    form.recovery_words.clear();
+    form.recovery_words.push_str(&valid_words);
     assert!(form.validate_creation());
     form.path = Some("/tmp/failed-profile.lbx".into());
     form.edit_cloud_connection();
     assert!(form.path.is_none());
     assert!(form.password.is_empty());
-    assert!(form.recovery_password.is_empty());
-    assert!(form.recovery_repeat.is_empty());
+    assert!(form.repeat.is_empty());
+    assert!(form.recovery_words.is_empty());
+    assert!(!form.words_saved);
 }
 
 #[test]
@@ -105,25 +110,26 @@ fn application_worker_creates_and_reopens_identity_profile() {
     let mut form = Locked::new(Some(path.clone()));
     form.mode = Mode::Create;
     form.storage_kind = Some(StorageKind::Cloud);
-    form.cloud_password_step = true;
     form.cloud.username = "Alice".into();
     form.cloud.space_name = "Team".into();
     form.cloud.base_url = "https://gateway.storjshare.io".into();
     form.cloud.bucket = "team-vault".into();
     form.cloud.access_key.push_str("test-access");
     form.cloud.secret_key.push_str("test-secret");
+    form.continue_cloud();
     form.password.push_str("local master password");
     form.repeat.push_str("local master password");
-    form.recovery_password
-        .push_str("independent recovery password");
-    form.recovery_repeat
-        .push_str("independent recovery password");
+    form.words_saved = true;
+    let words = zeroize::Zeroizing::new(form.recovery_words.to_string());
+    let expected_root = crate::core::mnemonic::RecoveryPhrase::parse(&form.recovery_words)
+        .unwrap()
+        .signing_key()
+        .verifying_key()
+        .to_bytes();
     form.submit();
     assert!(form.error.is_none());
     assert!(form.password.is_empty());
     assert!(form.repeat.is_empty());
-    assert!(form.recovery_password.is_empty());
-    assert!(form.recovery_repeat.is_empty());
     let opened = form
         .pending
         .take()
@@ -132,6 +138,7 @@ fn application_worker_creates_and_reopens_identity_profile() {
         .unwrap()
         .unwrap();
     let profile = opened.vault.test_profile().unwrap();
+    assert_eq!(profile.identity.root_key, expected_root);
     assert_eq!(profile.username, "Alice");
     assert_eq!(profile.space_name, "Team");
     let id = profile.identity.user_id;
@@ -144,4 +151,78 @@ fn application_worker_creates_and_reopens_identity_profile() {
     .unwrap();
     assert_eq!(reopened.test_profile().unwrap().identity.user_id, id);
     assert_eq!(reopened.test_profile().unwrap().identity.device_id, device);
+    let profile = reopened.test_profile().unwrap();
+    let recovered = profile
+        .recover_identity(
+            &SecretString::from("local master password".to_owned()),
+            crate::infra::vault::KdfParams {
+                memory_kib: 8192,
+                passes: 1,
+                lanes: 1,
+            },
+            profile.username.clone(),
+            profile.space_name.clone(),
+            crate::infra::profile::ProviderConfiguration {
+                base_url: profile.provider.base_url.clone(),
+                bucket: profile.provider.bucket.clone(),
+                access_key: profile.provider.access_key.clone(),
+                secret_key: profile.provider.secret_key.clone(),
+            },
+        )
+        .unwrap();
+    assert_eq!(recovered.identity.user_id, id);
+    assert_ne!(recovered.identity.device_id, device);
+    drop(reopened);
+    let mut recovery = Locked::new(Some(path.clone()));
+    recovery.toggle_recovery();
+    recovery.password.push_str("replacement master password");
+    recovery.repeat.push_str("replacement master password");
+    recovery.recovery_words.push_str(&words);
+    recovery.submit();
+    assert!(recovery.error.is_none());
+    let recovered = recovery
+        .pending
+        .take()
+        .unwrap()
+        .recv_timeout(Duration::from_secs(30))
+        .unwrap()
+        .unwrap();
+    assert!(recovered.with_password);
+    assert!(recovered.recovery_notice.is_none());
+    assert_eq!(recovered.vault.test_profile().unwrap().identity.user_id, id);
+    drop(recovered);
+    assert!(
+        Vault::open(
+            &path,
+            &SecretString::from("local master password".to_owned())
+        )
+        .is_err()
+    );
+    assert!(
+        Vault::open(
+            &path,
+            &SecretString::from("replacement master password".to_owned())
+        )
+        .is_ok()
+    );
+}
+
+#[test]
+fn recovery_mode_clears_secrets_and_validates_before_starting_worker() {
+    let mut form = Locked::new(Some("/tmp/missing-recovery-test.lbx".into()));
+    form.password.push_str("old typed secret");
+    form.toggle_recovery();
+    assert!(form.recovering);
+    assert!(form.password.is_empty());
+    form.password.push_str("new master password");
+    form.repeat.push_str("new master password");
+    form.recovery_words.push_str("invalid recovery words");
+    form.submit();
+    assert!(form.pending.is_none());
+    assert!(form.error.as_ref().unwrap().contains("12-word"));
+    form.toggle_recovery();
+    assert!(!form.recovering);
+    assert!(form.password.is_empty());
+    assert!(form.repeat.is_empty());
+    assert!(form.recovery_words.is_empty());
 }

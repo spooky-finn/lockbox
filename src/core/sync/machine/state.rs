@@ -1,8 +1,8 @@
 //! Persisted ciphertext journal, pinned trust anchors, and replay results.
 
-use crate::core::identity::Key;
 use super::super::{Blob, Error, Hash, Object, Projection, Result, Role, Transaction};
 use super::protocol::{Change, Control};
+use crate::core::identity::Key;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 

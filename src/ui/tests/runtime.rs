@@ -22,6 +22,7 @@ fn worker_results_open_the_vault_and_report_failure_or_disconnect() {
             .send(Ok(Opened {
                 vault: crate::app::test_support::unlocked(&dir).vault,
                 with_password: true,
+                recovery_notice: None,
             }))
             .unwrap_or_else(|_| panic!("receiver dropped"));
         runtime::poll_workers();

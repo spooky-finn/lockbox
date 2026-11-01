@@ -1,0 +1,13 @@
+Recovery words
+
+- New cloud create/join: 12 English BIP39 words, 128-bit OS entropy, valid checksum.
+- No BIP39 passphrase. PBKDF2 seed; SLIP-0010 Ed25519 master m. Device/space keys stay random.
+- Show/hide words; explicit saved acknowledgment. Existing words accepted. Words wiped with setup state.
+- Forgot master password: words + existing profile/backup recover data. Original password unnecessary.
+- v8: random data key; independent password/recovery key slots; whole header authenticated.
+- Password reset preserves salt, identity, device, data key, witnesses. Atomic save; fresh slot nonce/root capsule.
+- Imported/rollback copies recover read-only. No witness bypass or implicit signer enrollment.
+- Legacy profiles unchanged; no retroactive words. File format v8 rejected by older clients.
+- Mnemonic/entropy/seed/key Rust buffers zeroized. No word logging or automatic clipboard export.
+- Specs: docs/recovery-words.md. Vector, tamper, failed-write, reset/reopen, UI/worker tests.
+- Validation: 301 unit checks covered by full run + corrected UI rerun; 1 OS probe ignored. Recovery 14/14; UI 5/5; integration 2/2; doc 2/2. Clippy, formatting, diff checks pass.

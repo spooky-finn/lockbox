@@ -1,7 +1,7 @@
 //! Read-only public profile metadata and durable local participant aliases.
 
-use crate::core::identity::Key;
 use super::{Result, Vault, VaultError};
+use crate::core::identity::Key;
 use crate::core::sync::Hash;
 
 /// Public identity metadata, without provider credentials or private keys.

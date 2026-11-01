@@ -79,11 +79,12 @@ fn cloud_submit_validates_then_offers_identity_creation() {
     dom.render_immediate_to_vec();
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("id=\"master-password\""));
+    assert!(html.contains("id=\"repeat-password\""));
     assert!(html.contains("Назад к подключению"));
     assert!(!html.contains("test-secret"));
     assert!(!html.contains("test-access"));
-    assert!(html.contains("id=\"recovery-password\""));
-    assert!(html.contains("id=\"recovery-repeat\""));
+    assert!(!html.contains("id=\"recovery-password\""));
+    assert!(!html.contains("id=\"recovery-repeat\""));
     assert!(html.contains("Создать профиль и ключи…"));
 }
 
@@ -117,7 +118,71 @@ fn joining_starts_at_connection_setup_without_creating_a_named_space() {
     });
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("id=\"master-password\""));
-    assert!(html.contains("id=\"recovery-password\""));
+    assert!(html.contains("id=\"repeat-password\""));
+    assert!(!html.contains("id=\"recovery-password\""));
     update(&mut dom, |_| runtime::begin_create());
     assert!(dioxus_ssr::render(&dom).contains("storage-choices"));
+}
+
+#[test]
+fn recovery_words_are_hidden_until_revealed_and_removed_when_setup_is_left() {
+    use crate::ui::context::edit_locked;
+    let mut dom = mounted();
+    let words = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+    update(&mut dom, |_| {
+        runtime::set_language(crate::core::language::Language::English);
+        runtime::begin_create();
+    });
+    update(&mut dom, |state| {
+        edit_locked(state, |form| {
+            form.storage_kind = Some(crate::app::auth::StorageKind::Cloud);
+            form.cloud_password_step = true;
+            form.recovery_words.push_str(words);
+        })
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("Show recovery words"));
+    assert!(!html.contains(words));
+    update(&mut dom, |state| {
+        edit_locked(state, |form| form.show_recovery_words = true)
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains(words));
+    assert!(html.contains("id=\"recovery-saved\""));
+    update(&mut dom, |state| {
+        edit_locked(state, |form| form.edit_cloud_connection())
+    });
+    assert!(!dioxus_ssr::render(&dom).contains(words));
+}
+
+#[test]
+fn forgot_password_shows_words_and_new_password_confirmation() {
+    use crate::ui::context::edit_locked;
+    use dioxus::prelude::WritableExt;
+    let mut dom = mounted();
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("existing.lbx");
+    std::fs::write(&path, []).unwrap();
+    update(&mut dom, |_| {
+        runtime::set_language(crate::core::language::Language::English)
+    });
+    update(&mut dom, |mut state| {
+        *state.write() = crate::app::session::Screen::Locked(Box::new(
+            crate::app::auth::Locked::new(Some(path.clone())),
+        ));
+        edit_locked(state, |form| form.toggle_recovery());
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("Recover access"));
+    assert!(html.contains("New master password"));
+    assert!(html.contains("id=\"repeat-password\""));
+    assert!(html.contains("id=\"recovery-words\""));
+    assert!(html.contains("Reset password and unlock"));
+    assert!(!html.contains("id=\"recovery-saved\""));
+    update(&mut dom, |state| {
+        edit_locked(state, |form| form.toggle_recovery())
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("Forgot master password?"));
+    assert!(!html.contains("id=\"recovery-words\""));
 }

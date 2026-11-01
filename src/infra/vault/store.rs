@@ -1,7 +1,7 @@
 //! Explicit witness-store injection for CLI hosts, tests and alternate platforms.
 
-use crate::core::identity::Key;
 use super::{KdfParams, ProviderConfiguration, Result, Unlock, Vault};
+use crate::core::identity::Key;
 use crate::core::sync::{Error, Hash, Machine, RecoveryAnchor, SpaceDescriptor};
 use crate::infra::{
     profile::BootstrapProfile,
@@ -104,7 +104,7 @@ impl ProfileStore {
             kdf,
             profile,
             self.witnesses.clone(),
-            (projection.entries(), projection.folders()),
+            (projection.entries(), projection.folders(), None),
         )?;
         vault.approve_controller_recovery(recovery.recovery_password)?;
         Ok(vault)
@@ -130,6 +130,46 @@ impl ProfileStore {
             kdf,
         )?;
         self.create_profile(path, password, kdf, profile)
+    }
+
+    /// Creates a v8 profile with independent password and recovery-word key slots.
+    pub fn create_shared_with_phrase(
+        &self,
+        path: impl AsRef<Path>,
+        password: &SecretString,
+        kdf: KdfParams,
+        configuration: SharedProfile,
+        phrase: &crate::core::mnemonic::RecoveryPhrase,
+    ) -> Result<Vault> {
+        let profile = BootstrapProfile::from_recovery_phrase(
+            configuration.username,
+            configuration.space_name,
+            configuration.provider,
+            password,
+            kdf,
+            phrase,
+        )?;
+        Vault::create_profile_snapshot(
+            path.as_ref(),
+            password,
+            kdf,
+            profile,
+            self.witnesses.clone(),
+            (Vec::new(), Vec::new(), Some(phrase)),
+        )
+    }
+
+    /// Recovers readable access without bypassing installation/rollback protection.
+    pub fn open_with_recovery_phrase(
+        &self,
+        path: impl AsRef<Path>,
+        phrase: &crate::core::mnemonic::RecoveryPhrase,
+    ) -> Result<Vault> {
+        Vault::open_using(
+            path.as_ref(),
+            Unlock::Recovery(phrase),
+            self.witnesses.clone(),
+        )
     }
 
     /// Never imports the old signing identity, sequence counters, outbox, epoch

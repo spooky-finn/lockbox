@@ -1,6 +1,6 @@
 Join space simplification
 
-- Welcome: Join a space; name + Storj credentials; master + recovery passwords.
+- Welcome: Join a space; name + Storj credentials; master password + confirmation; save 12 recovery words.
 - Local staging profile creates independent keys. No space-name prompt.
 - One file opener. Detect content; retain strict parsing, signatures, trusted verification.
 - Create artifact opens save dialog. User sends file separately.
