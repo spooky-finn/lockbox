@@ -8,3 +8,10 @@ Scope
 - Private validated_key shares secret decoding and settings checks.
 - Code generation decodes once; error precedence and key wiping retained.
 - Validation: 11 TOTP tests passed; RFC vectors, invalid settings/order covered.
+
+2. Import rollback
+- append_records reuses shared_snapshot/commit_edit.
+- Local failure truncates appended tails; existing secrets/files need no undo clone.
+- Shared failure retains full readable snapshot and reserved signing intent.
+- Validation: 23 import tests passed. Added local folder/entry/mixed write-failure
+  cases and shared retry/reopen check; retry emits one event.

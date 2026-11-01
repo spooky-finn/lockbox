@@ -138,13 +138,15 @@ impl Vault {
 
     /// Appends one import batch atomically. Earlier batches are independent.
     pub fn append_records(&mut self, folders: &[Folder], entries: &[Entry]) -> Result<()> {
-        let previous = Records {
-            entries: self.entries.clone(),
-            folders: self.folders.clone(),
-        };
+        let shared = self.shared_snapshot();
+        let entry_count = self.entries.len();
+        let folder_count = self.folders.len();
         self.folders.extend_from_slice(folders);
         self.entries.extend_from_slice(entries);
-        self.commit_edit(Some(previous), |_| {})
+        self.commit_edit(shared, move |vault| {
+            vault.entries.truncate(entry_count);
+            vault.folders.truncate(folder_count);
+        })
     }
 }
 

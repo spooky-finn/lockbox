@@ -108,3 +108,100 @@ fn shared_folder_commands_restore_readable_view_and_retry_retained_intent() {
         reopened.folders()[0].id.clone().into()
     );
 }
+
+#[test]
+fn local_import_batches_restore_existing_records_and_folders_after_failed_writes() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("local.lbx");
+    let password = SecretString::from("test master".to_owned());
+    let mut vault = Vault::create(
+        &path,
+        &password,
+        KdfParams {
+            memory_kib: 8192,
+            passes: 1,
+            lanes: 1,
+        },
+    )
+    .unwrap();
+    let parent = Folder::new("Existing".into(), None);
+    let mut existing = Entry::new();
+    existing.title = "Existing record".into();
+    existing.folder_id = Some(parent.id.clone());
+    existing
+        .add_attachment("keep.bin".into(), vec![1, 2, 3])
+        .unwrap();
+    vault
+        .append_records(
+            std::slice::from_ref(&parent),
+            std::slice::from_ref(&existing),
+        )
+        .unwrap();
+    let before = fs::read(&path).unwrap();
+    let history = vault.record_history().unwrap().len();
+    let child = Folder::new("Imported".into(), Some(parent.id.clone()));
+    let mut imported = Entry::new();
+    imported.title = "Imported record".into();
+    imported.folder_id = Some(parent.id.clone());
+    let folders = std::slice::from_ref(&child);
+    let entries = std::slice::from_ref(&imported);
+    let temporary = path.with_extension("lbx.tmp");
+    fs::create_dir(&temporary).unwrap();
+
+    for (folders, entries) in [(folders, &[][..]), (&[][..], entries), (folders, entries)] {
+        assert!(vault.append_records(folders, entries).is_err());
+        assert_eq!(vault.entries(), std::slice::from_ref(&existing));
+        assert_eq!(vault.folders(), std::slice::from_ref(&parent));
+        assert_eq!(vault.record_history().unwrap().len(), history);
+        assert_eq!(fs::read(&path).unwrap(), before);
+    }
+
+    fs::remove_dir(temporary).unwrap();
+    vault.append_records(folders, entries).unwrap();
+    let entries = [existing, imported];
+    let folders = [parent, child];
+    assert_eq!(vault.entries(), entries);
+    assert_eq!(vault.folders(), folders);
+    drop(vault);
+    let reopened = Vault::open(&path, &password).unwrap();
+    assert_eq!(reopened.entries(), entries);
+    assert_eq!(reopened.folders(), folders);
+}
+
+#[test]
+fn shared_import_batch_retry_preserves_existing_records_and_reserved_intent() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = ProfileStore::new(Arc::new(MemoryWitness::default()));
+    let path = directory.path().join("profile.lbx");
+    let mut vault = sharing_tests::create(&store, &path);
+    let mut existing = Entry::new();
+    existing.title = "Existing record".into();
+    vault.upsert_entry(existing.clone()).unwrap();
+    let objects = vault.sync_state().unwrap().objects.len();
+    let folder = Folder::new("Imported".into(), None);
+    let mut imported = Entry::new();
+    imported.title = "Imported record".into();
+    imported.folder_id = Some(folder.id.clone());
+    let folders = std::slice::from_ref(&folder);
+    let entries = std::slice::from_ref(&imported);
+    let before = fs::read(&path).unwrap();
+    let temporary = path.with_extension("lbx.tmp");
+    fs::create_dir(&temporary).unwrap();
+
+    assert!(vault.append_records(folders, entries).is_err());
+    assert_eq!(vault.entries(), std::slice::from_ref(&existing));
+    assert!(vault.folders().is_empty());
+    assert!(vault.sync_state().unwrap().intent.is_some());
+    assert_eq!(fs::read(&path).unwrap(), before);
+
+    fs::remove_dir(temporary).unwrap();
+    vault.append_records(folders, entries).unwrap();
+    assert!(vault.sync_state().unwrap().intent.is_none());
+    assert_eq!(vault.sync_state().unwrap().objects.len(), objects + 1);
+    drop(vault);
+    let reopened = store
+        .open(&path, &SecretString::from("test master".to_owned()))
+        .unwrap();
+    assert_eq!(reopened.entries(), [existing, imported]);
+    assert_eq!(reopened.folders(), [folder]);
+}
