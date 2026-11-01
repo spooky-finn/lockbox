@@ -141,12 +141,11 @@ impl Vault {
             return Ok(());
         };
 
-        let previous_outbox = sync.outbox.clone();
         let previous_exchange = sync.last_exchange;
-
-        for hash in hashes {
-            sync.outbox.remove(hash);
-        }
+        let removed: Vec<_> = hashes
+            .iter()
+            .filter(|hash| sync.outbox.remove(*hash))
+            .collect();
 
         if completed {
             sync.last_exchange = Some(
@@ -159,7 +158,7 @@ impl Vault {
 
         if let Err(error) = self.save_inner(false) {
             let state = self.profile.as_mut().unwrap().sync.as_mut().unwrap();
-            state.outbox = previous_outbox;
+            state.outbox.extend(removed);
             state.last_exchange = previous_exchange;
             return Err(error);
         }

@@ -8,18 +8,17 @@ No delegation requested. Keep unrelated work outside refactor commits.
 Last full suite: cycle 31; 397 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 31: Reuse rebase verification
-- Rebase uses one fresh replay for writer authority, excluded draft decryption
-  and transaction preparation; remove two redundant full replays.
-- Shared decryption helper private. Decode all drafts in same order; retain idle
-  check after selection, original error precedence, wire and provenance rules.
-- Expanded regression passed before refactor: demoted reader denied, pending
-  intent retained, missing edit precedes idle error, owner re-authorship intact.
-- Full suite passed: 397 library, four integration, two doctests; two OS probes
-  ignored. Formatting and strict all-target Clippy passed. Source byte-matches
-  verified snapshot; workspace whitespace checks passed.
+Cycle 32: Narrow acknowledgement rollback
+- Retain references to actually removed receipt hashes; restore those on save
+  failure. Remove full outbox clone. Save borrows self; outbox cannot change.
+- Preserve timestamp rollback, partial acknowledgements and later pending edits.
+- Expanded regression passed before refactor: partial/duplicate/unknown receipts,
+  failed save with removals and with no removals, successful retry/completion.
+- Ack regression, 12 scheduler tests and both sync integration tests passed.
+  Formatting and strict all-target Clippy passed. Source byte-matches snapshot;
+  workspace whitespace checks passed. Tests use memory transport; no live cloud.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-31.Ql9elY when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-32.7VO3fn when workspace cannot compile.
 
-Next search: receive/publish setup, settings updates, identity formatting.
+Next search: salt ID formatting, publication setup, settings updates.
 Inspect current code and tests before choosing; no quota-driven edits.

@@ -731,14 +731,34 @@ fn failed_acknowledgement_restores_receipts_and_exchange_time() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("profile.lbx");
     let mut vault = profile_vault(&path, "Alice");
+    vault
+        .upsert_entry(entry("Still pending after a partial receipt"))
+        .unwrap();
     let outbox = vault.sync_state().unwrap().outbox.clone();
-    let hashes: Vec<_> = outbox.iter().copied().collect();
+    let acknowledged = *outbox.first().unwrap();
+    let unknown = crate::sync::protocol::Hash([99; 32]);
+    assert!(!outbox.contains(&unknown));
+    let hashes = [acknowledged, acknowledged, unknown];
     std::fs::create_dir(sibling(&path, "tmp")).unwrap();
     assert!(vault.acknowledge_sync(&hashes, true).is_err());
     assert_eq!(vault.sync_state().unwrap().outbox, outbox);
     assert!(vault.sync_state().unwrap().last_exchange.is_none());
     std::fs::remove_dir(sibling(&path, "tmp")).unwrap();
-    vault.acknowledge_sync(&hashes, true).unwrap();
+    let mut retained = outbox;
+    retained.remove(&acknowledged);
+    assert!(!retained.is_empty());
+    vault.acknowledge_sync(&hashes, false).unwrap();
+    assert_eq!(vault.sync_state().unwrap().outbox, retained);
+    assert!(vault.sync_state().unwrap().last_exchange.is_none());
+
+    // Repeated and unknown receipts remove nothing, including on a failed save.
+    std::fs::create_dir(sibling(&path, "tmp")).unwrap();
+    assert!(vault.acknowledge_sync(&hashes, true).is_err());
+    assert_eq!(vault.sync_state().unwrap().outbox, retained);
+    assert!(vault.sync_state().unwrap().last_exchange.is_none());
+    std::fs::remove_dir(sibling(&path, "tmp")).unwrap();
+    let remaining: Vec<_> = retained.into_iter().collect();
+    vault.acknowledge_sync(&remaining, true).unwrap();
     assert!(vault.sync_state().unwrap().outbox.is_empty());
     assert!(vault.sync_state().unwrap().last_exchange.is_some());
 }
