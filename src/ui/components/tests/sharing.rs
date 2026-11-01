@@ -108,3 +108,58 @@ fn recipient_enters_an_independent_code_and_drafts_remain_hidden_and_intact() {
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("Preserved draft"));
 }
+
+#[test]
+fn wizard_follows_artifacts_and_resumes_a_recipient_waiting_for_admission() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut owner = vault(&directory, "owner");
+    let mut guest = vault(&directory, "guest");
+    let certificate = guest.device_certificate().unwrap();
+    let invitation = owner
+        .issue_invitation(certificate.clone(), Role::Reader, None)
+        .unwrap();
+    let response = guest
+        .accept_invitation(invitation.clone(), invitation.descriptor())
+        .unwrap();
+    let mut dom = mounted();
+    update(&mut dom, |state| {
+        runtime::set_language(crate::core::language::Language::English);
+        edit_unlocked(state, |u| {
+            u.vault = guest;
+            u.open_sharing();
+        });
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("<h2>Finish connecting</h2>"));
+    assert!(html.contains("Open admission confirmation"));
+    assert!(html.contains("Awaiting owner confirmation"));
+    assert!(!html.contains("Prepare device file"));
+
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| {
+            u.vault = owner;
+            u.sharing.review = Some(Artifact::Certificate(certificate));
+        });
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("<h2>Get their device file</h2>"));
+    assert!(html.contains("Access already granted does not expire"));
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| {
+            u.sharing.recipient_verified = true;
+            u.sharing_action(Action::Issue(Role::Reader), 0);
+        });
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("<h2>Send an invitation</h2>"));
+    assert!(html.contains("Save sharing file"));
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| {
+            u.sharing.output = None;
+            u.sharing.review = Some(Artifact::Response(response));
+        });
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("<h2>Approve access</h2>"));
+    assert!(html.contains("Admit device"));
+}

@@ -37,6 +37,8 @@ pub(super) fn role_text(role: Role) -> Text {
 pub(super) fn SharingView() -> Element {
     let language = use_language();
     let state = use_context::<Session>();
+    let mut selection = use_signal(|| None::<(bool, usize)>);
+    let clock = use_context::<Clock>();
     let screen = state.read();
     let Screen::Unlocked(u) = &*screen else {
         return rsx! {};
@@ -45,6 +47,74 @@ pub(super) fn SharingView() -> Element {
         || u.sharing.busy()
         || u.vault.signing_error().is_some()
         || u.vault.has_pending_exchange();
+    // Imported and re-exported artifacts always open the matching workflow step.
+    let artifact_step = u
+        .sharing
+        .review
+        .as_ref()
+        .map(|artifact| match artifact {
+            Artifact::Certificate(_) => (true, 0),
+            Artifact::Invitation(_) => (false, 1),
+            Artifact::Response(_) => (true, 2),
+            Artifact::Receipt(_) => (false, 2),
+        })
+        .or_else(|| {
+            u.sharing.output.as_ref().map(|output| match output.kind {
+                Kind::Certificate => (false, 0),
+                Kind::Invitation => (true, 1),
+                Kind::Response => (false, 1),
+                Kind::Receipt => (true, 2),
+            })
+        });
+    let awaiting_owner = u.vault.accepted_invitations().iter().any(|i| !i.joined);
+    let awaiting_consent = u
+        .vault
+        .issued_invitations(*clock.0.read())
+        .iter()
+        .any(|i| i.status == InvitationStatus::Pending);
+    let connected = u.sharing.notice == Some("This device joined the space");
+    let (inviting, step) = artifact_step
+        .or(if connected {
+            Some((false, 2))
+        } else {
+            *selection.read()
+        })
+        .unwrap_or_else(|| {
+            if connected || awaiting_owner {
+                (false, 2)
+            } else if awaiting_consent {
+                (true, 2)
+            } else {
+                (u.is_controller(), 0)
+            }
+        });
+    let steps = if inviting {
+        [
+            Text::SharingStepDevice,
+            Text::SharingStepInvite,
+            Text::SharingStepAdmit,
+        ]
+    } else {
+        [
+            Text::SharingStepPrepare,
+            Text::SharingStepAccept,
+            Text::SharingStepConnect,
+        ]
+    };
+    let hint = if inviting {
+        [
+            Text::SharingHintDevice,
+            Text::SharingHintInvite,
+            Text::SharingHintAdmit,
+        ][step]
+    } else {
+        [
+            Text::SharingHintPrepare,
+            Text::SharingHintAccept,
+            Text::SharingHintConnect,
+        ][step]
+    };
+    let reviewing = artifact_step.is_some() || u.sharing.busy();
     rsx! {
         article { class: "settings-page sharing-page stack", aria_label: language.text(Text::SharingParticipants),
             h1 { {language.text(Text::SharingParticipants)} }
@@ -53,46 +123,105 @@ pub(super) fn SharingView() -> Element {
             if u.vault.signing_error().is_some() { p { class: "notice", {language.text(Text::SharingReadOnly)} } }
             if u.sharing.busy() { p { role: "status", {language.text(Text::SharingBusy)} } }
             if let Some(notice) = u.sharing.notice { p { class: "notice", role: "status", {language.message(notice)} } }
-            section { class: "settings-section stack",
-                h2 { {language.text(Text::SharingThisDevice)} }
-                if let Some(certificate) = u.vault.device_certificate() {
-                    p { class: "muted", {language.text(Text::UserFingerprint)} }
-                    code { class: "sharing-code", "{certificate.body.user}" }
-                    p { class: "muted", {language.text(Text::DeviceFingerprint)} }
-                    code { class: "sharing-code", "{certificate.body.device}" }
+            div { class: "sharing-paths", role: "group", aria_label: language.text(Text::SharingChoosePath),
+                if u.is_controller() {
+                    button { class: if inviting { "sharing-path selected" } else { "sharing-path" },
+                        aria_pressed: inviting, disabled: reviewing,
+                        onclick: move |_| selection.set(Some((true, 0))),
+                        strong { {language.text(Text::SharingInvite)} }
+                        span { {language.text(Text::SharingInvitePathHint)} }
+                    }
                 }
-                button { disabled: u.sharing.busy() || u.is_editing(), onclick: move |_| act(Action::Certificate), {language.text(Text::SharingExportDevice)} }
-            }
-            section { class: "settings-section stack",
-                h2 { {language.text(Text::SharingConnect)} }
-                p { class: "muted", {language.text(Text::SharingConnectionSteps)} }
-                div { class: "actions sharing-actions",
-                    button { disabled: blocked, onclick: move |_| runtime::import_sharing_file(Kind::Invitation), {language.text(Text::SharingImportInvitation)} }
-                    button { disabled: blocked, onclick: move |_| runtime::import_sharing_file(Kind::Receipt), {language.text(Text::SharingImportConfirmation)} }
+                button { class: if !inviting { "sharing-path selected" } else { "sharing-path" },
+                    aria_pressed: !inviting, disabled: reviewing,
+                    onclick: move |_| selection.set(Some((false, 0))),
+                    strong { {language.text(Text::SharingConnect)} }
+                    span { {language.text(Text::SharingJoinPathHint)} }
                 }
             }
-            if u.is_controller() {
-                section { class: "settings-section stack",
-                    h2 { {language.text(Text::SharingInvite)} }
+            section { class: "settings-section sharing-wizard stack",
+                nav { aria_label: language.text(Text::SharingProgress),
+                    ol { class: "sharing-steps",
+                        for (index, title) in steps.into_iter().enumerate() {
+                            li {
+                                button { class: if index == step { "sharing-step current" } else { "sharing-step" },
+                                    aria_current: if index == step { "step" } else { "false" },
+                                    disabled: reviewing,
+                                    onclick: move |_| selection.set(Some((inviting, index))),
+                                    span { class: "sharing-step-number", "{index + 1}" }
+                                    span { {language.text(title)} }
+                                }
+                            }
+                        }
+                    }
+                }
+                header { class: "sharing-step-heading stack",
+                    h2 { {language.text(if connected { Text::SharingConnected } else { steps[step] })} }
+                    p { class: "muted", {language.text(if connected { Text::SharingConnectedHint } else { hint })} }
+                }
+                if !connected && u.sharing.review.is_none() && u.sharing.output.is_none() {
                     div { class: "actions sharing-actions",
-                        button { disabled: blocked, onclick: move |_| runtime::import_sharing_file(Kind::Certificate), {language.text(Text::SharingImportDevice)} }
-                        button { disabled: blocked, onclick: move |_| runtime::import_sharing_file(Kind::Response), {language.text(Text::SharingImportResponse)} }
+                        if inviting {
+                            if step == 0 {
+                                button { class: "primary", disabled: blocked, onclick: move |_| runtime::import_sharing_file(Kind::Certificate), {language.text(Text::SharingImportDevice)} }
+                            } else if step == 1 {
+                                p { class: "muted", {language.text(Text::SharingResumeInvite)} }
+                            } else {
+                                button { class: "primary", disabled: blocked, onclick: move |_| runtime::import_sharing_file(Kind::Response), {language.text(Text::SharingImportResponse)} }
+                            }
+                        } else if step == 0 {
+                            button { class: "primary", disabled: blocked, onclick: move |_| act(Action::Certificate), {language.text(Text::SharingExportDevice)} }
+                        } else if step == 1 {
+                            button { class: "primary", disabled: blocked, onclick: move |_| runtime::import_sharing_file(Kind::Invitation), {language.text(Text::SharingImportInvitation)} }
+                        } else {
+                            button { class: "primary", disabled: blocked, onclick: move |_| runtime::import_sharing_file(Kind::Receipt), {language.text(Text::SharingImportConfirmation)} }
+                        }
+                    }
+                }
+                Review { blocked }
+                if let Some(output) = &u.sharing.output {
+                    section { class: "sharing-output stack", aria_label: language.text(Text::SharingOutput),
+                        h3 { {language.text(Text::SharingOutput)} }
+                        p { {language.text(match output.kind {
+                            Kind::Certificate => Text::SharingSendDevice, Kind::Invitation => Text::SharingSendInvitation,
+                            Kind::Response => Text::SharingSendResponse, Kind::Receipt => Text::SharingSendConfirmation,
+                        })} }
+                        if let Some(code) = output.code {
+                            p { {language.text(Text::SharingVerificationCode)} }
+                            code { class: "sharing-code", "{code}" }
+                        }
+                        button { class: "primary", disabled: u.sharing.busy(), onclick: move |_| {
+                            selection.set(Some((inviting, step)));
+                            runtime::export_sharing_file();
+                        }, {language.text(Text::SharingSaveFile)} }
+                        button { class: "quiet", disabled: u.sharing.busy(), onclick: move |_| {
+                            selection.set(Some((inviting, step)));
+                            edit_unlocked(state, |u| { u.sharing.output = None; u.sharing.notice = None; });
+                        }, {language.text(Text::Cancel)} }
+                    }
+                }
+                if !connected {
+                    footer { class: "sharing-navigation",
+                        button { class: "quiet", disabled: reviewing || step == 0,
+                            onclick: move |_| selection.set(Some((inviting, step.saturating_sub(1)))),
+                            {language.text(Text::SharingPreviousStep)} }
+                        if step < 2 {
+                            button { class: "quiet", disabled: reviewing,
+                                onclick: move |_| selection.set(Some((inviting, step + 1))),
+                                {language.text(Text::SharingNextStep)} }
+                        }
                     }
                 }
             }
-            Review { blocked }
-            if let Some(output) = &u.sharing.output {
-                section { class: "settings-section stack", aria_label: language.text(Text::SharingOutput),
-                    h2 { {language.text(Text::SharingOutput)} }
-                    p { {language.text(match output.kind {
-                        Kind::Certificate => Text::SharingSendDevice, Kind::Invitation => Text::SharingSendInvitation,
-                        Kind::Response => Text::SharingSendResponse, Kind::Receipt => Text::SharingSendConfirmation,
-                    })} }
-                    if let Some(code) = output.code {
-                        p { {language.text(Text::SharingVerificationCode)} }
-                        code { class: "sharing-code", "{code}" }
+            details { class: "settings-section sharing-identity",
+                summary { {language.text(Text::SharingThisDevice)} }
+                div { class: "stack",
+                    if let Some(certificate) = u.vault.device_certificate() {
+                        p { class: "muted", {language.text(Text::UserFingerprint)} }
+                        code { class: "sharing-code", "{certificate.body.user}" }
+                        p { class: "muted", {language.text(Text::DeviceFingerprint)} }
+                        code { class: "sharing-code", "{certificate.body.device}" }
                     }
-                    button { disabled: u.sharing.busy(), onclick: move |_| runtime::export_sharing_file(), {language.text(Text::SharingSaveFile)} }
                 }
             }
             Members { blocked }
@@ -113,7 +242,7 @@ fn Review(blocked: bool) -> Element {
         return rsx! {};
     };
     rsx! {
-        section { class: "settings-section stack", aria_label: language.text(Text::SharingReview),
+        section { class: "sharing-review stack", aria_label: language.text(Text::SharingReview),
             h2 { {language.text(Text::SharingReview)} }
             match review {
                 Artifact::Certificate(certificate) => rsx! {
@@ -135,6 +264,7 @@ fn Review(blocked: bool) -> Element {
                         option { value: "7", {language.text(Text::SharingSevenDays)} }
                         option { value: "30", {language.text(Text::SharingThirtyDays)} }
                     }
+                    p { class: "muted", {language.text(Text::SharingExpiryHint)} }
                     div { class: "actions sharing-actions",
                         if u.vault.device_certificate().is_some_and(|own| own.body.user == certificate.body.user) {
                             button { disabled: blocked || !u.sharing.recipient_verified, onclick: move |_| act(Action::Issue(Role::Owner)), {language.text(Text::SharingInviteOwnDevice)} }
