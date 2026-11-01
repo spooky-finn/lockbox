@@ -5,22 +5,21 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 37; 402 library, four integration, two doctests passed.
+Last full suite: cycle 40; 404 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 39: Stream publication graph construction
-- Read bounded dependency iterator directly into child edges and incoming counts.
-  Keep counts beside borrowed ciphertext; remove per-object dependency vectors
-  and separate incoming-count map. Clone bytes only for final upload plan.
-- Preserve eligibility, hash tie order, repeated-edge counts, all outbox decoding,
-  readiness guards and validation error order; acknowledged dependencies omitted.
-- Four publication-filtered regressions passed before refactor; verify exact
-  bytes, epoch order, duplicate causal edges, excluded edits and missing outbox.
-- Eleven transport tests, twelve scheduler tests and both sync integration tests
-  passed. Formatting and strict all-target Clippy passed; source byte-matches
-  verified snapshot and workspace whitespace checks passed.
+Cycle 40: Borrow authenticated replay headers
+- VerifiedChange retains borrowed ChangeHeader plus owned decrypted transaction.
+  Avoid cloning signed envelope, ciphertext, signature, nonce and parent vector.
+- Propagate private lifetimes through authentication/causal stages; simplify
+  repeated signed.body.header access. Decoded journal lives for whole replay.
+- Public Replay still owns projection/history. Authentication, rejection, closed
+  epoch selection, sequence checks, causal order and output logic unchanged.
+- Full suite passed above: 404 library, four integration, two doctests; two OS
+  probes ignored. Formatting and strict all-target Clippy passed. Source matches
+  verified snapshot; workspace whitespace checks passed. No new mechanical tests.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-39.lrhwv5j7 when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-40.7shi5rpw when workspace cannot compile.
 
-Next search: local undo snapshots, record editor setup and protocol traversal.
+Next search: TOTP link parsing copies; repeated projection-head lookups in diff.
 Inspect current code and tests before choosing; no quota-driven edits.

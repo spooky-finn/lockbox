@@ -11,7 +11,7 @@ use crate::sync::{
             Machine,
             history::ControlHistory,
             membership::grant_aad,
-            protocol::{Change, Control},
+            protocol::{Change, ChangeHeader, Control},
             state::{Replay, SyncState},
         },
         model::project,
@@ -185,8 +185,8 @@ impl Machine {
     }
 }
 
-struct VerifiedChange {
-    signed: Signed<Change>,
+struct VerifiedChange<'a> {
+    header: &'a ChangeHeader,
     transaction: Transaction,
 }
 
@@ -194,7 +194,7 @@ fn replay_epoch(
     membership: Hash,
     control: &Control,
     baseline: &Projection,
-    authenticated: AuthenticatedChanges,
+    authenticated: AuthenticatedChanges<'_>,
     changes: &BTreeMap<Hash, Signed<Change>>,
     controls: &BTreeMap<Hash, Signed<Control>>,
     next: Option<&Control>,
@@ -224,7 +224,7 @@ fn replay_epoch(
     pending.extend(missing_closed);
 
     for change in verified.values() {
-        for parent in &change.signed.body.header.parents {
+        for parent in &change.header.parents {
             if !accepted.contains_key(parent) && !rejected.contains_key(parent) {
                 pending.insert(*parent);
             }
@@ -240,7 +240,7 @@ fn replay_epoch(
 
         if pending.is_empty() {
             for head in &next.closed_frontier {
-                let past = ancestry(&accepted[head].signed.body.header.parents, &accepted)?;
+                let past = ancestry(&accepted[head].header.parents, &accepted)?;
 
                 if next
                     .closed_frontier
@@ -260,18 +260,14 @@ fn replay_epoch(
 
     let projection = project(
         baseline,
-        included.iter().map(|h| {
-            (
-                *h,
-                accepted[h].signed.body.header.author,
-                &accepted[h].transaction,
-            )
-        }),
+        included
+            .iter()
+            .map(|h| (*h, accepted[h].header.author, &accepted[h].transaction)),
     );
     let mut frontier = included.clone();
 
     for hash in &included {
-        for parent in &accepted[hash].signed.body.header.parents {
+        for parent in &accepted[hash].header.parents {
             frontier.remove(parent);
         }
     }
@@ -279,15 +275,14 @@ fn replay_epoch(
     let mut ordered = included
         .iter()
         .map(|hash| {
-            ancestry(&accepted[hash].signed.body.header.parents, &accepted)
-                .map(|past| (past.len(), hash))
+            ancestry(&accepted[hash].header.parents, &accepted).map(|past| (past.len(), hash))
         })
         .collect::<Result<Vec<_>>>()?;
     ordered.sort_by_key(|(depth, hash)| (*depth, **hash));
     let mut history = Vec::new();
     for (_, hash) in ordered {
         let change = &accepted[hash];
-        let author = change.signed.body.header.author;
+        let author = change.header.author;
         let actor = control
             .members
             .iter()
@@ -351,18 +346,18 @@ fn replay_epoch(
     })
 }
 
-struct AuthenticatedChanges {
-    verified: BTreeMap<Hash, VerifiedChange>,
+struct AuthenticatedChanges<'a> {
+    verified: BTreeMap<Hash, VerifiedChange<'a>>,
     rejected: BTreeMap<Hash, Error>,
 }
 
 /// Authenticate and decrypt only changes bound to this membership epoch.
-fn authenticate_changes(
+fn authenticate_changes<'a>(
     membership: Hash,
     control: &Control,
     key: &Key,
-    changes: &BTreeMap<Hash, Signed<Change>>,
-) -> AuthenticatedChanges {
+    changes: &'a BTreeMap<Hash, Signed<Change>>,
+) -> AuthenticatedChanges<'a> {
     let mut verified = BTreeMap::new();
     let mut rejected = BTreeMap::new();
 
@@ -416,7 +411,7 @@ fn authenticate_changes(
                 verified.insert(
                     *hash,
                     VerifiedChange {
-                        signed: signed.clone(),
+                        header,
                         transaction,
                     },
                 );
@@ -437,7 +432,7 @@ struct ClosedHistory {
 /// Restrict a closed epoch to the successor's signed causal closure before
 /// checking sequence forks. Late excluded history cannot invalidate that closure.
 fn select_closed_history(
-    verified: &mut BTreeMap<Hash, VerifiedChange>,
+    verified: &mut BTreeMap<Hash, VerifiedChange<'_>>,
     rejected: &BTreeMap<Hash, Error>,
     next: Option<&Control>,
 ) -> Result<ClosedHistory> {
@@ -458,7 +453,7 @@ fn select_closed_history(
             }
 
             match verified.get(&hash) {
-                Some(change) => stack.extend(&change.signed.body.header.parents),
+                Some(change) => stack.extend(&change.header.parents),
                 None if rejected.contains_key(&hash) => return Err(Error::CheckpointMismatch),
                 None => {
                     missing_closed.insert(hash);
@@ -480,11 +475,11 @@ fn select_closed_history(
     })
 }
 
-fn ensure_unique_sequences(verified: &BTreeMap<Hash, VerifiedChange>) -> Result<()> {
+fn ensure_unique_sequences(verified: &BTreeMap<Hash, VerifiedChange<'_>>) -> Result<()> {
     let mut slots = BTreeMap::new();
 
     for (hash, change) in verified {
-        let header = &change.signed.body.header;
+        let header = change.header;
 
         if slots
             .insert((header.author, header.sequence), *hash)
@@ -497,23 +492,23 @@ fn ensure_unique_sequences(verified: &BTreeMap<Hash, VerifiedChange>) -> Result<
     Ok(())
 }
 
-struct CausalChanges {
-    accepted: BTreeMap<Hash, VerifiedChange>,
-    unresolved: BTreeMap<Hash, VerifiedChange>,
+struct CausalChanges<'a> {
+    accepted: BTreeMap<Hash, VerifiedChange<'a>>,
+    unresolved: BTreeMap<Hash, VerifiedChange<'a>>,
 }
 
 /// Apply only transactions whose authenticated causal past is accepted. Invalid
 /// ancestry propagates rejection; genuinely absent history remains unresolved.
-fn apply_causal_changes(
+fn apply_causal_changes<'a>(
     membership: Hash,
     baseline: &Projection,
-    mut verified: BTreeMap<Hash, VerifiedChange>,
+    mut verified: BTreeMap<Hash, VerifiedChange<'a>>,
     rejected: &mut BTreeMap<Hash, Error>,
     changes: &BTreeMap<Hash, Signed<Change>>,
     controls: &BTreeMap<Hash, Signed<Control>>,
     closed: bool,
-) -> Result<CausalChanges> {
-    let mut accepted: BTreeMap<Hash, VerifiedChange> = BTreeMap::new();
+) -> Result<CausalChanges<'a>> {
+    let mut accepted: BTreeMap<Hash, VerifiedChange<'a>> = BTreeMap::new();
     loop {
         // A present but rejected or wrong-epoch parent cannot become valid by
         // downloading more objects. Propagate rejection through its descendants
@@ -521,7 +516,7 @@ fn apply_causal_changes(
         let invalid: Vec<_> = verified
             .iter()
             .filter(|(_, change)| {
-                change.signed.body.header.parents.iter().any(|parent| {
+                change.header.parents.iter().any(|parent| {
                     rejected.contains_key(parent)
                         || controls.contains_key(parent)
                         || changes
@@ -543,14 +538,7 @@ fn apply_causal_changes(
 
         let ready: Vec<_> = verified
             .iter()
-            .filter(|(_, c)| {
-                c.signed
-                    .body
-                    .header
-                    .parents
-                    .iter()
-                    .all(|p| accepted.contains_key(p))
-            })
+            .filter(|(_, c)| c.header.parents.iter().all(|p| accepted.contains_key(p)))
             .map(|(h, _)| *h)
             .collect();
 
@@ -560,13 +548,12 @@ fn apply_causal_changes(
 
         for hash in ready {
             let change = verified.remove(&hash).unwrap();
-            let header = &change.signed.body.header;
+            let header = change.header;
             let check = || -> Result<()> {
                 let past = ancestry(&header.parents, &accepted)?;
 
                 for parent in &header.parents {
-                    let ancestors =
-                        ancestry(&accepted[parent].signed.body.header.parents, &accepted)?;
+                    let ancestors = ancestry(&accepted[parent].header.parents, &accepted)?;
 
                     if header.parents.iter().any(|p| ancestors.contains(p)) {
                         return Err(Error::InvalidTransaction);
@@ -576,7 +563,7 @@ fn apply_causal_changes(
                 match (header.sequence.0, header.previous) {
                     (1, None) => {}
                     (sequence, Some(previous)) if sequence > 1 && past.contains(&previous) => {
-                        let previous = &accepted[&previous].signed.body.header;
+                        let previous = accepted[&previous].header;
 
                         if previous.author != header.author
                             || previous.sequence.0.checked_add(1) != Some(sequence)
@@ -589,13 +576,8 @@ fn apply_causal_changes(
 
                 let before = project(
                     baseline,
-                    past.iter().map(|h| {
-                        (
-                            *h,
-                            accepted[h].signed.body.header.author,
-                            &accepted[h].transaction,
-                        )
-                    }),
+                    past.iter()
+                        .map(|h| (*h, accepted[h].header.author, &accepted[h].transaction)),
                 );
                 change.transaction.validate(&before)
             };
@@ -622,7 +604,10 @@ fn apply_causal_changes(
     })
 }
 
-fn ancestry(parents: &[Hash], changes: &BTreeMap<Hash, VerifiedChange>) -> Result<BTreeSet<Hash>> {
+fn ancestry(
+    parents: &[Hash],
+    changes: &BTreeMap<Hash, VerifiedChange<'_>>,
+) -> Result<BTreeSet<Hash>> {
     let mut visited = BTreeSet::new();
     let mut stack = parents.to_vec();
 
@@ -636,7 +621,7 @@ fn ancestry(parents: &[Hash], changes: &BTreeMap<Hash, VerifiedChange>) -> Resul
         }
 
         let change = changes.get(&hash).ok_or(Error::MissingDependency)?;
-        stack.extend(&change.signed.body.header.parents);
+        stack.extend(&change.header.parents);
     }
 
     Ok(visited)
