@@ -417,19 +417,49 @@ fn history_and_trash_survive_reopen_and_restore_full_record() {
 #[test]
 fn failed_save_does_not_append_history_or_lose_trash() {
     let dir = tempfile::tempdir().unwrap();
-    let (_, mut vault) = new_vault(&dir);
-    let entry = vault.entries.remove(0);
+    let (path, mut vault) = new_vault(&dir);
+    let folder = Folder::new("Removed folder".into(), None);
+    vault.save_folder(folder.clone()).unwrap();
+    vault.entries[0].folder_id = Some(folder.id.clone());
+    vault.entries[0]
+        .add_attachment("restore.bin".into(), vec![0, 255, 42])
+        .unwrap();
+    let mut other = sample_entry();
+    other.title = "Keep in trash".into();
+    other
+        .add_attachment("keep.bin".into(), vec![3, 2, 1])
+        .unwrap();
+    vault.upsert_entry(other.clone()).unwrap();
+    let mut entry = vault.entries[0].clone();
+    vault.entries.clear();
     vault.save_changes().unwrap();
+    vault.delete_folder(&folder.id).unwrap();
     let count = vault.record_history().unwrap().len();
-    let path = vault.path.clone();
+    let trash = vault.trash().unwrap();
+    let before = fs::read(&path).unwrap();
     vault.path = dir.path().join("missing").join("vault.lbx");
     assert!(vault.restore_record(&entry.id).is_err());
+    assert!(matches!(
+        vault.restore_record("absent"),
+        Err(VaultError::Corrupted)
+    ));
     assert!(vault.entries.is_empty());
     assert_eq!(vault.record_history().unwrap().len(), count);
-    assert_eq!(vault.trash().unwrap(), vec![entry.clone()]);
-    vault.path = path;
+    assert_eq!(vault.trash().unwrap(), trash);
+    assert_eq!(fs::read(&path).unwrap(), before);
+    vault.path = path.clone();
     vault.restore_record(&entry.id).unwrap();
-    assert_eq!(vault.entries, vec![entry]);
+    entry.folder_id = None;
+    assert_eq!(vault.entries(), std::slice::from_ref(&entry));
+    assert_eq!(
+        vault.trash().unwrap().as_slice(),
+        std::slice::from_ref(&other)
+    );
+    assert_eq!(vault.record_history().unwrap().len(), count + 1);
+    drop(vault);
+    let reopened = Vault::open(&path, &password("master")).unwrap();
+    assert_eq!(reopened.entries(), &[entry]);
+    assert_eq!(reopened.trash().unwrap(), [other]);
 }
 
 #[test]

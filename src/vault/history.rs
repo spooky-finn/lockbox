@@ -66,6 +66,10 @@ impl Vault {
 
     /// Deleted records with an accessible previous value. Never hides history failures.
     pub fn trash(&self) -> Result<Vec<Entry>> {
+        self.select_trash(|trash| trash.into_values().cloned().collect())
+    }
+
+    fn select_trash<T>(&self, select: impl FnOnce(BTreeMap<&str, &Entry>) -> T) -> Result<T> {
         let replay = self.sync_replay()?;
         let local_history = self.history.borrow();
         let history = replay
@@ -99,14 +103,12 @@ impl Vault {
                 trash.entry(change.id.as_str()).or_insert(entry);
             }
         }
-        Ok(trash.into_values().cloned().collect())
+        Ok(select(trash))
     }
 
     pub fn restore_record(&mut self, id: &str) -> Result<()> {
         let mut entry = self
-            .trash()?
-            .into_iter()
-            .find(|e| e.id == id)
+            .select_trash(|trash| trash.into_values().find(|entry| entry.id == id).cloned())?
             .ok_or(VaultError::Corrupted)?;
         if entry
             .folder_id
