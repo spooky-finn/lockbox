@@ -52,6 +52,15 @@ fn compare_replays(state: &SyncState, device: &DeviceSecret) -> Result<Replay, E
 #[test]
 fn state_replay_preserves_closed_epochs_conflicts_and_unavailable_history() {
     let (mut state, device) = owner();
+    let empty = compare_replays(&state, &device).unwrap();
+    assert!(empty.ready && empty.frontier.is_empty());
+    let mut missing_anchor = state.clone();
+    let required = Hash([99; 32]);
+    missing_anchor.required_control = Some(required);
+    let waiting = compare_replays(&missing_anchor, &device).unwrap();
+    assert!(!waiting.ready);
+    assert!(waiting.frontier.is_empty());
+    assert_eq!(waiting.pending, BTreeSet::from([required]));
     let mut record = entry(1, "original");
     record
         .add_attachment("key.bin".into(), vec![0, 255, 42])
@@ -88,12 +97,14 @@ fn state_replay_preserves_closed_epochs_conflicts_and_unavailable_history() {
     let (outsider, _) = identity(3);
     let outside = compare_replays(&state, &outsider).unwrap();
     assert!(!outside.ready && !outside.history_verified);
+    assert!(outside.frontier.is_empty());
     assert_eq!(outside.role, None);
 
     let mut incomplete = state.clone();
     incomplete.objects.remove(&first);
     let waiting = compare_replays(&incomplete, &device).unwrap();
     assert!(!waiting.ready);
+    assert!(waiting.frontier.is_empty());
     assert!(waiting.pending.contains(&first));
 }
 
@@ -133,6 +144,7 @@ fn state_replay_keeps_failures_and_candidate_diagnostics() {
     Machine::receive(&mut state, child.hash().unwrap(), child.bytes().unwrap()).unwrap();
     let waiting = compare_replays(&state, &device).unwrap();
     assert!(!waiting.ready);
+    assert!(waiting.frontier.is_empty());
     assert!(waiting.pending.contains(&missing));
 
     let mut frozen = state.clone();

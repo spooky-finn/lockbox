@@ -183,8 +183,8 @@ impl Machine {
             }
             previous_epoch_verified = true;
 
-            if index + 1 == chain.len() {
-                result.frontier = replayed.frontier;
+            if let Some(frontier) = replayed.current_frontier {
+                result.frontier = frontier;
                 result.ready = true;
             }
         }
@@ -208,7 +208,8 @@ struct EpochContext<'a> {
 struct EpochReplay {
     history: Vec<RecordChange>,
     projection: Projection,
-    frontier: BTreeSet<Hash>,
+    /// Available only for a fully resolved current epoch.
+    current_frontier: Option<BTreeSet<Hash>>,
     accepted: BTreeSet<Hash>,
     pending: BTreeSet<Hash>,
     rejected: BTreeMap<Hash, Error>,
@@ -294,13 +295,15 @@ impl EpochContext<'_> {
                 .iter()
                 .map(|h| (*h, accepted[h].header.author, &accepted[h].transaction)),
         );
-        let mut frontier = included.clone();
-
-        for hash in &included {
-            for parent in &accepted[hash].header.parents {
-                frontier.remove(parent);
+        let current_frontier = (next.is_none() && pending.is_empty()).then(|| {
+            let mut frontier = included.clone();
+            for hash in &included {
+                for parent in &accepted[hash].header.parents {
+                    frontier.remove(parent);
+                }
             }
-        }
+            frontier
+        });
 
         let mut ordered = include_record_history.then(Vec::new);
         // Ancestry validation is required even when display revisions are omitted.
@@ -324,7 +327,7 @@ impl EpochContext<'_> {
         Ok(EpochReplay {
             history,
             projection,
-            frontier,
+            current_frontier,
             accepted: included,
             pending,
             rejected,

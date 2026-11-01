@@ -5,30 +5,37 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 75; 417 library, four integration, two doctests passed.
+Last full suite: cycle 77; 417 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 76: Give epoch replay its own result type
-- Private EpochReplay contains only history/projection/frontier/accepted/pending/
-  rejected/excluded, exactly the seven fields consumed by outer Machine replay.
-  EpochContext returns it instead of public Replay with unused identity/status
-  placeholders (including misleading ready=true while epoch pending is nonempty).
-- Outer loop still constructs complete public Replay, including membership/epoch,
-  role/readiness/history_verified. All algorithms, field values and errors unchanged;
-  no public API/schema change. Compiler verifies every consumed private field.
-- Formatting/strict all-target Clippy passed. 57 protocol, five vault history,
-  two sync integration tests passed. Source matches verified snapshot;
-  whitespace clean. Unrelated edits untouched.
-- Snapshot: /tmp/lockbox-refactor-76.0cac7608.
+Cycle 77: Derive only a resolved current frontier
+- Private EpochReplay.current_frontier is Option, built lazily when next=None and
+  local pending empty. Closed/incomplete epochs avoid discarded set clone/removals.
+  Outer unchanged global pending guard runs before Some(frontier) sets ready.
+- next=None iff final chain index; empty global pending implies empty local pending,
+  so public readiness/frontier are equivalent. Some(empty) keeps empty epoch ready;
+  missing independent required_control remains blocked before frontier use.
+- Boundary assertions passed before refactor: empty resolved epoch, missing pinned
+  control, unavailable member history and missing closure/parent all retain expected
+  ready/frontier. Every fallible crypto/causal/ancestry check and order unchanged.
+- Full suite: 417 library, four integration, two doctests passed; two OS probes
+  ignored. Formatting/strict all-target Clippy passed. Both sources match verified
+  snapshot; whitespace clean. Unrelated edits untouched.
+- Snapshot: /tmp/lockbox-refactor-77.lnrsgzl8.
 
-Next search: private frontier is cloned/derived for every epoch, but outer loop
-uses it only after global pending check in last epoch. Consider current_frontier:
-Option<BTreeSet<Hash>> populated only when next=None and local pending empty;
-outer after unchanged global pending guard can set ready from Some(frontier).
-Proof: next=None iff last chain index; empty global pending implies empty local
-pending. Some(empty) must still mark ready genesis/checkpoint with no new changes.
-Closed/incomplete epochs skip discarded set clone/removals. Preserve all failable
-ancestry/antichain/checkpoint/signature checks and their order, role and history.
-Missing independent required_control still blocks readiness before frontier use.
-Inspect code and existing pending/role/frontier tests; full suite appropriate.
+Next opportunity: RecordsView history page materializes full history, then filters
+by selected ID twice. Consider private selected-record history projection to avoid
+cloning unrelated before/after records/attachments, while still verifying ENTIRE
+history including selected=None or missing ID. Public full replay/history unchanged.
+Possible typed RecordHistory mode: Omit/All/Record(&str), replacing include bool.
+Core replay_record_history(state, device, Option<&str>) selects Omit for None;
+materializer filters mutation.entity.id before cloning; all validation/order stays.
+Vault shared replay_using could accept impl FnOnce instead of fn pointer for ID
+capture; narrow pub(super) sync_replay_record helper feeds history.record_history_for.
+Local history filter clones matching change.id only. UI calls selected history,
+then is_empty and iter.rev (remove duplicate predicates); trash still full.
+Need full-filter byte oracle baseline and tests for matching/missing/None IDs,
+attachments, tombstones, conflicts, pending/fault errors even no selection, plus
+rendered selected-record masking/no-history behavior. Inspect actual tests/helpers
+before choosing design; this is candidate, no implementation started.
