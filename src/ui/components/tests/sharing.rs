@@ -163,3 +163,73 @@ fn wizard_follows_artifacts_and_resumes_a_recipient_waiting_for_admission() {
     assert!(html.contains("<h2>Approve access</h2>"));
     assert!(html.contains("Admit device"));
 }
+
+#[test]
+fn wizard_follows_file_outputs_through_a_complete_admission() {
+    use crate::core::sync::{Admission, AdmissionReceipt};
+
+    let directory = tempfile::tempdir().unwrap();
+    let mut owner = vault(&directory, "owner");
+    let guest = vault(&directory, "guest");
+    let invitation = owner
+        .issue_invitation(guest.device_certificate().unwrap(), Role::Reader, None)
+        .unwrap();
+    let code = invitation.verification_code().unwrap().to_string();
+    let mut guest_dom = mounted();
+    update(&mut guest_dom, |state| {
+        runtime::set_language(crate::core::language::Language::English);
+        edit_unlocked(state, |u| {
+            u.vault = guest;
+            u.open_sharing();
+            u.sharing_action(Action::Certificate, 0);
+        });
+    });
+    let html = dioxus_ssr::render(&guest_dom);
+    assert!(html.contains("<h2>Prepare your device</h2>"));
+    assert!(html.contains("Save sharing file"));
+
+    let mut response = None;
+    update(&mut guest_dom, |state| {
+        edit_unlocked(state, |u| {
+            u.sharing.review = Some(Artifact::Invitation(invitation));
+            u.sharing.code = code;
+            u.sharing_action(Action::Accept, 0);
+            response = Some(Admission::decode(&u.sharing.output.as_ref().unwrap().bytes).unwrap());
+        });
+    });
+    let html = dioxus_ssr::render(&guest_dom);
+    assert!(html.contains("<h2>Accept the invitation</h2>"));
+    assert!(html.contains("Save sharing file"));
+
+    let mut owner_dom = mounted();
+    let mut receipt = None;
+    update(&mut owner_dom, |state| {
+        runtime::set_language(crate::core::language::Language::English);
+        edit_unlocked(state, |u| {
+            u.vault = owner;
+            u.open_sharing();
+            u.sharing.review = Some(Artifact::Response(response.unwrap()));
+            u.sharing_action(Action::Admit, 0);
+            receipt =
+                Some(AdmissionReceipt::decode(&u.sharing.output.as_ref().unwrap().bytes).unwrap());
+        });
+    });
+    let html = dioxus_ssr::render(&owner_dom);
+    assert!(html.contains("<h2>Approve access</h2>"));
+    assert!(html.contains("Save sharing file"));
+
+    update(&mut guest_dom, |state| {
+        edit_unlocked(state, |u| {
+            u.sharing.output = None;
+            u.sharing.review = Some(Artifact::Receipt(receipt.unwrap()));
+        });
+    });
+    assert!(dioxus_ssr::render(&guest_dom).contains("<h2>Finish connecting</h2>"));
+    update(&mut guest_dom, |state| {
+        edit_unlocked(state, |u| u.sharing_action(Action::Join, 0));
+    });
+    let html = dioxus_ssr::render(&guest_dom);
+    assert!(html.contains("This device joined the space"));
+    assert!(!html.contains("sharing-navigation"));
+    assert!(!html.contains("Open admission confirmation"));
+}

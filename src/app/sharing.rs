@@ -122,6 +122,25 @@ impl Default for Sharing {
 }
 
 impl Sharing {
+    pub fn has_artifact(&self) -> bool {
+        self.review.is_some() || self.output.is_some()
+    }
+
+    pub fn connected(&self) -> bool {
+        self.notice == Some("This device joined the space")
+    }
+
+    pub fn cancel_review(&mut self) {
+        self.review = None;
+        self.recipient_verified = false;
+        self.code.clear();
+    }
+
+    pub fn cancel_output(&mut self) {
+        self.output = None;
+        self.notice = None;
+    }
+
     pub fn ticket(&self, vault: &Vault) -> Ticket {
         Ticket {
             session: self.session,
@@ -156,6 +175,13 @@ pub(crate) enum Action {
 }
 
 impl Unlocked {
+    pub fn sharing_blocked(&self) -> bool {
+        self.is_editing()
+            || self.sharing.busy()
+            || self.vault.signing_error().is_some()
+            || self.vault.has_pending_exchange()
+    }
+
     pub fn open_sharing(&mut self) {
         self.page = Page::Sharing;
         self.show_password = false;
