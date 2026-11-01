@@ -1,14 +1,13 @@
 //! Offline, executable multiuser demonstration through the same Storage trait as
 //! Storj. All passwords below are disposable fixtures inside a temporary folder.
 use lockbox::{
-    core::{
-        entry::Entry,
-        sync::{Hash, Role, Value},
+    records::entry::Entry,
+    sync::{
+        protocol::{Hash, Role, Value},
+        transport::{Page, Storage, TransportError},
     },
-    infra::{
-        sync::{Page, Storage, TransportError},
-        vault::{KdfParams, ProfileStore, ProviderConfiguration, SharedProfile},
-        witness::MemoryWitness,
+    vault::{
+        KdfParams, ProfileStore, ProviderConfiguration, SharedProfile, witness::MemoryWitness,
     },
 };
 use secrecy::SecretString;

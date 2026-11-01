@@ -11,6 +11,14 @@ See the [developer guide](docs/development.md) for validation and asset generati
 and the [documentation index](docs/README.md) for architecture, implemented sync
 behavior, recovery and release plans.
 
+## Browser companion
+
+Chrome and Firefox companions suggest matching accounts, generate passwords, and
+fill logins from the existing `.lbx` vault through a local Rust native messaging
+host. Exact HTTPS origin matching, explicit fill actions and native session
+timeouts limit credential access. Passwords and vault keys are never persisted
+in browser storage. See the [installation and security guide](browser-extension/README.md).
+
 ## Файлы в записи
 
 В редакторе записи выберите «Добавить файл». Доступны до 16 файлов,
@@ -80,30 +88,36 @@ proposal v1. API подключения независимых профилей 
 Проверки используют adversarial transport и локальный S3 HTTP fixture;
 live-bucket Storj и независимое ревью безопасности пока не выполнены.
 
-## Структура кода
+## Code navigation
+
+Code is grouped by feature. Start with the behavior you want to change:
 
 ```text
 src/
-  core/            записи, папки, TOTP и генерация паролей
-  app/             сценарии, сессия, черновики и навигация
-    records/       записи, папки, редактор, импорт и дерево
-  infra/           файлы хранилища, настройки и системные сервисы
-  ui/              Dioxus runtime, контексты и каталог иконок
-    components/    компоненты интерфейса и стилизация
-      records/     экраны записей и навигация
-      shared/      общие кнопки, иконки, тема и статус
-  bin/             инструменты сборки ресурсов
-  lib.rs           границы модулей и совместимые публичные импорты
-  main.rs          запуск desktop-приложения
+  access/          vault creation, unlocking, biometric access and recovery words
+  browser/         browser native messaging and vault session
+  records/         record/folder models, editor, imports, history and views
+  sharing/         invitations, joining, participants and sharing views
+  sync/            protocol, exchange scheduler and transport providers
+  vault/           encrypted files, profiles, recovery and installation protection
+  settings/        preferences, config persistence and settings view
+  desktop/         app shell, session, windows, shared widgets and translations
+  platform/        clipboard, Touch ID, autolock and background jobs
+  bin/             asset build tools and browser native host
+  compatibility.rs legacy public import paths
+  lib.rs           feature modules and public exports
+  main.rs          desktop launch
 ```
 
-`core` не зависит от интерфейса и системных адаптеров. `app`
-использует модели и сервисы `infra`, но не зависит от Dioxus.
-`ui` связывает сценарии с реактивными контекстами и компонентами.
-Системные зависимости остаются в `infra`; существующий контракт
-`Biometrics` позволяет подменять биометрию в тестах. Старые публичные пути
-(`lockbox::vault`, `lockbox::app::App` и другие) сохранены в `lib.rs`;
-внутренний код использует пути соответствующих слоёв.
+Models and protocol rules stay independent of Dioxus and system I/O. Feature
+views bind workflows to the desktop contexts; native services stay in `platform`.
+Both local and shared modes use the existing `Vault` facade. Shared edits retain
+its durable signing-intent and outbox boundaries.
+
+Existing public paths, including `lockbox::vault`, `lockbox::core::sync`, and
+`lockbox::app::App`, remain supported. Internal code and examples use feature
+paths. See the [developer guide](docs/development.md#module-boundaries) for module
+ownership and extension rules.
 
 ## Как защищены данные
 

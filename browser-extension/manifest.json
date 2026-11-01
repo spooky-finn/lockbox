@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Lockbox · Browser companion",
+  "version": "0.1.0",
+  "description": "Suggest, generate and fill passwords from your encrypted local Lockbox vault. You control every fill.",
+  "permissions": ["activeTab", "scripting", "nativeMessaging", "idle"],
+  "action": {
+    "default_title": "Open Lockbox",
+    "default_popup": "popup.html",
+    "default_icon": { "48": "icons/48.png", "128": "icons/128.png" }
+  },
+  "icons": { "48": "icons/48.png", "128": "icons/128.png" },
+  "content_security_policy": {
+    "extension_pages": "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+  }
+}

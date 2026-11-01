@@ -1,11 +1,20 @@
-//! Local password manager, organized by responsibility.
+//! Local password manager organized by feature.
 
-pub mod app;
-pub mod core;
-pub mod infra;
-pub mod ui;
+pub mod access;
+pub mod browser;
+pub mod desktop;
+pub mod platform;
+pub mod records;
+pub mod settings;
+pub mod sharing;
+pub mod sync;
+pub mod vault;
 
-// Preserve the public API while implementations live in explicit layers.
-pub use core::{entry, folder, generator, totp};
-pub use infra::{autolock, clipboard, config, touchid, vault};
-pub use ui::{App, icons};
+mod compatibility;
+pub use compatibility::{app, core, infra, ui};
+
+// Established short imports remain available to library consumers.
+pub use desktop::{App, icons};
+pub use platform::{autolock, clipboard, touchid};
+pub use records::{entry, folder, generator, totp};
+pub use settings::config;

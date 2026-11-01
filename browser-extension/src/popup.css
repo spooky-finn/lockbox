@@ -1,0 +1,52 @@
+:root { color-scheme: dark; font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #eeeee9; background: #17191a; }
+* { box-sizing: border-box; }
+body { margin: 0; width: 390px; }
+[hidden] { display: none !important; }
+header { display: flex; align-items: center; gap: 10px; padding: 20px 22px; border-bottom: 1px solid #303333; }
+.brand { font-size: 19px; font-weight: 650; letter-spacing: -.5px; }
+.brand span { display: block; font-size: 10px; font-weight: 400; letter-spacing: .15px; color: #959c98; }
+main { padding: 22px; }
+h1 { font-size: 23px; line-height: 1.25; margin: 9px 0 12px; font-weight: 600; letter-spacing: -.65px; }
+p { margin: 10px 0; }
+.eyebrow { font-size: 9px; color: #a5ada7; letter-spacing: 1.6px; font-weight: 600; }
+.muted { color: #aeb5af; }
+.hint { font-size: 11px; line-height: 1.6; color: #9da69f; }
+label { display: block; color: #d1d7d1; font-size: 11px; margin: 16px 0 6px; }
+input:not([type=checkbox],[type=range]), select { width: 100%; padding: 11px 12px; border: 1px solid #414641; background: #212524; color: #f2f4ee; border-radius: 7px; font: inherit; }
+input::placeholder { color: #7f8981; font-size: 11px; }
+button { font: inherit; cursor: pointer; border: 0; border-radius: 7px; padding: 11px 13px; }
+button:disabled { opacity: .5; cursor: wait; }
+button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid #c8e2a5; outline-offset: 3px; }
+.primary { display: flex; width: 100%; justify-content: space-between; background: #d1e8b4; color: #1c2b19; font-weight: 650; margin-top: 20px; }
+.primary:hover { background: #e0f2c9; }
+.secondary { width: 100%; background: #343e32; color: #d7e7ca; margin-top: 10px; border: 1px solid #4e5e48; }
+.quiet { margin-left: auto; padding: 6px 8px; border: 1px solid #414641; background: transparent; color: #c9d2c8; font-size: 10px; }
+details { margin-top: 20px; padding-top: 16px; border-top: 1px solid #343935; }
+summary { cursor: pointer; font-size: 12px; color: #cbd7c6; }
+summary span { float: right; }
+details p { font-size: 11px; color: #aeb9ae; }
+code { overflow-wrap: anywhere; font-size: 10px; }
+a { color: #d1e8b4; }
+.site { display: flex; gap: 12px; align-items: center; padding: 11px 12px; border: 1px solid #384034; border-radius: 8px; background: #222820; margin-bottom: 24px; }
+.site p { font-size: 12px; margin: 2px 0 0; overflow-wrap: anywhere; font-family: ui-monospace, monospace; }
+.site-dot, .privacy-dot { height: 6px; width: 6px; flex-shrink: 0; border-radius: 50%; background: #a6ca89; }
+.section-title { display: flex; align-items: center; justify-content: space-between; }
+.section-title h1 { font-size: 19px; margin: 0; }
+.badge { background: #303a2c; color: #c6d9b7; border-radius: 5px; padding: 1px 7px; font-size: 10px; }
+.account { display: flex; align-items: center; gap: 10px; padding: 13px 0; border-bottom: 1px solid #303733; }
+.account div { flex: 1; min-width: 0; }
+.account strong, .account small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account strong { font-size: 12px; font-weight: 500; }
+.account small { color: #98a693; font-size: 11px; }
+.account button { padding: 6px 11px; font-size: 11px; background: #343e32; color: #daebcb; }
+.empty { padding: 20px 12px; border: 1px dashed #3b433a; border-radius: 7px; text-align: center; font-size: 11px; color: #a7b3a2; }
+.generator-body { padding-top: 2px; }
+input[type=range] { width: 100%; accent-color: #c2dba7; }
+output { float: right; font-family: ui-monospace, monospace; color: #d2eab8; }
+.check { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+input[type=checkbox] { accent-color: #b8d69c; }
+#message { padding: 11px 12px; border-radius: 7px; background: #392d24; border: 1px solid #6b4f36; color: #f1cfaa; font-size: 11px; margin-bottom: 18px; overflow-wrap: anywhere; }
+#message.success { background: #253323; border-color: #4e6645; color: #d2e8be; }
+footer { display: flex; align-items: center; gap: 6px; padding: 13px 22px; border-top: 1px solid #303733; font-size: 9px; color: #a2ada0; }
+footer .privacy-dot { height: 4px; width: 4px; }
+#session-label { margin-left: auto; color: #c3d4b7; }

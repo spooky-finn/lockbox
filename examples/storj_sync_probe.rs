@@ -4,10 +4,11 @@
 #[path = "../tests/support/sync_scenario.rs"]
 mod scenario;
 
-use lockbox::infra::{
-    storj::Storj,
-    vault::{KdfParams, ProfileStore, ProviderConfiguration, SharedProfile},
-    witness::DirectoryWitness,
+use lockbox::{
+    sync::transport::storj::Storj,
+    vault::{
+        KdfParams, ProfileStore, ProviderConfiguration, SharedProfile, witness::DirectoryWitness,
+    },
 };
 use secrecy::SecretString;
 use std::sync::Arc;

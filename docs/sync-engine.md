@@ -15,8 +15,9 @@ binding, file/witness ordering, read-only imports and fresh-device admission.
 
 ## Responsibilities
 
-Protocol rules and replay live in `core/sync`; durable operations and provider
-adapters in `infra`; session coordination in `app/space_sync`. The
+Protocol rules and replay live in `sync/protocol`; durable operations live in
+`vault`; provider adapters live in `sync/transport`; session coordination lives
+in `sync/scheduler.rs`. The
 [architecture guide](sync-architecture.md#responsibilities-and-dependencies)
 owns the detailed module map and extension contracts.
 

@@ -1,0 +1,14 @@
+Browser companion
+
+- Chrome + Firefox Manifest V3. Native messaging; reuse Rust Vault, generator, history, file lease.
+- No browser vault/key/password persistence. No localhost server, telemetry, remote code, clipboard or blanket host grants.
+- Exact HTTPS origin, effective port included. User click required. Top frame only; visible fields; same-origin form actions; document token blocks navigation races. No submit.
+- Suggestions expose labels only. Credential fetch happens after form inspection; inject into same document only.
+- Generate native-side; save before fill. Replace existing password preserves entry metadata/history. Site password changes still need form submission by user.
+- Native idle deadline 5 min, absolute 15 min; both monotonic + wall clocks. Polling cannot extend session. Browser screen/idle lock disconnects native host.
+- Exclusive file lease: lock desktop/other browser before unlock. Shared profile edits queue locally; desktop owns remote sync.
+- Realistic boundary: page scripts can read filled secrets. Browser JS copies cannot guarantee wiping. Hostile OS/browser/extension compromise outside protection.
+- Store signing/publication + independent security review remain release steps.
+- Firefox declares authenticationInfo + browsingActivity: Mozilla includes local native messaging. No browsing-history access/server/telemetry.
+- Validation 2026-11-01: Rust 309 unit + 2 existing integration + 2 native-host integration + 2 doc pass; 1 explicit OS probe ignored. Browser 34 checks pass, real Chrome package/form isolation + Firefox temporary install/module/UI smoke included. Formatting/clippy clean.
+- Release host built macOS arm64. Chrome/Firefox ZIPs built. Native registration smoke uses temporary output directories; real browser profiles/host manifests untouched.

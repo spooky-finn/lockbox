@@ -6,9 +6,9 @@ unchanged. No measured latency or memory improvement claimed.
 
 ## 1. Shared connection validation
 
-[`infra/provider.rs`](../src/infra/provider.rs) owns pure connection syntax checks
-and typed field errors. [`CloudSetup`](../src/app/cloud_setup.rs) maps errors to
-existing form messages; [`Storj`](../src/infra/storj.rs) maps to transport errors.
+[`sync/transport/provider.rs`](../src/sync/transport/provider.rs) owns pure connection syntax checks
+and typed field errors. [`CloudSetup`](../src/access/cloud_setup.rs) maps errors to
+existing form messages; [`Storj`](../src/sync/transport/storj/mod.rs) maps to transport errors.
 Username/space-name checks remain in app; signing-region checks remain in adapter.
 No network access during form validation; errors retain no supplied secrets.
 
@@ -17,14 +17,14 @@ embedded credentials, bucket bounds and credential syntax; explicit region guard
 
 ## 2. Smaller local entry rollback
 
-[`Unlocked`](../src/app/records/workspace.rs) retains previous entry for update, inserted
+[`Unlocked`](../src/desktop/workspace.rs) retains previous entry for update, inserted
 index for creation, removed entries and original indices for deletion. Local
 operations no longer clone entire entry collection, including unrelated passwords
 and attachment bytes.
 
 Shared saves retain full snapshot: intent recovery can replace collection before
 later persistence failure. Narrow undo would lose previously visible data.
-[`Vault::save_changes`](../src/infra/vault/shared.rs) journal-copy reduction and
+[`Vault::save_changes`](../src/vault/shared.rs) journal-copy reduction and
 explicit Vault edit commands remain future investigation.
 
 Coverage: failed create/update/delete preserve draft, selection, order, confirmation
@@ -33,10 +33,10 @@ intent and commits exactly one additional event.
 
 ## 3. Explicit replay stages
 
-[`replay.rs`](../src/core/sync/machine/replay.rs) separates authenticated change
+[`replay.rs`](../src/sync/protocol/machine/replay.rs) separates authenticated change
 decoding, signed epoch closure, sequence-fork checks and causal application.
 Control history verification lives in
-[`history.rs`](../src/core/sync/machine/history.rs). Verification order and
+[`history.rs`](../src/sync/protocol/machine/history.rs). Verification order and
 rejected/pending/excluded/fault classifications preserved.
 
 Coverage: delivery permutations, reader forgery, forks, invalid ancestry, checkpoint
@@ -44,10 +44,10 @@ faults and wide-frontier behavior. Canonical wire fixture unchanged.
 
 ## 4. Vault format and filesystem separation
 
-[`vault.rs`](../src/infra/vault/mod.rs) retains public facade and explicit generation/
-witness ordering. Private [`format.rs`](../src/infra/vault/format.rs) owns header
+[`vault.rs`](../src/vault/mod.rs) retains public facade and explicit generation/
+witness ordering. Private [`format.rs`](../src/vault/format.rs) owns header
 codec, serialization, key derivation and authenticated encryption.
-[`file.rs`](../src/infra/vault/file.rs) owns private files, process locks, backups
+[`file.rs`](../src/vault/file.rs) owns private files, process locks, backups
 and atomic replacement. Both create and replace reuse one witness-commit tail.
 
 Coverage: legacy formats, header tampering, password/key failures, backup behavior,
@@ -56,7 +56,7 @@ writer shared with config; durability contracts remain explicit.
 
 ## 5. Sync tests grouped by behavior
 
-[`core/sync/tests/`](../src/core/sync/tests/mod.rs) contains focused `wire`,
+[`sync/protocol/tests/`](../src/sync/protocol/tests/mod.rs) contains focused `wire`,
 `membership`, `replay` and `intents` modules plus deterministic shared support.
 Original 21 tests and assertions retained. Public acceptance scenario remains in
 `tests/`; canonical fixture not regenerated.

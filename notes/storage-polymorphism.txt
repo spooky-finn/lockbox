@@ -1,0 +1,15 @@
+Storage polymorphism proposal — deferred
+
+- Feature-first layout retained. Distinguish vault behavior from ciphertext transport.
+- Current Vault combines local/shared behavior through optional profile/sync state. save_changes selects file save or signed transaction.
+- VaultBackend: read-only record view + typed atomic commands. LocalVault and SyncedVault implement. Session owns Box<dyn VaultBackend>; choose implementation when opening vault.
+- Commands cover current entry/folder mutations, import batches, restore. Preserve history, rollback, atomicity; never expose mutable collections or raw save to record UI.
+- Successful command means durable local commit for both backends. SyncedVault reserves intent, signs, commits projection/outbox under existing witness ordering; provider availability unnecessary for local edit.
+- Sync status separate: locally saved, queued, syncing, synced, conflict/recovery. Persisted fault/read-only policy still enforced by backend.
+- Optional SharedVault capability exposes shared operations through narrow sync/member interfaces. LocalVault returns None; no fake successful sync/share methods. Capability presence does not imply current write permission.
+- LocalVault and SyncedVault compose common encrypted file persistence; SyncedVault additionally owns protocol state/protection. Avoid wrapping LocalVault's record commit path and bypassing signed transactions.
+- Existing Storage + StorageFactory already provide transport polymorphism. Keep list/get/put ciphertext-only; preserve bounded discovery, idempotent publication, cancellation and worker construction. Future directory transport is sync provider, not standalone local vault.
+- Suggested modules: vault/backend.rs, command.rs, local.rs, synced.rs, file/, tests/; sync/transport/{mod.rs,storj.rs}. Add providers only when needed.
+- Migration: facade/command contract first, preserve existing paths, extract local behavior, then shared behavior. Avoid two adapters that merely call same mode-switching Vault forever.
+- Verify common behavior across both backends; shared-specific recovery/outbox/witness tests retained. Inject failed local writes and unavailable transport to test truthful commit semantics.
+- Reassessment: new backend trait and command enum premature. Feature-first refactor implemented separately; existing Vault and Storage contracts retained. Revisit polymorphism when concrete interchangeable implementations justify it.

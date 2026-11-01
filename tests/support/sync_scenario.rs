@@ -1,14 +1,12 @@
 //! The same acceptance scenario runs against memory and the live S3 adapter.
 
 use lockbox::{
-    core::{
-        entry::Entry,
-        sync::{Error, Hash, Role, Value},
+    records::entry::Entry,
+    sync::{
+        protocol::{Error, Hash, Role, Value},
+        transport::{Page, Storage, TransportError},
     },
-    infra::{
-        sync::{Page, Storage, TransportError},
-        vault::{Vault, VaultError},
-    },
+    vault::{Vault, VaultError},
 };
 
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;

@@ -87,23 +87,26 @@ Readers can export known secrets. Copy prevention is outside cryptographic model
 
 ## 2 Current implementation
 
-[src/infra/vault/mod.rs](../src/infra/vault/mod.rs) encrypts entire JSON vault with
+[src/vault/mod.rs](../src/vault/mod.rs) encrypts entire JSON vault with
 XChaCha20-Poly1305. Master password passes Argon2id and HKDF. Header authenticated
 as associated data. New local vaults write v4 and shared profiles write v5;
 v1/v2/v3 files remain readable. Attachments are encrypted with their entries.
 Save uses temporary file, filesystem synchronization, rename, previous backup.
 
-Current layers:
+Current feature modules:
 
-- [src/core](../src/core): entries, folders, password generation, TOTP.
-- [src/app](../src/app): framework-independent state and user workflows.
-- [src/infra](../src/infra): vault, configuration, clipboard, platform services.
-- [src/ui](../src/ui): Dioxus components, contexts, lifecycle integration.
+- [src/records](../src/records): entries, folders, editing, import and record views.
+- [src/access](../src/access) and [src/sharing](../src/sharing): access and participant workflows.
+- [src/sync](../src/sync): protocol, exchange scheduling and transports.
+- [src/vault](../src/vault): encrypted persistence and profile protection.
+- [src/settings](../src/settings): preferences and config persistence.
+- [src/desktop](../src/desktop): shell, contexts, widgets and lifecycle integration.
+- [src/platform](../src/platform): native services and background jobs.
 
-[Entry](../src/core/entry.rs) and [Folder](../src/core/folder.rs) already have
-stable random IDs. Existing workflows in [workspace.rs](../src/app/records/workspace.rs)
-and [directories.rs](../src/app/records/directories.rs) mutate collections then save.
-Shared mode replaces that persistence boundary with signed local transactions.
+[Entry](../src/records/entry.rs) and [Folder](../src/records/folder.rs) already have
+stable random IDs. Existing workflows in [workspace.rs](../src/desktop/workspace.rs)
+and [directories.rs](../src/records/directories.rs) call the `Vault` mutation API.
+Shared mode persists edits through signed local transactions.
 
 New v5 cloud profiles now implement an experimental unversioned sync engine with
 independent device identities, signed membership epochs, encrypted events,
@@ -115,8 +118,8 @@ local persistence. Sharing a local vault key alone does not establish individual
 authorship.
 
 Local mode remains usable without cloud. Migration and cloud publication are
-separate actions. Existing `core/app/infra/ui` layering stays authoritative;
-protocol modules fit those layers rather than creating competing top-level ones.
+separate actions. Feature modules own their models, workflows, views and tests;
+protocol rules remain independent of persistence, providers and presentation.
 
 ## 3 Terms and version boundaries
 
@@ -1490,7 +1493,7 @@ contains device private keys and potentially keys for unrelated spaces.
 Only space protocol objects enter shared namespace. A separate encrypted backup
 export is explicit operation with different restore semantics.
 
-Public [configuration](../src/infra/config.rs) retains paths and nonsensitive
+Public [configuration](../src/settings/config.rs) retains paths and nonsensitive
 preferences only. Space names, participants, keys, API tokens, drafts, outbox
 contents stay out of plaintext configuration.
 
@@ -1861,8 +1864,9 @@ src/
 ```
 
 Module tree describes ownership, not instruction to create every file before
-behavior exists. `core` has no filesystem, provider SDK, or Dioxus dependency.
-`app` coordinates traits. `infra` implements I/O. `ui` consumes application state.
+behavior exists. Protocol and record models have no filesystem, provider SDK, or Dioxus dependency.
+Feature workflows coordinate services; views consume their state. Native adapters
+live in `platform`, encrypted persistence in `vault`, and providers in `sync/transport`.
 Existing public reexports may stay during migration.
 
 ### Typed trust boundary

@@ -35,42 +35,42 @@ flowchart TD
 
 | Module | Owns | Does not decide |
 | --- | --- | --- |
-| `core/sync/machine/protocol.rs` | Signed body schemas and immutable dependency references | Signature authority or network behavior |
-| `core/sync/machine/state.rs` | Serialized ciphertext journal, trust anchors, replay result contracts | Persistence or automatic recovery |
-| `core/sync/machine/commands.rs` | Command validation, encryption, reserved-intent completion | When the host has durably saved a body |
-| `core/sync/machine/membership.rs` | Owner authority, certificates, rosters, grants and epoch checkpoints | Provider permissions or discovery |
-| `core/sync/machine/authority/` | Exact controller handoff consent and root-approved recovery | Root password handling or publication |
-| `core/sync/machine/relay.rs` | Signature and ancestry checks for relayed closed ciphertext | Claims about unavailable old plaintext |
-| `core/sync/invitation.rs` | Canonical public invitation, consent and receipt artifacts | Local cancellation policy or persistence |
-| `core/sync/machine/invitations.rs` | Addressed signature proofs, consent-bound admission and receipt verification | Clock-based expiry or artifact export |
-| `core/sync/machine/replay.rs` | Verified history, epoch closure, causal validation and projection | Disk writes or timestamp winners |
-| `core/sync/machine/parents.rs` | Bounded causal merge parent selection, including prior local sequence ancestry | Conflict resolution or membership authority |
-| `infra/vault/mod.rs` | Public facade, profile lifecycle and file/witness commit ordering | Membership and mutation authorization |
-| `infra/vault/edits.rs` | Record/folder commands, read access and readable-view rollback | Alternate signing or witness ordering |
-| `infra/vault/metadata.rs` | Public profile summary and durable local participant aliases | Replicated membership authority or UI state |
-| `infra/vault/format.rs` | Header codec, contents serialization, KDF and authenticated encryption | Filesystem effects or witness policy |
-| `infra/vault/file.rs` | Private file creation, process locks, backups and atomic replacement | Generation allocation or witness acknowledgement |
-| `core/anchor.rs` | Pure equal/linked-next generation reconciliation | OS stores, files or peer freshness |
-| `infra/vault/protection.rs` | File-digest checks, witness catch-up, durable generation allocation | Device admission or record conflict winners |
-| `infra/witness/` | Exclusive device leases, Keychain/directory storage and injected memory adapter | Signing keys or membership |
-| `infra/vault/store.rs` | Host witness composition and new-device identity recovery | Automatic admission or controller recovery |
-| `infra/vault/shared.rs` | Application operations and the durable signing-intent boundary | Alternate protocol rules |
-| `infra/vault/authority.rs` | Durable controller transitions and pending approval resume | Alternate authority rules |
-| `infra/vault/root_journal.rs` | Exclusive root-claim reservation through the independent CAS store | Global freshness or automatic fork selection |
-| `infra/lease.rs` | Explicit lifetime of exclusive file locks | Cryptographic authority |
-| `infra/vault/sharing.rs` | Durable artifact export, local issuance policy and join installation | Independent protocol authority |
-| `infra/profile/sharing.rs` | Bounded encrypted ledger and invitation status | Provider access or replicated event authority |
-| `infra/vault/exchange.rs` | Candidate receive commits, acknowledgement rollback and retained pending commits | Signing new local mutations |
-| `infra/sync.rs` | Bounded discovery, publication order and provider contracts | Which decrypted mutation is authorized |
-| `infra/sync/discovery.rs` | Ciphertext-only discovery requests, recursive reference GETs and paginated scans | Admission, signatures or plaintext validation |
-| `infra/jobs.rs` | Thread lifetime, cancellation and one result mailbox | Session status, retries or vault access |
-| `infra/storj.rs` | S3 request signing, HTTPS, provider configuration and client construction | User identity or space membership |
-| `app/space_sync.rs` | Exchange phases, draft deferral, retry scheduling and status | HTTP construction, signing keys or cryptographic replay |
-| `app/space_sync/schedule.rs` | Monotonic deadlines and backoff from explicit clock/jitter inputs | Provider errors or protocol authority |
+| `sync/protocol/machine/protocol.rs` | Signed body schemas and immutable dependency references | Signature authority or network behavior |
+| `sync/protocol/machine/state.rs` | Serialized ciphertext journal, trust anchors, replay result contracts | Persistence or automatic recovery |
+| `sync/protocol/machine/commands.rs` | Command validation, encryption, reserved-intent completion | When the host has durably saved a body |
+| `sync/protocol/machine/membership.rs` | Owner authority, certificates, rosters, grants and epoch checkpoints | Provider permissions or discovery |
+| `sync/protocol/machine/authority/` | Exact controller handoff consent and root-approved recovery | Root password handling or publication |
+| `sync/protocol/machine/relay.rs` | Signature and ancestry checks for relayed closed ciphertext | Claims about unavailable old plaintext |
+| `sync/protocol/invitation.rs` | Canonical public invitation, consent and receipt artifacts | Local cancellation policy or persistence |
+| `sync/protocol/machine/invitations.rs` | Addressed signature proofs, consent-bound admission and receipt verification | Clock-based expiry or artifact export |
+| `sync/protocol/machine/replay.rs` | Verified history, epoch closure, causal validation and projection | Disk writes or timestamp winners |
+| `sync/protocol/machine/parents.rs` | Bounded causal merge parent selection, including prior local sequence ancestry | Conflict resolution or membership authority |
+| `vault/mod.rs` | Public facade, profile lifecycle and file/witness commit ordering | Membership and mutation authorization |
+| `vault/edits.rs` | Record/folder commands, read access and readable-view rollback | Alternate signing or witness ordering |
+| `vault/metadata.rs` | Public profile summary and durable local participant aliases | Replicated membership authority or UI state |
+| `vault/format.rs` | Header codec, contents serialization, KDF and authenticated encryption | Filesystem effects or witness policy |
+| `vault/file.rs` | Private file creation, process locks, backups and atomic replacement | Generation allocation or witness acknowledgement |
+| `vault/anchor.rs` | Pure equal/linked-next generation reconciliation | OS stores, files or peer freshness |
+| `vault/protection.rs` | File-digest checks, witness catch-up, durable generation allocation | Device admission or record conflict winners |
+| `vault/witness/` | Exclusive device leases, Keychain/directory storage and injected memory adapter | Signing keys or membership |
+| `vault/store.rs` | Host witness composition and new-device identity recovery | Automatic admission or controller recovery |
+| `vault/shared.rs` | Application operations and the durable signing-intent boundary | Alternate protocol rules |
+| `vault/authority.rs` | Durable controller transitions and pending approval resume | Alternate authority rules |
+| `vault/root_journal.rs` | Exclusive root-claim reservation through the independent CAS store | Global freshness or automatic fork selection |
+| `vault/lease.rs` | Explicit lifetime of exclusive file locks | Cryptographic authority |
+| `vault/sharing.rs` | Durable artifact export, local issuance policy and join installation | Independent protocol authority |
+| `vault/profile/sharing.rs` | Bounded encrypted ledger and invitation status | Provider access or replicated event authority |
+| `vault/exchange.rs` | Candidate receive commits, acknowledgement rollback and retained pending commits | Signing new local mutations |
+| `sync/transport/mod.rs` | Bounded discovery, publication order and provider contracts | Which decrypted mutation is authorized |
+| `sync/transport/discovery.rs` | Ciphertext-only discovery requests, recursive reference GETs and paginated scans | Admission, signatures or plaintext validation |
+| `platform/jobs.rs` | Thread lifetime, cancellation and one result mailbox | Session status, retries or vault access |
+| `sync/transport/storj/mod.rs` | S3 request signing, HTTPS, provider configuration and client construction | User identity or space membership |
+| `sync/scheduler.rs` | Exchange phases, draft deferral, retry scheduling and status | HTTP construction, signing keys or cryptographic replay |
+| `sync/scheduler/schedule.rs` | Monotonic deadlines and backoff from explicit clock/jitter inputs | Provider errors or protocol authority |
 
 The smaller modules are private implementation details. Existing callers still
-use `core::sync::Machine`, `core::sync::SyncState`, `infra::vault::Vault`, and the
-compatibility exports in `lib.rs`. Methods implemented in private modules remain
+use `sync::protocol::Machine`, `sync::protocol::SyncState`, `vault::Vault`, and the
+compatibility exports in `compatibility.rs`. Methods implemented in private modules remain
 available on those public facades.
 
 ## Applying SOLID to the actual boundaries
@@ -207,9 +207,9 @@ transport retry handling.
 | New mutation or conflict semantics | `model.rs` and command/replay validation | Delivery permutations, complete revision bases, atomicity |
 | Admission, role or epoch closure rule | `machine/membership.rs` and `machine/replay.rs` | Reader forgery, revocation, forks, checkpoint comparison |
 | New wire field or signature binding | `machine/protocol.rs`, `wire.rs`, `crypto.rs` | Canonical wire fixture and signature/hash tests; explicit wire-contract review |
-| Crash/durability behavior | `infra/vault/shared.rs`, `infra/vault/exchange.rs` and file adapter | Intent restart, failed candidate/receipt writes, revocation commit failure, legacy activation |
+| Crash/durability behavior | `vault/shared.rs`, `vault/exchange.rs` and file adapter | Intent restart, failed candidate/receipt writes, revocation commit failure, legacy activation |
 | New provider | `Storage` / `StorageFactory` implementation | Lost responses, partial visibility, pagination and bounded bodies |
-| Retry policy or session lifecycle | `app/space_sync.rs`, `schedule.rs`, `infra/jobs.rs` | Explicit-time backoff, scope changes, faults during pending work, cancellation and late receipts |
+| Retry policy or session lifecycle | `sync/scheduler.rs`, `schedule.rs`, `platform/jobs.rs` | Explicit-time backoff, scope changes, faults during pending work, cancellation and late receipts |
 
 ## Verification and fixtures
 
@@ -226,7 +226,7 @@ The S3 HTTP fixture binds to loopback; a sandbox may require permission for that
 local socket. The other transport tests use in-memory adapters and do not require
 credentials or a live Storj bucket.
 
-`src/core/sync/fixtures/change.json` was generated independently with Python cryptography.
+`src/sync/protocol/fixtures/change.json` was generated independently with Python cryptography.
 It contains a deterministic signature over public test metadata and opaque test
 ciphertext bytes. `change_wire_contract_survives_internal_refactors` checks exact
 canonical bytes, the fixed complete-object hash, decoding and strict signature

@@ -1,0 +1,19 @@
+Feature-first refactor implemented
+
+- Removed core/app/infra/ui source directories. Single crate retained.
+- access/: create/unlock, biometric workflows, recovery words, access views/tests.
+- records/: models, editor, import planning/workflow/dialogs, history, folders, favicon/attachments, record views/tests.
+- sharing/: participant actions, invitation files/dialogs, views/tests.
+- sync/: protocol + identity, exchange scheduler, ciphertext transport contracts, discovery, Storj.
+- vault/: existing Vault facade, encrypted persistence, profiles, recovery, anchor/witness protection.
+- settings/: preferences, config, language, view/tests.
+- desktop/: session/workspace coordinator, root/workspace views, runtime, windows, context, widgets, icons, translations.
+- platform/: clipboard, Touch ID, autolock, cancellable jobs.
+- Existing public core/app/infra/ui imports preserved in compatibility.rs. Internal code/examples/integration tests use feature paths.
+- Source behavior retained. No backend trait, command enum or file-format change. Canonical wire fixture byte-identical.
+- Updated native-dialog calls, embedded assets, test paths, subprocess test filter and documentation ownership/links.
+- Validation: 301 unit + 2 integration + 2 doc tests pass; 1 explicit Keychain OS probe ignored. Local HTTP fixtures require socket access.
+- All 302 unit test functions retained. Strict all-target Clippy, formatting, private Rustdoc links, local Markdown links and diff checks pass.
+- Follow-up complete: concurrent browser tests now present. Fixed Entry test construction for zeroizing Drop type and simplified native reader loop for strict Clippy. Browser parser now rejects unknown fields on status/lock requests.
+- Combined workspace validation: 309 unit + 2 integration + 2 doc tests pass; 1 explicit Keychain probe ignored. Browser JS: 8 tests pass; Chrome/Firefox builds pass.
+- Whole-workspace formatting, strict all-target Clippy, private Rustdoc links, local documentation links and diff checks pass. Previous validation blocker cleared. Browser feature added to navigation guide.

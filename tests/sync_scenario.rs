@@ -2,11 +2,12 @@
 mod scenario;
 
 use lockbox::{
-    core::sync::Hash,
-    infra::{
-        sync::{Page, Storage, TransportError},
-        vault::{KdfParams, ProfileStore, ProviderConfiguration, SharedProfile},
-        witness::MemoryWitness,
+    sync::{
+        protocol::Hash,
+        transport::{Page, Storage, TransportError},
+    },
+    vault::{
+        KdfParams, ProfileStore, ProviderConfiguration, SharedProfile, witness::MemoryWitness,
     },
 };
 use secrecy::SecretString;
@@ -56,10 +57,10 @@ impl Storage for Memory {
 #[test]
 fn owner_recovery_uses_current_reader_content_with_an_old_read_only_authority_backup()
 -> scenario::Result<()> {
-    use lockbox::{
-        core::{entry::Entry, sync::Role},
-        infra::vault::{ControllerRecovery, Vault},
-    };
+    use lockbox::records::entry::Entry;
+    use lockbox::sync::protocol::Role;
+    use lockbox::vault::ControllerRecovery;
+    use lockbox::vault::Vault;
     let directory = tempfile::tempdir()?;
     let profiles = ProfileStore::new(Arc::new(MemoryWitness::default()));
     let password = SecretString::from("disposable master".to_owned());
