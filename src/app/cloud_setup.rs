@@ -53,7 +53,9 @@ impl CloudSetup {
                 .iter()
                 .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || *b == b'-')
         {
-            return Err("Bucket: 3–63 characters using a–z, 0–9, and hyphens; start and end with a letter or digit");
+            return Err(
+                "Bucket: 3–63 characters using a–z, 0–9, and hyphens; start and end with a letter or digit",
+            );
         }
         for (key, error) in [
             (

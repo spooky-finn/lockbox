@@ -8,4 +8,5 @@ pub mod language;
 pub mod sync;
 pub mod totp;
 
+pub mod anchor;
 pub(crate) mod identity;

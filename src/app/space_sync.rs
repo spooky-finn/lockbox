@@ -48,6 +48,7 @@ pub(crate) enum Status {
     Conflict,
     Removed,
     Failed,
+    Recovery,
 }
 
 impl Status {
@@ -61,6 +62,7 @@ impl Status {
             Self::Conflict => "Conflicting versions",
             Self::Removed => "Access to the space was removed",
             Self::Failed => "History verification failed · uploads paused",
+            Self::Recovery => "Profile requires recovery · exchange paused",
         }
     }
 }
@@ -119,6 +121,8 @@ impl SpaceSync {
             self.scope != Some(Scope::from(state))
                 || (state.fault.is_some() && !self.stopped)
                 || (vault.has_pending_exchange() && self.worker.is_some())
+                || (vault.signing_error().is_some()
+                    && (self.worker.is_some() || self.status != Status::Recovery))
                 || self.needs_tick(editing)
         })
     }
@@ -145,6 +149,10 @@ impl SpaceSync {
             self.worker = None;
             self.status = Status::Incomplete;
         }
+        if vault.signing_error().is_some() {
+            self.worker = None;
+            self.status = Status::Recovery;
+        }
         if editing {
             return None;
         }
@@ -154,6 +162,7 @@ impl SpaceSync {
     }
 
     fn advance(&mut self, vault: &mut Vault) -> VaultResult<()> {
+        vault.ensure_profile_writable()?;
         vault.recover_exchange()?;
         if let Some(worker) = &mut self.worker {
             let Some(result) = worker.take() else {
@@ -240,12 +249,13 @@ impl SpaceSync {
         let state = vault
             .sync_state()
             .ok_or(crate::core::sync::Error::UnauthorizedDevice)?;
-        let namespace = state.namespace;
-        let known = state.objects.keys().copied().collect();
+        let request = sync::Discovery::for_state(state)?;
         let factory = self.factory(vault)?;
         self.start(move |cancel| {
             let mut storage = factory.connect()?;
-            sync::download(&mut *storage, namespace, &known, &cancel).map(Reply::Downloaded)
+            request
+                .download(&mut *storage, &cancel)
+                .map(Reply::Downloaded)
         });
         Ok(())
     }
@@ -283,6 +293,10 @@ impl SpaceSync {
                 VaultError::Transport(TransportError::Verification(_)) => Status::Failed,
                 _ => Status::Offline,
             };
+        } else if matches!(error, VaultError::ProfileProtection(_)) {
+            self.worker = None;
+            self.status = Status::Recovery;
+            self.schedule.defer(Instant::now(), RECOVERY_INTERVAL);
         } else {
             self.status = Status::Incomplete;
             self.schedule.defer(Instant::now(), RECOVERY_INTERVAL);

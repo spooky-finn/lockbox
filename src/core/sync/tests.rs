@@ -617,3 +617,312 @@ fn malicious_checkpoint_cannot_replace_independently_replayed_history() {
         Err(Error::CheckpointMismatch)
     ));
 }
+
+fn encrypted_change(
+    state: &SyncState,
+    membership: Hash,
+    device: &DeviceSecret,
+    sequence: u64,
+    previous: Option<Hash>,
+    parents: Vec<Hash>,
+    transaction: &Transaction,
+) -> Object {
+    let control = control_at(state, membership).unwrap();
+    let key = epoch_key(&control.body, device).unwrap();
+    let content_key = crypto::content_key(&key, state.space, control.body.epoch.context, false);
+    let mut nonce = [0; 24];
+    getrandom::fill(&mut nonce).unwrap();
+    let header = ChangeHeader {
+        profile: PROFILE.into(),
+        space: state.space,
+        membership,
+        epoch: control.body.epoch.number,
+        author: device.id(),
+        sequence: Counter(sequence),
+        previous,
+        parents,
+        nonce: Blob(nonce.to_vec()),
+    };
+    let ciphertext = crypto::encrypt(
+        &content_key,
+        &nonce,
+        &canonical(transaction).unwrap(),
+        &canonical(&header).unwrap(),
+    )
+    .unwrap();
+    Object::Change(
+        crypto::sign(
+            Change { header, ciphertext },
+            &device.signer(),
+            CHANGE_DOMAIN,
+        )
+        .unwrap(),
+    )
+}
+
+fn empty_transaction() -> Transaction {
+    Transaction {
+        mutations: vec![],
+        rebased_from: None,
+    }
+}
+
+#[test]
+fn invalid_ancestry_is_rejected_instead_of_waiting_forever_in_every_order() {
+    let (state, device) = owner();
+    let invalid = Transaction {
+        mutations: vec![Mutation {
+            entity: Value::Entry(entry(1, "fictional")).entity(),
+            bases: vec![],
+            action: Action::Delete, // no existing revision to delete
+            value: None,
+        }],
+        rebased_from: None,
+    };
+    let first = encrypted_change(&state, state.genesis, &device, 1, None, vec![], &invalid);
+    let first_hash = first.hash().unwrap();
+    let second = encrypted_change(
+        &state,
+        state.genesis,
+        &device,
+        2,
+        Some(first_hash),
+        vec![first_hash],
+        &empty_transaction(),
+    );
+    let second_hash = second.hash().unwrap();
+    let third = encrypted_change(
+        &state,
+        state.genesis,
+        &device,
+        3,
+        Some(second_hash),
+        vec![second_hash],
+        &empty_transaction(),
+    );
+    let objects = [first, second, third];
+    for order in [
+        [0, 1, 2],
+        [0, 2, 1],
+        [1, 0, 2],
+        [1, 2, 0],
+        [2, 0, 1],
+        [2, 1, 0],
+    ] {
+        let mut receiver = state.clone();
+        for index in order {
+            let object = &objects[index];
+            Machine::receive(
+                &mut receiver,
+                object.hash().unwrap(),
+                object.bytes().unwrap(),
+            )
+            .unwrap();
+        }
+        let replay = Machine::replay(&receiver, &device).unwrap();
+        assert!(replay.ready);
+        assert!(replay.pending.is_empty());
+        assert!(replay.accepted.is_empty());
+        assert_eq!(replay.rejected.len(), 3);
+        assert!(replay.projection.records.is_empty());
+    }
+}
+
+#[test]
+fn present_parents_from_another_epoch_or_object_kind_are_invalid() {
+    let (mut state, device) = owner();
+    let old = edit(&mut state, &device, vec![entry(1, "old")]);
+    let members = Machine::members(&state, &device).unwrap();
+    state.intent = Some(Machine::prepare_membership(&state, &device, members).unwrap());
+    let membership = Machine::complete_intent(&mut state, &device).unwrap();
+    for parent in [old, state.genesis, membership] {
+        let mut receiver = state.clone();
+        let object = encrypted_change(
+            &state,
+            membership,
+            &device,
+            1,
+            None,
+            vec![parent],
+            &empty_transaction(),
+        );
+        let hash = object.hash().unwrap();
+        Machine::receive(&mut receiver, hash, object.bytes().unwrap()).unwrap();
+        let replay = Machine::replay(&receiver, &device).unwrap();
+        assert!(replay.ready);
+        assert!(replay.pending.is_empty());
+        assert_eq!(replay.rejected[&hash], Error::InvalidTransaction);
+    }
+}
+
+#[test]
+fn invalid_intent_completion_preserves_the_exact_original_journal() {
+    let (mut state, device) = owner();
+    let object = encrypted_change(
+        &state,
+        state.genesis,
+        &device,
+        2, // no preceding event
+        None,
+        vec![],
+        &empty_transaction(),
+    );
+    let Object::Change(change) = object else {
+        panic!()
+    };
+    state.intent = Some(PreparedChange::Change(change.body));
+    let before = canonical(&state).unwrap();
+    for _ in 0..2 {
+        assert_eq!(
+            Machine::complete_intent(&mut state, &device),
+            Err(Error::InvalidTransaction)
+        );
+        assert_eq!(canonical(&state).unwrap(), before);
+    }
+}
+
+#[test]
+fn closing_over_semantically_invalid_history_is_a_checkpoint_fault() {
+    let (mut state, device) = owner();
+    let invalid = encrypted_change(
+        &state,
+        state.genesis,
+        &device,
+        2,
+        None,
+        vec![],
+        &empty_transaction(),
+    );
+    let hash = invalid.hash().unwrap();
+    let members = Machine::members(&state, &device).unwrap();
+    let PreparedChange::Control(mut successor) =
+        Machine::prepare_membership(&state, &device, members).unwrap()
+    else {
+        panic!()
+    };
+    successor.closed_frontier = vec![hash];
+    let successor =
+        Object::Control(crypto::sign(successor, &device.signer(), CONTROL_DOMAIN).unwrap());
+    for object in [invalid, successor] {
+        Machine::receive(&mut state, object.hash().unwrap(), object.bytes().unwrap()).unwrap();
+    }
+    assert!(matches!(
+        Machine::replay(&state, &device),
+        Err(Error::CheckpointMismatch)
+    ));
+}
+
+#[test]
+fn wide_frontier_merge_preserves_conflicts_sequence_and_retry_bytes() {
+    let (mut state, owner) = owner();
+    let mut members = Machine::members(&state, &owner).unwrap();
+    let mut devices = vec![owner];
+    for seed in 2..=66 {
+        let (device, certificate) = identity(seed);
+        members.push((certificate, Role::Editor));
+        devices.push(device);
+    }
+    state.intent = Some(Machine::prepare_membership(&state, &devices[0], members).unwrap());
+    let membership = Machine::complete_intent(&mut state, &devices[0]).unwrap();
+    let base = state.clone();
+    let mut authors = std::collections::BTreeMap::new();
+    for (index, device) in devices.iter().enumerate() {
+        let transaction = Transaction::diff(
+            &Projection::default(),
+            &[entry(1, &format!("fictional revision {index}"))],
+            &[],
+        )
+        .unwrap();
+        let object = encrypted_change(&state, membership, device, 1, None, vec![], &transaction);
+        let hash = object.hash().unwrap();
+        authors.insert(hash, index);
+        Machine::receive(&mut state, hash, object.bytes().unwrap()).unwrap();
+    }
+    let before = Machine::replay(&state, &devices[0]).unwrap();
+    assert_eq!(before.frontier.len(), 66);
+    assert_eq!(before.projection.records[0].versions.len(), 66);
+    let digest = before.projection.digest().unwrap();
+    let (previous, index) = authors.last_key_value().unwrap();
+    let device = &devices[*index];
+    assert!(matches!(
+        Machine::prepare(&state, device, empty_transaction()),
+        Err(Error::FrontierTooWide)
+    ));
+    assert!(matches!(
+        Machine::prepare_membership(
+            &state,
+            &devices[0],
+            Machine::members(&state, &devices[0]).unwrap()
+        ),
+        Err(Error::FrontierTooWide)
+    ));
+    let prepared = Machine::prepare_merge(&state, device).unwrap().unwrap();
+    let PreparedChange::Change(change) = &prepared else {
+        panic!()
+    };
+    assert_eq!(change.header.parents.len(), 64);
+    assert!(change.header.parents.contains(previous));
+    assert_eq!(change.header.sequence, Counter(2));
+    state.intent = Some(prepared);
+    let mut restarted: SyncState = serde_json::from_slice(&canonical(&state).unwrap()).unwrap();
+    let merged = Machine::complete_intent(&mut state, device).unwrap();
+    assert_eq!(
+        Machine::complete_intent(&mut restarted, device).unwrap(),
+        merged
+    );
+    assert_eq!(state.objects[&merged], restarted.objects[&merged]);
+    let after = Machine::replay(&state, device).unwrap();
+    assert_eq!(after.frontier.len(), 3);
+    assert_eq!(after.projection.digest().unwrap(), digest);
+    assert!(Machine::prepare_merge(&state, device).unwrap().is_none());
+    let resolution = Transaction::resolve(
+        &after.projection,
+        Value::Entry(entry(1, "chosen")).entity(),
+        Some(Value::Entry(entry(1, "chosen"))),
+    );
+    commit(&mut state, device, resolution);
+    let final_view = Machine::replay(&state, device).unwrap();
+    assert_eq!(final_view.projection.conflicts().count(), 0);
+    let mut receiver = base;
+    deliver(&state, &mut receiver);
+    let received = Machine::replay(&receiver, &devices[0]).unwrap();
+    assert!(received.ready);
+    assert_eq!(
+        received.projection.digest().unwrap(),
+        final_view.projection.digest().unwrap()
+    );
+    assert_eq!(received.accepted, final_view.accepted);
+}
+
+#[test]
+fn a_pinned_minimum_control_prevents_writes_from_an_older_valid_prefix() {
+    let (mut owner, device) = owner();
+    edit(&mut owner, &device, vec![entry(1, "current value")]);
+    let prefix = owner.clone();
+    let members = Machine::members(&owner, &device).unwrap();
+    owner.intent = Some(Machine::prepare_membership(&owner, &device, members).unwrap());
+    let anchor = Machine::complete_intent(&mut owner, &device).unwrap();
+    let mut joined = Machine::join_at(owner.descriptor(), anchor);
+    deliver(&prefix, &mut joined);
+    let replay = Machine::replay(&joined, &device).unwrap();
+    assert_eq!(replay.role, Some(Role::Owner));
+    assert!(!replay.ready);
+    assert!(replay.pending.contains(&anchor));
+    assert!(matches!(
+        Machine::prepare(&joined, &device, empty_transaction()),
+        Err(Error::MissingDependency)
+    ));
+    deliver(&owner, &mut joined);
+    let replay = Machine::replay(&joined, &device).unwrap();
+    assert!(replay.ready);
+    assert!(replay.pending.is_empty());
+    assert_eq!(replay.membership, anchor);
+    assert_eq!(
+        replay.projection.digest().unwrap(),
+        Machine::replay(&owner, &device)
+            .unwrap()
+            .projection
+            .digest()
+            .unwrap()
+    );
+}

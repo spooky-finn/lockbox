@@ -1,6 +1,6 @@
 //! Bounded ciphertext transport. Providers never receive signing or content keys.
 
-use crate::core::sync::{Blob, Error, Hash, MAX_OBJECT_BYTES, MAX_OBJECTS, SyncState};
+use crate::core::sync::{Blob, Error, Hash, SyncState};
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::{
@@ -64,7 +64,10 @@ pub trait StorageFactory: Send + Sync {
     fn connect(&self) -> Result<Box<dyn Storage + Send>>;
 }
 
+mod discovery;
 pub(crate) mod worker;
+
+pub use discovery::Discovery;
 
 #[derive(Clone, Default)]
 pub struct Cancellation(Arc<AtomicBool>);
@@ -87,79 +90,17 @@ pub struct Download {
 }
 
 /// Full bounded scan, deliberately independent of Storj's listing order. Known
-/// objects remain in the local cache when omitted by a provider. New verified
-/// objects are persisted between passes, allowing bounded scans to make progress.
+/// objects remain in the local cache when omitted by a provider. New candidates
+/// are persisted after replay, allowing bounded scans to make progress. Hosts with
+/// a durable journal should use [`Discovery::for_state`] to fetch unlisted known
+/// dependencies and pinned genesis as well.
 pub fn download(
     storage: &mut dyn Storage,
     namespace: Hash,
     known: &BTreeSet<Hash>,
     cancel: &Cancellation,
 ) -> Result<Download> {
-    let mut cursor = None;
-    let mut cursors = BTreeSet::new();
-    let mut discovered = BTreeSet::new();
-    let mut objects = Vec::new();
-    let mut bytes_used = 0;
-    let mut incomplete = false;
-    loop {
-        cancel.check()?;
-        let page = storage.list(namespace, cursor.as_deref())?;
-        if page.objects.len() > 1000 {
-            return Err(TransportError::InvalidResponse);
-        }
-        for hash in page.objects {
-            cancel.check()?;
-            if known.contains(&hash) || !discovered.insert(hash) {
-                continue;
-            }
-            if known.len() + discovered.len() > MAX_OBJECTS {
-                return Err(TransportError::Budget);
-            }
-            let bytes = match storage.get(namespace, hash) {
-                Ok(bytes) => bytes,
-                Err(TransportError::NotFound) => {
-                    incomplete = true;
-                    continue;
-                }
-                Err(error) => return Err(error),
-            };
-            if bytes.len() > MAX_OBJECT_BYTES {
-                return Err(TransportError::Budget);
-            }
-            bytes_used += bytes.len();
-            if bytes_used > MAX_BATCH_BYTES {
-                return Ok(Download {
-                    objects,
-                    incomplete: true,
-                });
-            }
-            let object = crate::core::sync::decode::<crate::core::sync::Object>(&bytes)
-                .map_err(TransportError::Verification)?;
-            if object.hash().map_err(TransportError::Verification)? != hash {
-                return Err(TransportError::Verification(Error::HashMismatch));
-            }
-            objects.push((hash, bytes));
-            if objects.len() == 128 {
-                return Ok(Download {
-                    objects,
-                    incomplete: true,
-                });
-            }
-        }
-        match page.next {
-            Some(next) if next.len() <= 8192 && cursors.insert(next.clone()) => cursor = Some(next),
-            Some(_) => return Err(TransportError::InvalidResponse),
-            None => {
-                return Ok(Download {
-                    objects,
-                    incomplete,
-                });
-            }
-        }
-        if cursors.len() > 64 {
-            return Err(TransportError::Budget);
-        }
-    }
+    Discovery::new(namespace, known.clone()).download(storage, cancel)
 }
 
 /// Caller builds this plan only after verified replay and a durable local save.

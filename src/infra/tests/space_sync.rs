@@ -33,6 +33,30 @@ fn profile_vault(path: &Path, name: &str) -> Vault {
     .unwrap()
 }
 
+fn bootstrap_vault(path: &Path) -> Vault {
+    let mut profile = BootstrapProfile::generate(
+        "Alice".into(),
+        "Team".into(),
+        ProviderConfiguration {
+            base_url: "https://gateway.storjshare.io".into(),
+            bucket: "test-bucket".into(),
+            access_key: "access".into(),
+            secret_key: "secret".into(),
+        },
+        &SecretString::from("recovery password".to_owned()),
+        FAST,
+    )
+    .unwrap();
+    profile.cancel_activation();
+    Vault::create_profile(
+        path,
+        &SecretString::from("master".to_owned()),
+        FAST,
+        profile,
+    )
+    .unwrap()
+}
+
 fn entry(title: &str) -> Entry {
     let mut entry = Entry::new();
     entry.title = title.into();
@@ -144,6 +168,11 @@ fn failed_intent_write_never_allocates_a_different_signing_slot() {
     let mut expected = profile.sync.as_ref().unwrap().clone();
     assert!(expected.intent.is_some());
     let hash = Machine::complete_intent(&mut expected, &device).unwrap();
+    assert!(vault.recover_sync().is_err());
+    let unsaved = vault.sync_state().unwrap();
+    assert_eq!(unsaved.objects.len(), 1);
+    assert!(unsaved.intent.is_some());
+    assert!(!unsaved.outbox.contains(&hash));
     assert_eq!(std::fs::read(&path).unwrap(), original);
     std::fs::remove_dir(sibling(&path, "tmp")).unwrap();
     // A restart has no emitted signature if intent never reached disk.
@@ -161,6 +190,78 @@ fn failed_intent_write_never_allocates_a_different_signing_slot() {
         expected.objects[&hash]
     );
     assert_eq!(vault.entries[0].title, "Retry");
+}
+
+#[test]
+fn automatic_frontier_folding_uses_durable_intents_before_the_requested_edit() {
+    use crate::core::sync::{DeviceSecret, PreparedChange};
+    use ed25519_dalek::SigningKey;
+
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("wide.lbx");
+    let mut vault = profile_vault(&path, "Owner");
+    let mut members = vec![(vault.device_certificate().unwrap(), Role::Owner)];
+    let mut devices = Vec::new();
+    for seed in 1..=65 {
+        let (device, certificate) =
+            DeviceSecret::generate(&SigningKey::from_bytes(&[seed; 32])).unwrap();
+        devices.push(device);
+        members.push((certificate, Role::Editor));
+    }
+    vault.set_space_members(members).unwrap();
+    let template = vault.sync_state().unwrap().clone();
+    let mut objects = Vec::new();
+    for device in &devices {
+        let mut branch = template.clone();
+        branch.intent = Some(
+            Machine::prepare(
+                &branch,
+                device,
+                Transaction {
+                    mutations: vec![],
+                    rebased_from: None,
+                },
+            )
+            .unwrap(),
+        );
+        let hash = Machine::complete_intent(&mut branch, device).unwrap();
+        objects.push((hash, branch.objects[&hash].0.clone()));
+    }
+    vault
+        .receive_sync(Download {
+            objects,
+            incomplete: false,
+        })
+        .unwrap();
+    let before = vault.sync_replay().unwrap().unwrap();
+    assert_eq!(before.frontier.len(), 65);
+    let object_count = vault.sync_state().unwrap().objects.len();
+    let desired = entry("Saved after folding");
+    vault.entries.push(desired.clone());
+    std::fs::create_dir(sibling(&path, "tmp")).unwrap();
+    assert!(vault.save_changes().is_err());
+    let pending = vault.sync_state().unwrap();
+    assert_eq!(pending.objects.len(), object_count);
+    assert!(matches!(pending.intent, Some(PreparedChange::Change(_))));
+    // The blocked intent is the empty merge, never a premature user mutation.
+    let mut recovered = pending.clone();
+    let device = vault.profile.as_ref().unwrap().sync_secret();
+    let expected_merge = Machine::complete_intent(&mut recovered, &device).unwrap();
+    std::fs::remove_dir(sibling(&path, "tmp")).unwrap();
+    vault.recover_sync().unwrap();
+    assert_eq!(
+        vault.sync_state().unwrap().objects[&expected_merge],
+        recovered.objects[&expected_merge]
+    );
+    assert!(vault.entries.is_empty());
+    assert_eq!(vault.sync_replay().unwrap().unwrap().frontier.len(), 2);
+    vault.entries.push(desired);
+    vault.save_changes().unwrap();
+    assert_eq!(vault.sync_state().unwrap().objects.len(), object_count + 2);
+    assert_eq!(vault.sync_replay().unwrap().unwrap().frontier.len(), 1);
+    drop(vault);
+    let reopened = Vault::open(&path, &SecretString::from("master".to_owned())).unwrap();
+    assert_eq!(reopened.entries[0].title, "Saved after folding");
 }
 
 #[test]
@@ -268,14 +369,14 @@ fn verified_fork_is_persistently_frozen_but_last_readable_data_survives() {
 }
 
 #[test]
-fn bootstrap_profile_activation_requires_recovery_and_preserves_records_and_identity() {
+fn bootstrap_activation_preserves_records_and_user_but_creates_a_fresh_signer() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("old.lbx");
-    let mut vault = profile_vault(&path, "Alice");
-    vault.profile.as_mut().unwrap().cancel_activation();
+    let mut vault = bootstrap_vault(&path);
     vault.entries.push(entry("Existing local secret"));
     vault.save().unwrap();
     let identity = vault.profile.as_ref().unwrap().identity.device_id;
+    let user = vault.profile.as_ref().unwrap().identity.user_id;
     assert!(matches!(
         vault.activate_sync(&SecretString::from("wrong".to_owned())),
         Err(VaultError::RecoveryFailed)
@@ -285,7 +386,8 @@ fn bootstrap_profile_activation_requires_recovery_and_preserves_records_and_iden
     vault
         .activate_sync(&SecretString::from("recovery password".to_owned()))
         .unwrap();
-    assert_eq!(vault.device_certificate().unwrap().body.device.0, identity);
+    assert_ne!(vault.device_certificate().unwrap().body.device.0, identity);
+    assert_eq!(vault.device_certificate().unwrap().body.user.0, user);
     assert_eq!(
         vault.sync_replay().unwrap().unwrap().projection.entries(),
         vault.entries
@@ -311,8 +413,7 @@ fn bootstrap_profile_activation_requires_recovery_and_preserves_records_and_iden
 fn failed_activation_keeps_existing_records_readable_and_recoverable() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("old.lbx");
-    let mut vault = profile_vault(&path, "Alice");
-    vault.profile.as_mut().unwrap().cancel_activation();
+    let mut vault = bootstrap_vault(&path);
     vault.entries.push(entry("Keep this"));
     vault.save().unwrap();
     std::fs::create_dir(sibling(&path, "tmp")).unwrap();

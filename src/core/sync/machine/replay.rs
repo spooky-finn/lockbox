@@ -90,7 +90,11 @@ impl Machine {
             projection: Projection::default(),
             frontier: BTreeSet::new(),
             accepted: BTreeSet::new(),
-            pending: BTreeSet::new(),
+            pending: state
+                .required_control
+                .filter(|head| !seen.contains(head))
+                .into_iter()
+                .collect(),
             rejected,
             excluded: BTreeSet::new(),
             role,
@@ -142,6 +146,7 @@ impl Machine {
                 &baseline,
                 &content_key,
                 &changes,
+                &controls.keys().copied().collect(),
                 next,
             )?;
             result.projection = replayed.projection;
@@ -175,6 +180,7 @@ fn replay_epoch(
     baseline: &Projection,
     key: &[u8; 32],
     changes: &BTreeMap<Hash, Signed<Change>>,
+    controls: &BTreeSet<Hash>,
     next: Option<&Control>,
 ) -> Result<Replay> {
     let mut verified = BTreeMap::new();
@@ -271,6 +277,29 @@ fn replay_epoch(
     }
     let mut accepted: BTreeMap<Hash, VerifiedChange> = BTreeMap::new();
     loop {
+        // A present but rejected or wrong-epoch parent cannot become valid by
+        // downloading more objects. Propagate rejection through its descendants
+        // instead of keeping the whole space permanently "incomplete".
+        let invalid: Vec<_> = verified
+            .iter()
+            .filter(|(_, change)| {
+                change.signed.body.header.parents.iter().any(|parent| {
+                    rejected.contains_key(parent)
+                        || controls.contains(parent)
+                        || changes
+                            .get(parent)
+                            .is_some_and(|c| c.body.header.membership != membership)
+                })
+            })
+            .map(|(hash, _)| *hash)
+            .collect();
+        if !invalid.is_empty() && next.is_some() {
+            return Err(Error::CheckpointMismatch);
+        }
+        for hash in &invalid {
+            verified.remove(hash);
+            rejected.insert(*hash, Error::InvalidTransaction);
+        }
         let ready: Vec<_> = verified
             .iter()
             .filter(|(_, c)| {
@@ -283,7 +312,7 @@ fn replay_epoch(
             })
             .map(|(h, _)| *h)
             .collect();
-        if ready.is_empty() {
+        if ready.is_empty() && invalid.is_empty() {
             break;
         }
         for hash in ready {
@@ -327,6 +356,11 @@ fn replay_epoch(
                     accepted.insert(hash, change);
                 }
                 Err(error) => {
+                    if next.is_some() {
+                        // An authenticated control closes over invalid history,
+                        // not merely unavailable history. Preserve fault evidence.
+                        return Err(Error::CheckpointMismatch);
+                    }
                     rejected.insert(hash, error);
                 }
             }

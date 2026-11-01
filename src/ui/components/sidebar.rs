@@ -24,10 +24,10 @@ pub(super) fn Sidebar() -> Element {
                 h2 { {language.text(Text::Vault)} }
                 span { class: "count", "{workspace.vault.entries.len()}" }
                 IconButton { class: "primary", icon: Icon::Plus, label: language.text(Text::NewEntry),
-                    disabled: workspace.is_editing(), onclick: move |_| edit_unlocked(state, |u| u.start_new()),
+                    disabled: workspace.is_editing() || workspace.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.start_new()),
                 }
                 IconButton { class: "quiet", icon: Icon::FolderPlus, label: language.text(Text::NewFolder),
-                    disabled: workspace.is_editing(), onclick: move |_| edit_unlocked(state, |u| u.start_directory()),
+                    disabled: workspace.is_editing() || workspace.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.start_directory()),
                 }
             }
             label { class: "sr-only", r#for: "search", {language.text(Text::SearchEntriesAndFolders)} }

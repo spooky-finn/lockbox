@@ -27,7 +27,11 @@
 //!
 //! An error after either persistence call must retain the same intent/event for
 //! recovery. [`crate::infra::vault::Vault`] implements this contract atomically
-//! inside its encrypted profile. Storage adapters receive only object bytes and
+//! inside its encrypted profile and reconciles an independent installation witness
+//! before signing or exchange. Other production hosts must supply equivalent
+//! rollback protection in their persistence boundary. Core replay alone cannot
+//! detect a restored profile when all independent evidence is absent.
+//! Storage adapters receive only object bytes and
 //! never construct verified transactions or choose conflict winners.
 
 mod crypto;
@@ -82,6 +86,8 @@ pub enum Error {
     InvalidTransaction,
     #[error("synchronization resource budget exceeded")]
     ResourceBudgetExceeded,
+    #[error("causal frontier must be folded before preparing this operation")]
+    FrontierTooWide,
     #[error("a durable signing intent must be completed first")]
     PendingIntent,
     #[error("operating system randomness unavailable")]

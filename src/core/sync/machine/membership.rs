@@ -29,11 +29,7 @@ pub(super) fn epoch_key(control: &Control, device: &DeviceSecret) -> Result<Zero
         .iter()
         .find(|g| g.device == device.id())
         .ok_or(Error::KeyUnavailable)?;
-    let member = control
-        .members
-        .iter()
-        .find(|m| m.certificate.body.device == device.id())
-        .ok_or(Error::UnauthorizedDevice)?;
+    let member = Roster(&control.members).member(device.id())?;
     device.open_grant(
         &grant.enc,
         &grant.ciphertext,
@@ -50,30 +46,12 @@ pub(super) fn build_control(
     baseline: &Projection,
     key: &[u8; 32],
 ) -> Result<Control> {
-    let mut grants = Vec::new();
-    for member in &members {
-        member.certificate.verify()?;
-        let (enc, ciphertext) = crypto::seal_grant(
-            &member.certificate.body.hpke_key,
-            key,
-            &grant_aad(&epoch, &member.certificate)?,
-        )?;
-        grants.push(Grant {
-            device: member.certificate.body.device,
-            enc,
-            ciphertext,
-        });
-    }
-    let checkpoint_key = crypto::content_key(key, epoch.space, epoch.context, true);
-    let mut checkpoint_nonce = [0; 24];
-    getrandom::fill(&mut checkpoint_nonce).map_err(|_| Error::Random)?;
-    let plaintext = Zeroizing::new(canonical(baseline)?);
-    let checkpoint = crypto::encrypt(
-        &checkpoint_key,
-        &checkpoint_nonce,
-        &plaintext,
-        &canonical(&epoch)?,
-    )?;
+    let encryption = EpochEncryption { epoch: &epoch, key };
+    let grants = members
+        .iter()
+        .map(|member| encryption.grant(&member.certificate))
+        .collect::<Result<_>>()?;
+    let (checkpoint_nonce, checkpoint) = encryption.checkpoint(baseline)?;
     Ok(Control {
         epoch,
         owner,
@@ -81,7 +59,7 @@ pub(super) fn build_control(
         members,
         closed_frontier,
         grants,
-        checkpoint_nonce: Blob(checkpoint_nonce.to_vec()),
+        checkpoint_nonce,
         checkpoint,
     })
 }
@@ -100,83 +78,164 @@ pub(super) fn validate_control_body(
     previous: Option<&Signed<Control>>,
     state: &SyncState,
 ) -> Result<[u8; 32]> {
-    if body.epoch.profile != PROFILE {
-        return Err(Error::UnsupportedProtocol);
+    ControlAuthority::new(body, state).signing_key(previous)
+}
+
+/// Recipient grants and checkpoint encryption share one immutable epoch scope.
+struct EpochEncryption<'a> {
+    epoch: &'a Epoch,
+    key: &'a [u8; 32],
+}
+
+impl EpochEncryption<'_> {
+    fn grant(&self, certificate: &Signed<Certificate>) -> Result<Grant> {
+        certificate.verify()?;
+        let (enc, ciphertext) = crypto::seal_grant(
+            &certificate.body.hpke_key,
+            self.key,
+            &grant_aad(self.epoch, certificate)?,
+        )?;
+        Ok(Grant {
+            device: certificate.body.device,
+            enc,
+            ciphertext,
+        })
     }
-    if body.epoch.space != state.space
-        || body.owner != Hash::digest(b"lockbox.user.v1\0", &state.owner_root)
-        || body.members.is_empty()
-        || body.members.len() > 512
-        || body.grants.len() != body.members.len()
-        || body.closed_frontier.len() > super::super::MAX_PARENTS
-        || !sorted_unique(&body.closed_frontier)
-        || !sorted_unique(
-            &body
-                .members
-                .iter()
-                .map(|m| m.certificate.body.device)
-                .collect::<Vec<_>>(),
-        )
-        || body.checkpoint_nonce.0.len() != 24
-        || body.checkpoint.0.len() < 16
-    {
-        return Err(Error::InvalidEncoding);
+
+    fn checkpoint(&self, baseline: &Projection) -> Result<(Blob, Blob)> {
+        let key = crypto::content_key(self.key, self.epoch.space, self.epoch.context, true);
+        let mut nonce = [0; 24];
+        getrandom::fill(&mut nonce).map_err(|_| Error::Random)?;
+        let plaintext = Zeroizing::new(canonical(baseline)?);
+        let ciphertext = crypto::encrypt(&key, &nonce, &plaintext, &canonical(self.epoch)?)?;
+        Ok((Blob(nonce.to_vec()), ciphertext))
     }
-    let mut users = BTreeMap::new();
-    for (member, grant) in body.members.iter().zip(&body.grants) {
-        member.certificate.verify()?;
-        let certificate = &member.certificate.body;
-        if (member.role == Role::Owner) != (certificate.user == body.owner)
-            || grant.device != certificate.device
-            || grant.enc.0.len() != 32
-            || grant.ciphertext.0.len() != 48
+}
+
+/// Owns canonical ordering, exact device lookup and user-wide role/device limits.
+struct Roster<'a>(&'a [Member]);
+
+impl<'a> Roster<'a> {
+    fn is_canonical(&self) -> bool {
+        !self.0.is_empty()
+            && self.0.len() <= 512
+            && self
+                .0
+                .windows(2)
+                .all(|pair| pair[0].certificate.body.device < pair[1].certificate.body.device)
+    }
+
+    fn member(&self, device: Hash) -> Result<&'a Member> {
+        self.0
+            .iter()
+            .find(|member| member.certificate.body.device == device)
+            .ok_or(Error::UnauthorizedDevice)
+    }
+
+    fn controller(&self, device: Hash) -> Result<&'a Member> {
+        let member = self.member(device)?;
+        if member.role != Role::Owner {
+            return Err(Error::UnauthorizedDevice);
+        }
+        Ok(member)
+    }
+
+    fn verify(&self, owner: Hash, grants: &[Grant]) -> Result<()> {
+        let mut users = BTreeMap::new();
+        for (member, grant) in self.0.iter().zip(grants) {
+            member.certificate.verify()?;
+            let certificate = &member.certificate.body;
+            if (member.role == Role::Owner) != (certificate.user == owner)
+                || grant.device != certificate.device
+                || grant.enc.0.len() != 32
+                || grant.ciphertext.0.len() != 48
+            {
+                return Err(Error::UnauthorizedDevice);
+            }
+            let user = users.entry(certificate.user).or_insert((member.role, 0));
+            if user.0 != member.role {
+                return Err(Error::UnauthorizedDevice);
+            }
+            user.1 += 1;
+            if user.1 > 16 {
+                return Err(Error::ResourceBudgetExceeded);
+            }
+        }
+        if users.len() > 128 {
+            return Err(Error::ResourceBudgetExceeded);
+        }
+        Ok(())
+    }
+}
+
+/// Applies pinned-root and predecessor authority to one control's own roster.
+struct ControlAuthority<'a> {
+    body: &'a Control,
+    state: &'a SyncState,
+    roster: Roster<'a>,
+}
+
+impl<'a> ControlAuthority<'a> {
+    fn new(body: &'a Control, state: &'a SyncState) -> Self {
+        Self {
+            body,
+            state,
+            roster: Roster(&body.members),
+        }
+    }
+
+    fn signing_key(&self, previous: Option<&Signed<Control>>) -> Result<[u8; 32]> {
+        self.validate_shape()?;
+        self.roster.verify(self.body.owner, &self.body.grants)?;
+        let controller = self.roster.controller(self.body.controller)?;
+        match previous {
+            None => self.genesis_key(controller),
+            Some(previous) => self.successor_key(previous),
+        }
+    }
+
+    fn validate_shape(&self) -> Result<()> {
+        let body = self.body;
+        if body.epoch.profile != PROFILE {
+            return Err(Error::UnsupportedProtocol);
+        }
+        if body.epoch.space != self.state.space
+            || body.owner != Hash::digest(b"lockbox.user.v1\0", &self.state.owner_root)
+            || !self.roster.is_canonical()
+            || body.grants.len() != body.members.len()
+            || body.closed_frontier.len() > super::super::MAX_PARENTS
+            || !sorted_unique(&body.closed_frontier)
+            || body.checkpoint_nonce.0.len() != 24
+            || body.checkpoint.0.len() < 16
+        {
+            return Err(Error::InvalidEncoding);
+        }
+        Ok(())
+    }
+
+    fn genesis_key(&self, controller: &Member) -> Result<[u8; 32]> {
+        let body = self.body;
+        if body.epoch.number.0 != 0
+            || body.epoch.previous.is_some()
+            || !body.closed_frontier.is_empty()
+            || controller.certificate.body.root_key != self.state.owner_root
         {
             return Err(Error::UnauthorizedDevice);
         }
-        let user = users.entry(certificate.user).or_insert((member.role, 0));
-        if user.0 != member.role {
+        Ok(controller.certificate.body.signing_key)
+    }
+
+    fn successor_key(&self, previous: &Signed<Control>) -> Result<[u8; 32]> {
+        let body = self.body;
+        let author = Roster(&previous.body.members).member(previous.body.controller)?;
+        if previous.body.epoch.number.0.checked_add(1) != Some(body.epoch.number.0)
+            || body.owner != previous.body.owner
+            || body.controller != previous.body.controller
+            || body.epoch.context == previous.body.epoch.context
+            || body.epoch.previous != Some(Object::Control(previous.clone()).hash()?)
+        {
             return Err(Error::UnauthorizedDevice);
         }
-        user.1 += 1;
-        if user.1 > 16 {
-            return Err(Error::ResourceBudgetExceeded);
-        }
-    }
-    if users.len() > 128 {
-        return Err(Error::ResourceBudgetExceeded);
-    }
-    let controller = body
-        .members
-        .iter()
-        .find(|m| m.certificate.body.device == body.controller && m.role == Role::Owner)
-        .ok_or(Error::UnauthorizedDevice)?;
-    match previous {
-        None => {
-            if body.epoch.number.0 != 0
-                || body.epoch.previous.is_some()
-                || !body.closed_frontier.is_empty()
-                || controller.certificate.body.root_key != state.owner_root
-            {
-                return Err(Error::UnauthorizedDevice);
-            }
-            Ok(controller.certificate.body.signing_key)
-        }
-        Some(previous) => {
-            let author = previous
-                .body
-                .members
-                .iter()
-                .find(|m| m.certificate.body.device == previous.body.controller)
-                .ok_or(Error::UnauthorizedDevice)?;
-            if previous.body.epoch.number.0.checked_add(1) != Some(body.epoch.number.0)
-                || body.owner != previous.body.owner
-                || body.controller != previous.body.controller
-                || body.epoch.context == previous.body.epoch.context
-                || body.epoch.previous != Some(Object::Control(previous.clone()).hash()?)
-            {
-                return Err(Error::UnauthorizedDevice);
-            }
-            Ok(author.certificate.body.signing_key)
-        }
+        Ok(author.certificate.body.signing_key)
     }
 }

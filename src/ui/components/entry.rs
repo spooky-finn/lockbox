@@ -93,14 +93,14 @@ pub(super) fn EntryView() -> Element {
                 div { class: "delete-confirm", role: "alert",
                     p { {language.format(Text::DeleteEntryThisCannotBeUndone, &[entry.title.to_string()])} }
                     div { class: "actions",
-                        IconButton { class: "danger", icon: Icon::Trash, label: language.text(Text::DeleteEntry), onclick: move |_| edit_unlocked(state, |u| u.error = u.delete_selected().err()) }
+                        IconButton { class: "danger", icon: Icon::Trash, label: language.text(Text::DeleteEntry), disabled: unlocked.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.error = u.delete_selected().err()) }
                         IconButton { icon: Icon::Close, label: language.text(Text::Cancel), onclick: move |_| edit_unlocked(state, |u| u.confirm_delete = false) }
                     }
                 }
             } else {
                 div { class: "actions entry-actions",
-                    IconButton { icon: Icon::Edit, label: language.text(Text::Edit), onclick: move |_| edit_unlocked(state, |u| u.start_edit()) }
-                    IconButton { class: "danger quiet", icon: Icon::Trash, label: language.text(Text::Delete), onclick: move |_| edit_unlocked(state, |u| u.confirm_delete = true) }
+                    IconButton { icon: Icon::Edit, label: language.text(Text::Edit), disabled: unlocked.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.start_edit()) }
+                    IconButton { class: "danger quiet", icon: Icon::Trash, label: language.text(Text::Delete), disabled: unlocked.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.confirm_delete = true) }
                 }
             }
         }

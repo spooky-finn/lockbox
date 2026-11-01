@@ -6,7 +6,7 @@ use crate::{
         entry::Entry,
         sync::{Machine, Transaction},
     },
-    infra::vault::{KdfParams, ProviderConfiguration},
+    infra::vault::{KdfParams, ProfileStore, ProviderConfiguration, SharedProfile},
 };
 use secrecy::SecretString;
 use std::time::Duration;
@@ -77,25 +77,63 @@ fn drive(session: &mut SpaceSync, vault: &mut Vault) -> Option<String> {
 }
 
 fn vault(dir: &tempfile::TempDir) -> Vault {
-    Vault::create_shared(
-        dir.path().join("profile.lbx"),
-        &SecretString::from("master".to_owned()),
-        &SecretString::from("recovery".to_owned()),
-        KdfParams {
-            memory_kib: 8192,
-            passes: 1,
-            lanes: 1,
-        },
-        "Alice".into(),
-        "Team".into(),
-        ProviderConfiguration {
-            base_url: "https://gateway.storjshare.io".into(),
-            bucket: "test-bucket".into(),
-            access_key: "access".into(),
-            secret_key: "secret".into(),
-        },
-    )
-    .unwrap()
+    vault_using(dir, &ProfileStore::default())
+}
+
+fn vault_using(dir: &tempfile::TempDir, profiles: &ProfileStore) -> Vault {
+    profiles
+        .create_shared(
+            dir.path().join("profile.lbx"),
+            &SecretString::from("master".to_owned()),
+            &SecretString::from("recovery".to_owned()),
+            KdfParams {
+                memory_kib: 8192,
+                passes: 1,
+                lanes: 1,
+            },
+            SharedProfile {
+                username: "Alice".into(),
+                space_name: "Team".into(),
+                provider: ProviderConfiguration {
+                    base_url: "https://gateway.storjshare.io".into(),
+                    bucket: "test-bucket".into(),
+                    access_key: "access".into(),
+                    secret_key: "secret".into(),
+                },
+            },
+        )
+        .unwrap()
+}
+
+#[test]
+fn witness_failure_cancels_old_work_even_during_a_draft_and_retry_can_resume() {
+    use crate::infra::witness::MemoryWitness;
+    let directory = tempfile::tempdir().unwrap();
+    let witnesses = Arc::new(MemoryWitness::default());
+    let profiles = ProfileStore::new(witnesses.clone());
+    let mut vault = vault_using(&directory, &profiles);
+    let factory = Arc::new(MemoryFactory::default());
+    let mut session = SpaceSync::new(Some(factory.clone()));
+    let (release, wait) = std::sync::mpsc::channel();
+    session.scope = Some(Scope::from(vault.sync_state().unwrap()));
+    session.worker = Some(Worker::spawn(move |_| {
+        let _ = wait.recv();
+        Ok(Reply::Uploaded(vec![]))
+    }));
+    witnesses.fail_reads(true);
+    assert!(vault.reconcile_profile().is_err());
+    assert!(session.needs_tick_for(&vault, true));
+    assert!(session.tick(&mut vault, true).is_none());
+    assert!(session.worker.is_none());
+    assert_eq!(session.status, Status::Recovery);
+    assert!(!session.stopped);
+    let _ = release.send(());
+    assert_eq!(factory.connections.load(Ordering::Relaxed), 0);
+    witnesses.fail_reads(false);
+    session.retry();
+    assert!(drive(&mut session, &mut vault).is_none());
+    assert!(vault.signing_error().is_none());
+    assert_eq!(session.status, Status::Synced);
 }
 
 #[test]

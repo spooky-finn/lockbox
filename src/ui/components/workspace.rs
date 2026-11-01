@@ -61,10 +61,16 @@ fn VaultContent() -> Element {
         return rsx! {};
     };
     rsx! {
+        if let Some(error) = unlocked.vault.signing_error() { ProtectionNotice { error } }
         if let Some(profile) = &unlocked.vault.profile {
             if let Some(sync) = &profile.sync {
                 p { class: "notice", aria_live: "polite", {language.format(Text::PendingUpload, &[language.message(unlocked.sync.status.label()), sync.outbox.len().to_string()])} }
-                button { class: "quiet", onclick: move |_| edit_unlocked(state, |u| u.sync.retry()), {language.text(Text::RetrySync)} }
+                button { class: "quiet", onclick: move |_| edit_unlocked(state, |u| {
+                    // Reconciliation updates the typed notice without installing
+                    // incoming history or disturbing an active draft.
+                    let _ = u.vault.reconcile_profile();
+                    u.sync.retry();
+                }), {language.text(Text::RetrySync)} }
             } else {
                 p { class: "notice", {language.text(Text::ThisProfilePredatesSyncConfirmYourRecoveryPasswordToConnectExistingEntries)} }
                 form {
@@ -108,6 +114,7 @@ fn VaultContent() -> Element {
                                 }
                             }
                             button {
+                                disabled: unlocked.vault.signing_error().is_some(),
                                 onclick: {
                                     let entity = record.entity.clone();
                                     let revision = version.revision;
@@ -139,7 +146,7 @@ fn VaultContent() -> Element {
                                     }
                                 }
                                 p { {language.text(Text::RebasingReplacesTheCurrentVersionsWithTheSelectedContentsYouWillBeTheAuthorOfTheNewChange)} }
-                                button { onclick: { let hash = edit.hash; move |_| edit_unlocked(state, |u| { u.error = u.vault.rebase_edit(hash).err().map(|e| e.to_string()); if u.error.is_none() { u.sync.saved(); } }) }, {language.text(Text::RebaseAfterReview)} }
+                                button { disabled: unlocked.vault.signing_error().is_some(), onclick: { let hash = edit.hash; move |_| edit_unlocked(state, |u| { u.error = u.vault.rebase_edit(hash).err().map(|e| e.to_string()); if u.error.is_none() { u.sync.saved(); } }) }, {language.text(Text::RebaseAfterReview)} }
                             }
                         }
                     }
@@ -172,10 +179,25 @@ fn VaultContent() -> Element {
             } else { h2 { {language.text(Text::EverythingImportantLockedAway)} } }
             p { {language.text(Text::SelectAnEntryOnTheLeftOrCreateOne)} }
             div { class: "actions",
-                IconButton { icon: Icon::FolderPlus, label: language.text(Text::NewFolder), onclick: move |_| edit_unlocked(state, |u| u.start_directory()) }
+                IconButton { icon: Icon::FolderPlus, label: language.text(Text::NewFolder), disabled: unlocked.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.start_directory()) }
             }
         } }
     }
+}
+
+#[component]
+fn ProtectionNotice(error: crate::core::anchor::Error) -> Element {
+    use crate::core::anchor::Error;
+    let language = crate::ui::i18n::use_language();
+    let text = match error {
+        Error::MissingBinding => Text::ProfileImportedReadOnly,
+        Error::Rollback => Text::ProfileRollbackReadOnly,
+        Error::Legacy => Text::LegacyProfileReadOnly,
+        Error::Unavailable => Text::LocalSecurityStorageUnavailable,
+        Error::InUse => Text::SigningDeviceAlreadyOpen,
+        Error::Exhausted => Text::ProfileRequiresReplacement,
+    };
+    rsx! { p { class: "notice", role: "status", {language.text(text)} } }
 }
 
 #[cfg(test)]

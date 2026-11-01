@@ -39,7 +39,7 @@ rand_core = { version = "0.9", features = ["os_rng"] }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
 quick-xml = { version = "0.41", features = ["serialize"] }
 serde_jcs = "0.2"
-time = { version = "0.3", features = ["formatting", "macros"] }
+rusty-s3 = { version = "0.11", default-features = false, features = ["rustcrypto", "xml"] }
 
 [dev-dependencies]
 dioxus-ssr = "0.7"

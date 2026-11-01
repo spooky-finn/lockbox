@@ -131,6 +131,7 @@ impl Vault {
         completed: bool,
     ) -> Result<()> {
         self.ensure_exchange_committed()?;
+        self.ensure_profile_writable()?;
         let Some(sync) = self.profile.as_mut().and_then(|p| p.sync.as_mut()) else {
             return Ok(());
         };
@@ -173,12 +174,7 @@ impl Vault {
         }
         let namespace = state.namespace;
         let cancel = sync::Cancellation::default();
-        let batch = sync::download(
-            storage,
-            namespace,
-            &state.objects.keys().copied().collect(),
-            &cancel,
-        )?;
+        let batch = sync::Discovery::for_state(state)?.download(storage, &cancel)?;
         let incomplete = batch.incomplete;
         self.receive_sync(batch)?;
         let profile = self.profile.as_ref().unwrap();

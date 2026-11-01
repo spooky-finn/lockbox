@@ -2,9 +2,10 @@
 
 The synchronization engine keeps the `Machine` and `Vault` facades while
 separating protocol rules, durable storage, transport construction and session
-scheduling. The experimental `LBX-SYNC-0` wire schema and local profile format
-are unchanged by this refactor. See [sync-engine.md](sync-engine.md) for protocol
-behavior, limits and outstanding release work.
+scheduling. The experimental `LBX-SYNC-0` remote wire schema is retained. Protected
+shared profiles use local bootstrap schema 3 with independent witness evidence.
+See [sync-engine.md](sync-engine.md) for protocol behavior and
+[profile-protection.md](profile-protection.md) for durability and recovery rules.
 
 ## Responsibilities and dependencies
 
@@ -17,6 +18,9 @@ flowchart TD
     Vault --> Shared[Shared-space operations]
     Shared --> File[Encrypted vault file adapter]
     Shared --> Machine[Machine protocol facade]
+    File --> Protection[Profile protection adapter]
+    Protection --> Anchor[Pure anchor reconciliation]
+    Protection --> Witness[WitnessStore / exclusive signer lease]
     Machine --> Commands[Command preparation]
     Machine --> Replay[Deterministic replay]
     Commands --> Membership[Membership and epoch rules]
@@ -35,10 +39,16 @@ flowchart TD
 | `core/sync/machine/commands.rs` | Command validation, encryption, reserved-intent completion | When the host has durably saved a body |
 | `core/sync/machine/membership.rs` | Owner authority, certificates, rosters, grants and epoch checkpoints | Provider permissions or discovery |
 | `core/sync/machine/replay.rs` | Verified history, epoch closure, causal validation and projection | Disk writes or timestamp winners |
+| `core/sync/machine/parents.rs` | Bounded causal merge parent selection, including prior local sequence ancestry | Conflict resolution or membership authority |
 | `infra/vault.rs` | Encrypted file format, KDF, process lock, atomic replacement | Membership and mutation authorization |
+| `core/anchor.rs` | Pure equal/linked-next generation reconciliation | OS stores, files or peer freshness |
+| `infra/vault/protection.rs` | File-digest checks, witness catch-up, durable generation allocation | Device admission or record conflict winners |
+| `infra/witness/` | Exclusive device leases, Keychain/directory storage and injected memory adapter | Signing keys or membership |
+| `infra/vault/store.rs` | Host witness composition and new-device identity recovery | Automatic admission or controller recovery |
 | `infra/vault/shared.rs` | Application operations and the durable signing-intent boundary | Alternate protocol rules |
 | `infra/vault/exchange.rs` | Candidate receive commits, acknowledgement rollback and retained pending commits | Signing new local mutations |
 | `infra/sync.rs` | Bounded discovery, publication order and provider contracts | Which decrypted mutation is authorized |
+| `infra/sync/discovery.rs` | Ciphertext-only discovery requests, recursive reference GETs and paginated scans | Admission, signatures or plaintext validation |
 | `infra/sync/worker.rs` | Thread lifetime, cancellation and one result mailbox | Session status, retries or vault access |
 | `infra/storj.rs` | S3 request signing, HTTPS, provider configuration and client construction | User identity or space membership |
 | `app/space_sync.rs` | Exchange phases, draft deferral, retry scheduling and status | HTTP construction, signing keys or cryptographic replay |
@@ -93,11 +103,23 @@ The ordering is:
 4. Persist the accepted event, materialized view and outbox together.
 5. Authorize transport publication only from the committed outbox.
 
+Recovery first reserves any retained unsigned intent successfully, even after
+an earlier reservation write failed. `Machine::complete_intent` restores its
+original journal on verification failure; it never leaves a rejected signed
+candidate in the committed object set.
+
+When a command returns `FrontierTooWide`, the Vault adapter commits bounded empty
+merge events through this same boundary before retrying the original command.
+It restores the verified view before reserving a merge, so a staged user edit
+cannot leak into a merge-only file commit. Merge events observe the prior local
+sequence, preserve the projection, and cannot implicitly resolve a conflict.
+
 Membership changes, resolution, rebase and legacy activation share the same
 path. A failed persistence call retains the reserved intent/event so restart or
 retry cannot replace it with another body in the same sequence slot. File-format
-code calls `recover_sync` on open; the caller never receives an unlocked profile
-whose recoverable intent was silently discarded.
+code reconciles the witness before `recover_sync` on a writable open. Imports and
+rolled-back profiles retain their readable snapshots and cannot complete an old
+intent without a current witness. No recoverable intent is silently discarded.
 
 `Machine::replay` is pure. A non-ready `Replay` must not replace the last readable
 snapshot or authorize publication. A verified history fork is persisted as a
@@ -110,8 +132,9 @@ the committed journal and readable records are restored, while a private
 and publication stay blocked until that same candidate commits successfully.
 This prevents a known membership successor from being forgotten and followed by
 old-epoch uploads after a disk error. Pending state is held in the unlocked
-session, not a new serialized profile field; an independent rollback anchor is
-still outside this implementation.
+session. Independently persisted file generations/witnesses additionally preserve
+the actual committed candidate across restart when rename completed before the
+witness acknowledgement failed.
 
 Acknowledgement rollback retains only the previous outbox and exchange time. It
 does not clone the immutable ciphertext cache. Publication planning decodes each
@@ -129,7 +152,8 @@ publication plan; a verification failure cannot become `Synced`.
 Replies are bound to the space ID, namespace and pinned genesis that started the
 job. Changing that scope discards the old mailbox. The runtime observes persisted
 faults and pending commits even while a request is running, so it can cancel old
-work promptly. Verified history faults also remain frozen after a retry request
+work promptly. Witness failures cancel work even during an active draft and use
+a recoverable `Recovery` status. Verified history faults remain frozen after a retry request
 or an attempted local save. `Error::is_history_fault` defines that policy once.
 
 Retry scheduling takes monotonic time and a jitter byte as explicit inputs. Its

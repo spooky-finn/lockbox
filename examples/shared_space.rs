@@ -7,11 +7,12 @@ use lockbox::{
     },
     infra::{
         sync::{Page, Storage, TransportError},
-        vault::{KdfParams, ProviderConfiguration, Vault},
+        vault::{KdfParams, ProfileStore, ProviderConfiguration, SharedProfile},
+        witness::MemoryWitness,
     },
 };
 use secrecy::SecretString;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 #[derive(Default)]
 struct Memory {
@@ -49,19 +50,22 @@ impl Storage for Memory {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let directory = tempfile::tempdir()?;
+    let profiles = ProfileStore::new(Arc::new(MemoryWitness::default()));
     let create = |name: &str| {
-        Vault::create_shared(
+        profiles.create_shared(
             directory.path().join(format!("{name}.lbx")),
             &SecretString::from("disposable master password".to_owned()),
             &SecretString::from("independent recovery password".to_owned()),
             KdfParams::default(),
-            name.into(),
-            "Example team".into(),
-            ProviderConfiguration {
-                base_url: "https://gateway.storjshare.io".into(),
-                bucket: "example-lockbox".into(),
-                access_key: "unused-fixture".into(),
-                secret_key: "unused-fixture".into(),
+            SharedProfile {
+                username: name.into(),
+                space_name: "Example team".into(),
+                provider: ProviderConfiguration {
+                    base_url: "https://gateway.storjshare.io".into(),
+                    bucket: "example-lockbox".into(),
+                    access_key: "unused-fixture".into(),
+                    secret_key: "unused-fixture".into(),
+                },
             },
         )
     };

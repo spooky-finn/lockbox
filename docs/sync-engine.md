@@ -7,6 +7,10 @@ interoperability or a completed security review.
 
 For module ownership, dependency direction, provider extension and durability
 contracts, see the [synchronization architecture guide](sync-architecture.md).
+The [production delivery plan](sync-production-plan.md) tracks remaining release
+gates; the [live test guide](sync-live-test.md) describes reproducible Storj checks.
+See [profile protection and recovery](profile-protection.md) for installation
+binding, file/witness ordering, read-only imports and fresh-device admission.
 
 ## Responsibilities
 
@@ -16,9 +20,12 @@ contracts, see the [synchronization architecture guide](sync-architecture.md).
 | `core/sync/crypto.rs` | Root-certified device identities, strict Ed25519, HPKE, AEAD |
 | `core/sync/model.rs` | Atomic transactions, revision sets, conflicts and reference projection |
 | `core/sync/machine/` | Private protocol schemas, journal state, commands, membership rules and deterministic replay behind `Machine` |
+| `core/anchor.rs` | Pure file-generation/witness reconciliation rules |
 | `infra/vault.rs` | Encrypted file format, KDF, process lock and atomic replacement |
 | `infra/vault/shared.rs` | One durable signing-intent boundary, local commits, outbox, restart recovery and shared-space facade methods |
 | `infra/vault/exchange.rs` | Candidate receive commits, pending-commit recovery, acknowledgement rollback and blocking exchange |
+| `infra/vault/protection.rs`, `infra/witness/` | Independent witness commits and installation-wide signer leases |
+| `infra/vault/store.rs` | Witness injection and fresh-device recovery |
 | `infra/sync.rs` | Bounded provider contract, discovery, cancellation and publication ordering |
 | `infra/storj.rs` | Configuration-only `StorjFactory`, HTTPS S3 adapter, SigV4, bounded responses and opaque ListObjectsV2 cursors |
 | `infra/sync/worker.rs` | Cancellable result mailbox without access to session or protocol state |
@@ -51,8 +58,16 @@ outbox inside the encrypted `.lbx`. The UI confirms saving after that commit;
 provider availability is not required. `Vault::save()` rejects shared record
 changes that bypass the journal.
 
+Each protected file commit advances an independent installation witness. Missing
+or inconsistent evidence leaves saved records readable and stops signing/exchange.
+Exactly one linked file generation ahead can reconcile after a crash. Copies at
+different paths share one installation-wide signer lease.
+
 Restart completes the same reserved body using deterministic Ed25519 signatures.
 A failed save retains that intent rather than allocating another sequence slot.
+Recovery successfully persists a retained intent before signing, including when
+its first reservation write failed and the intent exists only in memory. A failed
+core intent completion leaves the original journal and intent intact.
 Uploads always reuse exact content-addressed bytes. Object acknowledgement is
 persisted separately; losing that acknowledgement causes an idempotent retry.
 
@@ -61,6 +76,9 @@ history, commits it locally, and only then publishes eligible dependencies and
 events. Provider omission never deletes a local object. Missing dependencies
 pause publication and retain the previous readable view. A verified control
 successor stops obsolete epoch publication even if its closed history is missing.
+Discovery directly fetches pinned genesis, outstanding local dependencies and
+the bounded ancestors of newly downloaded objects, even when LIST omits them.
+Unavailable direct references remain incomplete and are retried on later passes.
 
 The desktop worker receives provider credentials, namespace, hashes and
 ciphertext. Signing keys, HPKE secrets and decrypted records stay in the session.
@@ -115,6 +133,19 @@ exact incrementing device sequence scoped to its membership epoch. Verification
 checks signatures and roles before decrypting, then validates all parents and
 the entire transaction against its declared causal past.
 
+More than 64 maximal heads can arise after many devices work offline. Writers
+fold them with signed empty transactions, each observing 64 maximal heads and
+the preceding local sequence. Each fold removes 63 frontier heads, preserves the
+projection and every conflict, and uses the ordinary durable intent/outbox path.
+`Vault` folds automatically before preparing an edit, resolution, rebase or
+membership transition. Core hosts can call `Machine::prepare_merge` until it
+returns `None`, then retry an operation that returned `FrontierTooWide`.
+
+An authenticated transaction with rejected, wrong-epoch or wrong-kind parents
+is rejected with its descendants. Such history cannot become valid through
+another download and does not masquerade as a missing dependency. A signed
+control that closes over semantically invalid history is a checkpoint fault.
+
 Every mutation must name the complete visible revision set of its entity.
 Creation/update, deletion, restoration and conflict resolution have distinct
 preconditions. Concurrent changes to one entry retain complete versions,
@@ -156,7 +187,9 @@ Current limits are 4 MiB per complete wire object, 2 MiB transaction plaintext,
 64 parents, 256 mutations, 128 users, 16 devices per user, 512 total devices,
 64 folder levels, 4,096 cached objects and 64 MiB cached wire bytes per space.
 Each discovery batch downloads at most 128 new objects / 16 MiB and bounds page
-count, response size and cursor repetition. Large checkpoints or histories
+count, response size, cursor repetition and GET attempts (256 including missing
+objects). Availability hints never expand more than the protocol's parent limit.
+Large checkpoints or histories
 report a resource limit; multipart checkpoints and compaction are not present.
 
 Storj requests use HTTPS, disable redirects, have a 10-second connection timeout
@@ -176,6 +209,13 @@ empty profile uses `join_space(owner.space_descriptor())`. After admission,
 `synchronize(&mut dyn Storage)` downloads verified state and publishes durable
 events. `Storj` implements that contract; independent provider credentials can
 be supplied for each installation.
+
+`ProfileStore` supports alternate witness adapters. `restore_device` requires the
+separate recovery password and an independently authenticated descriptor/control
+anchor; it generates fresh certified device keys and waits for new admission.
+`Machine::join_at` pins this minimum head, and `space_anchor()` exports the current
+verified head from a writable installation. Existing schema-2 cloud profiles open
+read-only rather than silently enrolling their old signer.
 
 `core::sync::Machine` also exposes the pure state machine for other hosts. Such
 hosts must persist `SyncState.intent` **before** calling `complete_intent`, and
@@ -198,6 +238,9 @@ certificate/signature substitution, reader forgery, forks, revocation, checkpoin
 mismatch, rebase, local restart/crash boundaries, transport failures, worker
 cancellation, SigV4 vectors and a loopback S3 HTTP fixture. A live Storj bucket
 has not been exercised by these tests; no live credentials are in the repository.
+The HTTP fixture covers LIST, exact-body PUT with a signed payload hash, and GET.
+`cargo run --example storj_sync_probe` runs the shared acceptance scenario with
+real independent credentials supplied locally; see [its setup](sync-live-test.md).
 
 ## Remaining boundaries
 
@@ -206,16 +249,15 @@ invitation and admission screens are not implemented; membership APIs require
 explicit caller-provided, independently verified certificates. Existing v1/v2
 local vaults remain local. Older v3 bootstrap-schema-1 profiles remain readable
 and can be activated through the inline recovery-password form or
-`Vault::activate_sync`. Activation certifies the existing device and journals
+`Vault::activate_sync`. Activation certifies a fresh device and journals
 its existing entries/folders; it preserves data on failed writes. It requires
 the separate recovery password and never silently unlocks root authority.
-New shared profiles use bootstrap schema 2 so an older application rejects them
-instead of dropping their synchronization journal.
+New shared profiles use bootstrap schema 3 and authenticated file generations so
+older applications reject them instead of dropping their protection metadata.
 
-There is no independent rollback witness, installation binding, restored-device
-readmission flow, ownership/control transfer, multipart checkpoint, compaction,
-or external audit in this implementation. Copying or restoring a signer profile
-can cause a detectable device fork; full machine rollback with all evidence
-withheld cannot be detected locally. Keep separate device keys and protected
-backups, and complete the proposal's independent review before sharing real
-secrets under this experimental profile.
+Ownership/control transfer, lost-controller recovery, invitation/recovery screens,
+multipart checkpoints, compaction and external audit remain unfinished. The local
+witness is not a hardware monotonic counter: full machine rollback including all
+witnesses still requires independently authenticated peer history or fresh-device
+recovery. Complete the remaining release gates and independent review before
+sharing real secrets under this experimental profile.

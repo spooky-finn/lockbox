@@ -3,15 +3,13 @@
 
 use super::sync::{Page, Result, Storage, StorageFactory, TransportError};
 use crate::core::sync::{Hash, MAX_OBJECT_BYTES};
-use hmac::{Hmac, Mac};
 use reqwest::{
     Method, StatusCode,
     blocking::{Client, Response},
 };
+use rusty_s3::{Bucket, Credentials, S3Action, UrlStyle};
 use serde::Deserialize;
-use sha2::{Digest, Sha256};
 use std::{io::Read, time::Duration};
-use time::{OffsetDateTime, macros::format_description};
 use zeroize::Zeroizing;
 
 pub struct Storj {
@@ -128,58 +126,32 @@ impl Storj {
         query: Vec<(&str, &str)>,
         body: &[u8],
     ) -> Result<Response> {
-        let path = match key {
-            Some(key) => format!("/{}/{}", self.bucket, key),
-            None => format!("/{}", self.bucket),
+        let bucket = Bucket::new(
+            self.endpoint.clone(),
+            UrlStyle::Path,
+            self.bucket.clone(),
+            self.region.clone(),
+        )
+        .map_err(|_| TransportError::InvalidResponse)?;
+        let credentials = Credentials::new(self.access.as_str(), self.secret.as_str());
+        let url = match (method.clone(), key) {
+            (Method::GET, None) => {
+                let mut action = bucket.list_objects_v2(Some(&credentials));
+                for (name, value) in query {
+                    action.query_mut().insert(name, value);
+                }
+                action.sign(Duration::from_secs(60))
+            }
+            (Method::GET, Some(key)) => bucket
+                .get_object(Some(&credentials), key)
+                .sign(Duration::from_secs(60)),
+            (Method::PUT, Some(key)) => bucket
+                .put_object(Some(&credentials), key)
+                .sign(Duration::from_secs(60)),
+            _ => return Err(TransportError::InvalidResponse),
         };
-        let mut query: Vec<_> = query
-            .into_iter()
-            .map(|(k, v)| (encode(k, false), encode(v, false)))
-            .collect();
-        query.sort();
-        let query = query
-            .into_iter()
-            .map(|(k, v)| format!("{k}={v}"))
-            .collect::<Vec<_>>()
-            .join("&");
-        let path = encode(&path, true);
-        let mut url = self.endpoint.clone();
-        url.set_path(&path);
-        if !query.is_empty() {
-            url.set_query(Some(&query));
-        }
-        let host = match url.port() {
-            Some(port) => format!("{}:{port}", url.host_str().unwrap()),
-            None => url.host_str().unwrap().to_owned(),
-        };
-        let now = OffsetDateTime::now_utc();
-        let date = now
-            .format(format_description!("[year][month][day]"))
-            .map_err(|_| TransportError::InvalidResponse)?;
-        let timestamp = now
-            .format(format_description!(
-                "[year][month][day]T[hour][minute][second]Z"
-            ))
-            .map_err(|_| TransportError::InvalidResponse)?;
-        let payload_hash = hex(&Sha256::digest(body));
-        let authorization = authorization(
-            method.as_str(),
-            &path,
-            &query,
-            &host,
-            &date,
-            &timestamp,
-            &payload_hash,
-            &self.region,
-            &self.access,
-            &self.secret,
-        );
         self.client
             .request(method, url)
-            .header("host", host)
-            .header("x-amz-date", timestamp)
-            .header("x-amz-content-sha256", payload_hash)
-            .header("authorization", authorization)
             .header("content-type", "application/json")
             .body(body.to_vec())
             .send()
@@ -303,62 +275,6 @@ fn check(status: StatusCode) -> Result<()> {
         }
         _ => Err(TransportError::InvalidResponse),
     }
-}
-
-fn encode(value: &str, slash: bool) -> String {
-    let mut out = String::new();
-    for byte in value.bytes() {
-        if byte.is_ascii_alphanumeric() || b"-_.~".contains(&byte) || (slash && byte == b'/') {
-            out.push(byte as char);
-        } else {
-            out.push_str(&format!("%{byte:02X}"));
-        }
-    }
-    out
-}
-
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
-}
-
-fn hmac(key: &[u8], data: &[u8]) -> Zeroizing<[u8; 32]> {
-    let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(key).expect("HMAC accepts any key length");
-    mac.update(data);
-    Zeroizing::new(mac.finalize().into_bytes().into())
-}
-
-#[allow(clippy::too_many_arguments)]
-fn authorization(
-    method: &str,
-    path: &str,
-    query: &str,
-    host: &str,
-    date: &str,
-    timestamp: &str,
-    payload_hash: &str,
-    region: &str,
-    access: &str,
-    secret: &str,
-) -> String {
-    let headers =
-        format!("host:{host}\nx-amz-content-sha256:{payload_hash}\nx-amz-date:{timestamp}\n");
-    let signed_headers = "host;x-amz-content-sha256;x-amz-date";
-    let canonical =
-        format!("{method}\n{path}\n{query}\n{headers}\n{signed_headers}\n{payload_hash}");
-    let scope = format!("{date}/{region}/s3/aws4_request");
-    let to_sign = format!(
-        "AWS4-HMAC-SHA256\n{timestamp}\n{scope}\n{}",
-        hex(&Sha256::digest(canonical.as_bytes()))
-    );
-    let initial = Zeroizing::new(format!("AWS4{secret}"));
-    let key = hmac(initial.as_bytes(), date.as_bytes());
-    let key = hmac(key.as_ref(), region.as_bytes());
-    let key = hmac(key.as_ref(), b"s3");
-    let key = hmac(key.as_ref(), b"aws4_request");
-    format!(
-        "AWS4-HMAC-SHA256 Credential={access}/{scope},SignedHeaders={signed_headers},Signature={}",
-        hex(hmac(key.as_ref(), to_sign.as_bytes()).as_ref())
-    )
 }
 
 #[cfg(test)]

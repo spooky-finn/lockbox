@@ -59,6 +59,7 @@ impl Machine {
             namespace,
             genesis,
             owner_root: root,
+            required_control: None,
             objects: BTreeMap::from([(genesis, Blob(object.bytes()?))]),
             outbox: BTreeSet::from([genesis]),
             intent: None,
@@ -75,12 +76,26 @@ impl Machine {
             namespace,
             genesis,
             owner_root,
+            required_control: None,
             objects: BTreeMap::new(),
             outbox: BTreeSet::new(),
             intent: None,
             fault: None,
             last_exchange: None,
         }
+    }
+
+    /// Join with an independently authenticated minimum control anchor. Only a
+    /// verified chain containing this exact head can authorize publication.
+    pub fn join_at(descriptor: super::SpaceDescriptor, control: Hash) -> SyncState {
+        let mut state = Self::join(
+            descriptor.space,
+            descriptor.namespace,
+            descriptor.genesis,
+            descriptor.owner_root,
+        );
+        state.required_control = Some(control);
+        state
     }
 
     /// Idempotent insertion. Membership and plaintext are verified only in replay.
@@ -116,13 +131,53 @@ impl Machine {
         }
         let replay = Self::replay(state, device)?;
         require_writer(&replay)?;
+        Self::prepare_transaction(state, device, transaction, replay, false)
+    }
+
+    /// Prepare one projection-preserving causal merge when more than 64 heads
+    /// would block an edit or membership change. Each event reduces the frontier
+    /// by 63 without resolving record conflicts. Persist and complete it through
+    /// the same signing-intent boundary as an ordinary edit, then repeat as needed.
+    /// Readers cannot create merges. `None` means no folding is needed.
+    pub fn prepare_merge(
+        state: &SyncState,
+        device: &DeviceSecret,
+    ) -> Result<Option<PreparedChange>> {
+        if state.intent.is_some() {
+            return Err(Error::PendingIntent);
+        }
+        let replay = Self::replay(state, device)?;
+        require_writer(&replay)?;
+        if replay.frontier.len() <= super::super::MAX_PARENTS {
+            return Ok(None);
+        }
+        Self::prepare_transaction(
+            state,
+            device,
+            Transaction {
+                mutations: vec![],
+                rebased_from: None,
+            },
+            replay,
+            true,
+        )
+        .map(Some)
+    }
+
+    fn prepare_transaction(
+        state: &SyncState,
+        device: &DeviceSecret,
+        transaction: Transaction,
+        replay: Replay,
+        folding: bool,
+    ) -> Result<PreparedChange> {
         transaction.validate(&replay.projection)?;
         let plaintext = Zeroizing::new(canonical(&transaction)?);
         if plaintext.len() > super::super::MAX_TRANSACTION_BYTES {
             return Err(Error::ResourceBudgetExceeded);
         }
-        if replay.frontier.len() > super::super::MAX_PARENTS {
-            return Err(Error::ResourceBudgetExceeded);
+        if !folding && replay.frontier.len() > super::super::MAX_PARENTS {
+            return Err(Error::FrontierTooWide);
         }
         let control = control_at(state, replay.membership)?;
         let key = epoch_key(&control.body, device)?;
@@ -141,6 +196,11 @@ impl Machine {
                 sequence = change.body.header.sequence.0;
             }
         }
+        let parents = if folding {
+            super::parents::fold_parents(state, &replay, previous)?
+        } else {
+            replay.frontier.into_iter().collect()
+        };
         let mut nonce = [0; 24];
         getrandom::fill(&mut nonce).map_err(|_| Error::Random)?;
         let header = ChangeHeader {
@@ -155,7 +215,7 @@ impl Machine {
                     .ok_or(Error::ResourceBudgetExceeded)?,
             ),
             previous,
-            parents: replay.frontier.into_iter().collect(),
+            parents,
             nonce: Blob(nonce.to_vec()),
         };
         let ciphertext = crypto::encrypt(&content_key, &nonce, &plaintext, &canonical(&header)?)?;
@@ -188,6 +248,9 @@ impl Machine {
         let previous = control_at(state, replay.membership)?;
         if previous.body.controller != device.id() {
             return Err(Error::InsufficientRole);
+        }
+        if replay.frontier.len() > super::super::MAX_PARENTS {
+            return Err(Error::FrontierTooWide);
         }
         let mut members: Vec<_> = members
             .into_iter()
@@ -259,10 +322,22 @@ impl Machine {
             }
         };
         let hash = object.hash()?;
-        Self::receive(state, hash, object.bytes()?)?;
-        let checked = Self::replay(state, device)?;
-        if checked.rejected.contains_key(&hash) || checked.pending.contains(&hash) {
-            return Err(Error::InvalidTransaction);
+        let is_control = matches!(object, Object::Control(_));
+        let inserted = Self::receive(state, hash, object.bytes()?)?;
+        let check = Self::replay(state, device).and_then(|checked| {
+            if !checked.ready
+                || (is_control && checked.membership != hash)
+                || (!is_control && !checked.accepted.contains(&hash))
+            {
+                return Err(Error::InvalidTransaction);
+            }
+            Ok(())
+        });
+        if let Err(error) = check {
+            if inserted {
+                state.objects.remove(&hash);
+            }
+            return Err(error);
         }
         state.outbox.insert(hash);
         state.intent = None;

@@ -73,22 +73,22 @@ pub(super) fn DirectoryView() -> Element {
                 }
                 p { {language.text(Text::SelectAnEntryInTheTreeOrAddOneToThisFolder)} }
                 div { class: "actions",
-                    IconButton { class: "primary", icon: Icon::Plus, label: language.text(Text::NewEntry), onclick: move |_| edit_unlocked(state, |u| u.start_new()) }
-                    IconButton { icon: Icon::FolderPlus, label: language.text(Text::NewSubfolder), onclick: move |_| edit_unlocked(state, |u| u.start_directory()) }
+                    IconButton { class: "primary", icon: Icon::Plus, label: language.text(Text::NewEntry), disabled: workspace.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.start_new()) }
+                    IconButton { icon: Icon::FolderPlus, label: language.text(Text::NewSubfolder), disabled: workspace.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.start_directory()) }
                 }
             }
             if workspace.directories.confirm_delete {
                 div { class: "delete-confirm", role: "alert",
                     p { {language.format(Text::DeleteFolderAndItsSubfoldersAllEntriesWillMoveToTheParentFolder, &[directory.name.to_string()])} }
                     div { class: "actions",
-                        IconButton { class: "danger", icon: Icon::Trash, label: language.text(Text::DeleteFolder), onclick: move |_| edit_unlocked(state, |u| { u.error = u.directories.delete(&mut u.vault).err(); if u.error.is_none() { u.sync.saved(); } }) }
+                        IconButton { class: "danger", icon: Icon::Trash, label: language.text(Text::DeleteFolder), disabled: workspace.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| { u.error = u.directories.delete(&mut u.vault).err(); if u.error.is_none() { u.sync.saved(); } }) }
                         IconButton { icon: Icon::Close, label: language.text(Text::Cancel), onclick: move |_| edit_unlocked(state, |u| u.directories.confirm_delete = false) }
                     }
                 }
             } else {
                 div { class: "actions entry-actions",
-                    IconButton { icon: Icon::Edit, label: language.text(Text::EditFolder), onclick: move |_| edit_unlocked(state, |u| u.edit_directory()) }
-                    IconButton { class: "danger quiet", icon: Icon::Trash, label: language.text(Text::DeleteFolder2), onclick: move |_| edit_unlocked(state, |u| u.directories.confirm_delete = true) }
+                    IconButton { icon: Icon::Edit, label: language.text(Text::EditFolder), disabled: workspace.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.edit_directory()) }
+                    IconButton { class: "danger quiet", icon: Icon::Trash, label: language.text(Text::DeleteFolder2), disabled: workspace.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.directories.confirm_delete = true) }
                 }
             }
         }

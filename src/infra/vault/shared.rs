@@ -67,7 +67,9 @@ impl Vault {
         if transaction.mutations.is_empty() {
             return self.save();
         }
-        let prepared = Machine::prepare(sync, &device, transaction)?;
+        let prepared = self.prepare_sync_command(|sync, device| {
+            Machine::prepare(sync, device, transaction.clone())
+        })?;
         self.entries = replay.projection.entries();
         self.folders = replay.projection.folders();
         self.commit_prepared(prepared)
@@ -75,6 +77,15 @@ impl Vault {
 
     pub(super) fn recover_sync(&mut self) -> Result<()> {
         use crate::core::sync::Machine;
+        // An intent may exist only in memory after its first write failed.
+        // Reserve it successfully before any retry is allowed to sign it.
+        if self
+            .sync_state()
+            .is_some_and(|state| state.intent.is_some() && state.fault.is_none())
+        {
+            self.save_inner(false)?;
+        }
+        self.ensure_profile_writable()?;
         let Some(profile) = self.profile.as_mut().filter(|p| p.sync.is_some()) else {
             return Ok(());
         };
@@ -150,20 +161,17 @@ impl Vault {
     /// Explicit re-authoring after reviewing both the old edit and current state.
     pub fn rebase_edit(&mut self, hash: crate::core::sync::Hash) -> Result<()> {
         self.ensure_exchange_committed()?;
-        use crate::core::sync::{Error, Machine};
-        let profile = self.profile.as_ref().ok_or(Error::UnauthorizedDevice)?;
-        let device = profile.sync_secret();
-        let state = profile.sync.as_ref().ok_or(Error::UnauthorizedDevice)?;
-        let prepared = Machine::prepare_rebase(state, &device, hash)?;
+        use crate::core::sync::Machine;
+        let prepared = self
+            .prepare_sync_command(|state, device| Machine::prepare_rebase(state, device, hash))?;
         self.commit_prepared(prepared)
     }
 
     fn commit_sync(&mut self, transaction: crate::core::sync::Transaction) -> Result<()> {
-        use crate::core::sync::{Error, Machine};
-        let profile = self.profile.as_ref().ok_or(Error::UnauthorizedDevice)?;
-        let device = profile.sync_secret();
-        let sync = profile.sync.as_ref().ok_or(Error::UnauthorizedDevice)?;
-        let prepared = Machine::prepare(sync, &device, transaction)?;
+        use crate::core::sync::Machine;
+        let prepared = self.prepare_sync_command(|state, device| {
+            Machine::prepare(state, device, transaction.clone())
+        })?;
         self.commit_prepared(prepared)
     }
 
@@ -177,12 +185,38 @@ impl Vault {
         )>,
     ) -> Result<()> {
         self.ensure_exchange_committed()?;
-        use crate::core::sync::{Error, Machine};
-        let profile = self.profile.as_ref().ok_or(Error::UnauthorizedDevice)?;
-        let device = profile.sync_secret();
-        let sync = profile.sync.as_ref().ok_or(Error::UnauthorizedDevice)?;
-        let prepared = Machine::prepare_membership(sync, &device, members)?;
+        use crate::core::sync::Machine;
+        let prepared = self.prepare_sync_command(|state, device| {
+            Machine::prepare_membership(state, device, members.clone())
+        })?;
         self.commit_prepared(prepared)
+    }
+
+    fn prepare_sync_command(
+        &mut self,
+        command: impl Fn(
+            &SyncState,
+            &crate::core::sync::DeviceSecret,
+        ) -> crate::core::sync::Result<PreparedChange>,
+    ) -> Result<PreparedChange> {
+        self.ensure_sync_commit_allowed()?;
+        use crate::core::sync::{Error, Machine};
+        loop {
+            let profile = self.profile.as_ref().ok_or(Error::UnauthorizedDevice)?;
+            let state = profile.sync.as_ref().ok_or(Error::UnauthorizedDevice)?;
+            let device = profile.sync_secret();
+            match command(state, &device) {
+                Err(Error::FrontierTooWide) => {
+                    let merge =
+                        Machine::prepare_merge(state, &device)?.ok_or(Error::InvalidTransaction)?;
+                    // save_changes may have staged a desired view. A causal
+                    // merge reserves and commits only the verified prior view.
+                    self.recover_sync()?;
+                    self.commit_prepared(merge)?;
+                }
+                result => return result.map_err(VaultError::from),
+            }
+        }
     }
 
     pub fn space_descriptor(&self) -> Option<crate::core::sync::SpaceDescriptor> {
@@ -191,6 +225,19 @@ impl Vault {
             .sync
             .as_ref()
             .map(|sync| sync.descriptor())
+    }
+
+    /// Export a verified minimum control anchor from this installation's current
+    /// durable state. Authenticate it independently before invitation or restore.
+    pub fn space_anchor(&self) -> Result<crate::core::sync::Hash> {
+        self.ensure_profile_writable()?;
+        let replay = self
+            .sync_replay()?
+            .ok_or(crate::core::sync::Error::UnauthorizedDevice)?;
+        if !replay.ready {
+            return Err(crate::core::sync::Error::MissingDependency.into());
+        }
+        Ok(replay.membership)
     }
 
     pub fn device_certificate(
@@ -203,21 +250,57 @@ impl Vault {
     /// recovery authority, then journals its existing records as initial events.
     pub fn activate_sync(&mut self, recovery_password: &SecretString) -> Result<()> {
         self.ensure_exchange_committed()?;
-        use crate::core::sync::Error;
-        let profile = self.profile.as_mut().ok_or(Error::UnauthorizedDevice)?;
-        if profile.sync.is_some() {
-            return Ok(());
+        use crate::core::sync::{Error, Machine, Projection, Transaction};
+        if self
+            .profile
+            .as_ref()
+            .ok_or(Error::UnauthorizedDevice)?
+            .sync
+            .is_some()
+        {
+            return self.ensure_profile_writable();
         }
-        profile.activate_sync(recovery_password)?;
         let entries = self.entries.clone();
         let folders = self.folders.clone();
-        // Empty imports still have to persist the new schema and genesis.
-        let result = self.save_changes();
+        self.profile
+            .as_mut()
+            .unwrap()
+            .activate_sync(recovery_password)?;
+        let result = (|| {
+            let profile = self.profile.as_ref().unwrap();
+            let device = profile.sync_secret();
+            self.protection = Some(std::cell::RefCell::new(
+                super::protection::Protection::create(
+                    self.witnesses.clone(),
+                    device.id(),
+                    &self.salt,
+                )?,
+            ));
+            let transaction = Transaction::diff(&Projection::default(), &entries, &folders)?;
+            if transaction.mutations.is_empty() {
+                return self.save_inner(false);
+            }
+            // The first protected file contains the complete import intent.
+            // A crash cannot expose an empty genesis that discards local records.
+            let prepared = Machine::prepare(
+                self.profile.as_ref().unwrap().sync.as_ref().unwrap(),
+                &device,
+                transaction,
+            )?;
+            self.commit_prepared(prepared)
+        })();
         if result.is_err() {
             let profile = self.profile.as_mut().unwrap();
             let state = profile.sync.as_ref().unwrap();
-            if state.intent.is_none() && state.objects.len() == 1 {
+            if state.intent.is_none()
+                && state.objects.len() == 1
+                && self
+                    .protection
+                    .as_ref()
+                    .is_none_or(|p| !p.borrow().has_file())
+            {
                 profile.cancel_activation();
+                self.protection = None;
             }
             self.entries = entries;
             self.folders = folders;
@@ -229,6 +312,7 @@ impl Vault {
     /// routing/identity metadata. No private key or shared secret is copied.
     pub fn join_space(&mut self, descriptor: crate::core::sync::SpaceDescriptor) -> Result<()> {
         self.ensure_exchange_committed()?;
+        self.ensure_profile_writable()?;
         use crate::core::sync::{Error, Machine};
         if !self.entries.is_empty() || !self.folders.is_empty() {
             return Err(Error::InvalidTransaction.into());
@@ -265,6 +349,7 @@ impl Vault {
     /// Errors retain the intent so recovery cannot silently reuse its sequence slot.
     fn commit_prepared(&mut self, prepared: PreparedChange) -> Result<()> {
         self.ensure_exchange_committed()?;
+        self.ensure_sync_commit_allowed()?;
         use crate::core::sync::Error;
         let state = self
             .profile
@@ -275,7 +360,6 @@ impl Vault {
             return Err(Error::PendingIntent.into());
         }
         state.intent = Some(prepared);
-        self.save_inner(false)?;
         self.recover_sync()
     }
 

@@ -19,9 +19,11 @@
 //! The public [`Vault`] facade retains the existing import paths for both modes.
 
 use std::{
+    cell::RefCell,
     fs::{self, File, OpenOptions},
     io::{self, Write},
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use argon2::{Algorithm, Argon2, Params, Version};
@@ -40,8 +42,10 @@ use super::profile::BootstrapProfile;
 pub use super::profile::ProviderConfiguration;
 
 use crate::{
+    core::anchor::{self, FileGeneration},
     core::entry::Entry,
     core::folder::{self, Folder},
+    infra::witness::{self, WitnessStore},
 };
 
 const MAGIC: &[u8; 4] = b"LBX1";
@@ -89,6 +93,8 @@ pub enum VaultError {
     RecoveryFailed,
     #[error("received changes await a durable commit; retry synchronization")]
     PendingSyncCommit,
+    #[error("{0}")]
+    ProfileProtection(#[from] anchor::Error),
 }
 
 pub type Result<T> = std::result::Result<T, VaultError>;
@@ -130,6 +136,8 @@ struct Contents {
     folders: Vec<Folder>,
     #[serde(default)]
     profile: Option<BootstrapProfile>,
+    #[serde(default)]
+    generation: Option<FileGeneration>,
 }
 
 /// An unlocked vault. The derived key and all entries are wiped when it is dropped.
@@ -144,10 +152,21 @@ pub struct Vault {
     pub(crate) profile: Option<BootstrapProfile>,
     pending_exchange: Option<exchange::PendingExchange>,
     _profile_lock: Option<File>,
+    witnesses: Arc<dyn WitnessStore>,
+    protection: Option<RefCell<protection::Protection>>,
 }
 
 mod exchange;
+mod protection;
 mod shared;
+mod store;
+
+pub use store::{DeviceRecovery, ProfileStore, SharedProfile};
+
+enum Unlock<'a> {
+    Password(&'a SecretString),
+    Key(&'a [u8; 32]),
+}
 
 impl Vault {
     /// Creates and saves an empty vault. Never overwrites an existing file.
@@ -171,6 +190,8 @@ impl Vault {
             profile: None,
             pending_exchange: None,
             _profile_lock: None,
+            witnesses: witness::system(),
+            protection: None,
         };
         vault.save()?;
         Ok(vault)
@@ -183,7 +204,17 @@ impl Vault {
         kdf: KdfParams,
         profile: BootstrapProfile,
     ) -> Result<Self> {
-        let path = path.as_ref().to_path_buf();
+        ProfileStore::default().create_profile(path, password, kdf, profile)
+    }
+
+    fn create_profile_using(
+        path: &Path,
+        password: &SecretString,
+        kdf: KdfParams,
+        profile: BootstrapProfile,
+        witnesses: Arc<dyn WitnessStore>,
+    ) -> Result<Self> {
+        let path = path.to_path_buf();
         if path.exists() {
             return Err(VaultError::AlreadyExists(path));
         }
@@ -195,6 +226,15 @@ impl Vault {
         let mut salt = [0; SALT_LEN];
         getrandom::fill(&mut salt).map_err(|_| VaultError::Random)?;
         let (key, check) = derive(password, &salt, kdf)?;
+        let protection = if profile.requires_witness() {
+            Some(RefCell::new(protection::Protection::create(
+                witnesses.clone(),
+                profile.sync_secret().id(),
+                &salt,
+            )?))
+        } else {
+            None
+        };
         let vault = Self {
             path,
             kdf,
@@ -206,42 +246,28 @@ impl Vault {
             profile: Some(profile),
             pending_exchange: None,
             _profile_lock: Some(profile_lock),
+            witnesses,
+            protection,
         };
         vault.save_inner(true)?;
         Ok(vault)
     }
 
     pub fn open(path: impl AsRef<Path>, password: &SecretString) -> Result<Self> {
-        let path = path.as_ref().to_path_buf();
-        let data = fs::read(&path)?;
-        let header = Header::parse(&data)?;
-        let path = if header.version == PROFILE_VERSION {
-            path.canonicalize()?
-        } else {
-            path
-        };
-        let profile_lock = if header.version == PROFILE_VERSION {
-            Some(lock_profile(&path)?)
-        } else {
-            None
-        };
-        // Re-read after taking the lock so a concurrent writer cannot leave us
-        // opening a stale snapshot read before it released the lock.
-        let (data, header) = refresh_profile_snapshot(&path, data, header, &profile_lock)?;
-        let (key, check) = derive(password, &header.salt, header.kdf)?;
-        // The check value tells a mistyped password apart from a damaged file.
-        if !bool::from(check.ct_eq(&header.check)) {
-            return Err(VaultError::WrongPassword);
-        }
-        let contents = decrypt(&data, &key).ok_or(VaultError::Corrupted)?;
-        let mut vault = header.into_vault(path, key, contents, profile_lock);
-        vault.recover_sync()?;
-        Ok(vault)
+        ProfileStore::default().open(path, password)
     }
 
     /// Opens with a key exported earlier, skipping Argon2id (used for Touch ID).
     pub fn open_with_key(path: impl AsRef<Path>, key: &[u8; 32]) -> Result<Self> {
-        let path = path.as_ref().to_path_buf();
+        ProfileStore::default().open_with_key(path, key)
+    }
+
+    fn open_using(
+        path: &Path,
+        unlock: Unlock<'_>,
+        witnesses: Arc<dyn WitnessStore>,
+    ) -> Result<Self> {
+        let path = path.to_path_buf();
         let data = fs::read(&path)?;
         let header = Header::parse(&data)?;
         let path = if header.version == PROFILE_VERSION {
@@ -255,10 +281,39 @@ impl Vault {
             None
         };
         let (data, header) = refresh_profile_snapshot(&path, data, header, &profile_lock)?;
-        let key = Zeroizing::new(*key);
-        let contents = decrypt(&data, &key).ok_or(VaultError::KeyMismatch)?;
-        let mut vault = header.into_vault(path, key, contents, profile_lock);
-        vault.recover_sync()?;
+        let (key, failed_decryption) = match unlock {
+            Unlock::Password(password) => {
+                let (key, check) = derive(password, &header.salt, header.kdf)?;
+                if !bool::from(check.ct_eq(&header.check)) {
+                    return Err(VaultError::WrongPassword);
+                }
+                (key, VaultError::Corrupted)
+            }
+            Unlock::Key(key) => (Zeroizing::new(*key), VaultError::KeyMismatch),
+        };
+        let contents = decrypt(&data, &key).ok_or(failed_decryption)?;
+        let generation = contents.generation;
+        let mut vault = header.into_vault(path, key, contents, profile_lock, witnesses.clone());
+        if let Some(generation) = generation {
+            let device = vault
+                .profile
+                .as_ref()
+                .ok_or(VaultError::Corrupted)?
+                .sync_secret()
+                .id();
+            let digest = protection::digest_parts(&data[..HEADER_LEN], &data[HEADER_LEN..]);
+            vault.protection = Some(RefCell::new(protection::Protection::open(
+                witnesses,
+                device,
+                &vault.salt,
+                generation,
+                digest,
+                &vault.path,
+            )?));
+        }
+        if vault.ensure_profile_writable().is_ok() {
+            vault.recover_sync()?;
+        }
         Ok(vault)
     }
 
@@ -281,6 +336,7 @@ impl Vault {
     /// Encrypts with a fresh nonce and replaces the file atomically,
     /// keeping the previous version next to it as `<name>.bak`.
     pub fn save(&self) -> Result<()> {
+        self.ensure_profile_writable()?;
         self.ensure_sync_projection()?;
         self.save_inner(false)
     }
@@ -296,6 +352,23 @@ impl Vault {
         if self.profile.as_ref().is_none_or(|p| p.sync.is_none()) {
             folder::validate(&self.folders, &self.entries).map_err(VaultError::InvalidFolders)?;
         }
+        let requires_witness = self.profile.as_ref().is_some_and(|p| p.requires_witness());
+        if !requires_witness && self.protection.is_some() {
+            return Err(VaultError::Corrupted);
+        }
+        let mut protection = self.protection.as_ref().map(RefCell::borrow_mut);
+        let generation = if requires_witness {
+            Some(
+                protection
+                    .as_mut()
+                    .ok_or(anchor::Error::Legacy)?
+                    .prepare_save(&self.path)?,
+            )
+        } else if self.profile.as_ref().is_some_and(|p| p.sync.is_some()) {
+            return Err(anchor::Error::Legacy.into());
+        } else {
+            None
+        };
         let mut nonce = [0u8; NONCE_LEN];
         random(&mut nonce);
         let header = self.header(&nonce);
@@ -304,6 +377,7 @@ impl Vault {
                 entries: &self.entries,
                 folders: &self.folders,
                 profile: self.profile.as_ref(),
+                generation,
             })
             .expect("vault entries always serialize"),
         );
@@ -335,13 +409,20 @@ impl Vault {
             let result = (|| {
                 file.write_all(&header)?;
                 file.write_all(&ciphertext)?;
-                file.sync_all()?;
-                sync_dir(&self.path)
+                file.sync_all()
             })();
             if result.is_err() {
                 let _ = fs::remove_file(&self.path);
             }
-            return result.map_err(VaultError::Io);
+            result?;
+            if let (Some(protection), Some(generation)) = (protection.as_mut(), generation) {
+                protection.committed(generation, protection::digest_parts(&header, &ciphertext));
+            }
+            sync_dir(&self.path)?;
+            if let Some(protection) = protection.as_mut() {
+                protection.ensure_ready(&self.path)?;
+            }
+            return Ok(());
         }
         let tmp = sibling(&self.path, "tmp");
         {
@@ -352,11 +433,65 @@ impl Vault {
         }
         if self.path.exists() {
             let backup = sibling(&self.path, "bak");
-            fs::copy(&self.path, &backup)?;
-            File::open(&backup)?.sync_all()?;
+            let backup_tmp = sibling(&backup, "tmp");
+            let mut source = File::open(&self.path)?;
+            let mut target = private_file(&backup_tmp)?;
+            io::copy(&mut source, &mut target)?;
+            target.sync_all()?;
+            fs::rename(&backup_tmp, &backup)?;
         }
         fs::rename(&tmp, &self.path)?;
+        if let (Some(protection), Some(generation)) = (protection.as_mut(), generation) {
+            protection.committed(generation, protection::digest_parts(&header, &ciphertext));
+        }
         sync_dir(&self.path)?;
+        if let Some(protection) = protection.as_mut() {
+            protection.ensure_ready(&self.path)?;
+        }
+        Ok(())
+    }
+
+    /// Cached reason this shared profile cannot sign or exchange. Readable data
+    /// remains available. Missing bindings are never recreated implicitly.
+    pub fn signing_error(&self) -> Option<anchor::Error> {
+        if self.profile.as_ref().is_none_or(|p| p.sync.is_none()) {
+            return None;
+        }
+        match &self.protection {
+            Some(protection) => {
+                let protection = protection.borrow();
+                protection
+                    .error
+                    .or_else(|| (!protection.has_file()).then_some(anchor::Error::Unavailable))
+            }
+            None => Some(anchor::Error::Legacy),
+        }
+    }
+
+    /// Retry an unavailable credential store or reconcile exactly one linked
+    /// file generation. Never enroll an imported or rolled-back signer.
+    pub fn reconcile_profile(&self) -> Result<()> {
+        self.ensure_profile_writable()
+    }
+
+    pub(crate) fn ensure_profile_writable(&self) -> Result<()> {
+        if self.profile.as_ref().is_none_or(|p| p.sync.is_none()) {
+            return Ok(());
+        }
+        self.protection
+            .as_ref()
+            .ok_or(anchor::Error::Legacy)?
+            .borrow_mut()
+            .ensure_ready(&self.path)?;
+        Ok(())
+    }
+
+    fn ensure_sync_commit_allowed(&self) -> Result<()> {
+        self.protection
+            .as_ref()
+            .ok_or(anchor::Error::Legacy)?
+            .borrow_mut()
+            .prepare_save(&self.path)?;
         Ok(())
     }
 
@@ -420,6 +555,7 @@ impl Header {
         key: Zeroizing<[u8; 32]>,
         contents: Contents,
         profile_lock: Option<File>,
+        witnesses: Arc<dyn WitnessStore>,
     ) -> Vault {
         Vault {
             path,
@@ -432,6 +568,8 @@ impl Header {
             profile: contents.profile,
             pending_exchange: None,
             _profile_lock: profile_lock,
+            witnesses,
+            protection: None,
         }
     }
 }
@@ -460,6 +598,14 @@ fn decrypt(data: &[u8], key: &[u8; 32]) -> Option<Contents> {
         || contents
             .profile
             .as_ref()
+            .is_some_and(|profile| profile.requires_witness())
+            != contents.generation.is_some()
+        || contents
+            .generation
+            .is_some_and(|generation| !generation.valid())
+        || contents
+            .profile
+            .as_ref()
             .is_some_and(|profile| !profile.validate())
     {
         return None;
@@ -478,6 +624,8 @@ struct ContentsRef<'a> {
     folders: &'a [Folder],
     #[serde(skip_serializing_if = "Option::is_none")]
     profile: Option<&'a BootstrapProfile>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    generation: Option<FileGeneration>,
 }
 
 /// Argon2id stretches the password; HKDF splits the result into the
@@ -568,8 +716,15 @@ fn lock_profile(path: &Path) -> Result<File> {
 
 /// Readable and writable by the owner only.
 fn private_file(path: &Path) -> io::Result<File> {
+    // Unlink stale sidecars themselves, then exclusively create the new file.
+    // Never truncate a symlink target through a predictable temporary pathname.
+    match fs::remove_file(path) {
+        Ok(()) => {}
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error),
+    }
     let mut options = OpenOptions::new();
-    options.write(true).create(true).truncate(true);
+    options.write(true).create_new(true);
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
@@ -595,3 +750,7 @@ mod tests;
 #[cfg(test)]
 #[path = "tests/space_sync.rs"]
 mod sync_tests;
+
+#[cfg(test)]
+#[path = "tests/protection.rs"]
+mod protection_tests;

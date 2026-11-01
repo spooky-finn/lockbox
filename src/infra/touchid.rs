@@ -213,9 +213,7 @@ mod mac {
         match error.code() {
             -2 | -4 | -9 => "cancelled".to_owned(),
             -1 => "fingerprint not recognized".to_owned(),
-            -8 => {
-                "Touch ID is locked after failed attempts — enter the master password".to_owned()
-            }
+            -8 => "Touch ID is locked after failed attempts — enter the master password".to_owned(),
             _ => error.localizedDescription().to_string(),
         }
     }

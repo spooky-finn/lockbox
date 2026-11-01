@@ -33,6 +33,10 @@ pub struct SyncState {
     pub namespace: Hash,
     /// Pinned complete-object hash, established outside the provider.
     pub genesis: Hash,
+    /// Independently authenticated minimum control head for invitation/restore.
+    /// An older provider prefix cannot become ready by withholding this anchor.
+    #[serde(default)]
+    pub required_control: Option<Hash>,
     /// Owner trust anchor, compared through an authenticated channel on join.
     pub owner_root: [u8; 32],
     /// Immutable candidate objects; only replay establishes their authority.

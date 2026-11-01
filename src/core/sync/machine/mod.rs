@@ -5,6 +5,7 @@
 
 mod commands;
 mod membership;
+mod parents;
 mod protocol;
 mod replay;
 mod state;

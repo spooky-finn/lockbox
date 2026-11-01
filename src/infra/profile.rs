@@ -61,11 +61,29 @@ impl BootstrapProfile {
         kdf: KdfParams,
     ) -> Result<Self> {
         let root = SigningKey::from_bytes(&*random32().map_err(|_| VaultError::Random)?);
-        let (device, identity) = DeviceKeys::generate(&root).map_err(|_| VaultError::Random)?;
-        let root_capsule = RootCapsule::seal(&root, recovery_password, kdf)?;
+        Self::generate_for_root(
+            &root,
+            username,
+            space_name,
+            provider,
+            recovery_password,
+            kdf,
+        )
+    }
+
+    fn generate_for_root(
+        root: &SigningKey,
+        username: String,
+        space_name: String,
+        provider: ProviderConfiguration,
+        recovery_password: &SecretString,
+        kdf: KdfParams,
+    ) -> Result<Self> {
+        let (device, identity) = DeviceKeys::generate(root).map_err(|_| VaultError::Random)?;
+        let root_capsule = RootCapsule::seal(root, recovery_password, kdf)?;
         let space = SpaceKeys::generate().map_err(|_| VaultError::Random)?;
         let secret = device.sync_secret();
-        let certificate = secret.certificate(&root, identity.hpke_key)?;
+        let certificate = secret.certificate(root, identity.hpke_key)?;
         let sync = crate::core::sync::Machine::create(
             crate::core::sync::Hash(space.space_id),
             crate::core::sync::Hash(space.namespace),
@@ -75,7 +93,7 @@ impl BootstrapProfile {
             crate::core::sync::Hash(space.epoch_context),
         )?;
         Ok(Self {
-            schema_version: 2,
+            schema_version: 3,
             username,
             space_name,
             identity,
@@ -90,7 +108,9 @@ impl BootstrapProfile {
 
     pub(crate) fn validate(&self) -> bool {
         ((self.schema_version == 1 && self.sync.is_none())
-            || (self.schema_version == 2 && self.sync.is_some() && self.certificate.is_some()))
+            || ((self.schema_version == 2 || self.schema_version == 3)
+                && self.sync.is_some()
+                && self.certificate.is_some()))
             && self.device.matches(&self.identity)
             && self.root_capsule.version == 1
             && self.root_capsule.kdf.validate().is_ok()
@@ -114,6 +134,32 @@ impl BootstrapProfile {
         self.device.sync_secret()
     }
 
+    pub(crate) fn requires_witness(&self) -> bool {
+        self.schema_version == 3
+    }
+
+    pub(crate) fn recover_identity(
+        &self,
+        recovery_password: &SecretString,
+        kdf: KdfParams,
+        username: String,
+        space_name: String,
+        provider: ProviderConfiguration,
+    ) -> Result<Self> {
+        let root = self
+            .root_capsule
+            .open(recovery_password, &self.identity.root_key)
+            .map_err(|_| VaultError::RecoveryFailed)?;
+        Self::generate_for_root(
+            &root,
+            username,
+            space_name,
+            provider,
+            recovery_password,
+            kdf,
+        )
+    }
+
     pub(crate) fn activate_sync(&mut self, recovery_password: &SecretString) -> Result<()> {
         if self.sync.is_some() {
             return Ok(());
@@ -122,8 +168,10 @@ impl BootstrapProfile {
             .root_capsule
             .open(recovery_password, &self.identity.root_key)
             .map_err(|_| VaultError::RecoveryFailed)?;
-        let device = self.sync_secret();
-        let certificate = device.certificate(&root, self.identity.hpke_key)?;
+        // Activation of a copied bootstrap must never resurrect its old signer.
+        let (keys, identity) = DeviceKeys::generate(&root).map_err(|_| VaultError::Random)?;
+        let device = keys.sync_secret();
+        let certificate = device.certificate(&root, identity.hpke_key)?;
         let sync = crate::core::sync::Machine::create(
             crate::core::sync::Hash(self.space.space_id),
             crate::core::sync::Hash(self.space.namespace),
@@ -134,7 +182,9 @@ impl BootstrapProfile {
         )?;
         self.certificate = Some(certificate);
         self.sync = Some(sync);
-        self.schema_version = 2;
+        self.device = keys;
+        self.identity = identity;
+        self.schema_version = 3;
         Ok(())
     }
 
