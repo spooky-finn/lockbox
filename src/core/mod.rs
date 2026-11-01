@@ -3,6 +3,7 @@
 pub mod entry;
 pub mod folder;
 pub mod generator;
+pub mod history;
 pub(crate) mod id;
 pub mod import;
 pub mod language;

@@ -38,6 +38,7 @@ pub(super) fn EntryView() -> Element {
                 div { class: "detail-title", p { class: "detail-kind", {language.text(Text::Password)} } h1 { "{entry.title}" } }
                 if !unlocked.confirm_delete {
                     div { class: "actions entry-actions",
+                        button { class: "quiet", onclick: move |_| edit_unlocked(state, |u| u.open_records_page(crate::app::workspace::Page::History)), {language.text(Text::RecordHistory)} }
                         IconButton { class: "quiet", icon: Icon::Edit, label: language.text(Text::Edit), disabled: unlocked.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.start_edit()) }
                         IconButton { class: "danger quiet", icon: Icon::Trash, label: language.text(Text::Delete), disabled: unlocked.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.confirm_delete = true) }
                     }
@@ -116,7 +117,7 @@ pub(super) fn EntryView() -> Element {
 
             if unlocked.confirm_delete {
                 div { class: "delete-confirm", role: "alert",
-                    p { {language.format(Text::DeleteEntryThisCannotBeUndone, &[entry.title.to_string()])} }
+                    p { {language.format(Text::MoveEntryToTrash, &[entry.title.to_string()])} }
                     div { class: "actions",
                         IconButton { class: "danger", icon: Icon::Trash, label: language.text(Text::DeleteEntry), disabled: unlocked.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.error = u.delete_selected().err()) }
                         IconButton { icon: Icon::Close, label: language.text(Text::Cancel), onclick: move |_| edit_unlocked(state, |u| u.confirm_delete = false) }

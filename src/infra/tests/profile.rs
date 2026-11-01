@@ -81,7 +81,7 @@ fn profile_roundtrip_preserves_keys_and_keeps_secrets_encrypted() {
         Err(VaultError::ProfileInUse)
     ));
     let data = std::fs::read(&path).unwrap();
-    assert_eq!(&data[4..6], &5u16.to_le_bytes());
+    assert_eq!(&data[4..6], &7u16.to_le_bytes());
     for secret in [
         b"Alice".as_slice(),
         b"test-access",

@@ -21,10 +21,10 @@ use sha2::Sha256;
 use zeroize::Zeroizing;
 
 const MAGIC: &[u8; 4] = b"LBX1";
-// v4/v5 add attachments to local vaults/shared profiles. Read older versions,
-// but prevent old clients from silently discarding files when re-saving.
-pub(super) const VERSION: u16 = 4;
-pub(super) const PROFILE_VERSION: u16 = 5;
+// v6/v7 preserve local record history and trash. Older clients must reject
+// these files rather than silently discarding revisions on save.
+pub(super) const VERSION: u16 = 6;
+pub(super) const PROFILE_VERSION: u16 = 7;
 pub(super) const SALT_LEN: usize = 16;
 pub(super) const CHECK_LEN: usize = 32;
 pub(super) const NONCE_LEN: usize = 24;
@@ -36,6 +36,8 @@ const CHECK_INFO: &[u8] = b"lockbox v1 password check";
 #[derive(Default, Serialize, Deserialize)]
 pub(super) struct Contents {
     pub(super) entries: Vec<Entry>,
+    #[serde(default)]
+    pub(super) history: Vec<crate::core::history::RecordChange>,
     #[serde(default)]
     pub(super) folders: Vec<Folder>,
     #[serde(default)]
@@ -106,7 +108,7 @@ pub(super) fn decrypt(data: &[u8], key: &[u8; 32]) -> Option<Contents> {
 
     let version = u16::from_le_bytes([header[4], header[5]]);
 
-    if (matches!(version, 3 | PROFILE_VERSION)) != contents.profile.is_some()
+    if (matches!(version, 3 | 5 | PROFILE_VERSION)) != contents.profile.is_some()
         || contents
             .profile
             .as_ref()
@@ -128,6 +130,7 @@ pub(super) fn decrypt(data: &[u8], key: &[u8; 32]) -> Option<Contents> {
 #[derive(Serialize)]
 pub(super) struct ContentsRef<'a> {
     pub(super) entries: &'a [Entry],
+    pub(super) history: &'a [crate::core::history::RecordChange],
     #[serde(skip_serializing_if = "<[Folder]>::is_empty")]
     pub(super) folders: &'a [Folder],
     #[serde(skip_serializing_if = "Option::is_none")]

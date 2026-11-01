@@ -23,8 +23,8 @@ behavior, recovery and release plans.
 не создаются. Выгруженные пользователем файлы остаются обычными файлами.
 Удаление вложения сохраняет прежние версии в резервной копии и истории обмена.
 Для обмена вложениями обновите все устройства: старые клиенты отклоняют события
-с неизвестными полями. Локальные файлы теперь записываются как v4, облачные
-профили — v5; чтение прежних v1/v2/v3 поддерживается. Старые приложения новые
+с неизвестными полями. Локальные файлы теперь записываются как v6, облачные
+профили — v7; чтение прежних v1–v5 поддерживается. Старые приложения новые
 файлы не открывают, чтобы не потерять вложения при сохранении.
 
 ## Облачный профиль: идентичность и ключи
@@ -124,3 +124,23 @@ src/
 подписанные изменения, шифрование, отзыв доступа и обмен через стороннее облако. Описанные
 возможности шире реализованного экспериментального профиля `LBX-SYNC-1`;
 текущие границы описаны в [движке синхронизации](docs/sync-engine.md).
+
+## Record history and Trash
+
+Open a record and select **Record history** to compare changed fields before and
+after each revision. Passwords and TOTP secrets stay hidden until revealed.
+Shared history identifies the verified user and device by their full fingerprints;
+cloud events have causal ordering but no wall-clock timestamps. Local history
+records save times and labels the editor as “Local user”; it does not authenticate
+individual people sharing a master password.
+
+Deleting moves a record to **Trash** in the sidebar. Restore preserves the record
+ID, secrets and attachments. If its folder was removed, it returns to the root.
+History and deleted values remain inside encrypted storage. There is no permanent
+purge operation. Local history begins with changes saved by this version; earlier
+local edits and deletions cannot be reconstructed. Shared history is limited to
+events the device can decrypt; a newly admitted device may lack older revisions.
+Concurrent shared versions stay in the existing conflict review until resolved.
+
+Files saved by this version use v6 (local) or v7 (shared); earlier clients reject
+them to avoid losing history. Update clients before reopening upgraded files.

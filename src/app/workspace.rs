@@ -9,6 +9,8 @@ pub(crate) enum Page {
     Vault,
     Settings,
     Sharing,
+    History,
+    Trash,
 }
 
 pub(crate) struct Unlocked {
@@ -119,6 +121,27 @@ impl Unlocked {
         });
         self.confirm_delete = false;
         self.error = None;
+    }
+
+    pub(crate) fn open_records_page(&mut self, page: Page) {
+        if self.is_editing() {
+            return;
+        }
+        self.page = page;
+        self.show_password = false;
+        self.confirm_delete = false;
+        self.error = None;
+    }
+
+    pub(crate) fn restore_record(&mut self, id: &str) {
+        match self.vault.restore_record(id) {
+            Ok(()) => {
+                self.error = None;
+                self.sync.saved();
+                self.select(id.to_owned());
+            }
+            Err(error) => self.error = Some(error.to_string()),
+        }
     }
 
     pub(crate) fn open_settings(&mut self) {

@@ -670,3 +670,28 @@ fn failed_acknowledgement_restores_receipts_and_exchange_time() {
     assert!(vault.sync_state().unwrap().outbox.is_empty());
     assert!(vault.sync_state().unwrap().last_exchange.is_some());
 }
+
+#[test]
+fn shared_history_attributes_signer_and_restores_deleted_record() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut vault = profile_vault(&dir.path().join("history.lbx"), "Alice");
+    let original = entry("History");
+    vault.entries.push(original.clone());
+    vault.save_changes().unwrap();
+    vault.entries[0].password = "updated fictional password".into();
+    vault.save_changes().unwrap();
+    let updated = vault.entries.remove(0);
+    vault.save_changes().unwrap();
+    let history = vault.record_history().unwrap();
+    assert_eq!(history.len(), 3);
+    assert_eq!(history[1].before, vec![original]);
+    assert_eq!(history[1].after.as_ref(), Some(&updated));
+    let certificate = vault.device_certificate().unwrap();
+    assert_eq!(history[1].actor, certificate.body.user.to_string());
+    assert_eq!(history[1].device, certificate.body.device.to_string());
+    assert_eq!(vault.trash().unwrap(), vec![updated.clone()]);
+    vault.restore_record(&updated.id).unwrap();
+    assert_eq!(vault.entries, vec![updated]);
+    assert_eq!(vault.record_history().unwrap()[3].action, "Restore");
+    assert!(vault.trash().unwrap().is_empty());
+}

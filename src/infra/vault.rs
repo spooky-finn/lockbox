@@ -118,6 +118,8 @@ pub struct Vault {
     check: [u8; CHECK_LEN],
     key: Zeroizing<[u8; 32]>,
     pub entries: Vec<Entry>,
+    history: RefCell<Vec<crate::core::history::RecordChange>>,
+    saved_entries: RefCell<Vec<Entry>>,
     pub folders: Vec<Folder>,
     pub(crate) profile: Option<BootstrapProfile>,
     pending_exchange: Option<exchange::PendingExchange>,
@@ -136,6 +138,7 @@ use format::{
     decrypt, derive,
 };
 mod authority;
+mod history;
 mod protection;
 mod records;
 mod root_journal;
@@ -172,6 +175,8 @@ impl Vault {
             check,
             key,
             entries: Vec::new(),
+            history: RefCell::default(),
+            saved_entries: RefCell::default(),
             folders: Vec::new(),
             profile: None,
             pending_exchange: None,
@@ -249,6 +254,8 @@ impl Vault {
             salt,
             check,
             key,
+            history: RefCell::default(),
+            saved_entries: RefCell::new(snapshot.0.clone()),
             entries: snapshot.0,
             folders: snapshot.1,
             profile: Some(profile),
@@ -278,13 +285,13 @@ impl Vault {
         let path = path.to_path_buf();
         let data = fs::read(&path)?;
         let header = Header::parse(&data)?;
-        let path = if matches!(header.version, 3 | PROFILE_VERSION) {
+        let path = if matches!(header.version, 3 | 5 | PROFILE_VERSION) {
             path.canonicalize()?
         } else {
             path
         };
 
-        let profile_lock = if matches!(header.version, 3 | PROFILE_VERSION) {
+        let profile_lock = if matches!(header.version, 3 | 5 | PROFILE_VERSION) {
             Some(lock_profile(&path)?)
         } else {
             None
@@ -404,9 +411,11 @@ impl Vault {
             self.profile.is_some(),
             &nonce,
         );
+        let history = self.next_local_history();
         let ciphertext = format::encrypt(
             ContentsRef {
                 entries: &self.entries,
+                history: &history,
                 folders: &self.folders,
                 profile: self.profile.as_ref(),
                 generation,
@@ -425,6 +434,8 @@ impl Vault {
         if let (Some(protection), Some(generation)) = (protection.as_mut(), generation) {
             protection.committed(generation, protection::digest_parts(&header, &ciphertext));
         }
+        *self.history.borrow_mut() = history;
+        *self.saved_entries.borrow_mut() = self.entries.clone();
         sync_dir(&self.path)?;
 
         if let Some(protection) = protection.as_mut() {
@@ -500,6 +511,8 @@ impl Header {
             salt: self.salt,
             check: self.check,
             key,
+            history: RefCell::new(contents.history),
+            saved_entries: RefCell::new(contents.entries.clone()),
             entries: contents.entries,
             folders: contents.folders,
             profile: contents.profile,

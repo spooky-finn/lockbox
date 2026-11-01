@@ -1,1 +1,5 @@
 # Project feedback
+
+- Record history: local encrypted revisions; cloud verified signer fingerprints, causal order, no wall-clock times. Secrets hidden by default.
+- Trash: deletion retains values; restore same ID/files; missing folder restores root. No purge. Shared conflicts excluded from Trash.
+- File formats v6/v7; reads v1–v5. Old clients reject new files. Local history starts after upgrade; cloud history requires epoch keys.

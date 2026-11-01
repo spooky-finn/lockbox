@@ -48,6 +48,11 @@ pub(super) fn Sidebar() -> Element {
                 }
             }
             div { class: "sidebar-footer",
+                button { class: "quiet sidebar-settings", disabled: workspace.is_editing(),
+                    aria_current: (workspace.page == crate::app::workspace::Page::Trash).then_some("page"),
+                    onclick: move |_| edit_unlocked(state, |u| u.open_records_page(crate::app::workspace::Page::Trash)),
+                    Symbol { icon: Icon::Trash } {language.text(Text::Trash)}
+                }
                 if workspace.vault.device_certificate().is_some() {
                     button { class: "quiet sidebar-settings", r#type: "button",
                         aria_current: (workspace.page == crate::app::workspace::Page::Sharing).then_some("page"),

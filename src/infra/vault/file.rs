@@ -31,7 +31,7 @@ pub(super) fn refresh_profile_snapshot(
     let data = fs::read(path)?;
     let header = Header::parse(&data)?;
 
-    if !matches!(header.version, 3 | PROFILE_VERSION) {
+    if !matches!(header.version, 3 | 5 | PROFILE_VERSION) {
         return Err(VaultError::Corrupted);
     }
 

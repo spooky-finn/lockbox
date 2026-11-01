@@ -21,10 +21,15 @@ pub(super) fn UnlockedView() -> Element {
         return rsx! {};
     };
 
+    let records_open = matches!(
+        unlocked.page,
+        crate::app::workspace::Page::History | crate::app::workspace::Page::Trash
+    );
     let settings_open = unlocked.page == crate::app::workspace::Page::Settings;
     let sharing_open = unlocked.page == crate::app::workspace::Page::Sharing;
     let editing = unlocked.is_editing();
-    let has_detail = settings_open
+    let has_detail = records_open
+        || settings_open
         || sharing_open
         || unlocked.selected.is_some()
         || unlocked.directories.selected.is_some()
@@ -34,7 +39,7 @@ pub(super) fn UnlockedView() -> Element {
         div { class: if has_detail { "workspace has-detail" } else { "workspace" },
             Sidebar {}
             section { class: "detail",
-                if settings_open || sharing_open || (!editing && has_detail) {
+                if !records_open && (settings_open || sharing_open || (!editing && has_detail)) {
                     IconButton { class: "mobile-back quiet", icon: Icon::ArrowLeft,
                         label: if settings_open || sharing_open { language.text(Text::BackToVault) } else { language.text(Text::BackToList) },
                         onclick: move |_| edit_unlocked(state, |u| {
@@ -48,6 +53,7 @@ pub(super) fn UnlockedView() -> Element {
                 if let Some(error) = unlocked.vault.signing_error() { ProtectionNotice { error } }
                 if settings_open { super::settings::SettingsView {} }
                 else if sharing_open { super::sharing::SharingView {} }
+                else if records_open { super::history::RecordsView { key: "{records_open}:{unlocked.selected:?}:{unlocked.page == crate::app::workspace::Page::Trash}" } }
                 else { VaultContent {} }
             }
         }

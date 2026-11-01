@@ -2,6 +2,24 @@
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Text {
+    Trash,
+    RecordHistory,
+    MoveEntryToTrash,
+    RestoreRecord,
+    EmptyTrash,
+    NoRecordHistory,
+    HistoryHint,
+    LocalHistoryHint,
+    HistoryBefore,
+    HistoryAfter,
+    HistorySecrets,
+    HistoryCreated,
+    HistoryUpdated,
+    HistoryRestored,
+    HistoryResolved,
+    HistoryTime,
+    HistoryAuthor,
+
     SharingConnected,
     SharingConnectedHint,
     SharingChoosePath,
@@ -391,6 +409,24 @@ pub(crate) enum Text {
 impl Text {
     pub(super) fn translations(self) -> (&'static str, &'static str) {
         match self {
+            Self::Trash => ("Корзина", "Trash"),
+            Self::RecordHistory => ("История записи", "Record history"),
+            Self::MoveEntryToTrash => ("Переместить «{0}» в корзину? Запись можно восстановить.", "Move “{0}” to Trash? You can restore it later."),
+            Self::RestoreRecord => ("Восстановить", "Restore"),
+            Self::EmptyTrash => ("Корзина пуста", "Trash is empty"),
+            Self::NoRecordHistory => ("История недоступна для этой записи. Новые изменения будут сохранены.", "No history is available for this record. New changes will be recorded."),
+            Self::HistoryHint => ("Показаны доступные версии в причинном порядке. Отпечатки определяют пользователя и устройство. Облачные события не содержат времени.", "Available revisions appear in causal order. Fingerprints identify the user and device. Cloud events have no wall-clock timestamp."),
+            Self::LocalHistoryHint => ("Локальное хранилище не проверяет личность автора.", "Local vaults do not verify the identity of the editor."),
+            Self::HistoryBefore => ("До", "Before"),
+            Self::HistoryAfter => ("После", "After"),
+            Self::HistorySecrets => ("Показать / скрыть секреты", "Show / hide secrets"),
+            Self::HistoryCreated => ("Создано", "Created"),
+            Self::HistoryUpdated => ("Изменено", "Updated"),
+            Self::HistoryRestored => ("Восстановлено", "Restored"),
+            Self::HistoryResolved => ("Конфликт разрешён", "Conflict resolved"),
+            Self::HistoryTime => ("Сохранено (UTC): {0}", "Saved (UTC): {0}"),
+            Self::HistoryAuthor => ("Автор: {0}", "Author: {0}"),
+
             Self::SharingConnected => ("Подключено", "Connected"),
             Self::SharingConnectedHint => ("Устройство подключено. Данные пространства будут синхронизироваться через настроенное хранилище.", "Your device is connected. Space data will sync through your configured storage."),
             Self::SharingChoosePath => ("Что вы хотите сделать?", "What would you like to do?"),
@@ -780,6 +816,23 @@ impl Text {
 }
 
 pub(super) const CATALOG: &[Text] = &[
+    Text::Trash,
+    Text::RecordHistory,
+    Text::MoveEntryToTrash,
+    Text::RestoreRecord,
+    Text::EmptyTrash,
+    Text::NoRecordHistory,
+    Text::HistoryHint,
+    Text::LocalHistoryHint,
+    Text::HistoryBefore,
+    Text::HistoryAfter,
+    Text::HistorySecrets,
+    Text::HistoryCreated,
+    Text::HistoryUpdated,
+    Text::HistoryRestored,
+    Text::HistoryResolved,
+    Text::HistoryTime,
+    Text::HistoryAuthor,
     Text::SharingConnected,
     Text::SharingConnectedHint,
     Text::SharingChoosePath,

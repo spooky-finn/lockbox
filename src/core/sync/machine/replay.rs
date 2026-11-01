@@ -62,6 +62,7 @@ impl Machine {
             .find(|m| m.certificate.body.device == device.id())
             .map(|m| m.role);
         let mut result = Replay {
+            history: Vec::new(),
             membership: tip,
             epoch: current.body.epoch.number.0,
             projection: Projection::default(),
@@ -132,6 +133,7 @@ impl Machine {
                 &controls.keys().copied().collect(),
                 next,
             )?;
+            result.history.extend(replayed.history);
             result.projection = replayed.projection;
             result.accepted.extend(replayed.accepted);
             result.pending.extend(replayed.pending);
@@ -246,7 +248,67 @@ fn replay_epoch(
         }
     }
 
+    let mut ordered = included
+        .iter()
+        .map(|hash| {
+            ancestry(&accepted[hash].signed.body.header.parents, &accepted)
+                .map(|past| (past.len(), hash))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    ordered.sort_by_key(|(depth, hash)| (*depth, **hash));
+    let mut history = Vec::new();
+    for (_, hash) in ordered {
+        let change = &accepted[hash];
+        let author = change.signed.body.header.author;
+        let actor = control
+            .members
+            .iter()
+            .find(|m| m.certificate.body.device == author)
+            .map(|m| m.certificate.body.user.to_string())
+            .unwrap_or_else(|| author.to_string());
+        for (index, mutation) in change.transaction.mutations.iter().enumerate() {
+            if mutation.entity.kind != super::super::EntityKind::Entry {
+                continue;
+            }
+            let before = mutation
+                .bases
+                .iter()
+                .filter_map(|base| {
+                    let value = accepted
+                        .get(&base.change)
+                        .and_then(|c| c.transaction.mutations.get(base.index as usize))
+                        .and_then(|m| m.value.as_ref())
+                        .or_else(|| {
+                            baseline
+                                .records
+                                .iter()
+                                .flat_map(|r| &r.versions)
+                                .find(|v| v.revision == *base)
+                                .and_then(|v| v.value.as_ref())
+                        });
+                    match value {
+                        Some(super::super::Value::Entry(e)) => Some(e.clone()),
+                        _ => None,
+                    }
+                })
+                .collect();
+            history.push(crate::core::history::RecordChange {
+                id: mutation.entity.id.clone(),
+                revision: format!("{hash}:{index}"),
+                actor: actor.clone(),
+                device: author.to_string(),
+                at: None,
+                action: format!("{:?}", mutation.action),
+                before,
+                after: match &mutation.value {
+                    Some(super::super::Value::Entry(e)) => Some(e.clone()),
+                    _ => None,
+                },
+            });
+        }
+    }
     Ok(Replay {
+        history,
         membership,
         epoch: control.epoch.number.0,
         projection,

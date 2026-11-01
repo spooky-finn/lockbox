@@ -78,6 +78,7 @@ fn dependency_wait_and_signature_substitution_never_mutate_projection() {
     Machine::receive(&mut receiver, second, writer.objects[&second].0.clone()).unwrap();
     let replay = Machine::replay(&receiver, &device).unwrap();
     assert!(replay.pending.contains(&first));
+    assert!(replay.history.is_empty());
     assert!(!replay.ready);
     assert!(replay.projection.records.is_empty());
     Machine::receive(&mut receiver, first, writer.objects[&first].0.clone()).unwrap();
@@ -98,6 +99,13 @@ fn dependency_wait_and_signature_substitution_never_mutate_projection() {
     Machine::receive(&mut receiver, hash, altered.bytes().unwrap()).unwrap();
     let replay = Machine::replay(&receiver, &device).unwrap();
     assert!(replay.rejected.contains_key(&hash));
+    assert_eq!(replay.history.len(), 2);
+    assert!(
+        replay
+            .history
+            .iter()
+            .all(|event| !event.revision.starts_with(&hash.to_string()))
+    );
     assert_eq!(replay.projection.entries()[0].password, "two");
 }
 

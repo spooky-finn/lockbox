@@ -102,6 +102,7 @@ impl SyncState {
 /// dependencies do not establish corruption. A ready view can still contain
 /// concurrent versions that require explicit resolution.
 pub struct Replay {
+    pub history: Vec<crate::core::history::RecordChange>,
     pub membership: Hash,
     pub epoch: u64,
     pub projection: Projection,

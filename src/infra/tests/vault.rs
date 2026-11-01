@@ -289,3 +289,64 @@ fn attachments_are_encrypted_locally_and_survive_reopen_and_removal() {
             .is_empty()
     );
 }
+
+#[test]
+fn history_and_trash_survive_reopen_and_restore_full_record() {
+    let dir = tempfile::tempdir().unwrap();
+    let (path, mut vault) = new_vault(&dir);
+    let original = vault.entries[0].clone();
+    vault.entries[0].password = "changed fictional password".into();
+    vault.entries[0]
+        .add_attachment("example.txt".into(), b"fictional file".to_vec())
+        .unwrap();
+    vault.save_changes().unwrap();
+    let updated = vault.entries[0].clone();
+    vault.entries.clear();
+    vault.save_changes().unwrap();
+    drop(vault);
+    let mut vault = Vault::open(&path, &password("master")).unwrap();
+    let history = vault.record_history().unwrap();
+    assert_eq!(history.len(), 3);
+    assert_eq!(history[1].before[0], original);
+    assert_eq!(history[1].after.as_ref(), Some(&updated));
+    assert_eq!(vault.trash().unwrap(), vec![updated.clone()]);
+    vault.restore_record(&updated.id).unwrap();
+    assert!(vault.trash().unwrap().is_empty());
+    assert_eq!(vault.entries, vec![updated.clone()]);
+    drop(vault);
+    let vault = Vault::open(&path, &password("master")).unwrap();
+    assert_eq!(vault.entries, vec![updated]);
+    assert_eq!(vault.record_history().unwrap()[3].action, "Restore");
+    let encrypted = fs::read(path).unwrap();
+    assert!(
+        !encrypted
+            .windows(original.password.len())
+            .any(|w| w == original.password.as_bytes())
+    );
+}
+
+#[test]
+fn failed_save_does_not_append_history_or_lose_trash() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_, mut vault) = new_vault(&dir);
+    let entry = vault.entries.remove(0);
+    vault.save_changes().unwrap();
+    let count = vault.record_history().unwrap().len();
+    let path = vault.path.clone();
+    vault.path = dir.path().join("missing").join("vault.lbx");
+    assert!(vault.restore_record(&entry.id).is_err());
+    assert!(vault.entries.is_empty());
+    assert_eq!(vault.record_history().unwrap().len(), count);
+    assert_eq!(vault.trash().unwrap(), vec![entry.clone()]);
+    vault.path = path;
+    vault.restore_record(&entry.id).unwrap();
+    assert_eq!(vault.entries, vec![entry]);
+}
+
+#[test]
+fn unchanged_save_does_not_add_revision() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_, vault) = new_vault(&dir);
+    vault.save().unwrap();
+    assert_eq!(vault.record_history().unwrap().len(), 1);
+}

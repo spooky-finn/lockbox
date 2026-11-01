@@ -8,6 +8,7 @@ mod editor;
 mod entry;
 mod folder_select;
 mod generator;
+mod history;
 mod icons;
 mod lock_mark;
 mod locked;
