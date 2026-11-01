@@ -39,8 +39,8 @@ fn profile_one_change_matches_independently_generated_signature_fixture() {
         panic!()
     };
     let mut body = legacy.body;
-    body.header.profile = super::super::profile::PROFILE.into();
-    let domain = super::super::profile::Profile::Current.change_domain();
+    body.header.profile = super::super::profile::CONSENT_PROFILE.into();
+    let domain = super::super::profile::Profile::Consent.change_domain();
     let signed = crypto::sign(body, &signing, domain).unwrap();
     crypto::verify(&signed, &signing.verifying_key().to_bytes(), domain).unwrap();
     assert!(crypto::verify(&signed, &signing.verifying_key().to_bytes(), CHANGE_DOMAIN).is_err());

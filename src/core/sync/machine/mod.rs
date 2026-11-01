@@ -4,6 +4,7 @@
 //! This facade never owns a provider, filesystem handle, clock, or UI state.
 
 mod commands;
+mod authority;
 mod history;
 mod invitations;
 mod membership;
@@ -13,7 +14,7 @@ mod protocol;
 mod replay;
 mod state;
 
-pub use protocol::{Change, Control};
+pub use protocol::{Change, Control, ControlApproval, ControlTransfer, ControlTransition, RecoveryAnchor};
 pub use state::{ExcludedEdit, PreparedChange, Replay, SpaceDescriptor, SyncState};
 
 /// Stateless entry point for deterministic replay and encrypted command preparation.

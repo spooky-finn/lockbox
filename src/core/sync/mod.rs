@@ -46,7 +46,7 @@ pub use invitation::{
     Admission, AdmissionConfirmation, AdmissionReceipt, Invitation, InviteOffer, JoinRequest,
     MAX_INVITATION_BYTES,
 };
-pub use machine::{ExcludedEdit, Machine, PreparedChange, Replay, SpaceDescriptor, SyncState};
+pub use machine::{ControlApproval, ControlTransfer, ControlTransition, RecoveryAnchor, ExcludedEdit, Machine, PreparedChange, Replay, SpaceDescriptor, SyncState};
 pub use model::{
     Action, Entity, EntityKind, Mutation, Projection, Record, Revision, Role, Transaction, Value,
     Version,
@@ -110,6 +110,8 @@ pub enum Error {
     InvitationCancelled,
     #[error("device keys were previously admitted; generate fresh device keys")]
     RetiredDevice,
+    #[error("the prepared control transition requires approval")]
+    ControlApprovalRequired,
 }
 
 impl Error {

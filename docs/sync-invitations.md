@@ -19,7 +19,7 @@ to join another space.
 2. Owner selects **Open recipient device file**, confirms the fingerprints,
    chooses the deadline and invites the device with read or edit access. An
    additional device of the owner's own identity uses the owner-device option.
-3. Owner saves and sends the invitation file. Share its 64-digit verification
+3. Owner saves and sends the invitation file. Share its 64-character verification
    code through a separate trusted channel. This code binds the full space
    descriptor and signed control anchor. The recipient screen intentionally does
    not display the expected code for copying into its own verification field.

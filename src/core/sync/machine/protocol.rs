@@ -2,6 +2,7 @@
 
 use super::super::{Admission, Blob, Certificate, Counter, Hash, Object, Role, Signed};
 use serde::{Deserialize, Serialize};
+use super::state::SpaceDescriptor;
 
 pub(super) use super::profile::PROFILE;
 
@@ -43,6 +44,44 @@ pub struct Control {
     pub(super) checkpoint: Blob,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(super) admissions: Vec<Admission>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) transition: Option<ControlTransition>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) approval: Option<Signed<ControlApproval>>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ControlTransition { Transfer, Recovery }
+
+/// Detached approval binds every semantic field of a prepared control and the
+/// complete descriptor. The final author also signs this approval's exact bytes.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ControlApproval {
+    pub(super) profile: String,
+    pub(super) descriptor: SpaceDescriptor,
+    pub(super) statement: Hash,
+    pub(super) author: Hash,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ControlTransfer {
+    pub(super) descriptor: SpaceDescriptor,
+    pub(super) control: Control,
+    pub(super) signature: Blob,
+    pub(super) objects: Vec<Blob>,
+}
+
+/// Independently authenticated current content boundary. Frontier hashes commit
+/// to encrypted events; no password-derived plaintext digest is made public.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RecoveryAnchor {
+    pub descriptor: SpaceDescriptor,
+    pub control: Hash,
+    pub frontier: Vec<Hash>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -81,7 +120,7 @@ impl Object {
                         .body
                         .closed_frontier
                         .iter()
-                        .take(super::super::MAX_PARENTS)
+                        .take(if control.body.transition == Some(ControlTransition::Recovery) { 512 } else { super::super::MAX_PARENTS })
                         .copied(),
                 )
                 .collect(),

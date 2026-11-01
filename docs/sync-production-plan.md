@@ -63,7 +63,7 @@ tests must not be presented as an independent audit.
 
 ## Validation snapshot: 2026-11-01
 
-- `cargo test --locked --offline --all-targets --quiet`: 222 library tests and one
+- `cargo test --locked --offline --all-targets --quiet`: 232 library tests and one
   public-API acceptance test passed; the explicit OS Keychain probe is ignored
   by the ordinary suite.
 - `cargo test --locked --offline --doc --quiet`: two doctests passed.
@@ -73,6 +73,9 @@ tests must not be presented as an independent audit.
   network I/O. No live Storj result is claimed.
 - `cargo run --locked --offline --example shared_space --quiet`: independent
   profiles completed signed admission, concurrent edits, retries and resolution.
+- Desktop sharing evidence covers application state transitions, independent
+  trust-code checks, scoped file workers and rendered components. A manual native
+  desktop handshake against real Storj remains a release check.
 
 Independent profile protection and fresh-device identity recovery are implemented
 in [profile-protection.md](profile-protection.md). Next implementation priority is

@@ -7,8 +7,9 @@ use super::super::{
     decode,
 };
 use super::{
+    authority::{control_domain, verify_approval},
     Machine,
-    protocol::{Change, ChangeHeader, Control, Epoch, Member, PROFILE},
+    protocol::{Change, ChangeHeader, Control, ControlTransition, Epoch, Member, PROFILE},
     state::{ExcludedEdit, PreparedChange, Replay, SyncState},
 };
 use super::{
@@ -328,10 +329,10 @@ impl Machine {
         };
 
         let epoch = Epoch {
-            profile: if admissions.is_empty() {
+            profile: if admissions.is_empty() || Profile::parse(&previous.body.epoch.profile)? >= Profile::Consent {
                 previous.body.epoch.profile.clone()
             } else {
-                PROFILE.into()
+                super::profile::CONSENT_PROFILE.into()
             },
             ..epoch
         };
@@ -368,7 +369,9 @@ impl Machine {
     pub fn complete_intent(state: &mut SyncState, device: &DeviceSecret) -> Result<Hash> {
         let prepared = state.intent.clone().ok_or(Error::PendingIntent)?;
         let replay = Self::replay(state, device)?;
-        require_writer(&replay)?;
+        if !matches!(&prepared, PreparedChange::Control(c) if c.transition == Some(ControlTransition::Recovery)) {
+            require_writer(&replay)?;
+        } else if !replay.pending.is_empty() { return Err(Error::MissingDependency); }
         let object = match prepared {
             PreparedChange::Change(change) => {
                 if change.header.membership != replay.membership
@@ -387,13 +390,15 @@ impl Machine {
 
                 let previous = control_at(state, replay.membership)?;
 
-                if previous.body.controller != device.id() {
+                if (control.transition == Some(ControlTransition::Recovery) && control.controller != device.id())
+                    || (control.transition != Some(ControlTransition::Recovery) && previous.body.controller != device.id()) {
                     return Err(Error::InsufficientRole);
                 }
                 with_history(state, |history| {
                     validate_control_body(&control, Some(&previous), state, &history.chain)
                 })?;
-                let domain = Profile::parse(&control.epoch.profile)?.control_domain();
+                verify_approval(&control, Some(&previous), state)?;
+                let domain = control_domain(&control)?;
                 let signed = crypto::sign(control, &device.signer(), domain)?;
                 Object::Control(signed)
             }
@@ -527,7 +532,7 @@ impl Machine {
     }
 }
 
-fn capacity(state: &SyncState, bytes: usize) -> Result<()> {
+pub(super) fn capacity(state: &SyncState, bytes: usize) -> Result<()> {
     if bytes > super::super::MAX_OBJECT_BYTES
         || state.objects.len() >= super::super::MAX_OBJECTS
         || state

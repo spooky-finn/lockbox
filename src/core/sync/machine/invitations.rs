@@ -5,7 +5,7 @@ use super::{
     Machine,
     history::{ControlHistory, with_history},
     profile::Profile,
-    protocol::Control,
+    protocol::{Control, ControlTransition},
     state::{PreparedChange, SpaceDescriptor, SyncState},
 };
 use crate::core::sync::{
@@ -309,6 +309,11 @@ pub(super) fn verify_admissions(
         }
         if was_admitted(ancestors, member.certificate.body.device) {
             return Err(Error::RetiredDevice);
+        }
+        if body.transition == Some(ControlTransition::Recovery)
+            && member.certificate.body.device == body.controller
+            && member.certificate.body.user == body.owner {
+            continue;
         }
         added.insert(member.certificate.body.device, member);
     }
