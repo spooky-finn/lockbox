@@ -47,7 +47,8 @@ pub enum GeneratorError {
 
 impl Options {
     /// The chosen character sets, without ambiguous characters if requested.
-    fn sets(&self) -> Vec<Vec<char>> {
+    fn sets(&self) -> impl Iterator<Item = impl Iterator<Item = char>> {
+        let avoid_ambiguous = self.avoid_ambiguous;
         [
             (self.lower, LOWER),
             (self.upper, UPPER),
@@ -56,17 +57,15 @@ impl Options {
         ]
         .into_iter()
         .filter(|(chosen, _)| *chosen)
-        .map(|(_, set)| {
+        .map(move |(_, set)| {
             set.chars()
-                .filter(|c| !(self.avoid_ambiguous && AMBIGUOUS.contains(*c)))
-                .collect()
+                .filter(move |c| !(avoid_ambiguous && AMBIGUOUS.contains(*c)))
         })
-        .collect()
     }
 
     /// Counts the available characters after applying the ambiguity filter.
     pub fn alphabet_size(&self) -> usize {
-        self.sets().iter().map(Vec::len).sum()
+        self.sets().flatten().count()
     }
 
     /// Strength of a uniformly random password with these options.
@@ -84,7 +83,7 @@ pub fn generate(options: &Options) -> Result<Zeroizing<String>, GeneratorError> 
         return Err(GeneratorError::InvalidLength);
     }
 
-    let sets = options.sets();
+    let sets: Vec<Vec<char>> = options.sets().map(Iterator::collect).collect();
 
     if sets.is_empty() {
         return Err(GeneratorError::NoCharacters);

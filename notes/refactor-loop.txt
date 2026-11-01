@@ -9,21 +9,21 @@ Last full suite: cycle 65; 415 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 66: Count prepared object capacity bytes
-- PreparedChange.check_capacity uses shared canonical_size instead of retaining
-  object.bytes Vec just to read len. Same canonical writer, same temporary signed
-  Object and dummy 64-byte signature; body moves back unchanged after success.
-- Keep serialization failure mapped to InvalidEncoding before capacity checks,
-  exact object/cache/count limits and signing only after durable reservation.
-- Formatting/strict all-target Clippy passed. 55 protocol, four vault authority,
-  two sync integration tests passed. Source matches verified snapshot;
+Cycle 67: Count generator alphabets lazily
+- Options.sets returns iterators of filtered character iterators. alphabet_size
+  flattens/counts without allocating set vectors; entropy UI uses same count.
+- generate collects exactly same Vec<Vec<char>> once for indexed random choices.
+  Preserve selected set/character order, ambiguity filter, length/error order,
+  OS random calls, unbiased rejection sampling and Fisher–Yates shuffle.
+- Formatting/strict all-target Clippy passed. 76 records, nine browser unit,
+  two browser-host integration tests passed. Existing generator coverage checks
+  lengths/sets/ambiguity/entropy/distribution. Source matches verified snapshot;
   whitespace clean. Unrelated edits untouched.
-- Snapshot: /tmp/lockbox-refactor-66.1jum7ip5.
+- Snapshot: /tmp/lockbox-refactor-67._cntk5lb.
 
-Next search: generator Options.sets builds Vec<Vec<char>> even when alphabet_size
-only counts characters for strength UI. Consider lazy iterator of filtered set
-iterators; alphabet_size flattens/counts without allocating. generate collects
-same Vec<Vec<char>> once for indexed random selection. Preserve all set order,
-ambiguity filtering, length/error order and OS random draw/shuffle algorithm.
-Existing seven generator tests cover lengths, alphabets, coverage, ambiguity,
-entropy and distribution; inspect before choosing. No new RNG policy.
+Next search: local folder.validate and import_plan.Targets.place repeat folder
+name emptiness/128-character policy. Consider named private folder::valid_name
+predicate shared by these local callers. Keep raw-name count in validation and
+trim-before-validation in import. Protocol model has frozen whitespace helper
+and literal 128; inspect before touching and preserve that distinct contract.
+Avoid forced cross-protocol unification or unrelated early-count changes.
