@@ -18,6 +18,7 @@ pub(super) fn DirectoryEditor() -> Element {
     let Screen::Unlocked(workspace) = &*screen else {
         return rsx! {};
     };
+
     let Some(draft) = &workspace.directories.draft else {
         return rsx! {};
     };

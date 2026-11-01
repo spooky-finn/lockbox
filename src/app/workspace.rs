@@ -58,6 +58,7 @@ impl Unlocked {
             .activate_sync(&recovery)
             .err()
             .map(|error| error.to_string());
+
         if self.error.is_none() {
             self.sync.saved();
         }
@@ -65,10 +66,12 @@ impl Unlocked {
 
     pub(crate) fn select(&mut self, id: String) {
         self.page = Page::Vault;
+
         if let Some(entry) = self.vault.entries.iter().find(|entry| entry.id == id) {
             self.directories.selected = entry.folder_id.clone();
             self.directories.reveal(&self.vault);
         }
+
         self.directories.confirm_delete = false;
         self.selected = Some(id);
         self.show_password = false;
@@ -80,6 +83,7 @@ impl Unlocked {
         if self.is_editing() {
             return;
         }
+
         let mut entry = Entry::new();
         entry.folder_id = self.directories.selected.clone();
         self.start_draft(entry, true);
@@ -124,16 +128,21 @@ impl Unlocked {
         let Some(draft) = &self.draft else {
             return Ok(());
         };
+
         if draft.entry.title.trim().is_empty() {
             return Err("Enter an entry name".into());
         }
+
         if let Some(totp) = &draft.entry.totp {
             totp::validate(totp).map_err(|error| format!("TOTP: {error}"))?;
         }
+
         let mut entry = draft.entry.clone();
+
         if let Some(totp) = &mut entry.totp {
             totp.secret = totp::normalize_secret(&totp.secret);
         }
+
         let id = entry.id.clone();
         // Shared recovery can replace the entire view before a save fails.
         // Local saves only need the entry changed by this operation for undo.
@@ -154,6 +163,7 @@ impl Unlocked {
         } else {
             Some(std::mem::replace(&mut self.vault.entries[index], entry))
         };
+
         if let Err(error) = self.vault.save_changes() {
             if let Some(entries) = shared_previous {
                 self.vault.entries = entries;
@@ -164,6 +174,7 @@ impl Unlocked {
             }
             return Err(format!("Could not save: {error}"));
         }
+
         self.draft = None;
         self.search.clear();
         self.select(id);
@@ -183,6 +194,7 @@ impl Unlocked {
             .then(|| self.vault.entries.clone());
         let mut removed = Vec::new();
         let mut index = 0;
+
         while index < self.vault.entries.len() {
             if self.vault.entries[index].id == id {
                 removed.push((index + removed.len(), self.vault.entries.remove(index)));
@@ -190,6 +202,7 @@ impl Unlocked {
                 index += 1;
             }
         }
+
         if let Err(error) = self.vault.save_changes() {
             if let Some(entries) = shared_previous {
                 self.vault.entries = entries;
@@ -200,6 +213,7 @@ impl Unlocked {
             }
             return Err(format!("Could not save: {error}"));
         }
+
         self.selected = None;
         self.confirm_delete = false;
         self.sync.saved();

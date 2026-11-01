@@ -25,6 +25,7 @@ pub struct AutoLock {
     activity_wall: SystemTime,
 }
 
+/// Converts the configured minutes to a duration; zero disables automatic locking.
 pub fn timeout(minutes: u32) -> Option<Duration> {
     (minutes > 0).then(|| Duration::from_secs(u64::from(minutes) * 60))
 }
@@ -43,11 +44,13 @@ impl AutoLock {
         self.activity(now, wall);
     }
 
+    /// Resets both clocks so idle checks also account for time spent asleep.
     pub fn activity(&mut self, now: Instant, wall: SystemTime) {
         self.activity = now;
         self.activity_wall = wall;
     }
 
+    /// Determines whether to warn or lock using the longer elapsed clock duration.
     pub fn check(&self, now: Instant, wall: SystemTime) -> State {
         let Some(timeout) = self.timeout else {
             return State::Off;
@@ -56,6 +59,7 @@ impl AutoLock {
         let idle = now
             .saturating_duration_since(self.activity)
             .max(wall.duration_since(self.activity_wall).unwrap_or_default());
+
         match timeout.checked_sub(idle) {
             None | Some(Duration::ZERO) => State::Lock,
             Some(left) if left <= WARNING => State::Warning(left),

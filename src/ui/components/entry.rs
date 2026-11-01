@@ -21,6 +21,7 @@ pub(super) fn EntryView() -> Element {
     let Screen::Unlocked(unlocked) = &*screen else {
         return rsx! {};
     };
+
     let Some(entry) = unlocked.selected_entry() else {
         return rsx! {};
     };
@@ -55,6 +56,7 @@ pub(super) fn EntryView() -> Element {
                             pressed: Some(unlocked.show_password),
                             onclick: move |_| edit_unlocked(state, |u| u.show_password = !u.show_password),
                         }
+
                         if !entry.password.is_empty() {
                             IconButton { class: "quiet", label: language.text(Text::CopyPassword), icon: Icon::Copy,
                                 onclick: move |_| runtime::copy(CopyField::Password),
@@ -85,10 +87,12 @@ pub(super) fn EntryView() -> Element {
                         }
                     }
                 }
+
                 if !entry.notes.is_empty() {
                     div { class: "field-row notes-row", dt { {language.text(Text::Note)} } dd { class: "notes", "{entry.notes}" } }
                 }
             }
+
             if !entry.attachments.is_empty() {
                 section { class: "stack",
                     h2 { {language.text(Text::Attachments)} }
@@ -102,6 +106,7 @@ pub(super) fn EntryView() -> Element {
                     }
                 }
             }
+
             if unlocked.confirm_delete {
                 div { class: "delete-confirm", role: "alert",
                     p { {language.format(Text::DeleteEntryThisCannotBeUndone, &[entry.title.to_string()])} }

@@ -28,9 +28,11 @@ impl Storage for Memory {
     }
     fn get(&mut self, _: Hash, hash: Hash) -> Result<Vec<u8>> {
         self.gets += 1;
+
         if self.missing {
             return Err(TransportError::NotFound);
         }
+
         self.objects
             .get(&hash)
             .cloned()
@@ -38,6 +40,7 @@ impl Storage for Memory {
     }
     fn put(&mut self, _: Hash, hash: Hash, bytes: &[u8]) -> Result<()> {
         self.objects.insert(hash, bytes.to_vec());
+
         if std::mem::take(&mut self.lost_response) {
             Err(TransportError::Unavailable)
         } else {
@@ -52,6 +55,7 @@ fn history() -> (SyncState, SyncState, DeviceSecret, Hash) {
     let base = state.clone();
     let mut entry = Entry::new();
     let mut last = state.genesis;
+
     for title in ["First", "Second", "Third"] {
         entry.title = title.into();
         let before = Machine::replay(&state, &device).unwrap().projection;
@@ -80,12 +84,14 @@ fn pinned_genesis_is_fetched_even_when_list_omits_it() {
         hidden: BTreeSet::from([state.genesis]),
         ..Memory::default()
     };
+
     let batch = Discovery::for_state(&join)
         .unwrap()
         .download(&mut provider, &Cancellation::default())
         .unwrap();
     assert!(!batch.incomplete);
     assert_eq!(provider.gets, 1);
+
     for (hash, bytes) in batch.objects {
         Machine::receive(&mut join, hash, bytes).unwrap();
     }
@@ -108,12 +114,14 @@ fn a_required_control_anchor_is_fetched_without_provider_listing() {
         hidden: owner.objects.keys().copied().collect(),
         ..Memory::default()
     };
+
     let batch = Discovery::for_state(&joined)
         .unwrap()
         .download(&mut provider, &Cancellation::default())
         .unwrap();
     assert!(!batch.incomplete);
     assert_eq!(provider.gets, owner.objects.len());
+
     for (hash, bytes) in batch.objects {
         Machine::receive(&mut joined, hash, bytes).unwrap();
     }
@@ -134,15 +142,18 @@ fn known_orphans_resolve_omitted_dependencies_recursively() {
         hidden: state.objects.keys().copied().collect(),
         ..Memory::default()
     };
+
     let batch = Discovery::for_state(&receiver)
         .unwrap()
         .download(&mut provider, &Cancellation::default())
         .unwrap();
     assert!(!batch.incomplete);
     assert_eq!(provider.gets, 2);
+
     for (hash, bytes) in batch.objects {
         Machine::receive(&mut receiver, hash, bytes).unwrap();
     }
+
     let replay = Machine::replay(&receiver, &device).unwrap();
     assert!(replay.ready);
     assert_eq!(replay.projection.entries()[0].title, "Third");
@@ -171,6 +182,7 @@ fn discovering_a_head_fetches_its_unlisted_ancestry_in_the_same_pass() {
             .collect(),
         ..Memory::default()
     };
+
     let batch = download(
         &mut provider,
         state.namespace,
@@ -180,6 +192,7 @@ fn discovering_a_head_fetches_its_unlisted_ancestry_in_the_same_pass() {
     .unwrap();
     assert!(!batch.incomplete);
     assert_eq!(provider.gets, state.objects.len());
+
     for (hash, bytes) in batch.objects {
         Machine::receive(&mut receiver, hash, bytes).unwrap();
     }
@@ -206,10 +219,12 @@ fn omitted_unavailable_anchor_is_incomplete_and_missing_gets_are_bounded() {
     assert_eq!(provider.gets, 1);
     provider.gets = 0;
     provider.missing = true;
+
     for index in 0u64..1000 {
         let hash = Hash::digest(b"missing-test", &index.to_be_bytes());
         provider.objects.insert(hash, vec![]);
     }
+
     let batch = download(
         &mut provider,
         state.namespace,
@@ -247,6 +262,7 @@ fn lost_upload_response_retries_exact_same_object_and_deduplicates() {
         lost_response: true,
         ..Memory::default()
     };
+
     let cancel = Cancellation::default();
     assert_eq!(
         upload(&mut provider, state.namespace, &plan, &cancel),
@@ -325,6 +341,7 @@ fn publication_orders_epoch_and_causal_dependencies_before_references() {
         entry::Entry,
         sync::{Role, Transaction},
     };
+
     let (mut state, device) = fixture();
     let genesis = state.genesis;
     let mut entry = Entry::new();

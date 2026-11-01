@@ -77,19 +77,23 @@ fn source_domain(icon: &Source) -> Option<String> {
 /// `slug domain…` lines in file order; `#` starts a comment.
 fn manual_domains(assets: &Path) -> Vec<(String, Vec<String>)> {
     let mut table: Vec<(String, Vec<String>)> = Vec::new();
+
     for (number, line) in read(&assets.join("icon_domains.txt")).lines().enumerate() {
         let line = line.split('#').next().unwrap_or_default();
         let mut words = line.split_whitespace();
         let Some(slug) = words.next() else {
             continue;
         };
+
         let domains: Vec<String> = words.map(str::to_lowercase).collect();
+
         if domains.is_empty() {
             fail(format!(
                 "icon_domains.txt:{}: no domains for {slug}",
                 number + 1
             ));
         }
+
         match table.iter_mut().find(|(known, _)| known == slug) {
             Some((_, known)) => known.extend(domains),
             None => table.push((slug.to_owned(), domains)),
@@ -103,6 +107,7 @@ fn main() {
     let [_, package] = args.as_slice() else {
         fail("usage: cargo run --bin build-icons -- <unpacked simple-icons package>");
     };
+
     let package = PathBuf::from(package);
     let assets = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets");
 
@@ -121,6 +126,7 @@ fn main() {
         .map(|(slug, _)| slug.as_str())
         .filter(|slug| !icons.iter().any(|icon| icon.slug == *slug))
         .collect();
+
     if !unknown.is_empty() {
         unknown.sort_unstable();
         fail(format!(
@@ -132,9 +138,11 @@ fn main() {
     // The manual table always wins; a source domain goes to the first icon
     // (in slug order) that claims it, so brand variants (uniqlo, uniqlo_ja) share nothing.
     let mut owner: HashMap<String, String> = HashMap::new();
+
     for (slug, domains) in &manual {
         for domain in domains {
             let first = owner.entry(domain.clone()).or_insert_with(|| slug.clone());
+
             if first != slug {
                 fail(format!(
                     "icon_domains.txt gives {domain} to both {first} and {slug}"
@@ -144,26 +152,32 @@ fn main() {
     }
 
     let mut lines = Vec::with_capacity(icons.len());
+
     for icon in &icons {
         let svg = read(&package.join("icons").join(format!("{}.svg", icon.slug)));
         let path = svg_path(&svg)
             .unwrap_or_else(|| fail(format!("{}.svg is not a single-path 24×24 icon", icon.slug)));
+
         if icon.hex.len() != 6 || !icon.hex.chars().all(|c| c.is_ascii_hexdigit()) {
             fail(format!("{}: bad colour {}", icon.slug, icon.hex));
         }
+
         let mut domains = manual
             .iter()
             .find(|(slug, _)| *slug == icon.slug)
             .map(|(_, domains)| domains.clone())
             .unwrap_or_default();
+
         if let Some(domain) = source_domain(icon) {
             let first = owner
                 .entry(domain.clone())
                 .or_insert_with(|| icon.slug.clone());
+
             if *first == icon.slug && !domains.contains(&domain) {
                 domains.push(domain);
             }
         }
+
         let line = Line {
             slug: &icon.slug,
             title: &icon.title,
@@ -179,6 +193,7 @@ fn main() {
         &assets.join("SIMPLE_ICONS_VERSION"),
         &format!("{version}\n"),
     );
+
     for (from, to) in [
         ("LICENSE.md", "LICENSE-simple-icons.md"),
         ("DISCLAIMER.md", "DISCLAIMER-simple-icons.md"),

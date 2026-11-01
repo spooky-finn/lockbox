@@ -83,6 +83,7 @@ pub fn reconcile(
     witness: Option<Witness>,
 ) -> Result<Reconciliation> {
     let witness = witness.ok_or(Error::MissingBinding)?;
+
     if !file.valid()
         || witness.profile != profile
         || witness.binding != file.binding
@@ -90,9 +91,11 @@ pub fn reconcile(
     {
         return Err(Error::Rollback);
     }
+
     if witness.generation == file.generation && witness.digest == Some(digest) {
         return Ok(Reconciliation::Current);
     }
+
     if witness.generation.checked_add(1) == Some(file.generation) && file.previous == witness.digest
     {
         return Ok(Reconciliation::Advance(Witness {
@@ -120,6 +123,7 @@ mod tests {
             generation: 2,
             previous: Some(previous),
         };
+
         let witness = |generation, digest| Witness {
             profile,
             binding,
@@ -138,6 +142,7 @@ mod tests {
             reconcile(profile, file, digest, Some(witness(1, Some(previous)))),
             Ok(Reconciliation::Advance(witness(2, Some(digest))))
         );
+
         for record in [
             witness(0, None),
             witness(1, Some(Hash([9; 32]))),
@@ -149,6 +154,7 @@ mod tests {
                 Err(Error::Rollback)
             );
         }
+
         let mut record = witness(2, Some(digest));
         record.profile = Hash([9; 32]);
         assert_eq!(

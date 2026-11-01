@@ -26,6 +26,7 @@ pub(super) fn LockedView() -> Element {
     let Screen::Locked(locked) = &*screen else {
         return rsx! {};
     };
+
     let busy = locked.pending.is_some();
     let create = locked.mode == Mode::Create;
     let cloud_password = create && locked.cloud_password_step;
@@ -51,6 +52,7 @@ pub(super) fn LockedView() -> Element {
         && locked.password.chars().count() < MIN_PASSWORD_CHARS;
     let submit = move |event: FormEvent| {
         event.prevent_default();
+
         if cloud_password {
             runtime::create_cloud_profile();
             return;
@@ -89,6 +91,7 @@ pub(super) fn LockedView() -> Element {
                     else if ready { {language.format(Text::EnterTheMasterPasswordToOpenVault, &[filename.to_string()])} }
                     else { {language.text(Text::OpenAVaultOrCreateOneToStoreYourPasswords)} }
                 }
+
                 if create && locked.path.is_none() && !cloud_password {
                     div { class: "storage-choices",
                         button { r#type: "button", class: "storage-choice", onclick: move |_| runtime::pick_vault(true),
@@ -105,14 +108,17 @@ pub(super) fn LockedView() -> Element {
                             span { {language.text(Text::SharedCloudVaultInStorj)} }
                         }
                     }
+
                     if locked.storage_kind == Some(StorageKind::Cloud) {
                         super::cloud_setup::CloudSetupView {}
                     }
                 }
+
                 if cloud_password {
                     p { class: "notice", {language.text(Text::YourProfileAndKeysWillBeSavedOnThisDeviceStorjHasNotBeenContactedYet)} }
                     button { r#type: "button", class: "setup-button", disabled: busy, onclick: move |_| edit_locked(state, |locked| locked.edit_cloud_connection()), {language.text(Text::BackToConnection)} }
                 }
+
                 if ready {
                     form { class: "unlock-form", onsubmit: submit,
                         label { class: "sr-only", r#for: "master-password", {language.text(Text::MasterPassword)} }
@@ -125,10 +131,12 @@ pub(super) fn LockedView() -> Element {
                                     edit_locked(state, |locked| replace_secret(&mut locked.password, &value));
                                 },
                             }
+
                             if !create {
                                 IconButton { class: "unlock-submit quiet", kind: "submit", icon: Icon::ArrowRight, label: language.text(Text::Unlock), disabled: busy }
                             }
                         }
+
                         if create {
                             label { class: "sr-only", r#for: "repeat-password", {language.text(Text::RepeatMasterPassword)} }
                             div { class: "unlock-input",
@@ -139,11 +147,13 @@ pub(super) fn LockedView() -> Element {
                                         edit_locked(state, |locked| replace_secret(&mut locked.repeat, &value));
                                     },
                                 }
+
                                 if !cloud_password {
                                     IconButton { class: "unlock-submit quiet", kind: "submit", icon: Icon::ArrowRight, label: language.text(Text::CreateVault), disabled: busy }
                                 }
                             }
                         }
+
                         if cloud_password {
                             p { class: "notice", {language.text(Text::ASeparateRecoveryPasswordProtectsYourRootKeyKeepItInASafePlace)} }
                             label { r#for: "recovery-password", {language.text(Text::RecoveryPassword)} }
@@ -170,6 +180,7 @@ pub(super) fn LockedView() -> Element {
                         }
                     }
                 }
+
                 if weak_password || locked.notice.is_some() || busy || locked.error.is_some() {
                     div { class: "unlock-feedback", aria_live: "polite",
                         if weak_password { p { class: "notice", {language.format(Text::PasswordsShorterThanCharactersAreEasierToGuess, &[MIN_PASSWORD_CHARS.to_string()])} } }
@@ -181,6 +192,7 @@ pub(super) fn LockedView() -> Element {
                                 else { {language.text(Text::CheckingPassword)} }
                             }
                         }
+
                         if let Some(error) = &locked.error { p { class: "error", role: "alert", {language.message(error)} } }
                     }
                 }
@@ -193,6 +205,7 @@ pub(super) fn LockedView() -> Element {
                 IconButton { class: "quiet", icon: Icon::FolderPlus, label: language.text(Text::CreateVault2), disabled: busy,
                     onclick: move |_| runtime::begin_create(),
                 }
+
                 if settings.read().config.last_vault.is_some() {
                     IconButton { class: "quiet", icon: Icon::FolderX, label: language.text(Text::ForgetPath), disabled: busy,
                         onclick: move |_| runtime::forget_path(),

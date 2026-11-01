@@ -56,6 +56,7 @@ pub fn App() -> Element {
                     onmousedown: move |_| dioxus::desktop::window().drag(),
                 }
             }
+
             if locked { LockedView {} } else { UnlockedView {} }
         }
     }

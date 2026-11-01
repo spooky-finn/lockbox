@@ -78,10 +78,13 @@ impl std::fmt::Debug for Attachment {
 impl Entry {
     pub fn validate_attachments(&self) -> Result<(), &'static str> {
         let mut ids = std::collections::BTreeSet::new();
+
         if self.attachments.len() > MAX_ATTACHMENTS {
             return Err("At most 16 attachments are allowed per entry");
         }
+
         let mut total = 0usize;
+
         for file in &self.attachments {
             if file.id.len() != 32
                 || !file
@@ -101,9 +104,11 @@ impl Entry {
             }
             total = total.saturating_add(file.data.len());
         }
+
         if total > MAX_ATTACHMENT_BYTES {
             return Err("Attachments must total at most 1 MiB per entry");
         }
+
         Ok(())
     }
 
@@ -113,10 +118,12 @@ impl Entry {
             name,
             data,
         });
+
         if let Err(error) = self.validate_attachments() {
             self.attachments.pop();
             return Err(error);
         }
+
         Ok(())
     }
 }
@@ -133,6 +140,7 @@ mod file_bytes {
 
     pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<u8>, D::Error> {
         let encoded = Zeroizing::new(String::deserialize(deserializer)?);
+
         if encoded.len() > super::MAX_ATTACHMENT_BYTES.div_ceil(3) * 4 {
             return Err(D::Error::custom("attachment is too large"));
         }

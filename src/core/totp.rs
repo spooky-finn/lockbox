@@ -46,6 +46,7 @@ pub fn normalize_secret(secret: &str) -> String {
 /// RFC 4648 Base32, ignoring case, spaces and trailing padding.
 pub fn decode_base32(secret: &str) -> Result<Zeroizing<Vec<u8>>, TotpError> {
     let secret = Zeroizing::new(normalize_secret(secret));
+
     if secret.is_empty() {
         return Err(TotpError::EmptySecret);
     }
@@ -53,8 +54,10 @@ pub fn decode_base32(secret: &str) -> Result<Zeroizing<Vec<u8>>, TotpError> {
     if matches!(secret.len() % 8, 1 | 3 | 6) {
         return Err(TotpError::InvalidSecret);
     }
+
     let mut bytes = Zeroizing::new(Vec::with_capacity(secret.len() * 5 / 8));
     let (mut buffer, mut bits) = (0u32, 0u32);
+
     for c in secret.bytes() {
         let value = match c {
             b'A'..=b'Z' => c - b'A',
@@ -63,6 +66,7 @@ pub fn decode_base32(secret: &str) -> Result<Zeroizing<Vec<u8>>, TotpError> {
         };
         buffer = (buffer << 5) | u32::from(value);
         bits += 5;
+
         if bits >= 8 {
             bits -= 8;
             bytes.push((buffer >> bits) as u8);
@@ -73,14 +77,18 @@ pub fn decode_base32(secret: &str) -> Result<Zeroizing<Vec<u8>>, TotpError> {
     Ok(bytes)
 }
 
+/// Checks the secret, digit count, and period before generating a code.
 pub fn validate(totp: &Totp) -> Result<(), TotpError> {
     decode_base32(&totp.secret)?;
+
     if !DIGITS.contains(&totp.digits) {
         return Err(TotpError::InvalidDigits);
     }
+
     if !PERIOD.contains(&totp.period) {
         return Err(TotpError::InvalidPeriod);
     }
+
     Ok(())
 }
 
@@ -142,11 +150,13 @@ pub fn parse_link(link: &str) -> Result<Link, TotpError> {
     let link = link.trim();
     let rest = strip_prefix_ignore_case(link, "otpauth://").ok_or(TotpError::NotTotpLink)?;
     let (kind, rest) = rest.split_once('/').ok_or(TotpError::NotTotpLink)?;
+
     match kind.to_ascii_lowercase().as_str() {
         "totp" => {}
         "hotp" => return Err(TotpError::HotpUnsupported),
         _ => return Err(TotpError::NotTotpLink),
     }
+
     let (label, query) = rest.split_once('?').unwrap_or((rest, ""));
     let label = percent_decode(label)?;
     let (mut issuer, account) = match label.split_once(':') {
@@ -156,9 +166,11 @@ pub fn parse_link(link: &str) -> Result<Link, TotpError> {
 
     let mut secret = None;
     let (mut algorithm, mut digits, mut period) = (TotpAlgorithm::Sha1, 6u8, 30u32);
+
     for pair in query.split('&').filter(|pair| !pair.is_empty()) {
         let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
         let value = percent_decode(&value.replace('+', " "))?;
+
         match key.to_ascii_lowercase().as_str() {
             "secret" => secret = Some(Zeroizing::new(value)),
             "issuer" => issuer = non_empty(&value).or(issuer),
@@ -175,6 +187,7 @@ pub fn parse_link(link: &str) -> Result<Link, TotpError> {
             _ => {}
         }
     }
+
     let secret = secret
         .filter(|secret| !secret.trim().is_empty())
         .ok_or(TotpError::MissingSecret)?;
@@ -192,6 +205,7 @@ pub fn parse_link(link: &str) -> Result<Link, TotpError> {
     })
 }
 
+/// Recognizes the otpauth scheme without parsing or validating its parameters.
 pub fn is_link(text: &str) -> bool {
     strip_prefix_ignore_case(text.trim(), "otpauth://").is_some()
 }
@@ -211,6 +225,7 @@ fn percent_decode(text: &str) -> Result<String, TotpError> {
     let bytes = text.as_bytes();
     let mut decoded = Vec::with_capacity(bytes.len());
     let mut i = 0;
+
     while i < bytes.len() {
         if bytes[i] == b'%' {
             let hex = text.get(i + 1..i + 3).ok_or(TotpError::MalformedLink)?;

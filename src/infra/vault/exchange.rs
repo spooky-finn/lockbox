@@ -42,9 +42,11 @@ impl Vault {
             .as_ref()
             .ok_or(Error::UnauthorizedDevice)?
             .clone();
+
         for (hash, bytes) in batch.objects {
             Machine::receive(&mut candidate, hash, bytes)?;
         }
+
         if candidate
             .objects
             .values()
@@ -54,6 +56,7 @@ impl Vault {
         {
             return Err(Error::ResourceBudgetExceeded.into());
         }
+
         match Machine::replay(&candidate, &device) {
             Ok(replay) => {
                 self.prepare_received(candidate, replay.ready.then_some(replay.projection))
@@ -95,6 +98,7 @@ impl Vault {
             .sync
             .replace(pending.journal);
         let previous_view = pending.view.map(|view| view.install(self));
+
         if let Err(error) = self.save_inner(false) {
             let journal =
                 std::mem::replace(&mut self.profile.as_mut().unwrap().sync, previous).unwrap();
@@ -102,6 +106,7 @@ impl Vault {
             self.pending_exchange = Some(PendingExchange { journal, view });
             return Err(error);
         }
+
         Ok(())
     }
 
@@ -122,6 +127,7 @@ impl Vault {
         if let Some(pending) = self.pending_exchange.take() {
             self.commit_received(pending)?;
         }
+
         Ok(())
     }
 
@@ -135,11 +141,14 @@ impl Vault {
         let Some(sync) = self.profile.as_mut().and_then(|p| p.sync.as_mut()) else {
             return Ok(());
         };
+
         let previous_outbox = sync.outbox.clone();
         let previous_exchange = sync.last_exchange;
+
         for hash in hashes {
             sync.outbox.remove(hash);
         }
+
         if completed {
             sync.last_exchange = Some(
                 std::time::SystemTime::now()
@@ -148,12 +157,14 @@ impl Vault {
                     .as_secs(),
             );
         }
+
         if let Err(error) = self.save_inner(false) {
             let state = self.profile.as_mut().unwrap().sync.as_mut().unwrap();
             state.outbox = previous_outbox;
             state.last_exchange = previous_exchange;
             return Err(error);
         }
+
         Ok(())
     }
 
@@ -165,13 +176,16 @@ impl Vault {
             core::sync::{Error, Machine},
             infra::sync,
         };
+
         self.recover_exchange()?;
         self.recover_sync()?;
         let profile = self.profile.as_ref().ok_or(Error::UnauthorizedDevice)?;
         let state = profile.sync.as_ref().ok_or(Error::UnauthorizedDevice)?;
+
         if let Some(error) = state.fault {
             return Err(error.into());
         }
+
         let namespace = state.namespace;
         let cancel = sync::Cancellation::default();
         let batch = sync::Discovery::for_state(state)?.download(storage, &cancel)?;
@@ -180,12 +194,15 @@ impl Vault {
         let profile = self.profile.as_ref().unwrap();
         let state = profile.sync.as_ref().unwrap();
         let replay = Machine::replay(state, &profile.sync_secret())?;
+
         if replay.role.is_none() {
             return Err(Error::UnauthorizedDevice.into());
         }
+
         if incomplete || !replay.ready {
             return Err(Error::MissingDependency.into());
         }
+
         let plan = sync::publication(state, &replay)?;
         let receipts = sync::upload(storage, namespace, &plan, &cancel)?;
         self.acknowledge_sync(&receipts, true)

@@ -10,9 +10,11 @@ pub(super) fn StatusBar() -> Element {
     let state = use_context::<Session>();
     let status = use_context::<Signal<Status>>();
     let status = status.read();
+
     if status.lock_seconds.is_none() && status.clipboard_seconds.is_none() {
         return rsx! {};
     }
+
     let editing = matches!(&*state.read(), Screen::Unlocked(workspace) if workspace.is_editing());
     rsx! {
         footer { class: "status", aria_live: "polite",
@@ -21,6 +23,7 @@ pub(super) fn StatusBar() -> Element {
                     if editing { {language.text(Text::UnsavedChangesWillBeDiscarded)} }
                 }
             }
+
             if let Some(seconds) = status.clipboard_seconds {
                 span { {language.format(Text::CopiedClipboardClearsInS, &[seconds.to_string()])} }
             }

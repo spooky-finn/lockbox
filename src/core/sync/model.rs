@@ -56,6 +56,7 @@ impl Value {
                 entry
                     .validate_attachments()
                     .map_err(|_| Error::InvalidTransaction)?;
+
                 if trim_whitespace(&entry.title).is_empty()
                     || entry.title.len() > 1024
                     || entry.username.len() > 4096
@@ -66,6 +67,7 @@ impl Value {
                 {
                     return Err(Error::InvalidTransaction);
                 }
+
                 if let Some(totp) = &entry.totp
                     && (totp.secret.len() > 4096
                         || !totp
@@ -76,6 +78,7 @@ impl Value {
                 {
                     return Err(Error::InvalidTransaction);
                 }
+
                 if let Some(parent) = &entry.folder_id {
                     validate_id(parent)?;
                 }
@@ -84,11 +87,13 @@ impl Value {
                 if trim_whitespace(&folder.name).is_empty() || folder.name.chars().count() > 128 {
                     return Err(Error::InvalidTransaction);
                 }
+
                 if let Some(parent) = &folder.parent_id {
                     validate_id(parent)?;
                 }
             }
         }
+
         Ok(())
     }
 }
@@ -170,6 +175,7 @@ impl Projection {
                 if r.versions.len() != 1 {
                     return None;
                 }
+
                 match &r.versions[0].value {
                     Some(Value::Entry(entry)) => Some(entry.clone()),
                     _ => None,
@@ -185,6 +191,7 @@ impl Projection {
                 if r.versions.len() != 1 {
                     return None;
                 }
+
                 match &r.versions[0].value {
                     Some(Value::Folder(folder)) => Some(folder.clone()),
                     _ => None,
@@ -202,22 +209,28 @@ impl Projection {
             kind,
             id: id.to_owned(),
         };
+
         let mut bad = BTreeSet::new();
         let mut names = BTreeMap::new();
+
         for folder in &folders {
             let name = trim_whitespace(&folder.name).to_ascii_lowercase();
             let key = (folder.parent_id.clone(), name);
+
             if let Some(previous) = names.insert(key, folder.id.as_str()) {
                 bad.insert(entity(EntityKind::Folder, previous));
                 bad.insert(entity(EntityKind::Folder, &folder.id));
             }
+
             let mut path = BTreeSet::new();
             let mut current = Some(folder.id.as_str());
+
             while let Some(id) = current {
                 if !path.insert(id) || path.len() > 64 {
                     bad.insert(entity(EntityKind::Folder, &folder.id));
                     break;
                 }
+
                 let Some(next) = by_id.get(id) else {
                     bad.insert(entity(EntityKind::Folder, &folder.id));
                     break;
@@ -225,6 +238,7 @@ impl Projection {
                 current = next.parent_id.as_deref();
             }
         }
+
         for entry in self.entries() {
             if entry.folder_id.as_ref().is_some_and(|id| {
                 !by_id.contains_key(id.as_str()) || bad.contains(&entity(EntityKind::Folder, id))
@@ -239,13 +253,17 @@ impl Projection {
         if self.records.len() > 100_000 {
             return Err(Error::ResourceBudgetExceeded);
         }
+
         if !super::wire::sorted_unique(&self.records.iter().map(|r| &r.entity).collect::<Vec<_>>())
         {
             return Err(Error::InvalidTransaction);
         }
+
         let mut revisions = BTreeSet::new();
+
         for record in &self.records {
             validate_entity(&record.entity)?;
+
             if record.versions.is_empty()
                 || record.versions.len() > super::MAX_OBJECTS
                 || !super::wire::sorted_unique(
@@ -258,10 +276,12 @@ impl Projection {
             {
                 return Err(Error::InvalidTransaction);
             }
+
             for version in &record.versions {
                 if !revisions.insert(version.revision) {
                     return Err(Error::InvalidTransaction);
                 }
+
                 if let Some(value) = &version.value {
                     if value.entity() != record.entity {
                         return Err(Error::InvalidTransaction);
@@ -270,6 +290,7 @@ impl Projection {
                 }
             }
         }
+
         Ok(())
     }
 
@@ -293,6 +314,7 @@ fn validate_id(id: &str) -> Result<()> {
     {
         return Err(Error::InvalidTransaction);
     }
+
     Ok(())
 }
 
@@ -306,17 +328,21 @@ impl Transaction {
         if self.mutations.len() > MAX_MUTATIONS {
             return Err(Error::ResourceBudgetExceeded);
         }
+
         if !super::wire::sorted_unique(
             &self.mutations.iter().map(|m| &m.entity).collect::<Vec<_>>(),
         ) {
             return Err(Error::InvalidTransaction);
         }
+
         for mutation in &self.mutations {
             validate_entity(&mutation.entity)?;
             let heads = before.heads(&mutation.entity);
+
             if heads != mutation.bases {
                 return Err(Error::InvalidTransaction);
             }
+
             let old = before.records.iter().find(|r| r.entity == mutation.entity);
             let live = old.is_some_and(|r| r.versions.len() == 1 && r.versions[0].value.is_some());
             let valid = match mutation.action {
@@ -327,9 +353,11 @@ impl Transaction {
                 Action::Restore => heads.len() == 1 && !live && mutation.value.is_some(),
                 Action::Resolve => heads.len() >= 2,
             };
+
             if !valid {
                 return Err(Error::InvalidTransaction);
             }
+
             if let Some(value) = &mutation.value {
                 if value.entity() != mutation.entity {
                     return Err(Error::InvalidTransaction);
@@ -337,8 +365,10 @@ impl Transaction {
                 value.validate()?;
             }
         }
+
         let after = project(before, [(Hash::default(), Hash::default(), self)]);
         let after_conflicts = after.structural_conflicts();
+
         if !after_conflicts.is_subset(&before.structural_conflicts())
             || self
                 .mutations
@@ -347,12 +377,14 @@ impl Transaction {
         {
             return Err(Error::InvalidTransaction);
         }
+
         Ok(())
     }
 
     /// Used by existing record/folder workflows. Conflicts require explicit resolve().
     pub fn diff(before: &Projection, entries: &[Entry], folders: &[Folder]) -> Result<Self> {
         let mut desired = BTreeMap::new();
+
         for value in entries
             .iter()
             .cloned()
@@ -363,7 +395,9 @@ impl Transaction {
                 return Err(Error::InvalidTransaction);
             }
         }
+
         let mut mutations = Vec::new();
+
         for record in &before.records {
             if record.versions.len() > 1 {
                 if desired.remove(&record.entity).is_some() {
@@ -371,8 +405,10 @@ impl Transaction {
                 }
                 continue;
             }
+
             let previous = &record.versions[0].value;
             let next = desired.remove(&record.entity);
+
             if *previous == next {
                 continue;
             }
@@ -388,6 +424,7 @@ impl Transaction {
                 value: next,
             });
         }
+
         for (entity, value) in desired {
             mutations.push(Mutation {
                 entity,
@@ -433,6 +470,7 @@ pub(super) fn project<'a>(
         })
         .collect();
     let mut removed: BTreeMap<Entity, BTreeSet<Revision>> = BTreeMap::new();
+
     for (change, author, transaction) in changes {
         for (index, mutation) in transaction.mutations.iter().enumerate() {
             removed

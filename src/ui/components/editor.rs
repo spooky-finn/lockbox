@@ -23,9 +23,11 @@ pub(super) fn DraftView() -> Element {
     let Screen::Unlocked(unlocked) = &*screen else {
         return rsx! {};
     };
+
     let Some(draft) = &unlocked.draft else {
         return rsx! {};
     };
+
     let entry = &draft.entry;
     let icon = icons::catalog().for_entry(entry);
     rsx! {
@@ -54,6 +56,7 @@ pub(super) fn DraftView() -> Element {
                     onclick: move |_| edit_draft(state, |d| d.generator_open = !d.generator_open),
                 }
             }
+
             if draft.generator_open { GeneratorView {} }
             label { r#for: "entry-url", "URL" }
             input { id: "entry-url", value: "{entry.url}", oninput: move |e| set_field(state, Field::Url, e.value()) }
@@ -63,8 +66,10 @@ pub(super) fn DraftView() -> Element {
                 IconButton { icon: Icon::Image, label: language.text(Text::ChooseIcon), expanded: Some(draft.icon_picker_open),
                     onclick: move |_| edit_draft(state, |d| d.icon_picker_open = !d.icon_picker_open),
                 }
+
                 if entry.icon.is_some() { IconButton { icon: Icon::Reset, label: language.text(Text::ChooseIconAutomatically), onclick: move |_| edit_draft(state, |d| d.entry.icon = None) } }
             }
+
             if draft.icon_picker_open { IconPicker {} }
             label { r#for: "entry-notes", {language.text(Text::Note)} }
             textarea { id: "entry-notes", rows: 3, value: "{entry.notes}", oninput: move |e| set_field(state, Field::Notes, e.value()) }

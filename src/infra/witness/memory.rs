@@ -34,6 +34,7 @@ impl WitnessStore for MemoryWitness {
     fn acquire(&self, device: Hash) -> Result<Box<dyn WitnessLease>> {
         let mut state = self.0.lock().map_err(|_| Error::Unavailable)?;
         let slot = state.slots.entry(device).or_default();
+
         if slot.leased {
             return Err(Error::InUse);
         }
@@ -57,6 +58,7 @@ impl WitnessLease for Lease {
         if state.fail_reads {
             return Err(Error::Unavailable);
         }
+
         Ok(state.slots.get(&self.device).and_then(|slot| slot.witness))
     }
 
@@ -69,10 +71,12 @@ impl WitnessLease for Lease {
             state.fail_writes -= 1;
             return Err(Error::Unavailable);
         }
+
         let slot = state
             .slots
             .get_mut(&self.device)
             .ok_or(Error::Unavailable)?;
+
         if slot.witness != expected {
             return Err(Error::Rollback);
         }
@@ -82,6 +86,7 @@ impl WitnessLease for Lease {
             state.lose_writes -= 1;
             return Err(Error::Unavailable);
         }
+
         Ok(())
     }
 }

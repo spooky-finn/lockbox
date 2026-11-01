@@ -62,6 +62,7 @@ impl Protection {
         if let Err(Error::InUse) = protection.ensure_ready(path) {
             return Err(Error::InUse);
         }
+
         Ok(protection)
     }
 
@@ -74,6 +75,7 @@ impl Protection {
             self.error = Some(Error::Unavailable);
             return Err(Error::Unavailable);
         }
+
         self.checked(path).map(|_| ())
     }
 
@@ -93,6 +95,7 @@ impl Protection {
         if self.lease.is_none() {
             self.lease = Some(self.store.acquire(self.device)?);
         }
+
         let lease = self.lease.as_mut().ok_or(Error::Unavailable)?;
         let saved = lease.load()?;
         let Some((file, digest)) = self.file else {
@@ -103,9 +106,11 @@ impl Protection {
                 None => Err(Error::MissingBinding),
             };
         };
+
         if digest_file(path)? != digest {
             return Err(Error::Rollback);
         }
+
         match anchor::reconcile(self.profile, file, digest, saved)? {
             Reconciliation::Current => saved.ok_or(Error::MissingBinding),
             Reconciliation::Advance(next) => {
@@ -148,10 +153,12 @@ pub(super) fn digest_file(path: &Path) -> Result<Hash> {
     let mut bytes = [0; 32 * 1024];
     loop {
         let count = file.read(&mut bytes).map_err(|_| Error::Unavailable)?;
+
         if count == 0 {
             break;
         }
         digest.update(&bytes[..count]);
     }
+
     Ok(Hash(digest.finalize().into()))
 }

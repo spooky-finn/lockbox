@@ -14,16 +14,20 @@ pub(crate) fn read(path: &Path) -> Result<(String, Zeroizing<Vec<u8>>), String> 
         .ok_or("Invalid attachment file name")?
         .to_owned();
     let file = File::open(path).map_err(|e| e.to_string())?;
+
     if !file.metadata().map_err(|e| e.to_string())?.is_file() {
         return Err("Select a regular file".into());
     }
+
     let mut data = Zeroizing::new(Vec::new());
     file.take(MAX_ATTACHMENT_BYTES as u64 + 1)
         .read_to_end(&mut data)
         .map_err(|e| e.to_string())?;
+
     if data.len() > MAX_ATTACHMENT_BYTES {
         return Err("Attachments must total at most 1 MiB per entry".into());
     }
+
     Ok((name, data))
 }
 
@@ -37,10 +41,12 @@ pub(crate) fn export(path: &Path, data: &[u8]) -> Result<(), String> {
     }
     // Never follow a symlink or silently overwrite an existing file.
     let mut file = options.open(path).map_err(|e| e.to_string())?;
+
     if let Err(error) = file.write_all(data).and_then(|_| file.sync_all()) {
         let _ = std::fs::remove_file(path);
         return Err(error.to_string());
     }
+
     Ok(())
 }
 

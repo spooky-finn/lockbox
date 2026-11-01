@@ -32,22 +32,28 @@ pub(crate) fn validate(folders: &[Folder], entries: &[Entry]) -> Result<(), &'st
         .iter()
         .map(|folder| (folder.id.as_str(), folder))
         .collect();
+
     if by_id.len() != folders.len() || folders.iter().any(|folder| folder.id.is_empty()) {
         return Err("Duplicate or empty folder ID");
     }
+
     let mut names = BTreeSet::new();
+
     for folder in folders {
         if folder.name.trim().is_empty() || folder.name.chars().count() > MAX_NAME_CHARS {
             return Err("Folder name must contain 1–128 characters");
         }
+
         if !names.insert((
             folder.parent_id.as_deref(),
             folder.name.trim().to_lowercase(),
         )) {
             return Err("A folder with this name already exists here");
         }
+
         let mut current = Some(folder.id.as_str());
         let mut visited = BTreeSet::new();
+
         while let Some(id) = current {
             if !visited.insert(id) || visited.len() > MAX_DEPTH {
                 return Err("A folder cannot contain itself or exceed 64 levels");
@@ -59,6 +65,7 @@ pub(crate) fn validate(folders: &[Folder], entries: &[Entry]) -> Result<(), &'st
                 .as_deref();
         }
     }
+
     if entries.iter().any(|entry| {
         entry
             .folder_id
@@ -67,6 +74,7 @@ pub(crate) fn validate(folders: &[Folder], entries: &[Entry]) -> Result<(), &'st
     }) {
         return Err("Entry folder not found");
     }
+
     Ok(())
 }
 
@@ -74,10 +82,12 @@ pub(crate) fn validate(folders: &[Folder], entries: &[Entry]) -> Result<(), &'st
 pub(crate) fn ancestors<'a>(folders: &'a [Folder], id: &str) -> Vec<&'a Folder> {
     let mut path = Vec::new();
     let mut current = Some(id);
+
     while let Some(id) = current {
         let Some(folder) = folders.iter().find(|folder| folder.id == id) else {
             break;
         };
+
         if path.iter().any(|item: &&Folder| item.id == id) || path.len() == MAX_DEPTH {
             break;
         }

@@ -57,7 +57,9 @@ impl TouchId {
         if self.pending.is_some() {
             return None;
         }
+
         let id = vault.id();
+
         if wanted {
             let (sender, receiver) = mpsc::channel();
             let key = vault.export_key();
@@ -81,6 +83,7 @@ impl TouchId {
             Err(TryRecvError::Empty) => return None,
             Err(TryRecvError::Disconnected) => Err("Enabling Touch ID was interrupted".into()),
         };
+
         self.pending = None;
         Some(result.and_then(|()| {
             self.enabled = true;

@@ -17,6 +17,7 @@ pub(super) fn Toolbar() -> Element {
     let Screen::Unlocked(unlocked) = &*screen else {
         return rsx! {};
     };
+
     let filename = unlocked
         .vault
         .path()

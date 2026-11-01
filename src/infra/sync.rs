@@ -115,6 +115,7 @@ pub fn publication(
     // Decode each eligible object once, then order only the dependency edges.
     // Independent objects may have any order; hashes never choose a data winner.
     let mut pending = BTreeMap::new();
+
     for hash in &state.outbox {
         let bytes = state
             .objects
@@ -122,17 +123,21 @@ pub fn publication(
             .ok_or(TransportError::InvalidResponse)?;
         let object = crate::core::sync::decode::<crate::core::sync::Object>(&bytes.0)
             .map_err(TransportError::Verification)?;
+
         if matches!(object, crate::core::sync::Object::Control(_))
             || (replay.accepted.contains(hash) && !replay.excluded.contains(hash))
         {
             pending.insert(*hash, (bytes.clone(), object.dependencies()));
         }
     }
+
     let mut incoming = BTreeMap::new();
     let mut children: BTreeMap<Hash, Vec<Hash>> = BTreeMap::new();
     let mut ready = BTreeSet::new();
+
     for (hash, (_, dependencies)) in &pending {
         let mut count = 0;
+
         for dependency in dependencies
             .iter()
             .filter(|dependency| pending.contains_key(dependency))
@@ -141,24 +146,31 @@ pub fn publication(
             children.entry(*dependency).or_default().push(*hash);
         }
         incoming.insert(*hash, count);
+
         if count == 0 {
             ready.insert(*hash);
         }
     }
+
     let mut ordered = Vec::new();
+
     while let Some(hash) = ready.pop_first() {
         ordered.push((hash, pending.remove(&hash).unwrap().0));
+
         for child in children.remove(&hash).unwrap_or_default() {
             let count = incoming.get_mut(&child).unwrap();
             *count -= 1;
+
             if *count == 0 {
                 ready.insert(child);
             }
         }
     }
+
     if !pending.is_empty() {
         return Err(TransportError::Verification(Error::InvalidTransaction));
     }
+
     Ok(ordered)
 }
 
@@ -169,11 +181,13 @@ pub fn upload(
     cancel: &Cancellation,
 ) -> Result<Vec<Hash>> {
     let mut receipts = Vec::new();
+
     for (hash, bytes) in plan {
         cancel.check()?;
         storage.put(namespace, *hash, &bytes.0)?;
         receipts.push(*hash);
     }
+
     Ok(receipts)
 }
 

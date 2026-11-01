@@ -33,6 +33,7 @@ struct Lease {
 impl WitnessLease for Lease {
     fn load(&self) -> Result<Option<Witness>> {
         self.lock.check()?;
+
         match get_generic_password(SERVICE, &self.account) {
             Ok(bytes) => directory::decode(&bytes).map(Some),
             Err(error) if error.code() == -25300 => Ok(None), // errSecItemNotFound only
@@ -44,6 +45,7 @@ impl WitnessLease for Lease {
         if self.load()? != expected {
             return Err(Error::Rollback);
         }
+
         let bytes = serde_json::to_vec(&next).map_err(|_| Error::Unavailable)?;
         self.lock.check()?;
         set_generic_password(SERVICE, &self.account, &bytes).map_err(|_| Error::Unavailable)
@@ -66,6 +68,7 @@ mod tests {
                 }
             }
         }
+
         let directory = tempfile::tempdir().unwrap();
         let mut bytes = [0; 32];
         getrandom::fill(&mut bytes).unwrap();

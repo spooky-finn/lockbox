@@ -79,6 +79,7 @@ impl Security {
                 None => return Ok(()),
             },
         };
+
         self.clipboard
             .copy(&text, Instant::now())
             .map_err(|error| format!("Could not copy: {error}"))

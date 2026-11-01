@@ -14,6 +14,7 @@ pub(crate) fn use_language() -> Language {
 impl Language {
     pub(crate) fn text(self, key: Text) -> &'static str {
         let (ru, en) = key.translations();
+
         match self {
             Self::English => en,
             Self::Russian => ru,
@@ -33,9 +34,11 @@ impl Language {
                 Self::English => (ru, en),
                 Self::Russian => (en, ru),
             };
+
             if source == message {
                 return translated.to_owned();
             }
+
             if let Some(values) = captures(source, message) {
                 let values = values
                     .into_iter()
@@ -59,10 +62,12 @@ impl Language {
 fn interpolate(template: &str, values: &[String]) -> String {
     let mut output = String::new();
     let mut rest = template;
+
     for value in values {
         let Some((prefix, placeholder)) = rest.split_once('{') else {
             break;
         };
+
         let Some((_, suffix)) = placeholder.split_once('}') else {
             break;
         };
@@ -80,6 +85,7 @@ fn captures<'a>(template: &str, mut message: &'a str) -> Option<Vec<&'a str>> {
     let mut values = Vec::new();
     loop {
         let (_, suffix) = template.split_once('}')?;
+
         if let Some((separator, next)) = suffix.split_once('{') {
             let (value, rest) = message.split_once(separator)?;
             values.push(value);
@@ -99,6 +105,7 @@ mod tests {
     #[test]
     fn catalog_is_unique_and_templates_keep_the_same_arguments() {
         let mut sources = std::collections::BTreeSet::new();
+
         for key in CATALOG {
             let (ru, en) = key.translations();
             assert!(sources.insert(ru), "duplicate translation: {ru}");

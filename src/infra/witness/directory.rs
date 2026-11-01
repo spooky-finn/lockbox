@@ -43,6 +43,7 @@ impl WitnessLease for Lease {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
             Err(_) => return Err(Error::Unavailable),
         };
+
         let mut bytes = Vec::new();
         file.take(4097)
             .read_to_end(&mut bytes)
@@ -54,14 +55,17 @@ impl WitnessLease for Lease {
         if self.load()? != expected {
             return Err(Error::Rollback);
         }
+
         let bytes = serde_json::to_vec(&next).map_err(|_| Error::Unavailable)?;
         self.lock.check()?;
         let temporary = self.path.with_extension("tmp");
+
         match fs::remove_file(&temporary) {
             Ok(()) => {}
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
             Err(_) => return Err(Error::Unavailable),
         }
+
         let mut file = options()
             .create_new(true)
             .open(&temporary)
@@ -92,12 +96,14 @@ impl SignerLock {
     pub(super) fn check(&self) -> Result<()> {
         let current = fs::symlink_metadata(&self.path).map_err(|_| Error::Unavailable)?;
         let held = self.file.metadata().map_err(|_| Error::Unavailable)?;
+
         if !current.is_file() {
             return Err(Error::Unavailable);
         }
         #[cfg(unix)]
         {
             use std::os::unix::fs::MetadataExt;
+
             if current.dev() != held.dev() || current.ino() != held.ino() {
                 return Err(Error::Unavailable);
             }
@@ -125,6 +131,7 @@ pub(super) fn lock(root: &Path, device: Hash) -> Result<SignerLock> {
         // FILE_SHARE_READ | FILE_SHARE_WRITE; the lock alone excludes deletion.
         lease_options.share_mode(0x1 | 0x2);
     }
+
     let file = lease_options
         .truncate(false)
         .open(&path)

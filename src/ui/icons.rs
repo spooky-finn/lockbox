@@ -50,8 +50,10 @@ impl Catalog {
             .collect();
         let mut by_slug = HashMap::new();
         let mut by_domain = HashMap::new();
+
         for (index, icon) in icons.iter().enumerate() {
             by_slug.insert(icon.slug.clone(), index);
+
             for domain in &icon.domains {
                 by_domain.insert(domain.clone(), index);
             }
@@ -85,11 +87,13 @@ impl Catalog {
             if let Some(&index) = self.by_domain.get(candidate) {
                 return Some(&self.icons[index]);
             }
+
             if candidate == site {
                 break;
             }
             candidate = candidate.split_once('.')?.1;
         }
+
         self.get(site.split('.').next()?)
     }
 
@@ -98,6 +102,7 @@ impl Catalog {
         if let Some(slug) = &entry.icon {
             return self.get(slug);
         }
+
         self.for_url(&entry.url)
             .or_else(|| self.get(&normalized(&entry.title)))
     }
@@ -105,9 +110,11 @@ impl Catalog {
     /// Icons whose title or slug contains the query, best matches first.
     pub fn search(&self, query: &str, limit: usize) -> Vec<&Icon> {
         let query = normalized(query);
+
         if query.is_empty() {
             return Vec::new();
         }
+
         let mut found: Vec<&Icon> = self
             .icons
             .iter()

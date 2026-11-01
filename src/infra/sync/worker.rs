@@ -31,6 +31,7 @@ impl<T: Send + 'static> Worker<T> {
             let reply = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 task(task_cancel.clone())
             }));
+
             if task_cancel.check().is_ok()
                 && let Ok(reply) = reply
             {
@@ -99,6 +100,7 @@ mod tests {
         assert!(cancel.check().is_err());
         release.send(()).unwrap();
         let deadline = Instant::now() + Duration::from_secs(2);
+
         while !finished.load(Ordering::Acquire) && Instant::now() < deadline {
             std::thread::yield_now();
         }
@@ -110,6 +112,7 @@ mod tests {
     fn provider_panic_becomes_a_worker_failure() {
         let mut worker = Worker::<()>::spawn(|_| panic!("fixture provider failure"));
         let deadline = Instant::now() + Duration::from_secs(2);
+
         while !worker.is_finished() && Instant::now() < deadline {
             std::thread::yield_now();
         }

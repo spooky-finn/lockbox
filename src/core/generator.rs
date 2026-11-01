@@ -64,6 +64,7 @@ impl Options {
         .collect()
     }
 
+    /// Counts the available characters after applying the ambiguity filter.
     pub fn alphabet_size(&self) -> usize {
         self.sets().iter().map(Vec::len).sum()
     }
@@ -82,15 +83,20 @@ pub fn generate(options: &Options) -> Result<Zeroizing<String>, GeneratorError> 
     if !LENGTH.contains(&options.length) {
         return Err(GeneratorError::InvalidLength);
     }
+
     let sets = options.sets();
+
     if sets.is_empty() {
         return Err(GeneratorError::NoCharacters);
     }
+
     let alphabet: Vec<char> = sets.iter().flatten().copied().collect();
     let mut chars = Zeroizing::new(Vec::with_capacity(options.length));
+
     for set in &sets {
         chars.push(set[uniform(set.len())]);
     }
+
     while chars.len() < options.length {
         chars.push(alphabet[uniform(alphabet.len())]);
     }
@@ -98,6 +104,7 @@ pub fn generate(options: &Options) -> Result<Zeroizing<String>, GeneratorError> 
     for i in (1..chars.len()).rev() {
         chars.swap(i, uniform(i + 1));
     }
+
     Ok(Zeroizing::new(chars.iter().collect()))
 }
 
@@ -110,6 +117,7 @@ fn uniform(bound: usize) -> usize {
         let mut bytes = [0u8; 4];
         getrandom::fill(&mut bytes).expect("operating system random generator");
         let value = u32::from_le_bytes(bytes);
+
         if value < limit {
             return (value % bound) as usize;
         }

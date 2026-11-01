@@ -36,6 +36,7 @@ pub(super) fn use_runtime() -> Session {
 
     dioxus::desktop::use_wry_event_handler(move |event, _| {
         use dioxus::desktop::tao::event::{Event, WindowEvent};
+
         if matches!(
             event,
             Event::WindowEvent {
@@ -66,6 +67,7 @@ pub(super) fn tick() {
         Screen::Locked(form) => form.pending.is_some() || form.auto_touch_id,
         Screen::Unlocked(workspace) => workspace.touch_id.pending.is_some(),
     };
+
     if pending {
         poll_workers();
     }
@@ -73,10 +75,12 @@ pub(super) fn tick() {
         let mut state = consume_context::<Session>();
         // Avoid notifying the whole UI at 10 Hz while the network worker waits.
         let should_tick = matches!(&*state.peek(), Screen::Unlocked(u) if u.sync.needs_tick_for(&u.vault, u.is_editing()));
+
         if should_tick {
             state.with_mut(|screen| {
                 if let Screen::Unlocked(workspace) = screen {
                     let editing = workspace.is_editing();
+
                     if let Some(error) = workspace.sync.tick(&mut workspace.vault, editing) {
                         workspace.error = Some(error);
                     }
@@ -86,6 +90,7 @@ pub(super) fn tick() {
     }
     publish_status();
     let now = unix_now();
+
     if *clock.peek() != now {
         clock.set(now);
     }
@@ -109,6 +114,7 @@ fn check_lock() {
     let state = consume_context::<Session>();
     let native = consume_context::<SecurityHandle>();
     let reason = native.borrow().lock_reason();
+
     if matches!(&*state.peek(), Screen::Unlocked(_))
         && let Some(reason) = reason
     {
@@ -126,6 +132,7 @@ pub(super) fn publish_status() {
     let native = consume_context::<SecurityHandle>();
     let mut status = consume_context::<Signal<Status>>();
     let next = native.borrow().status();
+
     if *status.peek() != next {
         status.set(next);
     }
@@ -137,9 +144,11 @@ pub(super) fn poll_workers() {
     let hardware = consume_context::<BiometricProvider>();
     let native = consume_context::<SecurityHandle>();
     let mut screen = state.write();
+
     match &mut *screen {
         Screen::Locked(form) => {
             let language = settings.peek().config.language;
+
             if let Some(opened) = form.poll(hardware.for_language(language)) {
                 screen.open(
                     opened,
@@ -174,14 +183,17 @@ pub(super) fn create_cloud_profile() {
         let Screen::Locked(form) = &mut *screen else {
             return;
         };
+
         if form.pending.is_some() || !form.validate_creation() {
             return;
         }
     }
+
     let path = rfd::FileDialog::new()
         .add_filter("lockbox", &["lbx"])
         .set_file_name("profile.lbx")
         .save_file();
+
     if let Some(path) = path
         && let Screen::Locked(form) = &mut *state.write()
     {
@@ -197,6 +209,7 @@ pub(super) fn pick_vault(create: bool) {
     } else {
         dialog.pick_file()
     };
+
     if let Some(path) = path {
         let mut state = consume_context::<Session>();
         let settings = consume_context::<Signal<Settings>>();
@@ -206,6 +219,7 @@ pub(super) fn pick_vault(create: bool) {
         } else {
             Locked::new(Some(path)).offer_touch_id(&settings.peek().config, &*hardware.0, false)
         };
+
         if create {
             form.mode = Mode::Create;
             form.storage_kind = Some(StorageKind::Local);
@@ -228,6 +242,7 @@ pub(super) fn set_touch_id(wanted: bool) {
     let mut settings = consume_context::<Signal<Settings>>();
     let hardware = consume_context::<BiometricProvider>();
     let biometrics = hardware.for_language(settings.peek().config.language);
+
     if let Screen::Unlocked(workspace) = &mut *state.write() {
         workspace.error =
             workspace
@@ -240,6 +255,7 @@ pub(super) fn set_auto_lock(minutes: u32) {
     if !autolock::CHOICES.contains(&minutes) {
         return;
     }
+
     let mut settings = consume_context::<Signal<Settings>>();
     let mut state = consume_context::<Session>();
     let native = consume_context::<SecurityHandle>();
@@ -248,6 +264,7 @@ pub(super) fn set_auto_lock(minutes: u32) {
         .borrow_mut()
         .auto_lock
         .set_minutes(minutes, Instant::now(), SystemTime::now());
+
     if let Screen::Unlocked(workspace) = &mut *state.write() {
         workspace.error = settings.peek().save().err();
     }
@@ -258,6 +275,7 @@ pub(super) fn set_language(language: crate::core::language::Language) {
     let mut settings = consume_context::<Signal<Settings>>();
     let mut state = consume_context::<Session>();
     settings.write().config.language = language;
+
     if let Err(error) = settings.peek().save() {
         match &mut *state.write() {
             Screen::Locked(form) => form.error = Some(error),
@@ -269,6 +287,7 @@ pub(super) fn set_language(language: crate::core::language::Language) {
 pub(super) fn copy(field: CopyField) {
     let mut state = consume_context::<Session>();
     let native = consume_context::<SecurityHandle>();
+
     if let Screen::Unlocked(workspace) = &mut *state.write()
         && let Some(entry) = workspace.selected_entry()
     {
@@ -283,19 +302,24 @@ pub(super) fn add_attachment() {
         Screen::Unlocked(u) => u.draft.as_ref().map(|d| d.entry.id.clone()),
         _ => None,
     };
+
     let Some(draft_id) = draft_id else {
         return;
     };
+
     let Some(path) = rfd::FileDialog::new().pick_file() else {
         return;
     };
+
     let mut screen = state.write();
     let Screen::Unlocked(u) = &mut *screen else {
         return;
     };
+
     let Some(draft) = &mut u.draft else {
         return;
     };
+
     if draft.entry.id != draft_id {
         return;
     }
@@ -320,19 +344,24 @@ pub(super) fn export_attachment(id: &str) {
         }),
         _ => None,
     };
+
     let Some((entry_id, name)) = selected else {
         return;
     };
+
     let Some(path) = rfd::FileDialog::new().set_file_name(&name).save_file() else {
         return;
     };
+
     let mut screen = state.write();
     let Screen::Unlocked(u) = &mut *screen else {
         return;
     };
+
     let Some(entry) = u.selected_entry().filter(|e| e.id == entry_id) else {
         return;
     };
+
     let Some(file) = entry.attachments.iter().find(|f| f.id == id) else {
         return;
     };

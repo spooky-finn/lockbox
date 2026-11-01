@@ -132,30 +132,37 @@ impl SpaceSync {
     pub fn tick(&mut self, vault: &mut Vault, editing: bool) -> Option<String> {
         let state = vault.sync_state()?;
         let scope = Scope::from(state);
+
         if self.scope != Some(scope) {
             if self.scope.is_some() {
                 self.worker = None;
                 self.stopped = false;
                 self.status = Status::Saved;
             }
+
             self.scope = Some(scope);
             self.retry();
         }
+
         if state.fault.is_some() {
             self.freeze();
             return None;
         }
+
         if vault.has_pending_exchange() {
             self.worker = None;
             self.status = Status::Incomplete;
         }
+
         if vault.signing_error().is_some() {
             self.worker = None;
             self.status = Status::Recovery;
         }
+
         if editing {
             return None;
         }
+
         self.advance(vault)
             .err()
             .map(|error| self.on_failure(vault, error))
@@ -164,10 +171,12 @@ impl SpaceSync {
     fn advance(&mut self, vault: &mut Vault) -> VaultResult<()> {
         vault.ensure_profile_writable()?;
         vault.recover_exchange()?;
+
         if let Some(worker) = &mut self.worker {
             let Some(result) = worker.take() else {
                 return Ok(());
             };
+
             self.worker = None;
             let reply = result.map_err(|_| TransportError::Unavailable)??;
             return match reply {
@@ -175,9 +184,11 @@ impl SpaceSync {
                 Reply::Uploaded(receipts) => self.uploaded(vault, receipts),
             };
         }
+
         if self.schedule.is_due(Instant::now()) {
             self.start_download(vault)?;
         }
+
         Ok(())
     }
 
@@ -187,16 +198,19 @@ impl SpaceSync {
         let replay = vault
             .sync_replay()?
             .ok_or(crate::core::sync::Error::UnauthorizedDevice)?;
+
         if replay.role.is_none() {
             self.status = Status::Removed;
             self.schedule.defer(Instant::now(), RECOVERY_INTERVAL);
             return Ok(());
         }
+
         if !replay.ready || incomplete {
             self.status = Status::Incomplete;
             self.schedule.defer(Instant::now(), INCOMPLETE_INTERVAL);
             return Ok(());
         }
+
         let state = vault
             .sync_state()
             .ok_or(crate::core::sync::Error::UnauthorizedDevice)?;
@@ -214,12 +228,15 @@ impl SpaceSync {
         let replay = vault
             .sync_replay()?
             .ok_or(crate::core::sync::Error::UnauthorizedDevice)?;
+
         if replay.role.is_none() {
             return Err(crate::core::sync::Error::UnauthorizedDevice.into());
         }
+
         if !replay.ready {
             return Err(crate::core::sync::Error::MissingDependency.into());
         }
+
         let state = vault
             .sync_state()
             .ok_or(crate::core::sync::Error::UnauthorizedDevice)?;
@@ -242,6 +259,7 @@ impl SpaceSync {
         } else {
             Status::Synced
         };
+
         Ok(())
     }
 
@@ -282,6 +300,7 @@ impl SpaceSync {
         let persisted_fault = vault
             .sync_state()
             .is_some_and(|state| state.fault.is_some());
+
         if persisted_fault || matches!(&error, VaultError::Sync(fault) if fault.is_history_fault())
         {
             self.freeze();

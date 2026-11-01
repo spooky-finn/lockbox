@@ -18,6 +18,7 @@ pub(crate) fn validate(
     secret: &str,
 ) -> Result<url::Url, FieldError> {
     let parsed = url::Url::parse(endpoint).map_err(|_| FieldError::EndpointSyntax)?;
+
     if endpoint
         .chars()
         .any(|c| c.is_whitespace() || c.is_control())
@@ -33,6 +34,7 @@ pub(crate) fn validate(
     }
 
     let bucket = bucket.as_bytes();
+
     if !(3..=63).contains(&bucket.len())
         || !bucket.first().is_some_and(u8::is_ascii_alphanumeric)
         || !bucket.last().is_some_and(u8::is_ascii_alphanumeric)
@@ -51,5 +53,6 @@ pub(crate) fn validate(
             return Err(error);
         }
     }
+
     Ok(parsed)
 }

@@ -25,6 +25,7 @@ impl std::fmt::Display for Hash {
         for byte in self.0 {
             write!(f, "{byte:02x}")?;
         }
+
         Ok(())
     }
 }
@@ -39,11 +40,14 @@ impl std::str::FromStr for Hash {
         {
             return Err(Error::InvalidEncoding);
         }
+
         let mut bytes = [0; 32];
+
         for (index, byte) in bytes.iter_mut().enumerate() {
             *byte = u8::from_str_radix(&s[index * 2..index * 2 + 2], 16)
                 .map_err(|_| Error::InvalidEncoding)?;
         }
+
         Ok(Self(bytes))
     }
 }
@@ -73,9 +77,11 @@ impl<'de> Deserialize<'de> for Counter {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
         let s = String::deserialize(deserializer)?;
         let value = s.parse::<u64>().map_err(serde::de::Error::custom)?;
+
         if value.to_string() != s {
             return Err(serde::de::Error::custom("noncanonical counter"));
         }
+
         Ok(Self(value))
     }
 }
@@ -94,9 +100,11 @@ impl<'de> Deserialize<'de> for Blob {
         let bytes = URL_SAFE_NO_PAD
             .decode(&s)
             .map_err(serde::de::Error::custom)?;
+
         if URL_SAFE_NO_PAD.encode(&bytes) != s {
             return Err(serde::de::Error::custom("noncanonical bytes"));
         }
+
         Ok(Self(bytes))
     }
 }
@@ -133,10 +141,13 @@ pub fn decode<T: DeserializeOwned + Serialize>(bytes: &[u8]) -> Result<T> {
     if bytes.len() > super::MAX_OBJECT_BYTES {
         return Err(Error::ResourceBudgetExceeded);
     }
+
     let value: T = serde_json::from_slice(bytes).map_err(|_| Error::InvalidEncoding)?;
+
     if canonical(&value)? != bytes {
         return Err(Error::InvalidEncoding);
     }
+
     Ok(value)
 }
 

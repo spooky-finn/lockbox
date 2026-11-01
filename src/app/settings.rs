@@ -30,9 +30,11 @@ impl Settings {
 
     pub fn set_touch_id(&mut self, id: &str, enabled: bool) -> Result<(), String> {
         self.config.touch_id.retain(|known| known != id);
+
         if enabled {
             self.config.touch_id.push(id.to_owned());
         }
+
         self.save()
     }
 }

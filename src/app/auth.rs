@@ -113,6 +113,7 @@ impl Locked {
         let (Some(path), Some(id)) = (self.path.clone(), self.touch_id.clone()) else {
             return;
         };
+
         self.error = None;
         self.waiting_touch_id = true;
         let (sender, receiver) = mpsc::channel();
@@ -133,6 +134,7 @@ impl Locked {
         if self.mode != Mode::Create || self.storage_kind != Some(StorageKind::Cloud) {
             return;
         }
+
         match self.cloud.validate() {
             Ok(()) => {
                 self.error = None;
@@ -159,6 +161,7 @@ impl Locked {
         {
             return false;
         }
+
         let error = self.cloud.validate().err().map(str::to_owned).or_else(|| {
             if self.password.chars().count() < MIN_PASSWORD_CHARS {
                 Some(format!(
@@ -186,21 +189,27 @@ impl Locked {
         if self.pending.is_some() {
             return;
         }
+
         let cloud = self.mode == Mode::Create && self.storage_kind == Some(StorageKind::Cloud);
+
         if self.mode == Mode::Create && self.storage_kind.is_none() {
             self.error = Some("Choose a vault type".into());
             return;
         }
+
         if cloud && !self.validate_creation() {
             return;
         }
+
         let Some(path) = self.path.clone() else {
             return;
         };
+
         if self.password.is_empty() {
             self.error = Some("Enter master password".into());
             return;
         }
+
         if self.mode == Mode::Create && *self.password != *self.repeat {
             self.error = Some("Passwords do not match".into());
             return;
@@ -279,6 +288,7 @@ impl Locked {
                 }
             }
         }
+
         if self.auto_touch_id && self.pending.is_none() {
             self.auto_touch_id = false;
             self.start_touch_id(biometrics);

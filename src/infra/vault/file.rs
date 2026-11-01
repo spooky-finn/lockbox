@@ -27,11 +27,14 @@ pub(super) fn refresh_profile_snapshot(
     if lock.is_none() {
         return Ok((data, header));
     }
+
     let data = fs::read(path)?;
     let header = Header::parse(&data)?;
+
     if !matches!(header.version, 3 | PROFILE_VERSION) {
         return Err(VaultError::Corrupted);
     }
+
     Ok((data, header))
 }
 
@@ -50,6 +53,7 @@ pub(super) fn lock_profile(path: &Path) -> Result<File> {
     } else {
         canonical
     };
+
     let mut options = OpenOptions::new();
     options.read(true).write(true).create(true).truncate(false);
     #[cfg(unix)]
@@ -57,6 +61,7 @@ pub(super) fn lock_profile(path: &Path) -> Result<File> {
         use std::os::unix::fs::OpenOptionsExt;
         options.mode(0o600);
     }
+
     let file = options.open(sibling(&canonical, "lock"))?;
     file.try_lock().map_err(|_| VaultError::ProfileInUse)?;
     Ok(file)
@@ -71,6 +76,7 @@ fn private_file(path: &Path) -> io::Result<File> {
         Err(error) if error.kind() == io::ErrorKind::NotFound => {}
         Err(error) => return Err(error),
     }
+
     let mut options = OpenOptions::new();
     options.write(true).create_new(true);
     #[cfg(unix)]
@@ -88,6 +94,7 @@ pub(super) fn sync_dir(path: &Path) -> io::Result<()> {
         let dir = path.parent().filter(|p| !p.as_os_str().is_empty());
         File::open(dir.unwrap_or(Path::new(".")))?.sync_all()?;
     }
+
     Ok(())
 }
 
@@ -99,6 +106,7 @@ pub(super) fn create(path: &Path, header: &[u8], ciphertext: &[u8]) -> Result<()
         use std::os::unix::fs::OpenOptionsExt;
         options.mode(0o600);
     }
+
     let mut file = options.open(path).map_err(|error| {
         if error.kind() == io::ErrorKind::AlreadyExists {
             VaultError::AlreadyExists(path.to_path_buf())
@@ -111,6 +119,7 @@ pub(super) fn create(path: &Path, header: &[u8], ciphertext: &[u8]) -> Result<()
         file.write_all(ciphertext)?;
         file.sync_all()
     })();
+
     if result.is_err() {
         let _ = fs::remove_file(path);
     }
@@ -126,6 +135,7 @@ pub(super) fn replace(path: &Path, header: &[u8], ciphertext: &[u8]) -> Result<(
         file.write_all(ciphertext)?;
         file.sync_all()?;
     }
+
     if path.exists() {
         let backup = sibling(path, "bak");
         let backup_tmp = sibling(&backup, "tmp");

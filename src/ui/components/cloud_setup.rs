@@ -15,6 +15,7 @@ pub(super) fn CloudSetupView() -> Element {
     let Screen::Locked(locked) = &*screen else {
         return rsx! {};
     };
+
     if show_help() {
         return rsx! {
             section { class: "cloud-setup", aria_label: language.text(Text::StorjSetup),

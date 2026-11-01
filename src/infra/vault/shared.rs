@@ -31,19 +31,23 @@ impl Vault {
 
     pub(super) fn ensure_sync_projection(&self) -> Result<()> {
         self.ensure_exchange_committed()?;
+
         if let Some(profile) = &self.profile
             && let Some(sync) = &profile.sync
         {
             if let Some(error) = sync.fault {
                 return Err(error.into());
             }
+
             let replay = crate::core::sync::Machine::replay(sync, &profile.sync_secret())?;
+
             if replay.projection.entries() != self.entries
                 || replay.projection.folders() != self.folders
             {
                 return Err(crate::core::sync::Error::InvalidTransaction.into());
             }
         }
+
         Ok(())
     }
 
@@ -56,6 +60,7 @@ impl Vault {
         let Some(profile) = self.profile.as_ref().filter(|p| p.sync.is_some()) else {
             return self.save();
         };
+
         let device = profile.sync_secret();
         let desired_entries = self.entries.clone();
         let desired_folders = self.folders.clone();
@@ -64,9 +69,11 @@ impl Vault {
         let replay = Machine::replay(sync, &device)?;
         let transaction =
             Transaction::diff(&replay.projection, &desired_entries, &desired_folders)?;
+
         if transaction.mutations.is_empty() {
             return self.save();
         }
+
         let prepared = self.prepare_sync_command(|sync, device| {
             Machine::prepare(sync, device, transaction.clone())
         })?;
@@ -85,10 +92,12 @@ impl Vault {
         {
             self.save_inner(false)?;
         }
+
         self.ensure_profile_writable()?;
         let Some(profile) = self.profile.as_mut().filter(|p| p.sync.is_some()) else {
             return Ok(());
         };
+
         let device = profile.sync_secret();
         let sync = profile.sync.as_mut().unwrap();
         // A frozen history remains readable. Recovery never erases a fault or
@@ -96,23 +105,30 @@ impl Vault {
         if sync.fault.is_some() {
             return Ok(());
         }
+
         let recovering = sync.intent.is_some();
+
         if recovering {
             Machine::complete_intent(sync, &device)?;
         }
+
         let replay = match Machine::replay(sync, &device) {
             Ok(replay) => replay,
             Err(crate::core::sync::Error::MissingDependency) if !recovering => return Ok(()),
             Err(error) => return Err(error.into()),
         };
+
         if !replay.ready && !recovering {
             return Ok(());
         }
+
         self.entries = replay.projection.entries();
         self.folders = replay.projection.folders();
+
         if recovering {
             self.save_inner(false)?;
         }
+
         Ok(())
     }
 
@@ -205,6 +221,7 @@ impl Vault {
             let profile = self.profile.as_ref().ok_or(Error::UnauthorizedDevice)?;
             let state = profile.sync.as_ref().ok_or(Error::UnauthorizedDevice)?;
             let device = profile.sync_secret();
+
             match command(state, &device) {
                 Err(Error::FrontierTooWide) => {
                     let merge =
@@ -234,9 +251,11 @@ impl Vault {
         let replay = self
             .sync_replay()?
             .ok_or(crate::core::sync::Error::UnauthorizedDevice)?;
+
         if !replay.ready {
             return Err(crate::core::sync::Error::MissingDependency.into());
         }
+
         Ok(replay.membership)
     }
 
@@ -251,6 +270,7 @@ impl Vault {
     pub fn activate_sync(&mut self, recovery_password: &SecretString) -> Result<()> {
         self.ensure_exchange_committed()?;
         use crate::core::sync::{Error, Machine, Projection, Transaction};
+
         if self
             .profile
             .as_ref()
@@ -260,6 +280,7 @@ impl Vault {
         {
             return self.ensure_profile_writable();
         }
+
         let entries = self.entries.clone();
         let folders = self.folders.clone();
         self.profile
@@ -277,6 +298,7 @@ impl Vault {
                 )?,
             ));
             let transaction = Transaction::diff(&Projection::default(), &entries, &folders)?;
+
             if transaction.mutations.is_empty() {
                 return self.save_inner(false);
             }
@@ -289,9 +311,11 @@ impl Vault {
             )?;
             self.commit_prepared(prepared)
         })();
+
         if result.is_err() {
             let profile = self.profile.as_mut().unwrap();
             let state = profile.sync.as_ref().unwrap();
+
             if state.intent.is_none()
                 && state.objects.len() == 1
                 && self
@@ -302,6 +326,7 @@ impl Vault {
                 profile.cancel_activation();
                 self.protection = None;
             }
+
             self.entries = entries;
             self.folders = folders;
         }
@@ -314,10 +339,13 @@ impl Vault {
         self.ensure_exchange_committed()?;
         self.ensure_profile_writable()?;
         use crate::core::sync::{Error, Machine};
+
         if !self.entries.is_empty() || !self.folders.is_empty() {
             return Err(Error::InvalidTransaction.into());
         }
+
         let profile = self.profile.as_mut().ok_or(Error::UnauthorizedDevice)?;
+
         if profile
             .sync
             .as_ref()
@@ -325,6 +353,7 @@ impl Vault {
         {
             return Err(Error::InvalidTransaction.into());
         }
+
         let previous = profile.sync.replace(Machine::join(
             descriptor.space,
             descriptor.namespace,
@@ -335,6 +364,7 @@ impl Vault {
         let old_namespace = profile.space.namespace;
         profile.space.space_id = descriptor.space.0;
         profile.space.namespace = descriptor.namespace.0;
+
         if let Err(error) = self.save_inner(false) {
             let profile = self.profile.as_mut().unwrap();
             profile.sync = previous;
@@ -342,6 +372,7 @@ impl Vault {
             profile.space.namespace = old_namespace;
             return Err(error);
         }
+
         Ok(())
     }
 
@@ -356,6 +387,7 @@ impl Vault {
             .as_mut()
             .and_then(|profile| profile.sync.as_mut())
             .ok_or(Error::UnauthorizedDevice)?;
+
         if state.intent.is_some() {
             return Err(Error::PendingIntent.into());
         }

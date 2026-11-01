@@ -35,11 +35,14 @@ impl Draft {
         let Some(totp) = &self.entry.totp else {
             return;
         };
+
         if !totp::is_link(&totp.secret) {
             self.totp_error = None;
             return;
         }
+
         let text = Zeroizing::new(totp.secret.clone());
+
         match totp::parse_link(&text) {
             Ok(link) => {
                 if self.entry.title.trim().is_empty()
@@ -47,11 +50,13 @@ impl Draft {
                 {
                     self.entry.title = issuer.clone();
                 }
+
                 if self.entry.username.trim().is_empty()
                     && let Some(account) = &link.account
                 {
                     self.entry.username = account.clone();
                 }
+
                 self.entry.totp = Some(link.totp);
                 self.totp_error = None;
             }
@@ -77,6 +82,7 @@ impl Draft {
             }
         };
         replace_secret(target, &value);
+
         if matches!(field, Field::Totp) {
             self.apply_link();
         }

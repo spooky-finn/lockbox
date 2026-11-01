@@ -85,6 +85,7 @@ impl DeviceKeys {
         else {
             return false;
         };
+
         let mut hpke_public = [0; 32];
         X25519HkdfSha256::sk_to_pk(&secret).write_exact(&mut hpke_public);
         SigningKey::from_bytes(&self.signing_secret)

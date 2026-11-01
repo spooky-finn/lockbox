@@ -43,9 +43,11 @@ pub(super) fn IconPicker() -> Element {
     let Screen::Unlocked(unlocked) = &*screen else {
         return rsx! {};
     };
+
     let Some(draft) = &unlocked.draft else {
         return rsx! {};
     };
+
     let found = icons::catalog().search(&draft.icon_query, 60);
     rsx! {
         section { class: "subpanel stack", aria_label: language.text(Text::ChooseIcon2),
@@ -53,6 +55,7 @@ pub(super) fn IconPicker() -> Element {
                 input { aria_label: language.text(Text::ServiceName), placeholder: language.text(Text::ServiceName), value: "{draft.icon_query}", oninput: move |e| edit_draft(state, |d| d.icon_query = e.value()) }
                 IconButton { icon: Icon::Close, label: language.text(Text::CloseIconPicker), onclick: move |_| edit_draft(state, |d| d.icon_picker_open = false) }
             }
+
             if draft.icon_query.trim().is_empty() { p { class: "muted", {language.format(Text::StartTypingANameIconsAvailable, &[icons::catalog().len().to_string()])} } }
             else if found.is_empty() { p { class: "muted", {language.text(Text::NoResults)} } }
             div { class: "icon-grid",

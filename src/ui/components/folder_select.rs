@@ -18,6 +18,7 @@ pub(super) fn FolderSelect(
     let Screen::Unlocked(workspace) = &*screen else {
         return rsx! {};
     };
+
     let options = folder::options(&workspace.vault.folders);
     rsx! {
         div { class: "select-field",

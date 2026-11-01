@@ -150,9 +150,11 @@ impl Vault {
     /// Creates and saves an empty vault. Never overwrites an existing file.
     pub fn create(path: impl AsRef<Path>, password: &SecretString, kdf: KdfParams) -> Result<Self> {
         let path = path.as_ref().to_path_buf();
+
         if path.exists() {
             return Err(VaultError::AlreadyExists(path));
         }
+
         let kdf = kdf.validate()?;
         let mut salt = [0u8; SALT_LEN];
         random(&mut salt);
@@ -193,12 +195,15 @@ impl Vault {
         witnesses: Arc<dyn WitnessStore>,
     ) -> Result<Self> {
         let path = path.to_path_buf();
+
         if path.exists() {
             return Err(VaultError::AlreadyExists(path));
         }
+
         if !profile.validate() {
             return Err(VaultError::Corrupted);
         }
+
         let profile_lock = lock_profile(&path)?;
         let kdf = kdf.validate()?;
         let mut salt = [0; SALT_LEN];
@@ -213,6 +218,7 @@ impl Vault {
         } else {
             None
         };
+
         let vault = Self {
             path,
             kdf,
@@ -253,15 +259,18 @@ impl Vault {
         } else {
             path
         };
+
         let profile_lock = if matches!(header.version, 3 | PROFILE_VERSION) {
             Some(lock_profile(&path)?)
         } else {
             None
         };
+
         let (data, header) = refresh_profile_snapshot(&path, data, header, &profile_lock)?;
         let (key, failed_decryption) = match unlock {
             Unlock::Password(password) => {
                 let (key, check) = derive(password, &header.salt, header.kdf)?;
+
                 if !bool::from(check.ct_eq(&header.check)) {
                     return Err(VaultError::WrongPassword);
                 }
@@ -269,9 +278,11 @@ impl Vault {
             }
             Unlock::Key(key) => (Zeroizing::new(*key), VaultError::KeyMismatch),
         };
+
         let contents = decrypt(&data, &key).ok_or(failed_decryption)?;
         let generation = contents.generation;
         let mut vault = header.into_vault(path, key, contents, profile_lock, witnesses.clone());
+
         if let Some(generation) = generation {
             let device = vault
                 .profile
@@ -289,9 +300,11 @@ impl Vault {
                 &vault.path,
             )?));
         }
+
         if vault.ensure_profile_writable().is_ok() {
             vault.recover_sync()?;
         }
+
         Ok(vault)
     }
 
@@ -325,6 +338,7 @@ impl Vault {
                 .validate_attachments()
                 .map_err(|_| VaultError::Corrupted)?;
         }
+
         if self
             .profile
             .as_ref()
@@ -332,13 +346,17 @@ impl Vault {
         {
             return Err(VaultError::Corrupted);
         }
+
         if self.profile.as_ref().is_none_or(|p| p.sync.is_none()) {
             folder::validate(&self.folders, &self.entries).map_err(VaultError::InvalidFolders)?;
         }
+
         let requires_witness = self.profile.as_ref().is_some_and(|p| p.requires_witness());
+
         if !requires_witness && self.protection.is_some() {
             return Err(VaultError::Corrupted);
         }
+
         let mut protection = self.protection.as_ref().map(RefCell::borrow_mut);
         let generation = if requires_witness {
             Some(
@@ -352,6 +370,7 @@ impl Vault {
         } else {
             None
         };
+
         let mut nonce = [0u8; NONCE_LEN];
         random(&mut nonce);
         let header = Header::encode(
@@ -378,13 +397,16 @@ impl Vault {
         } else {
             file::replace(&self.path, &header, &ciphertext)?;
         }
+
         if let (Some(protection), Some(generation)) = (protection.as_mut(), generation) {
             protection.committed(generation, protection::digest_parts(&header, &ciphertext));
         }
         sync_dir(&self.path)?;
+
         if let Some(protection) = protection.as_mut() {
             protection.ensure_ready(&self.path)?;
         }
+
         Ok(())
     }
 
@@ -394,6 +416,7 @@ impl Vault {
         if self.profile.as_ref().is_none_or(|p| p.sync.is_none()) {
             return None;
         }
+
         match &self.protection {
             Some(protection) => {
                 let protection = protection.borrow();
@@ -415,6 +438,7 @@ impl Vault {
         if self.profile.as_ref().is_none_or(|p| p.sync.is_none()) {
             return Ok(());
         }
+
         self.protection
             .as_ref()
             .ok_or(anchor::Error::Legacy)?

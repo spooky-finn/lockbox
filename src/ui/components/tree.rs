@@ -62,6 +62,7 @@ pub(super) fn nodes_ui(
                                     span { "{folder.name}" }
                                 }
                             }
+
                             if expanded {
                                 ul { class: "tree-branch", id: "folder-{id}",
                                     if children.is_empty() { li { class: "tree-empty", {language.text(Text::EmptyFolder)} } }

@@ -20,6 +20,7 @@ pub(super) fn UnlockedView() -> Element {
     let Screen::Unlocked(unlocked) = &*screen else {
         return rsx! {};
     };
+
     let settings_open = unlocked.page == crate::app::workspace::Page::Settings;
     let editing = unlocked.is_editing();
     let has_detail = settings_open
@@ -40,6 +41,7 @@ pub(super) fn UnlockedView() -> Element {
                         }),
                     }
                 }
+
                 if let Some(error) = &unlocked.error { p { class: "error", role: "alert", {language.message(error)} } }
                 if settings_open { super::settings::SettingsView {} }
                 else { VaultContent {} }
@@ -82,10 +84,12 @@ fn VaultContent() -> Element {
                 }
             }
         }
+
         if let Ok(Some(replay)) = unlocked.vault.sync_replay() {
             if !replay.history_verified {
                 p { class: "notice", {language.text(Text::TheOwnerConfirmedTheInitialStateThisDeviceHasNotVerifiedEarlierChanges)} }
             }
+
             for record in replay.projection.conflicts() {
                 details { class: "notice",
                     summary { {language.format(Text::ConflictVersions, &[record.entity.id.to_string(), record.versions.len().to_string()])} }
@@ -101,6 +105,7 @@ fn VaultContent() -> Element {
                                 onclick: { let revision = version.revision; move |_| { let mut selected = revealed.write(); if !selected.remove(&revision) { selected.insert(revision); } } },
                                 {language.text(Text::ShowHideContents)}
                             }
+
                             if revealed.read().contains(&version.revision) {
                                 match &version.value {
                                     Some(crate::core::sync::Value::Entry(entry)) => rsx! {
@@ -126,9 +131,11 @@ fn VaultContent() -> Element {
                     }
                 }
             }
+
             if !replay.projection.structural_conflicts().is_empty() {
                 p { class: "notice", {language.text(Text::FolderLocationConflictAllEntriesAreSavedCorrectTheFolderLocations)} }
             }
+
             if !replay.excluded.is_empty() {
                 p { class: "notice", {language.text(Text::ChangesFromAClosedEpochAreSavedLocallyAndNeedToBeRebasedAfterReview)} }
                 if let Ok(edits) = unlocked.vault.excluded_edits() {
@@ -153,6 +160,7 @@ fn VaultContent() -> Element {
                 }
             }
         }
+
         if unlocked.directories.draft.is_some() { DirectoryEditor {} }
         else if unlocked.draft.is_some() { DraftView {} }
         else if unlocked.selected_entry().is_some() { EntryView {} }

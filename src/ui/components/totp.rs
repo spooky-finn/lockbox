@@ -23,6 +23,7 @@ pub(super) fn TotpEditor() -> Element {
     let Screen::Unlocked(unlocked) = &*screen else {
         return rsx! {};
     };
+
     let Some(draft) = &unlocked.draft else {
         return rsx! {};
     };
@@ -66,6 +67,7 @@ pub(super) fn TotpEditor() -> Element {
             } else {
                 IconButton { icon: Icon::Clock, label: language.text(Text::AddTOTP), onclick: move |_| edit_draft(state, |d| d.entry.totp = Some(Totp { secret: String::new(), algorithm: TotpAlgorithm::Sha1, digits: 6, period: 30 })) }
             }
+
             if let Some(error) = &draft.totp_error { p { class: "error", role: "alert", {language.message(error)} } }
         }
     }

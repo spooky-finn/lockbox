@@ -164,6 +164,7 @@ impl BootstrapProfile {
         if self.sync.is_some() {
             return Ok(());
         }
+
         let root = self
             .root_capsule
             .open(recovery_password, &self.identity.root_key)
@@ -218,6 +219,7 @@ impl RootCapsule {
     fn aad(&self, public_key: &[u8; 32]) -> Vec<u8> {
         let mut aad = b"lockbox.root-capsule.v1\0".to_vec();
         aad.extend_from_slice(&self.version.to_le_bytes());
+
         for n in [self.kdf.memory_kib, self.kdf.passes, self.kdf.lanes] {
             aad.extend_from_slice(&n.to_le_bytes());
         }
@@ -253,6 +255,7 @@ impl RootCapsule {
         if self.version != 1 {
             return Err(VaultError::Corrupted);
         }
+
         let key = self.key(password)?;
         let plaintext = Zeroizing::new(
             XChaCha20Poly1305::new(key.as_ref().into())
@@ -272,9 +275,11 @@ impl RootCapsule {
                 .map_err(|_| VaultError::Corrupted)?,
         );
         let root = SigningKey::from_bytes(&seed);
+
         if root.verifying_key().to_bytes() != *public_key {
             return Err(VaultError::Corrupted);
         }
+
         Ok(root)
     }
 }

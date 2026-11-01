@@ -13,9 +13,11 @@ pub(super) fn GeneratorView() -> Element {
     let Screen::Unlocked(unlocked) = &*screen else {
         return rsx! {};
     };
+
     let Some(draft) = &unlocked.draft else {
         return rsx! {};
     };
+
     let options = &unlocked.generator;
     let bits = options.entropy_bits();
     let verdict = if bits < 64.0 {
@@ -44,6 +46,7 @@ pub(super) fn GeneratorView() -> Element {
                 }) }
                 IconButton { icon: Icon::Close, label: language.text(Text::CloseGenerator), onclick: move |_| edit_draft(state, |d| d.generator_open = false) }
             }
+
             if let Some(error) = &draft.generator_error { p { class: "error", role: "alert", {language.message(error)} } }
         }
     }

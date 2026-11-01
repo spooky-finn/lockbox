@@ -56,6 +56,7 @@ impl Config {
         if let Some(dir) = path.parent() {
             create_private_dir(dir)?;
         }
+
         let mut options = OpenOptions::new();
         options.write(true).create(true).truncate(true);
         #[cfg(unix)]
@@ -63,6 +64,7 @@ impl Config {
             use std::os::unix::fs::OpenOptionsExt;
             options.mode(0o600);
         }
+
         let mut file = options.open(path)?;
         file.write_all(&serde_json::to_vec_pretty(self).expect("config always serializes"))?;
         file.sync_all()

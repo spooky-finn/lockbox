@@ -40,9 +40,11 @@ pub(super) fn verify<T: Serialize>(
     domain: &[u8],
 ) -> Result<()> {
     let key = VerifyingKey::from_bytes(key).map_err(|_| Error::InvalidSignature)?;
+
     if key.is_weak() {
         return Err(Error::InvalidSignature);
     }
+
     let signature =
         Signature::from_slice(&signed.signature.0).map_err(|_| Error::InvalidSignature)?;
     let mut bytes = domain.to_vec();
@@ -64,6 +66,7 @@ pub struct Certificate {
 impl Signed<Certificate> {
     pub fn verify(&self) -> Result<()> {
         let body = &self.body;
+
         if body.user != Hash::digest(b"lockbox.user.v1\0", &body.root_key)
             || body.device != Hash::digest(b"lockbox.device.v1\0", &body.signing_key)
             || VerifyingKey::from_bytes(&body.signing_key).map_or(true, |key| key.is_weak())
@@ -91,6 +94,7 @@ impl DeviceSecret {
             signing: *signing,
             hpke: *hpke,
         };
+
         let certificate =
             secret.certificate(root, public.to_bytes().as_slice().try_into().unwrap())?;
         Ok((secret, certificate))
@@ -126,6 +130,7 @@ impl DeviceSecret {
             &self.signer().verifying_key().to_bytes(),
         )
     }
+
     pub(super) fn signer(&self) -> SigningKey {
         SigningKey::from_bytes(&self.signing)
     }
@@ -197,6 +202,7 @@ pub(super) fn content_key(
     } else {
         b"lockbox.changes.v1\0".as_slice()
     };
+
     let mut info = domain.to_vec();
     info.extend(context.0);
     let mut out = Zeroizing::new([0; 32]);

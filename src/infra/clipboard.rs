@@ -95,6 +95,7 @@ impl Guard {
         let Some((copied, _)) = self.pending.take() else {
             return;
         };
+
         if self
             .board
             .get()

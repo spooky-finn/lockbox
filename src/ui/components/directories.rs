@@ -16,9 +16,11 @@ pub(super) fn DirectoryView() -> Element {
     let Screen::Unlocked(workspace) = &*screen else {
         return rsx! {};
     };
+
     let Some(selected) = workspace.directories.selected.as_deref() else {
         return rsx! {};
     };
+
     let Some(directory) = workspace
         .vault
         .folders
@@ -27,6 +29,7 @@ pub(super) fn DirectoryView() -> Element {
     else {
         return rsx! {};
     };
+
     let breadcrumbs = folder::ancestors(&workspace.vault.folders, selected);
     let records = workspace
         .vault
@@ -77,6 +80,7 @@ pub(super) fn DirectoryView() -> Element {
                     IconButton { icon: Icon::FolderPlus, label: language.text(Text::NewSubfolder), disabled: workspace.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.start_directory()) }
                 }
             }
+
             if workspace.directories.confirm_delete {
                 div { class: "delete-confirm", role: "alert",
                     p { {language.format(Text::DeleteFolderAndItsSubfoldersAllEntriesWillMoveToTheParentFolder, &[directory.name.to_string()])} }

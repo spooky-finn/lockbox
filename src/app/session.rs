@@ -33,6 +33,7 @@ impl Screen {
         reason: Option<&str>,
     ) {
         security.clipboard.clear_now();
+
         if let Self::Unlocked(unlocked) = self {
             let mut locked = Locked::new(Some(unlocked.vault.path().to_path_buf())).offer_touch_id(
                 &settings.config,

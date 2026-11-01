@@ -31,6 +31,7 @@ pub(super) fn use_system_theme() -> &'static str {
             Event::Resumed => Some(system_theme(&events)),
             _ => None,
         };
+
         if let Some(next) = next
             && *theme.peek() != next
         {
@@ -45,6 +46,7 @@ pub(super) fn use_system_theme() -> &'static str {
         };
         window.set_background_color(Some(background));
     });
+
     match theme() {
         Theme::Dark => "dark",
         _ => "light",

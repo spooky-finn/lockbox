@@ -35,9 +35,11 @@ pub(crate) fn project<'a>(vault: &'a Vault, query: &str) -> Vec<Node<'a>> {
             }
         }
     }
+
     let mut folders = BTreeSet::new();
     let mut entries = BTreeSet::new();
     placed(&nodes, &mut folders, &mut entries);
+
     for folder in &vault.folders {
         if !folders.contains(folder.id.as_str())
             && (query.is_empty() || folder.name.to_lowercase().contains(&query))
@@ -45,6 +47,7 @@ pub(crate) fn project<'a>(vault: &'a Vault, query: &str) -> Vec<Node<'a>> {
             nodes.push(Node::Folder(folder, Vec::new()));
         }
     }
+
     for entry in &vault.entries {
         if !entries.contains(entry.id.as_str()) && matches(entry, &query) {
             nodes.push(Node::Record(entry));
@@ -63,6 +66,7 @@ fn branch<'a>(
     if depth > MAX_DEPTH {
         return Vec::new();
     }
+
     let mut folders: Vec<_> = vault
         .folders
         .iter()
@@ -70,13 +74,16 @@ fn branch<'a>(
         .collect();
     folders.sort_by_key(|folder| folder.name.to_lowercase());
     let mut nodes = Vec::new();
+
     for folder in folders {
         let matching = inherited || folder.name.to_lowercase().contains(query);
         let children = branch(vault, Some(&folder.id), query, matching, depth + 1);
+
         if query.is_empty() || matching || !children.is_empty() {
             nodes.push(Node::Folder(folder, children));
         }
     }
+
     let mut entries: Vec<_> = vault
         .entries
         .iter()

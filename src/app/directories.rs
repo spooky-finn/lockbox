@@ -42,13 +42,16 @@ impl Directories {
         let Some(draft) = &self.draft else {
             return Ok(());
         };
+
         let id = draft.id.clone().unwrap_or_else(crate::core::id::new);
         let folder = Folder {
             id: id.clone(),
             name: draft.name.trim().to_owned(),
             parent_id: draft.parent_id.clone(),
         };
+
         let mut folders = vault.folders.clone();
+
         if let Some(slot) = folders.iter_mut().find(|item| item.id == id) {
             *slot = folder;
         } else {
@@ -56,10 +59,12 @@ impl Directories {
         }
         folder::validate(&folders, &vault.entries).map_err(str::to_owned)?;
         let previous = std::mem::replace(&mut vault.folders, folders);
+
         if let Err(error) = vault.save_changes() {
             vault.folders = previous;
             return Err(format!("Could not save folder: {error}"));
         }
+
         self.draft = None;
         self.selected = Some(id);
         self.confirm_delete = false;
@@ -76,6 +81,7 @@ impl Directories {
         else {
             return Ok(());
         };
+
         let parent = selected.parent_id.clone();
         let removed: BTreeSet<_> = vault
             .folders
@@ -85,6 +91,7 @@ impl Directories {
             .collect();
         let previous = vault.folders.clone();
         let mut assignments = Vec::new();
+
         for (index, entry) in vault.entries.iter_mut().enumerate() {
             if entry
                 .folder_id
@@ -96,13 +103,16 @@ impl Directories {
             }
         }
         vault.folders.retain(|folder| !removed.contains(&folder.id));
+
         if let Err(error) = vault.save_changes() {
             vault.folders = previous;
+
             for (index, folder) in assignments {
                 vault.entries[index].folder_id = folder;
             }
             return Err(format!("Could not delete folder: {error}"));
         }
+
         self.selected = parent;
         self.confirm_delete = false;
         self.collapsed.retain(|id| !removed.contains(id));
@@ -123,6 +133,7 @@ impl Unlocked {
         if self.is_editing() {
             return;
         }
+
         self.page = super::workspace::Page::Vault;
         self.selected = None;
         self.show_password = false;
@@ -137,6 +148,7 @@ impl Unlocked {
         if self.is_editing() {
             return;
         }
+
         self.page = super::workspace::Page::Vault;
         self.selected = None;
         self.show_password = false;
@@ -153,6 +165,7 @@ impl Unlocked {
         if self.is_editing() {
             return;
         }
+
         if let Some(folder) = self
             .directories
             .selected

@@ -53,6 +53,7 @@ mod tests {
         let now = Instant::now();
         let mut schedule = Schedule::new(now);
         assert!(schedule.is_due(now));
+
         for expected in [2, 4, 8, 16, 32, 64, 128, 256, 256] {
             schedule.failed(now, 0);
             assert!(!schedule.is_due(now + Duration::from_secs(expected - 1)));

@@ -57,10 +57,13 @@ impl Header {
         if data.len() < HEADER_LEN || &data[..4] != MAGIC {
             return Err(VaultError::NotAVault);
         }
+
         let version = u16::from_le_bytes([data[4], data[5]]);
+
         if !(1..=PROFILE_VERSION).contains(&version) {
             return Err(VaultError::UnsupportedVersion(version));
         }
+
         let kdf = KdfParams {
             memory_kib: u32_at(data, 6),
             passes: u32_at(data, 10),
@@ -92,13 +95,17 @@ pub(super) fn decrypt(data: &[u8], key: &[u8; 32]) -> Option<Contents> {
             .ok()?,
     );
     let contents: Contents = serde_json::from_slice(&plaintext).ok()?;
+
     for entry in &contents.entries {
         entry.validate_attachments().ok()?;
     }
+
     if contents.profile.as_ref().is_none_or(|p| p.sync.is_none()) {
         folder::validate(&contents.folders, &contents.entries).ok()?;
     }
+
     let version = u16::from_le_bytes([header[4], header[5]]);
+
     if (matches!(version, 3 | PROFILE_VERSION)) != contents.profile.is_some()
         || contents
             .profile

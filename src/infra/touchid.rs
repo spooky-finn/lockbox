@@ -85,6 +85,7 @@ pub fn unlock(
     if !available(biometrics) {
         return Err(TouchIdError::Unavailable);
     }
+
     let fingers = biometrics
         .authenticate(REASON)
         .map_err(TouchIdError::Failed)?;
@@ -92,14 +93,17 @@ pub fn unlock(
         .load(vault_id)
         .and_then(|bytes| Record::decode(&bytes))
         .ok_or(TouchIdError::NoKey)?;
+
     if record.domain_state != fingers {
         biometrics.delete(vault_id);
         return Err(TouchIdError::FingersChanged);
     }
+
     if now.saturating_sub(record.saved_at) >= PASSWORD_EVERY_SECS {
         biometrics.delete(vault_id);
         return Err(TouchIdError::Expired);
     }
+
     Ok(record.key)
 }
 
@@ -113,6 +117,7 @@ pub fn enable(
     if !available(biometrics) {
         return Err(TouchIdError::Unavailable);
     }
+
     let fingers = biometrics
         .authenticate(REASON)
         .map_err(TouchIdError::Failed)?;
@@ -236,6 +241,7 @@ mod mac {
                         .map(describe)
                         .unwrap_or_else(|| "unknown error".to_owned()))
                 };
+
                 let _ = sender.send(result);
             });
             unsafe {

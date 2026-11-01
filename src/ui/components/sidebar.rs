@@ -17,6 +17,7 @@ pub(super) fn Sidebar() -> Element {
     let Screen::Unlocked(workspace) = &*screen else {
         return rsx! {};
     };
+
     let nodes = tree::project(&workspace.vault, &workspace.search);
     rsx! {
         aside { class: "sidebar",
