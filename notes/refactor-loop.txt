@@ -8,17 +8,16 @@ No delegation requested. Keep unrelated work outside refactor commits.
 Last full suite: cycle 37; 402 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 37: Borrow projection comparison values
-- Plain shared save guard uses existing borrowed projection iterators; avoid
-  cloning passwords, attachment bytes and folder values just for equality.
-- Preserve deep equality, order, length, conflict filtering and public snapshots.
-- Regression passed before refactor: reject eleven unjournaled payload/order/
-  length mutations, preserve disk and journal, accept unchanged save and reopen.
-- Full suite passed above. Formatting and strict all-target Clippy passed.
-  Test-only type alias then passed focused regression and Clippy again.
-  All three sources byte-match verified snapshot; whitespace checks passed.
+Cycle 38: Move subtree assignment undo values
+- Replace cloned old folder IDs with mem::replace; retain exact old assignment
+  while installing parent. Avoid one string allocation per moved record.
+- Keep folder snapshot, shared recovery snapshot and rollback indices unchanged.
+- Nine vault edit tests and seven directory tests passed, including nested/root
+  subtree moves, local write rollback and shared retained-intent retry.
+- Formatting and strict all-target Clippy passed. Source byte-matches snapshot;
+  workspace whitespace checks passed. No new tests needed for direct move.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-37.Gk7vRt when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-38.bbkfffx3 when workspace cannot compile.
 
-Next search: subtree assignment undo, publication graph bookkeeping.
+Next search: simplify publication dependency graph storage and construction.
 Inspect current code and tests before choosing; no quota-driven edits.

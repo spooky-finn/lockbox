@@ -138,8 +138,10 @@ impl Vault {
                 .as_ref()
                 .is_some_and(|id| removed.contains(id))
             {
-                assignments.push((index, entry.folder_id.clone()));
-                entry.folder_id = parent.clone();
+                assignments.push((
+                    index,
+                    std::mem::replace(&mut entry.folder_id, parent.clone()),
+                ));
             }
         }
         self.folders.retain(|folder| !removed.contains(&folder.id));
