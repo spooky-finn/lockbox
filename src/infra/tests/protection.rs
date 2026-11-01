@@ -1,6 +1,13 @@
 //! Exercise the real encrypted file boundaries with an independently held witness.
 
+use super::file::sibling;
+use super::format::cipher;
 use super::*;
+use chacha20poly1305::{
+    XNonce,
+    aead::{Aead, Payload},
+};
+
 use crate::{
     core::sync::{Hash, Machine, Role},
     infra::{
@@ -366,7 +373,13 @@ fn authenticated_reencryption_and_unexplained_generation_gaps_are_detected() {
             frame.generation += gap;
             frame.previous = witnesses.snapshot(device(&vault)).unwrap().digest;
         }
-        let header = vault.header(&[0x71; NONCE_LEN]);
+        let header = Header::encode(
+            vault.kdf,
+            &vault.salt,
+            &vault.check,
+            vault.profile.is_some(),
+            &[0x71; NONCE_LEN],
+        );
         let plaintext = Zeroizing::new(serde_json::to_vec(&contents).unwrap());
         let encrypted = cipher(&vault.key)
             .encrypt(
@@ -403,7 +416,13 @@ fn legacy_shared_profiles_open_read_only_without_creating_witnesses() {
         .unwrap()
         .remove("required_control");
     legacy.as_object_mut().unwrap().remove("generation");
-    let header = vault.header(&[0x72; NONCE_LEN]);
+    let header = Header::encode(
+        vault.kdf,
+        &vault.salt,
+        &vault.check,
+        vault.profile.is_some(),
+        &[0x72; NONCE_LEN],
+    );
     let plaintext = Zeroizing::new(serde_json::to_vec(&legacy).unwrap());
     let encrypted = cipher(&vault.key)
         .encrypt(

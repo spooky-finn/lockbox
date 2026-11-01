@@ -1,3 +1,4 @@
+use super::file::sibling;
 use super::*;
 use crate::{
     core::sync::{Machine, Role, Transaction},
@@ -294,7 +295,7 @@ fn two_independent_profiles_exchange_and_reopen_without_cloned_signers() {
     bob.receive_sync(delivery(&alice)).unwrap();
     assert_eq!(bob.entries[0].title, "Before admission");
     assert_eq!(bob.entries[0].attachments[0].data, file_bytes);
-    for (_, bytes) in &alice
+    for bytes in alice
         .profile
         .as_ref()
         .unwrap()
@@ -302,6 +303,7 @@ fn two_independent_profiles_exchange_and_reopen_without_cloned_signers() {
         .as_ref()
         .unwrap()
         .objects
+        .values()
     {
         for marker in [
             b"cloud-private.bin".as_slice(),

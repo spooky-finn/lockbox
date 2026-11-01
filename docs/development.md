@@ -4,6 +4,15 @@ Run commands from `scripts/lockbox` with a Rust toolchain supporting edition 202
 The primary desktop platform is macOS. The UI uses the system WebView;
 Touch ID and Keychain integration live in platform adapters.
 
+```sh
+cargo run --locked
+cargo run --locked --example shared_space
+```
+
+The first command launches the desktop app; the second runs two fictional shared
+profiles through an in-memory provider. See the [documentation guide](README.md)
+for implemented sync behavior, release plans and the protocol proposal.
+
 ## Formatting and validation
 
 ```sh
@@ -44,5 +53,12 @@ cancelled edits, and error messages. Keep passwords, keys, and vault contents ou
 of logs and fixtures.
 
 Icons are bundled in the binary. Update domain mappings in
-`assets/icon_domains.txt` and regenerate the catalog with `build-icons` as described
-in the README rather than editing the large generated catalog manually.
+`assets/icon_domains.txt` rather than editing the large generated catalog manually.
+With an unpacked `simple-icons` npm package available locally, regenerate it using:
+
+```sh
+cargo run --locked --bin build-icons -- /path/to/unpacked/simple-icons/package
+```
+
+Review the generated asset diff and retain upstream license/attribution assets.
+The tool's module documentation describes the source archive layout.

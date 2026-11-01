@@ -4,6 +4,13 @@
 зашифрованном файле `.lbx`. Облачный режим сохраняет изменения на устройстве
 и обменивается зашифрованными подписанными событиями через Storj.
 
+## Development and documentation
+
+From `scripts/lockbox`, run `cargo run --locked` to start the desktop app.
+See the [developer guide](docs/development.md) for validation and asset generation,
+and the [documentation index](docs/README.md) for architecture, implemented sync
+behavior, recovery and release plans.
+
 ## Файлы в записи
 
 В редакторе записи выберите «Добавить файл». Доступны до 16 файлов,
@@ -111,4 +118,5 @@ src/
 [Lockbox Protocol](docs/lockbox-protocol.md) —
 подробный проект протокола на английском: идентичности и устройства, приглашения,
 подписанные изменения, шифрование, отзыв доступа и обмен через стороннее облако. Описанные
-в предложении возможности пока не реализованы.
+возможности шире реализованного экспериментального профиля `LBX-SYNC-0`;
+текущие границы описаны в [движке синхронизации](docs/sync-engine.md).

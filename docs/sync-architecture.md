@@ -40,7 +40,9 @@ flowchart TD
 | `core/sync/machine/membership.rs` | Owner authority, certificates, rosters, grants and epoch checkpoints | Provider permissions or discovery |
 | `core/sync/machine/replay.rs` | Verified history, epoch closure, causal validation and projection | Disk writes or timestamp winners |
 | `core/sync/machine/parents.rs` | Bounded causal merge parent selection, including prior local sequence ancestry | Conflict resolution or membership authority |
-| `infra/vault.rs` | Encrypted file format, KDF, process lock, atomic replacement | Membership and mutation authorization |
+| `infra/vault.rs` | Public facade, profile lifecycle and file/witness commit ordering | Membership and mutation authorization |
+| `infra/vault/format.rs` | Header codec, contents serialization, KDF and authenticated encryption | Filesystem effects or witness policy |
+| `infra/vault/file.rs` | Private file creation, process locks, backups and atomic replacement | Generation allocation or witness acknowledgement |
 | `core/anchor.rs` | Pure equal/linked-next generation reconciliation | OS stores, files or peer freshness |
 | `infra/vault/protection.rs` | File-digest checks, witness catch-up, durable generation allocation | Device admission or record conflict winners |
 | `infra/witness/` | Exclusive device leases, Keychain/directory storage and injected memory adapter | Signing keys or membership |

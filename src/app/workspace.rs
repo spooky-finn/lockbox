@@ -135,13 +135,33 @@ impl Unlocked {
             totp.secret = totp::normalize_secret(&totp.secret);
         }
         let id = entry.id.clone();
-        let previous = self.vault.entries.clone();
-        match self.vault.entries.iter_mut().find(|e| e.id == id) {
-            Some(slot) => *slot = entry,
-            None => self.vault.entries.push(entry),
-        }
+        // Shared recovery can replace the entire view before a save fails.
+        // Local saves only need the entry changed by this operation for undo.
+        let shared_previous = self
+            .vault
+            .sync_state()
+            .is_some()
+            .then(|| self.vault.entries.clone());
+        let index = self
+            .vault
+            .entries
+            .iter()
+            .position(|entry| entry.id == id)
+            .unwrap_or(self.vault.entries.len());
+        let previous = if index == self.vault.entries.len() {
+            self.vault.entries.push(entry);
+            None
+        } else {
+            Some(std::mem::replace(&mut self.vault.entries[index], entry))
+        };
         if let Err(error) = self.vault.save_changes() {
-            self.vault.entries = previous;
+            if let Some(entries) = shared_previous {
+                self.vault.entries = entries;
+            } else if let Some(entry) = previous {
+                self.vault.entries[index] = entry;
+            } else {
+                self.vault.entries.remove(index);
+            }
             return Err(format!("Could not save: {error}"));
         }
         self.draft = None;
@@ -155,10 +175,29 @@ impl Unlocked {
         let Some(id) = self.selected.clone() else {
             return Ok(());
         };
-        let previous = self.vault.entries.clone();
-        self.vault.entries.retain(|entry| entry.id != id);
+        // Shared recovery may change more than the entry being deleted.
+        let shared_previous = self
+            .vault
+            .sync_state()
+            .is_some()
+            .then(|| self.vault.entries.clone());
+        let mut removed = Vec::new();
+        let mut index = 0;
+        while index < self.vault.entries.len() {
+            if self.vault.entries[index].id == id {
+                removed.push((index + removed.len(), self.vault.entries.remove(index)));
+            } else {
+                index += 1;
+            }
+        }
         if let Err(error) = self.vault.save_changes() {
-            self.vault.entries = previous;
+            if let Some(entries) = shared_previous {
+                self.vault.entries = entries;
+            } else {
+                for (index, entry) in removed {
+                    self.vault.entries.insert(index, entry);
+                }
+            }
             return Err(format!("Could not save: {error}"));
         }
         self.selected = None;

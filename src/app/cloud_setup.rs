@@ -1,5 +1,6 @@
 //! Draft connection settings. Never serialize these into public configuration.
 
+use crate::infra::provider::{self, FieldError};
 use zeroize::Zeroizing;
 
 #[derive(Default)]
@@ -29,49 +30,20 @@ impl CloudSetup {
                 return Err(error);
             }
         }
-        let endpoint = url::Url::parse(&self.base_url)
-            .map_err(|_| "Enter a Base URL in the form https://address")?;
-        if self.base_url.trim() != self.base_url
-            || self.base_url.chars().any(char::is_whitespace)
-            || endpoint.scheme() != "https"
-            || endpoint.host_str().is_none()
-            || !endpoint.username().is_empty()
-            || endpoint.password().is_some()
-            || endpoint.query().is_some()
-            || endpoint.fragment().is_some()
-            || endpoint.path() != "/"
-        {
-            return Err(
-                "Base URL must be an HTTPS gateway address without credentials, path, query, or fragment",
-            );
-        }
-        let bucket = self.bucket.as_bytes();
-        if !(3..=63).contains(&bucket.len())
-            || !bucket.first().is_some_and(u8::is_ascii_alphanumeric)
-            || !bucket.last().is_some_and(u8::is_ascii_alphanumeric)
-            || !bucket
-                .iter()
-                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || *b == b'-')
-        {
-            return Err(
-                "Bucket: 3–63 characters using a–z, 0–9, and hyphens; start and end with a letter or digit",
-            );
-        }
-        for (key, error) in [
-            (
-                &self.access_key,
-                "Enter an Access Key without spaces or control characters",
-            ),
-            (
-                &self.secret_key,
-                "Enter a Secret Key without spaces or control characters",
-            ),
-        ] {
-            if key.is_empty() || key.chars().any(|c| c.is_whitespace() || c.is_control()) {
-                return Err(error);
-            }
-        }
-        Ok(())
+        provider::validate(
+            &self.base_url,
+            &self.bucket,
+            &self.access_key,
+            &self.secret_key,
+        )
+        .map(|_| ())
+        .map_err(|error| match error {
+            FieldError::EndpointSyntax => "Enter a Base URL in the form https://address",
+            FieldError::Endpoint => "Base URL must be an HTTPS gateway address without credentials, path, query, or fragment",
+            FieldError::Bucket => "Bucket: 3–63 characters using a–z, 0–9, and hyphens; start and end with a letter or digit",
+            FieldError::AccessKey => "Enter an Access Key without spaces or control characters",
+            FieldError::SecretKey => "Enter a Secret Key without spaces or control characters",
+        })
     }
 }
 

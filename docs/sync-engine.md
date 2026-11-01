@@ -14,23 +14,10 @@ binding, file/witness ordering, read-only imports and fresh-device admission.
 
 ## Responsibilities
 
-| Code | Responsibility |
-| --- | --- |
-| `core/sync/wire.rs` | Canonical encoding, bounded decoding, IDs and object hashes |
-| `core/sync/crypto.rs` | Root-certified device identities, strict Ed25519, HPKE, AEAD |
-| `core/sync/model.rs` | Atomic transactions, revision sets, conflicts and reference projection |
-| `core/sync/machine/` | Private protocol schemas, journal state, commands, membership rules and deterministic replay behind `Machine` |
-| `core/anchor.rs` | Pure file-generation/witness reconciliation rules |
-| `infra/vault.rs` | Encrypted file format, KDF, process lock and atomic replacement |
-| `infra/vault/shared.rs` | One durable signing-intent boundary, local commits, outbox, restart recovery and shared-space facade methods |
-| `infra/vault/exchange.rs` | Candidate receive commits, pending-commit recovery, acknowledgement rollback and blocking exchange |
-| `infra/vault/protection.rs`, `infra/witness/` | Independent witness commits and installation-wide signer leases |
-| `infra/vault/store.rs` | Witness injection and fresh-device recovery |
-| `infra/sync.rs` | Bounded provider contract, discovery, cancellation and publication ordering |
-| `infra/storj.rs` | Configuration-only `StorjFactory`, HTTPS S3 adapter, SigV4, bounded responses and opaque ListObjectsV2 cursors |
-| `infra/sync/worker.rs` | Cancellable result mailbox without access to session or protocol state |
-| `app/space_sync.rs` | Typed exchange phases, scope-bound replies, draft deferral and application status |
-| `app/space_sync/schedule.rs` | Monotonic retry deadlines and testable backoff policy |
+Protocol rules and replay live in `core/sync`; durable operations and provider
+adapters in `infra`; session coordination in `app/space_sync`. The
+[architecture guide](sync-architecture.md#responsibilities-and-dependencies)
+owns the detailed module map and extension contracts.
 
 Core replay has no network, filesystem, clock or UI dependency. Network timing,
 wall-clock time, listing order and random retry jitter never choose a record

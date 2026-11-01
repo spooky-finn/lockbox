@@ -152,3 +152,19 @@ fn listing_keeps_cursor_opaque() {
     assert!(listing.truncated);
     assert_eq!(listing.next.as_deref(), Some("a+/=&x"));
 }
+
+#[test]
+fn rejects_invalid_signing_regions_before_client_construction() {
+    for region in ["", "us east-1", "us-east-1\n", "us-east-1\0"] {
+        assert!(matches!(
+            Storj::with_region(
+                "https://example.invalid",
+                "bucket",
+                "access",
+                "secret",
+                region
+            ),
+            Err(TransportError::InvalidResponse)
+        ));
+    }
+}

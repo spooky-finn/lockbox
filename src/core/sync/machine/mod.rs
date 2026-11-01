@@ -4,6 +4,7 @@
 //! This facade never owns a provider, filesystem handle, clock, or UI state.
 
 mod commands;
+mod history;
 mod membership;
 mod parents;
 mod protocol;
@@ -21,5 +22,5 @@ pub use state::{ExcludedEdit, PreparedChange, Replay, SpaceDescriptor, SyncState
 pub struct Machine;
 
 #[cfg(test)]
-#[path = "../tests.rs"]
+#[path = "../tests/mod.rs"]
 mod tests;

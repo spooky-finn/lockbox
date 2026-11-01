@@ -79,27 +79,9 @@ impl Storj {
         secret: &str,
         region: &str,
     ) -> Result<Self> {
-        let endpoint = url::Url::parse(endpoint).map_err(|_| TransportError::InvalidResponse)?;
-        if endpoint.scheme() != "https"
-            || endpoint.host_str().is_none()
-            || endpoint.path() != "/"
-            || !endpoint.username().is_empty()
-            || endpoint.password().is_some()
-            || endpoint.query().is_some()
-            || endpoint.fragment().is_some()
-            || !(3..=63).contains(&bucket.len())
-            || !bucket
-                .bytes()
-                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
-            || !bucket.as_bytes()[0].is_ascii_alphanumeric()
-            || !bucket.as_bytes()[bucket.len() - 1].is_ascii_alphanumeric()
-            || access.is_empty()
-            || secret.is_empty()
-            || region.is_empty()
-            || [access, secret, region]
-                .iter()
-                .any(|s| s.chars().any(|c| c.is_whitespace() || c.is_control()))
-        {
+        let endpoint = super::provider::validate(endpoint, bucket, access, secret)
+            .map_err(|_| TransportError::InvalidResponse)?;
+        if region.is_empty() || region.chars().any(|c| c.is_whitespace() || c.is_control()) {
             return Err(TransportError::InvalidResponse);
         }
         let client = Client::builder()

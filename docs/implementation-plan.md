@@ -1,5 +1,8 @@
 # План реализации облачного Lockbox
 
+Historical delivery checklist. Current release priorities and validation evidence
+live in the [production delivery plan](sync-production-plan.md).
+
 Основа: [Lockbox Protocol](lockbox-protocol.md). Уточнение продукта: локальный
 однопользовательский режим либо облачный многопользовательский режим со Storj.
 
@@ -37,21 +40,14 @@
 - [x] Проверить перезапуск после durable signing intent и повторы после ошибки сохранения.
 - [x] Реализовать API восстановления на другом устройстве с новой идентичностью устройства и явным повторным допуском.
 
-## Последующие этапы
+## Subsequent delivery
 
-- [x] Детерминированная модель LBX-SYNC-0, проверка подписей, сертификатов и полномочий.
-- [ ] Полные conformance fixtures proposal v1 и независимая совместимость.
-- [x] Membership API, HPKE grants, отзыв устройств, роли и смена эпох.
-- [ ] Приглашения, перенос владения/control authority и UI участников.
-- [x] Изменения, причинный граф, whole-record конфликты, inline checkpoints и durable outbox.
-- [x] Adversarial transport, S3-совместимый Storj адаптер, SigV4 и HTTP fixture.
-- [x] Синхронизация двух независимых профилей, обработка сбоев и повторов.
-- [x] Фоновый обмен, статусы, просмотр конфликтов, явное разрешение и rebase.
-- [ ] Multipart checkpoints, compaction и профилирование большой истории.
-- [ ] UI приглашений и восстановления.
-- [ ] Независимое ревью безопасности перед выпуском облачного режима.
+The initial milestones above are retained as history. Implemented sync behavior
+and APIs are documented in [sync-engine.md](sync-engine.md); all remaining release
+work and acceptance evidence are tracked in the
+[production delivery plan](sync-production-plan.md).
 
-Облачный flow создаёт локальный профиль v3 с bootstrap-схемой 3 и движком
+Облачный flow создаёт локальный профиль v5 с bootstrap-схемой 3 и движком
 LBX-SYNC-0. Это отдельный экспериментальный wire profile, а не полная
 реализация protocol v1. [Границы и API](sync-engine.md) описаны отдельно.
 Пример `cargo run --example shared_space` проверяет два профиля через Storage

@@ -89,7 +89,8 @@ Readers can export known secrets. Copy prevention is outside cryptographic model
 
 [src/infra/vault.rs](../src/infra/vault.rs) encrypts entire JSON vault with
 XChaCha20-Poly1305. Master password passes Argon2id and HKDF. Header authenticated
-as associated data. Current format v2 stores entries and folders; v1 readable.
+as associated data. New local vaults write v4 and shared profiles write v5;
+v1/v2/v3 files remain readable. Attachments are encrypted with their entries.
 Save uses temporary file, filesystem synchronization, rename, previous backup.
 
 Current layers:
@@ -104,7 +105,7 @@ stable random IDs. Existing workflows in [workspace.rs](../src/app/workspace.rs)
 and [directories.rs](../src/app/directories.rs) mutate collections then save.
 Shared mode replaces that persistence boundary with signed local transactions.
 
-New v3 cloud profiles now implement an experimental `LBX-SYNC-0` engine with
+New v5 cloud profiles now implement an experimental `LBX-SYNC-0` engine with
 independent device identities, signed membership epochs, encrypted events,
 deterministic projection, durable outbox and Storj transport. See
 [implementation boundaries and API](sync-engine.md). Its compact inline

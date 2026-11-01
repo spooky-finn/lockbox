@@ -1,4 +1,10 @@
+use super::file::sibling;
+use super::format::{VERSION, cipher};
 use super::*;
+use chacha20poly1305::{
+    XNonce,
+    aead::{Aead, Payload},
+};
 
 /// Cheap Argon2id settings: the tests check the format, not the cost.
 const FAST: KdfParams = KdfParams {
@@ -59,7 +65,13 @@ fn vaults_written_before_folders_open_without_migration() {
         "password": "preserved", "url": "", "notes": "", "totp": null
     }]});
     let nonce = [3u8; NONCE_LEN];
-    let mut header = vault.header(&nonce);
+    let mut header = Header::encode(
+        vault.kdf,
+        &vault.salt,
+        &vault.check,
+        vault.profile.is_some(),
+        &nonce,
+    );
     header[4..6].copy_from_slice(&1u16.to_le_bytes());
     let plaintext = Zeroizing::new(serde_json::to_vec(&legacy).unwrap());
     let encrypted = cipher(&vault.key)

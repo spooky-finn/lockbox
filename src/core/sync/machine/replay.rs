@@ -7,12 +7,12 @@ use super::super::{
     model::project,
     wire::sorted_unique,
 };
-use super::membership::{grant_aad, validate_control};
 use super::{
     Machine,
     protocol::{Change, Control, PROFILE},
     state::{Replay, SyncState},
 };
+use super::{history::ControlHistory, membership::grant_aad};
 use std::collections::{BTreeMap, BTreeSet};
 
 impl Machine {
@@ -45,39 +45,9 @@ impl Machine {
                 }
             }
         }
-        let genesis = controls
-            .get(&state.genesis)
-            .ok_or(Error::MissingDependency)?;
-        validate_control(genesis, None, state)?;
-        let mut chain = vec![(state.genesis, genesis)];
-        let mut seen = BTreeSet::from([state.genesis]);
-        let mut rejected = BTreeMap::new();
-        loop {
-            let (head, previous) = *chain.last().unwrap();
-            let mut next = Vec::new();
-            for (hash, candidate) in &controls {
-                if candidate.body.epoch.previous != Some(head) {
-                    continue;
-                }
-                match validate_control(candidate, Some(previous), state) {
-                    Ok(()) => next.push((*hash, candidate)),
-                    Err(error) => {
-                        rejected.insert(*hash, error);
-                    }
-                }
-            }
-            if next.len() > 1 {
-                return Err(Error::ControlFork);
-            }
-            let Some((hash, control)) = next.pop() else {
-                break;
-            };
-            if !seen.insert(hash) {
-                return Err(Error::ControlFork);
-            }
-            chain.push((hash, control));
-        }
-        let (tip, current) = *chain.last().unwrap();
+        let history = ControlHistory::verify(&controls, state)?;
+        let chain = &history.chain;
+        let (tip, current) = history.tip();
         let role = current
             .body
             .members
@@ -92,10 +62,10 @@ impl Machine {
             accepted: BTreeSet::new(),
             pending: state
                 .required_control
-                .filter(|head| !seen.contains(head))
+                .filter(|head| !history.contains(*head))
                 .into_iter()
                 .collect(),
-            rejected,
+            rejected: history.rejected.clone(),
             excluded: BTreeSet::new(),
             role,
             ready: false,
@@ -183,6 +153,103 @@ fn replay_epoch(
     controls: &BTreeSet<Hash>,
     next: Option<&Control>,
 ) -> Result<Replay> {
+    let AuthenticatedChanges {
+        mut verified,
+        mut rejected,
+    } = authenticate_changes(membership, control, key, changes);
+    let ClosedHistory {
+        excluded,
+        missing: missing_closed,
+    } = select_closed_history(&mut verified, &rejected, next)?;
+    ensure_unique_sequences(&verified)?;
+    let CausalChanges {
+        accepted,
+        unresolved: verified,
+    } = apply_causal_changes(
+        membership,
+        baseline,
+        verified,
+        &mut rejected,
+        changes,
+        controls,
+        next.is_some(),
+    )?;
+    let mut pending: BTreeSet<_> = verified.keys().copied().collect();
+    pending.extend(missing_closed);
+    for change in verified.values() {
+        for parent in &change.signed.body.header.parents {
+            if !accepted.contains_key(parent) && !rejected.contains_key(parent) {
+                pending.insert(*parent);
+            }
+        }
+    }
+    let included = if let Some(next) = next {
+        for head in &next.closed_frontier {
+            if !accepted.contains_key(head) {
+                pending.insert(*head);
+            }
+        }
+        if pending.is_empty() {
+            for head in &next.closed_frontier {
+                let past = ancestry(&accepted[head].signed.body.header.parents, &accepted)?;
+                if next
+                    .closed_frontier
+                    .iter()
+                    .any(|other| past.contains(other))
+                {
+                    return Err(Error::CheckpointMismatch);
+                }
+            }
+            ancestry(&next.closed_frontier, &accepted)?
+        } else {
+            accepted.keys().copied().collect()
+        }
+    } else {
+        accepted.keys().copied().collect()
+    };
+    let projection = project(
+        baseline,
+        included.iter().map(|h| {
+            (
+                *h,
+                accepted[h].signed.body.header.author,
+                &accepted[h].transaction,
+            )
+        }),
+    );
+    let mut frontier = included.clone();
+    for hash in &included {
+        for parent in &accepted[hash].signed.body.header.parents {
+            frontier.remove(parent);
+        }
+    }
+    Ok(Replay {
+        membership,
+        epoch: control.epoch.number.0,
+        projection,
+        frontier,
+        accepted: included,
+        pending,
+        rejected,
+        excluded,
+        role: None,
+        ready: true,
+        history_verified: true,
+    })
+}
+
+struct AuthenticatedChanges {
+    verified: BTreeMap<Hash, VerifiedChange>,
+    rejected: BTreeMap<Hash, Error>,
+}
+
+/// Authenticate and decrypt only changes bound to this membership epoch.
+fn authenticate_changes(
+    membership: Hash,
+    control: &Control,
+    key: &[u8; 32],
+    changes: &BTreeMap<Hash, Signed<Change>>,
+) -> AuthenticatedChanges {
     let mut verified = BTreeMap::new();
     let mut rejected = BTreeMap::new();
     for (hash, signed) in changes {
@@ -237,6 +304,21 @@ fn replay_epoch(
             }
         }
     }
+    AuthenticatedChanges { verified, rejected }
+}
+
+struct ClosedHistory {
+    excluded: BTreeSet<Hash>,
+    missing: BTreeSet<Hash>,
+}
+
+/// Restrict a closed epoch to the successor's signed causal closure before
+/// checking sequence forks. Late excluded history cannot invalidate that closure.
+fn select_closed_history(
+    verified: &mut BTreeMap<Hash, VerifiedChange>,
+    rejected: &BTreeMap<Hash, Error>,
+    next: Option<&Control>,
+) -> Result<ClosedHistory> {
     let mut excluded = BTreeSet::new();
     let mut missing_closed = BTreeSet::new();
     if let Some(next) = next {
@@ -265,8 +347,15 @@ fn replay_epoch(
         );
         verified.retain(|hash, _| relevant.contains(hash));
     }
+    Ok(ClosedHistory {
+        excluded,
+        missing: missing_closed,
+    })
+}
+
+fn ensure_unique_sequences(verified: &BTreeMap<Hash, VerifiedChange>) -> Result<()> {
     let mut slots = BTreeMap::new();
-    for (hash, change) in &verified {
+    for (hash, change) in verified {
         let header = &change.signed.body.header;
         if slots
             .insert((header.author, header.sequence), *hash)
@@ -275,6 +364,25 @@ fn replay_epoch(
             return Err(Error::DeviceFork);
         }
     }
+    Ok(())
+}
+
+struct CausalChanges {
+    accepted: BTreeMap<Hash, VerifiedChange>,
+    unresolved: BTreeMap<Hash, VerifiedChange>,
+}
+
+/// Apply only transactions whose authenticated causal past is accepted. Invalid
+/// ancestry propagates rejection; genuinely absent history remains unresolved.
+fn apply_causal_changes(
+    membership: Hash,
+    baseline: &Projection,
+    mut verified: BTreeMap<Hash, VerifiedChange>,
+    rejected: &mut BTreeMap<Hash, Error>,
+    changes: &BTreeMap<Hash, Signed<Change>>,
+    controls: &BTreeSet<Hash>,
+    closed: bool,
+) -> Result<CausalChanges> {
     let mut accepted: BTreeMap<Hash, VerifiedChange> = BTreeMap::new();
     loop {
         // A present but rejected or wrong-epoch parent cannot become valid by
@@ -293,7 +401,7 @@ fn replay_epoch(
             })
             .map(|(hash, _)| *hash)
             .collect();
-        if !invalid.is_empty() && next.is_some() {
+        if !invalid.is_empty() && closed {
             return Err(Error::CheckpointMismatch);
         }
         for hash in &invalid {
@@ -356,7 +464,7 @@ fn replay_epoch(
                     accepted.insert(hash, change);
                 }
                 Err(error) => {
-                    if next.is_some() {
+                    if closed {
                         // An authenticated control closes over invalid history,
                         // not merely unavailable history. Preserve fault evidence.
                         return Err(Error::CheckpointMismatch);
@@ -366,67 +474,9 @@ fn replay_epoch(
             }
         }
     }
-    let mut pending: BTreeSet<_> = verified.keys().copied().collect();
-    pending.extend(missing_closed);
-    for change in verified.values() {
-        for parent in &change.signed.body.header.parents {
-            if !accepted.contains_key(parent) && !rejected.contains_key(parent) {
-                pending.insert(*parent);
-            }
-        }
-    }
-    let included = if let Some(next) = next {
-        for head in &next.closed_frontier {
-            if !accepted.contains_key(head) {
-                pending.insert(*head);
-            }
-        }
-        if pending.is_empty() {
-            for head in &next.closed_frontier {
-                let past = ancestry(&accepted[head].signed.body.header.parents, &accepted)?;
-                if next
-                    .closed_frontier
-                    .iter()
-                    .any(|other| past.contains(other))
-                {
-                    return Err(Error::CheckpointMismatch);
-                }
-            }
-            ancestry(&next.closed_frontier, &accepted)?
-        } else {
-            accepted.keys().copied().collect()
-        }
-    } else {
-        accepted.keys().copied().collect()
-    };
-    let projection = project(
-        baseline,
-        included.iter().map(|h| {
-            (
-                *h,
-                accepted[h].signed.body.header.author,
-                &accepted[h].transaction,
-            )
-        }),
-    );
-    let mut frontier = included.clone();
-    for hash in &included {
-        for parent in &accepted[hash].signed.body.header.parents {
-            frontier.remove(parent);
-        }
-    }
-    Ok(Replay {
-        membership,
-        epoch: control.epoch.number.0,
-        projection,
-        frontier,
-        accepted: included,
-        pending,
-        rejected,
-        excluded,
-        role: None,
-        ready: true,
-        history_verified: true,
+    Ok(CausalChanges {
+        accepted,
+        unresolved: verified,
     })
 }
 
