@@ -8,18 +8,20 @@ No delegation requested. Keep unrelated work outside refactor commits.
 Last full suite: cycle 40; 404 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 42: Borrow transaction validation heads
-- Find prior record once; compare borrowed revisions directly with mutation bases.
-  Reuse borrowed head slice for action validation. Remove one lookup and one
-  temporary revision vector per mutation; public Projection::heads unchanged.
-- Keep first matching record, empty heads, deep base order/length, validation
-  precedence and action rules. Regression passed before refactor for Delete,
-  Restore, Resolve and Put; reject reversed, extra and truncated base lists.
-- All 51 protocol tests and both sync integration tests passed. Formatting and
-  strict all-target Clippy passed. Both sources match verified snapshot;
-  workspace whitespace checks passed.
+Cycle 43: Encode stored objects once
+- Add private Object::encode returning exact canonical bytes and their hash.
+  Genesis and intent completion reuse both; remove duplicate canonical encoding.
+  Public hash delegates same helper; public bytes and domain remain unchanged.
+- Existing fixed wire fixture checks both returned values against exact golden
+  bytes and hash. Signing, capacity checks, replay proof and rollback untouched.
+- Four wire tests, four intent-filtered tests (including durable frontier folding
+  and restart/invalid-intent recovery), both sync integration tests passed.
+  Formatting and strict all-target Clippy passed. All three sources match tested
+  snapshot; workspace whitespace checks passed.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-42.ppr3lrlr when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-43.p098t0ho when workspace cannot compile.
 
-Next search: repeated canonical encoding for local object hash plus stored bytes.
+Next search: canonical decoding followed by redundant object hash serialization;
+consider verified Object::from_bytes returning hash plus decoded object, preserving
+canonicality/budget/hash validation order. Also inspect non-protocol modules.
 Inspect current code and tests before choosing; no quota-driven edits.

@@ -126,7 +126,13 @@ impl Object {
         canonical(self)
     }
     pub fn hash(&self) -> Result<Hash> {
-        Ok(Hash::digest(b"lockbox.sync.object\0", &self.bytes()?))
+        self.encode().map(|(hash, _)| hash)
+    }
+    /// Serialize once when both the object hash and canonical bytes are needed.
+    pub(super) fn encode(&self) -> Result<(Hash, Vec<u8>)> {
+        let bytes = self.bytes()?;
+        let hash = Hash::digest(b"lockbox.sync.object\0", &bytes);
+        Ok((hash, bytes))
     }
 }
 

@@ -20,11 +20,14 @@ fn change_wire_contract_survives_internal_refactors() {
     crypto::verify(&signed, &signing.verifying_key().to_bytes(), CHANGE_DOMAIN).unwrap();
     let object = Object::Change(signed);
     let expected = include_bytes!("../fixtures/change.json");
+    let (hash, encoded) = object.encode().unwrap();
+    assert_eq!(encoded, expected);
     assert_eq!(object.bytes().unwrap(), expected);
     assert_eq!(
-        object.hash().unwrap().to_string(),
+        hash.to_string(),
         "88a4ea5764e7a65286f301e2abfb66cb3c3eca91c753b3618ad7916736c5face"
     );
+    assert_eq!(object.hash().unwrap(), hash);
     let parsed: Object = decode(expected).unwrap();
     assert_eq!(parsed.hash().unwrap(), object.hash().unwrap());
 }

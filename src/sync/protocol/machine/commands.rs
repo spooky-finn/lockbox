@@ -63,14 +63,14 @@ impl Machine {
             &device.signer(),
             crypto::CONTROL_DOMAIN,
         )?);
-        let genesis = object.hash()?;
+        let (genesis, bytes) = object.encode()?;
         Ok(SyncState {
             space,
             namespace,
             genesis,
             owner_root: root,
             required_control: None,
-            objects: BTreeMap::from([(genesis, Blob(object.bytes()?))]),
+            objects: BTreeMap::from([(genesis, Blob(bytes))]),
             candidates: BTreeMap::new(),
             rejected_candidates: BTreeMap::new(),
             outbox: BTreeSet::from([genesis]),
@@ -384,10 +384,9 @@ impl Machine {
             }
         };
 
-        let hash = object.hash()?;
         // This exact body was locally reserved and signed above. Insert directly
         // and verify through replay; remote downloads take the quarantine path.
-        let bytes = object.bytes()?;
+        let (hash, bytes) = object.encode()?;
         let inserted = if let Some(existing) = state.objects.get(&hash) {
             if existing.0 != bytes {
                 return Err(Error::HashMismatch);
