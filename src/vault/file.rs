@@ -166,11 +166,7 @@ pub(super) fn create(path: &Path, header: &[u8], ciphertext: &[u8]) -> Result<()
             VaultError::Io(error)
         }
     })?;
-    let result = (|| {
-        file.write_all(header)?;
-        file.write_all(ciphertext)?;
-        file.sync_all()
-    })();
+    let result = write_synced(&mut file, header, ciphertext);
 
     if result.is_err() {
         let _ = fs::remove_file(path);
@@ -184,9 +180,7 @@ pub(super) fn replace(path: &Path, header: &[u8], ciphertext: &[u8]) -> Result<(
     let tmp = sibling(path, "tmp");
     {
         let mut file = private_file(&tmp)?;
-        file.write_all(header)?;
-        file.write_all(ciphertext)?;
-        file.sync_all()?;
+        write_synced(&mut file, header, ciphertext)?;
     }
 
     if path.exists() {
@@ -200,6 +194,12 @@ pub(super) fn replace(path: &Path, header: &[u8], ciphertext: &[u8]) -> Result<(
     }
     fs::rename(&tmp, path)?;
     Ok(())
+}
+
+fn write_synced(file: &mut File, header: &[u8], ciphertext: &[u8]) -> io::Result<()> {
+    file.write_all(header)?;
+    file.write_all(ciphertext)?;
+    file.sync_all()
 }
 
 fn check_size(header: &[u8], ciphertext: &[u8]) -> Result<()> {

@@ -5,23 +5,24 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 48; 411 library, four integration, two doctests passed.
+Last full suite: cycle 55; 412 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 54: Borrow value identity checks
-- ValueRef exposes borrowed kind/ID parts internally. Projection and transaction
-  validation compare those parts without allocating temporary Entity IDs.
-  Public Value::entity and diff keys still return/copy owned Entity values.
-- New regression passed before refactor: both entry/folder kinds accept exact
-  identity and reject wrong kind, wrong ID or both in each validator; public
-  owned getter returns expected identity. Validation order unchanged.
-- All 53 protocol tests and both sync integration tests passed. Formatting and
-  strict all-target Clippy passed. Both sources match verified snapshot;
-  workspace whitespace checks passed. Unrelated edits untouched.
-- Snapshot: /tmp/lockbox-refactor-54.bxoanqhn. Last full suite remains cycle 48.
+Cycle 55: Share encrypted-file write/sync sequence
+- Private write_synced writes header, ciphertext and sync_all once for both
+  create and replacement. Shared by vault and saved-identity persistence.
+- Borrow File so caller lifetime remains unchanged. Keep size checks, exclusive
+  creation, permissions, failed-create cleanup, temp drop, backup and rename order.
+  Directory sync remains in existing caller/witness orchestration.
+- Full suite passed: 412 library, four integration, two doctests; two OS probes
+  ignored. Includes identity recovery, reopen, private-file checks, backups and
+  rollback paths. Formatting/strict all-target Clippy passed. Source matches
+  verified snapshot; workspace whitespace checks passed. No new mechanical tests.
+- Unrelated edits untouched. Snapshot: /tmp/lockbox-refactor-55.r2_zhguj.
 
-Next search: file::create/replace repeat header write, ciphertext write and sync;
-share sequence while retaining file lifetime, cleanup, size checks and backup/
-rename order. Identity persistence shares these helpers too; verify its coverage.
+Next search: Machine::prepare consumes Transaction but only reads/serializes it.
+Vault save_changes and commit_sync clone full transactions for retry callbacks.
+Consider internal borrowed preparation with public owned API preserved; retain
+idle/writer/validation/budget/frontier ordering and merge/rebase behavior.
 Inspect current code and tests before choosing; no quota-driven edits.
