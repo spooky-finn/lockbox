@@ -1,4 +1,5 @@
 //! Vault lifecycle. Collaborators are borrowed for transitions, never owned here.
+
 use super::{
     auth::{Locked, Opened},
     biometrics::TouchId,

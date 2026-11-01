@@ -1,4 +1,5 @@
 //! Draft connection settings. Never serialize these into public configuration.
+
 use zeroize::Zeroizing;
 
 #[derive(Default)]

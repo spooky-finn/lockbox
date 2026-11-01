@@ -1,5 +1,6 @@
 //! Storj's path-style S3 API with AWS Signature V4. No remote credential probes
 //! or uploads occur at construction, and response bodies never enter diagnostics.
+
 use super::sync::{Page, Result, Storage, TransportError};
 use crate::core::sync::{Hash, MAX_OBJECT_BYTES};
 use hmac::{Hmac, Mac};
@@ -217,6 +218,7 @@ struct Listing {
     #[serde(rename = "Contents", default)]
     contents: Vec<Listed>,
 }
+
 #[derive(Deserialize)]
 struct Listed {
     #[serde(rename = "Key")]
@@ -272,6 +274,7 @@ fn encode(value: &str, slash: bool) -> String {
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
+
 fn hmac(key: &[u8], data: &[u8]) -> Zeroizing<[u8; 32]> {
     let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(key).expect("HMAC accepts any key length");
     mac.update(data);

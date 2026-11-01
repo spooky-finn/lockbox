@@ -1,5 +1,6 @@
 //! Session-scoped workers carry ciphertext and provider credentials only. Dropping
 //! the session cancels work; no detached result can unlock or restore plaintext.
+
 use crate::{
     core::sync::{Error, Hash},
     infra::{
@@ -20,11 +21,13 @@ enum Reply {
     Downloaded(sync::Result<Download>),
     Uploaded(sync::Result<Vec<Hash>>),
 }
+
 struct Worker {
     reply: Arc<Mutex<Option<Reply>>>,
     finished: Arc<AtomicBool>,
     cancel: Cancellation,
 }
+
 impl Drop for Worker {
     fn drop(&mut self) {
         self.cancel.cancel();
@@ -43,6 +46,7 @@ pub(crate) enum Status {
     Removed,
     Failed,
 }
+
 impl Status {
     pub fn label(self) -> &'static str {
         match self {

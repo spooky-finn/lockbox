@@ -2,6 +2,7 @@
 //!
 //! `LBX-SYNC-0` is an experimental, deliberately separate wire profile from the
 //! proposal in docs/lockbox-protocol.md. Only canonical objects enter replay.
+
 mod crypto;
 mod machine;
 mod model;

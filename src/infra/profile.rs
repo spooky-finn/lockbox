@@ -1,4 +1,5 @@
 //! Encrypted device profile, independent root capsule, and durable sync journal.
+
 use super::vault::{KdfParams, Result, VaultError};
 use crate::core::identity::{DeviceKeys, PublicIdentity, SpaceKeys, random32};
 use argon2::{Algorithm, Argon2, Params, Version};

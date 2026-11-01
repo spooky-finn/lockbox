@@ -1,4 +1,5 @@
 //! Encrypted folder metadata and hierarchy invariants.
+
 use crate::core::entry::Entry;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};

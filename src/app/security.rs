@@ -1,4 +1,5 @@
 //! Native clipboard and inactivity monitoring. No dependency on Dioxus.
+
 use super::time::unix_now;
 use crate::{
     core::entry::Entry,

@@ -1,4 +1,5 @@
 //! Unlock/create form and its background worker; no UI or system-service ownership.
+
 use super::time::unix_now;
 use crate::infra::profile::{BootstrapProfile, ProviderConfiguration};
 use crate::{
@@ -285,6 +286,7 @@ impl Locked {
         None
     }
 }
+
 /// Picked files get the `.lbx` extension, so `.gitignore` always covers them.
 pub(crate) fn with_vault_extension(mut path: PathBuf) -> PathBuf {
     if path.extension().is_none() {

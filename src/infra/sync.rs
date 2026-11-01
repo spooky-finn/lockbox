@@ -1,4 +1,5 @@
 //! Bounded ciphertext transport. Providers never receive signing or content keys.
+
 use crate::core::sync::{Blob, Error, Hash, MAX_OBJECT_BYTES, MAX_OBJECTS, SyncState};
 use std::{
     collections::BTreeSet,

@@ -10,6 +10,7 @@ struct Memory {
     repeated_cursor: bool,
     missing: bool,
 }
+
 impl Storage for Memory {
     fn list(&mut self, _: Hash, _: Option<&str>) -> Result<Page> {
         Ok(Page {

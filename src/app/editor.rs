@@ -1,4 +1,5 @@
 //! Entry editing, TOTP-link parsing and password generation.
+
 use crate::{
     core::entry::{Entry, TotpAlgorithm},
     core::generator,

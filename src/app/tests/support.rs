@@ -1,4 +1,5 @@
 //! Shared fixtures for application tests.
+
 use super::workspace::Unlocked;
 use crate::infra::vault::{KdfParams, Vault};
 use secrecy::SecretString;

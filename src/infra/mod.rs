@@ -1,4 +1,5 @@
 //! Infrastructure responsibilities.
+
 pub mod autolock;
 pub mod clipboard;
 pub mod config;

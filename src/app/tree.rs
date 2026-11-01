@@ -1,4 +1,5 @@
 //! A filtered hierarchy for presentation. Nodes borrow titles, never copy secrets.
+
 use super::workspace::matches;
 use crate::{
     core::entry::Entry,

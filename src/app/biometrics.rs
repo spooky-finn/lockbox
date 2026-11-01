@@ -1,4 +1,5 @@
 //! Biometric preference and worker lifecycle, scoped to one unlocked vault.
+
 use super::{settings::Settings, time::unix_now};
 use crate::{
     infra::touchid::{self, Biometrics, TouchIdError},

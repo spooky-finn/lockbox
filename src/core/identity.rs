@@ -1,4 +1,5 @@
 //! Initial identity material. No protocol signatures or admission are produced here.
+
 use ed25519_dalek::SigningKey;
 #[cfg(test)]
 use hkdf::Hkdf;
