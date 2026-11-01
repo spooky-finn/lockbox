@@ -321,34 +321,47 @@ pub(super) fn copy(field: CopyField) {
 }
 
 pub(super) fn add_attachment() {
-    let mut state = consume_context::<Session>();
-    let draft_id = match &*state.peek() {
-        Screen::Unlocked(u) => u.draft.as_ref().map(|d| d.entry.id.clone()),
+    let state = consume_context::<Session>();
+    let selected = match &*state.peek() {
+        Screen::Unlocked(u) => u
+            .draft
+            .as_ref()
+            .map(|d| (u.vault.path().to_path_buf(), d.entry.id.clone())),
         _ => None,
     };
-
-    let Some(draft_id) = draft_id else {
+    let Some((vault_path, draft_id)) = selected else {
         return;
     };
 
-    let Some(path) = rfd::FileDialog::new().pick_file() else {
-        return;
-    };
+    // A blocking native dialog can re-enter Dioxus with its callback borrowed.
+    spawn(async move {
+        if let Some(path) = rfd::AsyncFileDialog::new().pick_file().await {
+            finish_add_attachment(state, &vault_path, &draft_id, path.path());
+        }
+    });
+}
 
+fn finish_add_attachment(
+    mut state: Session,
+    vault_path: &std::path::Path,
+    draft_id: &str,
+    path: &std::path::Path,
+) {
     let mut screen = state.write();
     let Screen::Unlocked(u) = &mut *screen else {
         return;
     };
-
+    if u.vault.path() != vault_path {
+        return;
+    }
     let Some(draft) = &mut u.draft else {
         return;
     };
-
     if draft.entry.id != draft_id {
         return;
     }
     u.error = (|| {
-        let (name, mut data) = crate::infra::attachments::read(&path)?;
+        let (name, mut data) = crate::infra::attachments::read(path)?;
         draft
             .entry
             .add_attachment(name, std::mem::take(&mut *data))
@@ -358,38 +371,53 @@ pub(super) fn add_attachment() {
 }
 
 pub(super) fn export_attachment(id: &str) {
-    let mut state = consume_context::<Session>();
+    let state = consume_context::<Session>();
     let selected = match &*state.peek() {
         Screen::Unlocked(u) => u.selected_entry().and_then(|e| {
             e.attachments
                 .iter()
                 .find(|f| f.id == id)
-                .map(|f| (e.id.clone(), f.name.clone()))
+                .map(|f| (u.vault.path().to_path_buf(), e.id.clone(), f.name.clone()))
         }),
         _ => None,
     };
-
-    let Some((entry_id, name)) = selected else {
+    let Some((vault_path, entry_id, name)) = selected else {
         return;
     };
+    let id = id.to_owned();
 
-    let Some(path) = rfd::FileDialog::new().set_file_name(&name).save_file() else {
-        return;
-    };
+    spawn(async move {
+        if let Some(path) = rfd::AsyncFileDialog::new()
+            .set_file_name(&name)
+            .save_file()
+            .await
+        {
+            finish_export_attachment(state, &vault_path, &entry_id, &id, path.path());
+        }
+    });
+}
 
+fn finish_export_attachment(
+    mut state: Session,
+    vault_path: &std::path::Path,
+    entry_id: &str,
+    id: &str,
+    path: &std::path::Path,
+) {
     let mut screen = state.write();
     let Screen::Unlocked(u) = &mut *screen else {
         return;
     };
-
+    if u.vault.path() != vault_path {
+        return;
+    }
     let Some(entry) = u.selected_entry().filter(|e| e.id == entry_id) else {
         return;
     };
-
     let Some(file) = entry.attachments.iter().find(|f| f.id == id) else {
         return;
     };
-    u.error = crate::infra::attachments::export(&path, &file.data).err();
+    u.error = crate::infra::attachments::export(path, &file.data).err();
 }
 
 #[cfg(test)]

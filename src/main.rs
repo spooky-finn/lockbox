@@ -1,6 +1,8 @@
 use dioxus::desktop::{Config, LogicalSize, WindowBuilder};
 
 fn main() {
+    // Dioxus defaults to DEBUG in development, including verbose AWS SDK traces.
+    let _ = dioxus::logger::init(dioxus::logger::tracing::Level::INFO);
     let window = WindowBuilder::new()
         .with_title("lockbox")
         .with_theme(None)
