@@ -1,4 +1,175 @@
+use crate::sync::protocol::Replay;
 use crate::sync::protocol::machine::tests::*;
+
+fn replay_facts(replay: &Replay) -> impl Eq + std::fmt::Debug + '_ {
+    let Replay {
+        history: _,
+        membership,
+        epoch,
+        projection,
+        frontier,
+        accepted,
+        pending,
+        rejected,
+        excluded,
+        role,
+        ready,
+        history_verified,
+    } = replay;
+    (
+        membership,
+        epoch,
+        canonical(projection).unwrap(),
+        frontier,
+        accepted,
+        pending,
+        rejected,
+        excluded,
+        role,
+        ready,
+        history_verified,
+    )
+}
+
+fn compare_replays(state: &SyncState, device: &DeviceSecret) -> Result<Replay, Error> {
+    let full = Machine::replay(state, device);
+    let current = Machine::replay_state(state, device);
+    match (full, current) {
+        (Ok(full), Ok(current)) => {
+            assert!(current.history.is_empty());
+            assert_eq!(replay_facts(&full), replay_facts(&current));
+            Ok(full)
+        }
+        (Err(full), Err(current)) => {
+            assert_eq!(full, current);
+            Err(full)
+        }
+        (Ok(_), Err(error)) => panic!("state replay failed: {error:?}"),
+        (Err(error), Ok(_)) => panic!("full replay failed: {error:?}"),
+    }
+}
+
+#[test]
+fn state_replay_preserves_closed_epochs_conflicts_and_unavailable_history() {
+    let (mut state, device) = owner();
+    let mut record = entry(1, "original");
+    record
+        .add_attachment("key.bin".into(), vec![0, 255, 42])
+        .unwrap();
+    let first = edit(&mut state, &device, vec![record.clone()]);
+    let (guest, certificate) = identity(2);
+    admit(&mut state, &device, &guest, certificate, Role::Editor);
+    let mut concurrent = state.clone();
+    record.password = "owner edit".into();
+    edit(&mut state, &device, vec![record.clone()]);
+    record.password = "guest edit".into();
+    edit(&mut concurrent, &guest, vec![record]);
+    deliver(&concurrent, &mut state);
+
+    let full = compare_replays(&state, &device).unwrap();
+    assert!(full.ready && full.history_verified);
+    assert_eq!(full.projection.conflicts().count(), 1);
+    assert_eq!(full.history.len(), 3);
+    assert!(full.history.iter().all(|change| {
+        change
+            .after
+            .as_ref()
+            .is_some_and(|entry| entry.attachments[0].data == [0, 255, 42])
+    }));
+    assert!(full.history.iter().skip(1).all(|change| {
+        change.before[0].password == "original"
+            && change.before[0].attachments[0].data == [0, 255, 42]
+    }));
+
+    let joined = compare_replays(&state, &guest).unwrap();
+    assert!(joined.ready && !joined.history_verified);
+    assert_eq!(joined.role, Some(Role::Editor));
+    assert_eq!(joined.history.len(), 2);
+    let (outsider, _) = identity(3);
+    let outside = compare_replays(&state, &outsider).unwrap();
+    assert!(!outside.ready && !outside.history_verified);
+    assert_eq!(outside.role, None);
+
+    let mut incomplete = state.clone();
+    incomplete.objects.remove(&first);
+    let waiting = compare_replays(&incomplete, &device).unwrap();
+    assert!(!waiting.ready);
+    assert!(waiting.pending.contains(&first));
+}
+
+#[test]
+fn state_replay_keeps_failures_and_candidate_diagnostics() {
+    let (mut state, device) = owner();
+    let mut invalid = encrypted_change(
+        &state,
+        state.genesis,
+        &device,
+        1,
+        None,
+        vec![],
+        &empty_transaction(),
+    );
+    let Object::Change(change) = &mut invalid else {
+        unreachable!()
+    };
+    change.signature.0[0] ^= 1;
+    let hash = invalid.hash().unwrap();
+    Machine::receive(&mut state, hash, invalid.bytes().unwrap()).unwrap();
+    assert_eq!(
+        compare_replays(&state, &device).unwrap().rejected[&hash],
+        Error::InvalidSignature
+    );
+
+    let missing = Hash([99; 32]);
+    let child = encrypted_change(
+        &state,
+        state.genesis,
+        &device,
+        1,
+        None,
+        vec![missing],
+        &empty_transaction(),
+    );
+    Machine::receive(&mut state, child.hash().unwrap(), child.bytes().unwrap()).unwrap();
+    let waiting = compare_replays(&state, &device).unwrap();
+    assert!(!waiting.ready);
+    assert!(waiting.pending.contains(&missing));
+
+    let mut frozen = state.clone();
+    frozen.fault = Some(Error::DeviceFork);
+    assert!(matches!(
+        compare_replays(&frozen, &device),
+        Err(Error::DeviceFork)
+    ));
+    let mut malformed = state.clone();
+    malformed.objects.insert(state.genesis, Blob(b"{".to_vec()));
+    assert!(matches!(
+        compare_replays(&malformed, &device),
+        Err(Error::InvalidEncoding)
+    ));
+    let mut substituted = state.clone();
+    let bytes = substituted.objects.remove(&state.genesis).unwrap();
+    substituted.objects.insert(Hash([98; 32]), bytes);
+    assert!(matches!(
+        compare_replays(&substituted, &device),
+        Err(Error::HashMismatch)
+    ));
+
+    let (mut checkpoint, key) = owner();
+    let mut control = control_at(&checkpoint, checkpoint.genesis).unwrap();
+    control.body.checkpoint.0[0] ^= 1;
+    let object =
+        Object::Control(crypto::sign(control.body, &key.signer(), CONTROL_DOMAIN).unwrap());
+    checkpoint.genesis = object.hash().unwrap();
+    checkpoint.objects.clear();
+    checkpoint
+        .objects
+        .insert(checkpoint.genesis, Blob(object.bytes().unwrap()));
+    assert!(matches!(
+        compare_replays(&checkpoint, &key),
+        Err(Error::AuthenticationFailed)
+    ));
+}
 
 #[test]
 fn concurrent_passwords_converge_in_every_order_and_resolve_explicitly() {

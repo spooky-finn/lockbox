@@ -167,7 +167,7 @@ impl Machine {
     ) -> Result<PreparedChange> {
         state.require_idle()?;
 
-        let replay = Self::replay(state, device)?;
+        let replay = Self::replay_state(state, device)?;
         replay.require_writer()?;
         Self::prepare_transaction(state, device, transaction, replay, false)
     }
@@ -183,7 +183,7 @@ impl Machine {
     ) -> Result<Option<PreparedChange>> {
         state.require_idle()?;
 
-        let replay = Self::replay(state, device)?;
+        let replay = Self::replay_state(state, device)?;
         replay.require_writer()?;
 
         if replay.frontier.len() <= crate::sync::protocol::MAX_PARENTS {
@@ -289,7 +289,7 @@ impl Machine {
     ) -> Result<PreparedChange> {
         state.require_idle()?;
 
-        let replay = Self::replay(state, device)?;
+        let replay = Self::replay_state(state, device)?;
         replay.require_writer()?;
         let previous = control_at(state, replay.membership)?;
 
@@ -340,7 +340,7 @@ impl Machine {
     /// reproduces the exact signature after a crash or a lost save response.
     pub fn complete_intent(state: &mut SyncState, device: &DeviceSecret) -> Result<Hash> {
         let prepared = state.intent.clone().ok_or(Error::PendingIntent)?;
-        let replay = Self::replay(state, device)?;
+        let replay = Self::replay_state(state, device)?;
         prepared.verify_signing_authority(&replay)?;
         let object = match prepared {
             PreparedChange::Change(change) => {
@@ -386,8 +386,8 @@ impl Machine {
             state.objects.insert(hash, Blob(bytes));
             true
         };
-        let check =
-            Self::replay(state, device).and_then(|checked| checked.verify_applied(&object, hash));
+        let check = Self::replay_state(state, device)
+            .and_then(|checked| checked.verify_applied(&object, hash));
 
         if let Err(error) = check {
             if inserted {
@@ -409,7 +409,7 @@ impl Machine {
         state: &SyncState,
         device: &DeviceSecret,
     ) -> Result<Vec<(Signed<Certificate>, Role)>> {
-        let replay = Self::replay(state, device)?;
+        let replay = Self::replay_state(state, device)?;
         Ok(control_at(state, replay.membership)?
             .body
             .members
@@ -422,7 +422,7 @@ impl Machine {
     /// does not grant current write authority. A caller must explicitly review
     /// before re-authoring it against the current visible revisions.
     pub fn excluded_edits(state: &SyncState, device: &DeviceSecret) -> Result<Vec<ExcludedEdit>> {
-        let replay = Self::replay(state, device)?;
+        let replay = Self::replay_state(state, device)?;
         Self::decrypt_excluded(state, device, &replay)
     }
 
@@ -470,7 +470,7 @@ impl Machine {
     ) -> Result<PreparedChange> {
         use crate::sync::protocol::Action;
         use crate::sync::protocol::Mutation;
-        let replay = Self::replay(state, device)?;
+        let replay = Self::replay_state(state, device)?;
         replay.require_writer()?;
         let edit = Self::decrypt_excluded(state, device, &replay)?
             .into_iter()

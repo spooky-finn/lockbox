@@ -57,7 +57,7 @@ impl Machine {
     }
 
     pub fn recovery_anchor(state: &SyncState, device: &DeviceSecret) -> Result<RecoveryAnchor> {
-        let replay = Self::replay(state, device)?;
+        let replay = Self::replay_state(state, device)?;
         replay.require_ready()?;
         Ok(RecoveryAnchor {
             descriptor: state.descriptor(),
@@ -76,7 +76,7 @@ impl Machine {
     ) -> Result<PreparedChange> {
         source.require_idle()?;
         certificate.verify()?;
-        let replay = Self::replay(source, source_device)?;
+        let replay = Self::replay_state(source, source_device)?;
         anchor.verify_replay(source, &replay)?;
         let previous = control_at(source, replay.membership)?;
         if certificate.body.root_key != source.owner_root {

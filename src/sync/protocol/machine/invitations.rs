@@ -52,7 +52,7 @@ impl Machine {
             return Err(Error::InvalidInvitation);
         }
         state.require_idle()?;
-        let replay = Self::replay(state, device)?;
+        let replay = Self::replay_state(state, device)?;
 
         replay.require_ready()?;
         with_history(state, |history| {
@@ -162,7 +162,7 @@ impl Machine {
         admission: &Admission,
     ) -> Result<AdmissionReceipt> {
         state.require_idle()?;
-        if !Self::replay(state, device)?.ready {
+        if !Self::replay_state(state, device)?.ready {
             return Err(Error::MissingDependency);
         }
         with_history(state, |history| {

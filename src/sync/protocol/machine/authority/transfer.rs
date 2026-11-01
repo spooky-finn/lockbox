@@ -82,7 +82,7 @@ impl ControlTransfer {
         // real journal as excluded drafts when the transfer eventually arrives.
         let closure = self.control.dependency_closure(&candidate)?;
         candidate.objects.retain(|hash, _| closure.contains(hash));
-        let replay = Machine::replay(&candidate, device)?;
+        let replay = Machine::replay_state(&candidate, device)?;
         replay.require_ready()?;
         if !replay.has_frontier(&self.control.closed_frontier)
             || replay.projection != self.control.decrypt_checkpoint(device)?
@@ -110,7 +110,7 @@ impl Machine {
         target: Hash,
     ) -> Result<PreparedChange> {
         state.require_idle()?;
-        let replay = Self::replay(state, device)?;
+        let replay = Self::replay_state(state, device)?;
         replay.require_ready()?;
         let previous = control_at(state, replay.membership)?;
         if previous.body.controller != device.id() {

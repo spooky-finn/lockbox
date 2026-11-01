@@ -28,6 +28,19 @@ impl Machine {
     /// persists integrity faults and retains its previous readable snapshot while
     /// dependencies are incomplete; inspect [`Replay::ready`] before installing it.
     pub fn replay(state: &SyncState, device: &DeviceSecret) -> Result<Replay> {
+        Self::replay_inner(state, device, true)
+    }
+
+    /// Verify the complete history without allocating display-only record revisions.
+    pub(crate) fn replay_state(state: &SyncState, device: &DeviceSecret) -> Result<Replay> {
+        Self::replay_inner(state, device, false)
+    }
+
+    fn replay_inner(
+        state: &SyncState,
+        device: &DeviceSecret,
+        include_record_history: bool,
+    ) -> Result<Replay> {
         if let Some(fault) = state.fault {
             return Err(fault);
         }
@@ -149,15 +162,13 @@ impl Machine {
                     .iter()
                     .map(|(hash, error)| (*hash, *error)),
             );
-            let replayed = replay_epoch(
-                *membership,
+            let replayed = EpochContext {
+                membership: *membership,
                 control,
-                &baseline,
-                authenticated,
-                &changes,
-                &controls,
+                baseline: &baseline,
                 next,
-            )?;
+            }
+            .replay(authenticated, &changes, &controls, include_record_history)?;
             result.history.extend(replayed.history);
             result.projection = replayed.projection;
             result.accepted.extend(replayed.accepted);
@@ -187,115 +198,132 @@ struct VerifiedChange<'a> {
     transaction: Transaction,
 }
 
-fn replay_epoch(
+struct EpochContext<'a> {
     membership: Hash,
-    control: &Control,
-    baseline: &Projection,
-    authenticated: AuthenticatedChanges<'_>,
-    changes: &BTreeMap<Hash, Signed<Change>>,
-    controls: &BTreeMap<Hash, Signed<Control>>,
-    next: Option<&Control>,
-) -> Result<Replay> {
-    let AuthenticatedChanges {
-        mut verified,
-        mut rejected,
-    } = authenticated;
-    let ClosedHistory {
-        excluded,
-        missing: missing_closed,
-    } = select_closed_history(&mut verified, &rejected, next)?;
-    ensure_unique_sequences(&verified)?;
-    let CausalChanges {
-        accepted,
-        unresolved: verified,
-    } = apply_causal_changes(
-        membership,
-        baseline,
-        verified,
-        &mut rejected,
-        changes,
-        controls,
-        next.is_some(),
-    )?;
-    let mut pending: BTreeSet<_> = verified.keys().copied().collect();
-    pending.extend(missing_closed);
+    control: &'a Control,
+    baseline: &'a Projection,
+    next: Option<&'a Control>,
+}
 
-    for change in verified.values() {
-        for parent in &change.header.parents {
-            if !accepted.contains_key(parent) && !rejected.contains_key(parent) {
-                pending.insert(*parent);
-            }
-        }
-    }
+impl EpochContext<'_> {
+    fn replay(
+        self,
+        authenticated: AuthenticatedChanges<'_>,
+        changes: &BTreeMap<Hash, Signed<Change>>,
+        controls: &BTreeMap<Hash, Signed<Control>>,
+        include_record_history: bool,
+    ) -> Result<Replay> {
+        let Self {
+            membership,
+            control,
+            baseline,
+            next,
+        } = self;
+        let AuthenticatedChanges {
+            mut verified,
+            mut rejected,
+        } = authenticated;
+        let ClosedHistory {
+            excluded,
+            missing: missing_closed,
+        } = select_closed_history(&mut verified, &rejected, next)?;
+        ensure_unique_sequences(&verified)?;
+        let CausalChanges {
+            accepted,
+            unresolved: verified,
+        } = apply_causal_changes(
+            membership,
+            baseline,
+            verified,
+            &mut rejected,
+            changes,
+            controls,
+            next.is_some(),
+        )?;
+        let mut pending: BTreeSet<_> = verified.keys().copied().collect();
+        pending.extend(missing_closed);
 
-    let included = if let Some(next) = next {
-        for head in &next.closed_frontier {
-            if !accepted.contains_key(head) {
-                pending.insert(*head);
-            }
-        }
-
-        if pending.is_empty() {
-            for head in &next.closed_frontier {
-                let past = ancestry(&accepted[head].header.parents, &accepted)?;
-
-                if next
-                    .closed_frontier
-                    .iter()
-                    .any(|other| past.contains(other))
-                {
-                    return Err(Error::CheckpointMismatch);
+        for change in verified.values() {
+            for parent in &change.header.parents {
+                if !accepted.contains_key(parent) && !rejected.contains_key(parent) {
+                    pending.insert(*parent);
                 }
             }
-            ancestry(&next.closed_frontier, &accepted)?
+        }
+
+        let included = if let Some(next) = next {
+            for head in &next.closed_frontier {
+                if !accepted.contains_key(head) {
+                    pending.insert(*head);
+                }
+            }
+
+            if pending.is_empty() {
+                for head in &next.closed_frontier {
+                    let past = ancestry(&accepted[head].header.parents, &accepted)?;
+
+                    if next
+                        .closed_frontier
+                        .iter()
+                        .any(|other| past.contains(other))
+                    {
+                        return Err(Error::CheckpointMismatch);
+                    }
+                }
+                ancestry(&next.closed_frontier, &accepted)?
+            } else {
+                accepted.keys().copied().collect()
+            }
         } else {
             accepted.keys().copied().collect()
-        }
-    } else {
-        accepted.keys().copied().collect()
-    };
+        };
 
-    let projection = project(
-        baseline,
-        included
+        let projection = project(
+            baseline,
+            included
+                .iter()
+                .map(|h| (*h, accepted[h].header.author, &accepted[h].transaction)),
+        );
+        let mut frontier = included.clone();
+
+        for hash in &included {
+            for parent in &accepted[hash].header.parents {
+                frontier.remove(parent);
+            }
+        }
+
+        let mut ordered = included
             .iter()
-            .map(|h| (*h, accepted[h].header.author, &accepted[h].transaction)),
-    );
-    let mut frontier = included.clone();
-
-    for hash in &included {
-        for parent in &accepted[hash].header.parents {
-            frontier.remove(parent);
-        }
-    }
-
-    let mut ordered = included
-        .iter()
-        .map(|hash| {
-            ancestry(&accepted[hash].header.parents, &accepted).map(|past| (past.len(), hash))
+            .map(|hash| {
+                ancestry(&accepted[hash].header.parents, &accepted).map(|past| (past.len(), hash))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        ordered.sort_by_key(|(depth, hash)| (*depth, **hash));
+        let history = if include_record_history {
+            materialize_history(
+                control,
+                baseline,
+                &accepted,
+                ordered.into_iter().map(|(_, hash)| *hash),
+            )
+        } else {
+            Vec::new()
+        };
+        Ok(Replay {
+            history,
+            membership,
+            epoch: control.epoch.number.0,
+            projection,
+            frontier,
+            accepted: included,
+            pending,
+            rejected,
+            excluded,
+            role: None,
+            ready: true,
+            history_verified: true,
         })
-        .collect::<Result<Vec<_>>>()?;
-    ordered.sort_by_key(|(depth, hash)| (*depth, **hash));
-    let history = materialize_history(
-        control,
-        baseline,
-        &accepted,
-        ordered.into_iter().map(|(_, hash)| *hash),
-    );
-    Ok(Replay {
-        history,
-        membership,
-        epoch: control.epoch.number.0,
-        projection,
-        frontier,
-        accepted: included,
-        pending,
-        rejected,
-        excluded,
-        role: None,
-        ready: true,
-        history_verified: true,
-    })
+    }
 }
 
 fn materialize_history(
