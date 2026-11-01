@@ -155,6 +155,15 @@ impl Machine {
         device: &DeviceSecret,
         transaction: Transaction,
     ) -> Result<PreparedChange> {
+        Self::prepare_borrowed(state, device, &transaction)
+    }
+
+    /// Reuse a reviewed transaction across host retries without copying its payloads.
+    pub(crate) fn prepare_borrowed(
+        state: &SyncState,
+        device: &DeviceSecret,
+        transaction: &Transaction,
+    ) -> Result<PreparedChange> {
         state.require_idle()?;
 
         let replay = Self::replay(state, device)?;
@@ -182,7 +191,7 @@ impl Machine {
         Self::prepare_transaction(
             state,
             device,
-            Transaction {
+            &Transaction {
                 mutations: vec![],
                 rebased_from: None,
             },
@@ -196,12 +205,12 @@ impl Machine {
     fn prepare_transaction(
         state: &SyncState,
         device: &DeviceSecret,
-        transaction: Transaction,
+        transaction: &Transaction,
         replay: Replay,
         folding: bool,
     ) -> Result<PreparedChange> {
         transaction.validate(&replay.projection)?;
-        let plaintext = Zeroizing::new(canonical(&transaction)?);
+        let plaintext = Zeroizing::new(canonical(transaction)?);
 
         if plaintext.len() > crate::sync::protocol::MAX_TRANSACTION_BYTES {
             return Err(Error::ResourceBudgetExceeded);
@@ -514,7 +523,7 @@ impl Machine {
         Self::prepare_transaction(
             state,
             device,
-            Transaction {
+            &Transaction {
                 mutations,
                 rebased_from: Some(excluded),
             },

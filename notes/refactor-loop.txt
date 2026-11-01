@@ -5,24 +5,27 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 55; 412 library, four integration, two doctests passed.
+Last full suite: cycle 56; 413 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 55: Share encrypted-file write/sync sequence
-- Private write_synced writes header, ciphertext and sync_all once for both
-  create and replacement. Shared by vault and saved-identity persistence.
-- Borrow File so caller lifetime remains unchanged. Keep size checks, exclusive
-  creation, permissions, failed-create cleanup, temp drop, backup and rename order.
-  Directory sync remains in existing caller/witness orchestration.
-- Full suite passed: 412 library, four integration, two doctests; two OS probes
-  ignored. Includes identity recovery, reopen, private-file checks, backups and
-  rollback paths. Formatting/strict all-target Clippy passed. Source matches
-  verified snapshot; workspace whitespace checks passed. No new mechanical tests.
-- Unrelated edits untouched. Snapshot: /tmp/lockbox-refactor-55.r2_zhguj.
+Cycle 56: Borrow shared transaction preparation
+- Internal prepare_borrowed and prepare_transaction read Transaction by reference.
+  Public prepare keeps owned signature and delegates. Merge/rebase borrow their
+  temporary inputs; vault save/conflict retry callbacks stop cloning transactions.
+- Preserve idle/writer/validation/byte budget/frontier order, random nonce timing,
+  capacity checks, encryption and durable reservation/recovery behavior.
+- New regression passed before refactor through owned API, then borrowed API:
+  exact decrypted JSON including Unicode and attachment, inputs/journal unchanged,
+  pending intent rejection preserves both, completed replay retains full payload.
+- Full suite: 413 library, four integration, two doctests passed; two OS probes
+  ignored. Formatting/strict all-target Clippy passed. All three sources match
+  verified snapshot; whitespace checks passed. Unrelated edits untouched.
+- Snapshot: /tmp/lockbox-refactor-56.2lb83o8g.
 
-Next search: Machine::prepare consumes Transaction but only reads/serializes it.
-Vault save_changes and commit_sync clone full transactions for retry callbacks.
-Consider internal borrowed preparation with public owned API preserved; retain
-idle/writer/validation/budget/frontier ordering and merge/rebase behavior.
+Next search: prepare_transaction/membership clone ciphertext/control just to
+construct dummy-signed Object for byte capacity checks. Consider moving owned
+PreparedChange into temporary Object and back after checking, avoiding cloned
+bodies and duplicated placeholders without duplicating wire serialization schema.
+Inspect authority helper ownership before including it; some inputs may be borrowed.
 Inspect current code and tests before choosing; no quota-driven edits.

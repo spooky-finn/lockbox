@@ -77,7 +77,7 @@ impl Vault {
         }
 
         let prepared = self.prepare_sync_command(|sync, device| {
-            Machine::prepare(sync, device, transaction.clone())
+            Machine::prepare_borrowed(sync, device, &transaction)
         })?;
         self.entries = replay.projection.entries();
         self.folders = replay.projection.folders();
@@ -221,7 +221,7 @@ impl Vault {
     fn commit_sync(&mut self, transaction: crate::sync::protocol::Transaction) -> Result<()> {
         use crate::sync::protocol::Machine;
         let prepared = self.prepare_sync_command(|state, device| {
-            Machine::prepare(state, device, transaction.clone())
+            Machine::prepare_borrowed(state, device, &transaction)
         })?;
         self.commit_prepared(prepared)
     }
