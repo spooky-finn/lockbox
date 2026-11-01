@@ -8,22 +8,20 @@ No delegation requested. Keep unrelated work outside refactor commits.
 Last full suite: cycle 46; 407 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 46: Reuse worker lifecycle for access jobs
-- Password/profile create/open/recovery, identity setup/recovery and biometric
-  unlock use existing platform Worker. Remove three channel/thread setups and
-  repeated disconnect branches. Secret buffers and task bodies unchanged.
-- Keep pending/error/success flags and auto-biometric follow-up behavior. Dropped
-  forms discard late outputs; worker faults retain Unlock was interrupted text.
-- Adapt existing auth tests to poll real results; runtime test covers pending,
-  success, task error and absent worker result. Existing worker tests cover panic,
-  cancellation and late-result disposal. No new production behavior introduced.
-- Full suite passed above: 407 library, four integration, two doctests; two OS
-  probes ignored. Formatting and strict all-target Clippy passed. All three
-  sources match verified snapshot; workspace whitespace checks passed.
+Cycle 47: Reuse worker for biometric enabling
+- TouchId enable uses existing Worker; remove independent channel/thread setup
+  and map worker failure to unchanged interruption text. Keep pending guard,
+  native task, disabled path and preference update timing unchanged.
+- Three regressions passed before refactor: preferences wait for poll, successful
+  disable removes key, native denial/store errors preserve disabled state and
+  disk, preference write failure retains already-enabled key/control.
+- Forty access, fourteen native Touch ID, three worker, one settings state and
+  seven runtime tests passed; one OS probe ignored. Formatting/strict all-target
+  Clippy passed. Assertion-only clone fix then passed Clippy and three regressions
+  again. Both sources match verified snapshot; whitespace checks passed.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-46.2icoyl8_ when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-47.jefk5pm7 when workspace cannot compile.
 
-Next search: access/biometrics.rs still owns an independent channel/thread for
-Touch ID enable. Consider shared Worker while preserving settings-save timing,
-pending/drop behavior and native error text; add meaningful boundary coverage.
+Next search: inspect vault save serialization for unnecessary owned snapshots;
+consider common encrypted-file write/sync sequence only if it clarifies code.
 Inspect current code and tests before choosing; no quota-driven edits.

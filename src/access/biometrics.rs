@@ -2,23 +2,20 @@
 
 use crate::{
     desktop::time::unix_now,
-    platform::touchid::{self, Biometrics, TouchIdError},
+    platform::{
+        jobs::Worker,
+        touchid::{self, Biometrics, TouchIdError},
+    },
     settings::state::Settings,
     vault::Vault,
 };
-use std::{
-    sync::{
-        Arc,
-        mpsc::{self, Receiver, TryRecvError},
-    },
-    thread,
-};
+use std::sync::Arc;
 
 #[derive(Default)]
 pub(crate) struct TouchId {
     pub available: bool,
     pub enabled: bool,
-    pub pending: Option<Receiver<Result<(), String>>>,
+    pub pending: Option<Worker<Result<(), String>>>,
 }
 
 impl TouchId {
@@ -62,14 +59,11 @@ impl TouchId {
         let id = vault.id();
 
         if wanted {
-            let (sender, receiver) = mpsc::channel();
             let key = vault.export_key();
-            thread::spawn(move || {
-                let result = touchid::enable(&*biometrics, &id, &key, unix_now())
-                    .map_err(|error| format!("Could not enable Touch ID: {error}"));
-                let _ = sender.send(result);
-            });
-            self.pending = Some(receiver);
+            self.pending = Some(Worker::spawn(move |_| {
+                touchid::enable(&*biometrics, &id, &key, unix_now())
+                    .map_err(|error| format!("Could not enable Touch ID: {error}"))
+            }));
             None
         } else {
             touchid::disable(&*biometrics, &id);
@@ -79,11 +73,11 @@ impl TouchId {
     }
 
     pub fn poll(&mut self, vault: &Vault, settings: &mut Settings) -> Option<Result<(), String>> {
-        let result = match self.pending.as_ref()?.try_recv() {
-            Ok(result) => result,
-            Err(TryRecvError::Empty) => return None,
-            Err(TryRecvError::Disconnected) => Err("Enabling Touch ID was interrupted".into()),
-        };
+        let result = self
+            .pending
+            .as_mut()?
+            .take()?
+            .unwrap_or_else(|_| Err("Enabling Touch ID was interrupted".into()));
 
         self.pending = None;
         Some(result.and_then(|()| {
@@ -92,3 +86,7 @@ impl TouchId {
         }))
     }
 }
+
+#[cfg(test)]
+#[path = "tests/biometrics.rs"]
+mod tests;
