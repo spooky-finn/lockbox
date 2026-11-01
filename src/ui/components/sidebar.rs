@@ -11,6 +11,14 @@ use dioxus::prelude::*;
 
 #[component]
 pub(super) fn Sidebar() -> Element {
+    // Keep native pointer capture and layout observation inside the webview.
+    let resize = use_hook(|| std::rc::Rc::new(std::cell::Cell::new(None::<document::Eval>)));
+    let cleanup = resize.clone();
+    use_drop(move || {
+        if let Some(eval) = cleanup.take() {
+            let _ = eval.send(());
+        }
+    });
     let language = crate::ui::i18n::use_language();
     let state = use_context::<Session>();
     let screen = state.read();
@@ -20,7 +28,8 @@ pub(super) fn Sidebar() -> Element {
 
     let nodes = tree::project(&workspace.vault, &workspace.search);
     rsx! {
-        aside { class: "sidebar",
+        aside { id: "vault-sidebar", class: "sidebar",
+            onmounted: move |_| resize.set(Some(document::eval(include_str!("../../../assets/sidebar-resize.js")))),
             div { class: "sidebar-heading",
                 h2 { {language.text(Text::Vault)} }
                 span { class: "count", "{workspace.vault.entries.len()}" }
@@ -67,6 +76,12 @@ pub(super) fn Sidebar() -> Element {
                     Symbol { icon: Icon::Settings }
                     {language.text(Text::Settings)}
                 }
+            }
+            div { id: "sidebar-resizer", class: "sidebar-resizer", role: "separator", tabindex: "0",
+                aria_label: language.text(Text::ResizeSidebar),
+                title: language.text(Text::ResizeSidebar),
+                aria_orientation: "vertical", aria_controls: "vault-sidebar",
+                aria_valuemin: "200", aria_valuemax: "480", aria_valuenow: "240",
             }
         }
     }

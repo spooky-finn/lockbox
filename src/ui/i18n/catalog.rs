@@ -2,6 +2,7 @@
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Text {
+    ResizeSidebar,
     Trash,
     RecordHistory,
     MoveEntryToTrash,
@@ -415,6 +416,7 @@ pub(crate) enum Text {
 impl Text {
     pub(super) fn translations(self) -> (&'static str, &'static str) {
         match self {
+            Self::ResizeSidebar => ("Изменить ширину боковой панели", "Resize sidebar"),
             Self::Trash => ("Корзина", "Trash"),
             Self::RecordHistory => ("История записи", "Record history"),
             Self::MoveEntryToTrash => ("Переместить «{0}» в корзину? Запись можно восстановить.", "Move “{0}” to Trash? You can restore it later."),
@@ -828,6 +830,7 @@ impl Text {
 }
 
 pub(super) const CATALOG: &[Text] = &[
+    Text::ResizeSidebar,
     Text::Trash,
     Text::RecordHistory,
     Text::MoveEntryToTrash,

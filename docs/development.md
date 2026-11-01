@@ -39,6 +39,11 @@ when moving implementations between modules.
 
 ## Maintenance notes
 
+Sidebar: drag right divider; arrows resize 10 px, Shift+arrows 40 px.
+Home/End select limits; double-click restores default. Width stays within
+200–480 px, reserves 320 px for detail. Mobile hides divider.
+Webview owns pointer capture; component unmount removes listeners and observer.
+
 English is the default interface language when no preference is saved or a language
 code is unknown. Preserve explicit preferences, including Russian.
 
