@@ -128,7 +128,10 @@ pub fn publication(
         if closed.contains(hash)
             || (replay.accepted.contains(hash) && !replay.excluded.contains(hash))
         {
-            pending.insert(*hash, (bytes.clone(), object.dependencies()));
+            pending.insert(
+                *hash,
+                (bytes.clone(), object.dependencies().collect::<Vec<_>>()),
+            );
         }
     }
 

@@ -70,3 +70,56 @@ fn versioned_objects_and_signature_domains_are_rejected() {
         assert!(decode::<Object>(&canonical(&control).unwrap()).is_err());
     }
 }
+
+#[test]
+fn dependency_hints_keep_order_duplicates_and_variant_limits() {
+    use crate::sync::protocol::{ControlTransition, MAX_PARENTS};
+    let references: Vec<_> = (0u64..514)
+        .map(|index| Hash::digest(b"dependency-hint-test", &index.to_be_bytes()))
+        .collect();
+    let hints = |object: &Object| object.dependencies().collect::<Vec<_>>();
+    let membership = Hash([90; 32]);
+    let mut change: Object = decode(include_bytes!("../fixtures/change.json")).unwrap();
+    let Object::Change(signed) = &mut change else {
+        panic!()
+    };
+    signed.body.header.membership = membership;
+    signed.body.header.parents = references.clone();
+    signed.body.header.previous = Some(references[0]);
+    let dependencies = hints(&change);
+    assert_eq!(dependencies.len(), MAX_PARENTS + 2);
+    assert_eq!(dependencies[0], membership);
+    assert_eq!(&dependencies[1..=MAX_PARENTS], &references[..MAX_PARENTS]);
+    assert_eq!(dependencies[MAX_PARENTS + 1], references[0]);
+    let Object::Change(signed) = &mut change else {
+        panic!()
+    };
+    signed.body.header.parents.clear();
+    signed.body.header.previous = None;
+    assert_eq!(hints(&change), [membership]);
+
+    let (state, _) = owner();
+    let mut control: Object = decode(&state.objects[&state.genesis].0).unwrap();
+    for (transition, limit) in [
+        (None, MAX_PARENTS),
+        (Some(ControlTransition::Transfer), MAX_PARENTS),
+        (Some(ControlTransition::Recovery), 512),
+    ] {
+        let Object::Control(signed) = &mut control else {
+            panic!()
+        };
+        signed.body.epoch.previous = Some(membership);
+        signed.body.transition = transition;
+        signed.body.closed_frontier = references.clone();
+        let dependencies = hints(&control);
+        assert_eq!(dependencies.len(), limit + 1);
+        assert_eq!(dependencies[0], membership);
+        assert_eq!(&dependencies[1..], &references[..limit]);
+    }
+    let Object::Control(signed) = &mut control else {
+        panic!()
+    };
+    signed.body.epoch.previous = None;
+    signed.body.closed_frontier.clear();
+    assert!(hints(&control).is_empty());
+}

@@ -5,19 +5,21 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 31; 397 library, four integration, two doctests passed.
+Last full suite: cycle 34; 398 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 33: Share buffered identity hex encoding
-- Local salt IDs reuse existing identity encoder; remove identical vault helper.
-- Format bytes into one preallocated String instead of per-byte temporary text.
-  Keep byte order, lowercase padding and existing public IDs/fingerprints.
-- Existing suites passed: 22 vault, three mnemonic reference-vector, 17 Touch ID
-  tests; one OS prompt probe ignored. No new tests for encoder consolidation.
-- Formatting and strict all-target Clippy passed. Source byte-matches verified
-  snapshot; workspace whitespace checks passed.
+Cycle 34: Stream bounded dependency hints
+- Object dependencies return borrowed iterator; discovery and transfer traversal
+  consume directly. Publication explicitly collects its queued graph lists.
+- Keep order, duplicates, membership/previous anchors, normal cap 64 and recovery
+  cap 512. Public APIs, canonical bytes and authority checks unchanged.
+- Regression passed before refactor: over-limit change/control/transfer/recovery
+  hints bounded; duplicate previous parent and empty dependencies preserved.
+- Full suite passed: 398 library, four integration, two doctests; two OS probes
+  ignored. Formatting and strict all-target Clippy passed. Source byte-matches
+  verified snapshot; workspace whitespace checks passed.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-33.Q5W5Cm when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-34.k3bGm1 when workspace cannot compile.
 
-Next search: bounded dependency iterators, publication setup, settings updates.
+Next search: publication graph bookkeeping, local edit rollback, settings.
 Inspect current code and tests before choosing; no quota-driven edits.

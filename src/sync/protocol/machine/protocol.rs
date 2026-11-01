@@ -123,34 +123,24 @@ pub struct Change {
 impl Object {
     /// Bounded availability hints. Replay checks the complete signed lists and
     /// rejects an over-limit object; transport never expands unbounded references.
-    pub(crate) fn dependencies(&self) -> Vec<Hash> {
-        match self {
-            Self::Control(control) => control
-                .body
-                .epoch
-                .previous
-                .into_iter()
-                .chain(
-                    control
-                        .body
-                        .closed_frontier
-                        .iter()
-                        .take(control.body.frontier_limit())
-                        .copied(),
-                )
-                .collect(),
-            Self::Change(change) => std::iter::once(change.body.header.membership)
-                .chain(
-                    change
-                        .body
-                        .header
-                        .parents
-                        .iter()
-                        .take(crate::sync::protocol::MAX_PARENTS)
-                        .copied(),
-                )
-                .chain(change.body.header.previous)
-                .collect(),
-        }
+    pub(crate) fn dependencies(&self) -> impl Iterator<Item = Hash> + '_ {
+        let (first, parents, last, limit) = match self {
+            Self::Control(control) => (
+                control.body.epoch.previous,
+                control.body.closed_frontier.as_slice(),
+                None,
+                control.body.frontier_limit(),
+            ),
+            Self::Change(change) => (
+                Some(change.body.header.membership),
+                change.body.header.parents.as_slice(),
+                change.body.header.previous,
+                crate::sync::protocol::MAX_PARENTS,
+            ),
+        };
+        first
+            .into_iter()
+            .chain(parents.iter().take(limit).copied())
+            .chain(last)
     }
 }
