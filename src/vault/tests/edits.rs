@@ -319,3 +319,63 @@ fn shared_folder_upserts_retry_retained_intents_after_restoring_readable_view() 
     assert!(reopened.folders().contains(&child));
     assert_eq!(reopened.entries(), &[entry]);
 }
+
+#[test]
+fn deleting_legacy_duplicate_ids_preserves_survivors_and_restores_failed_positions() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("duplicate-records.lbx");
+    let password = SecretString::from("master".to_owned());
+    let mut vault = Vault::create(
+        &path,
+        &password,
+        KdfParams {
+            memory_kib: 8192,
+            passes: 1,
+            lanes: 1,
+        },
+    )
+    .unwrap();
+    let deleted = "legacy-duplicate";
+    let original: Vec<_> = [
+        (deleted, "First duplicate"),
+        ("keep-a", "Keep A"),
+        (deleted, "Middle duplicate"),
+        (deleted, "Adjacent duplicate"),
+        ("keep-b", "Keep B"),
+        (deleted, "Last duplicate"),
+    ]
+    .into_iter()
+    .enumerate()
+    .map(|(index, (id, title))| {
+        let mut entry = Entry::new();
+        entry.id = id.into();
+        entry.title = title.into();
+        entry.password = format!("fictional secret {index}");
+        entry
+            .add_attachment(format!("file-{index}.bin"), vec![index as u8, 0, 255])
+            .unwrap();
+        entry
+    })
+    .collect();
+    vault.append_records(&[], &original).unwrap();
+    let before = fs::read(&path).unwrap();
+    let history = vault.record_history().unwrap().len();
+    let temporary = path.with_extension("lbx.tmp");
+    fs::create_dir(&temporary).unwrap();
+    for id in [deleted, "absent"] {
+        assert!(vault.delete_entry(id).is_err());
+        assert_eq!(vault.entries(), original);
+        assert_eq!(vault.record_history().unwrap().len(), history);
+        assert_eq!(fs::read(&path).unwrap(), before);
+    }
+    fs::remove_dir(temporary).unwrap();
+    vault.delete_entry(deleted).unwrap();
+    let survivors = [original[1].clone(), original[4].clone()];
+    assert_eq!(vault.entries(), survivors);
+    let changes = vault.record_history().unwrap();
+    assert_eq!(changes.len(), history + 1);
+    assert_eq!(changes.last().unwrap().action, "Delete");
+    drop(vault);
+    let reopened = Vault::open(&path, &password).unwrap();
+    assert_eq!(reopened.entries(), survivors);
+}

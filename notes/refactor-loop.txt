@@ -8,18 +8,17 @@ No delegation requested. Keep unrelated work outside refactor commits.
 Last full suite: cycle 35; 400 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 35: Narrow folder-save rollback
-- Retain replaced folder or appended slot for local undo; remove full folder
-  collection clone. One undo closure handles validation and persistence failure.
-- Keep shared full-view snapshot because recovery can replace both collections.
-- Two regressions passed before refactor: local invalid edits/write failures keep
-  positions/data/history/disk; shared update/insert retries retain exact intent
-  and add one event, surviving reopen.
-- Full suite passed: 400 library, four integration, two doctests; two OS probes
-  ignored. Formatting and strict all-target Clippy passed. Source byte-matches
-  verified snapshot; workspace whitespace checks passed.
+Cycle 36: Compact deletion staging once
+- Replace repeated Vec::remove shifts with one retain_mut pass. Move matching
+  entries into undo storage and record original indices; no payload clones added.
+- Keep all matching-ID removal, survivor order, shared snapshot and undo behavior.
+- Regression passed before refactor: beginning/end/adjacent legacy duplicate IDs,
+  missing ID, failed save, payload/history/disk rollback and durable retry.
+- Passed: nine edit, 76 record, 17 history-filtered tests, failed-delete UI test,
+  both sync integration tests. Formatting and strict all-target Clippy passed.
+  Source byte-matches snapshot; workspace whitespace checks passed.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-35.o9Mw67 when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-36.TplZH4 when workspace cannot compile.
 
-Next search: subtree assignment undo, duplicate-ID deletion, publication graph.
+Next search: projection equality snapshots, subtree assignment undo, publication.
 Inspect current code and tests before choosing; no quota-driven edits.

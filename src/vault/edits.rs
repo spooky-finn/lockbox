@@ -73,13 +73,14 @@ impl Vault {
         let shared = self.shared_snapshot();
         let mut removed = Vec::new();
         let mut index = 0;
-        while index < self.entries.len() {
-            if self.entries[index].id == id {
-                removed.push((index + removed.len(), self.entries.remove(index)));
-            } else {
-                index += 1;
+        self.entries.retain_mut(|entry| {
+            let keep = entry.id != id;
+            if !keep {
+                removed.push((index, std::mem::take(entry)));
             }
-        }
+            index += 1;
+            keep
+        });
         self.commit_edit(shared, move |vault| {
             for (index, entry) in removed {
                 vault.entries.insert(index, entry);
