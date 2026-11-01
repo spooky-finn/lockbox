@@ -16,6 +16,9 @@ use std::{
     time::{Duration, Instant, SystemTime},
 };
 
+mod sharing;
+pub(super) use sharing::{export_sharing_file, import_sharing_file};
+
 pub(super) fn use_runtime() -> Session {
     let settings = use_signal(Settings::load);
     let hardware = use_hook(|| BiometricProvider(touchid::system()));
@@ -65,7 +68,9 @@ pub(super) fn tick() {
         .tick(Instant::now());
     let pending = match &*consume_context::<Session>().peek() {
         Screen::Locked(form) => form.pending.is_some() || form.auto_touch_id,
-        Screen::Unlocked(workspace) => workspace.touch_id.pending.is_some(),
+        Screen::Unlocked(workspace) => {
+            workspace.touch_id.pending.is_some() || workspace.sharing.needs_poll()
+        }
     };
 
     if pending {
@@ -159,6 +164,7 @@ pub(super) fn poll_workers() {
             }
         }
         Screen::Unlocked(workspace) => {
+            workspace.poll_sharing(unix_now());
             if let Some(result) = workspace
                 .touch_id
                 .poll(&workspace.vault, &mut settings.write())

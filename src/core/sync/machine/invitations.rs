@@ -22,6 +22,10 @@ impl Machine {
         with_history(state, |history| Ok(history.tip().1.body.controller))
     }
 
+    pub fn was_member(state: &SyncState, device: Hash) -> Result<bool> {
+        with_history(state, |history| Ok(was_admitted(&history.chain, device)))
+    }
+
     /// Creates an addressed offer under the current controller. Hosts persist it
     /// before export and enforce expiry/cancellation when consuming a response.
     pub fn offer_invitation(

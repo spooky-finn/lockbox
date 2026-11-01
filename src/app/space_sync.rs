@@ -47,6 +47,7 @@ pub(crate) enum Status {
     Incomplete,
     Conflict,
     Removed,
+    Waiting,
     Failed,
     Recovery,
 }
@@ -61,6 +62,7 @@ impl Status {
             Self::Incomplete => "Incomplete history · waiting for data",
             Self::Conflict => "Conflicting versions",
             Self::Removed => "Access to the space was removed",
+            Self::Waiting => "Waiting for owner admission",
             Self::Failed => "History verification failed · uploads paused",
             Self::Recovery => "Profile requires recovery · exchange paused",
         }
@@ -206,7 +208,19 @@ impl SpaceSync {
             .ok_or(crate::core::sync::Error::UnauthorizedDevice)?;
 
         if replay.role.is_none() {
-            self.status = Status::Removed;
+            let state = vault
+                .sync_state()
+                .ok_or(crate::core::sync::Error::UnauthorizedDevice)?;
+            let device = vault
+                .device_certificate()
+                .ok_or(crate::core::sync::Error::UnauthorizedDevice)?
+                .body
+                .device;
+            self.status = if crate::core::sync::Machine::was_member(state, device)? {
+                Status::Removed
+            } else {
+                Status::Waiting
+            };
             self.schedule.defer(Instant::now(), RECOVERY_INTERVAL);
             return Ok(());
         }

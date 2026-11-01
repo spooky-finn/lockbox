@@ -12,6 +12,7 @@ mod icons;
 mod lock_mark;
 mod locked;
 mod settings;
+mod sharing;
 mod sidebar;
 mod status;
 mod symbol;

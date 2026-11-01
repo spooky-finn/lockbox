@@ -14,7 +14,10 @@ impl Vault {
     /// Read-only inspection before the UI asks the controller to admit a device.
     /// Actual admission revalidates current history and durable local policy.
     pub fn verify_invitation_response(&self, response: &Admission, now: u64) -> Result<()> {
-        let record = self.profile.as_ref().and_then(|p| p.sharing.issued.get(&response.id()))
+        let record = self
+            .profile
+            .as_ref()
+            .and_then(|p| p.sharing.issued.get(&response.id()))
             .ok_or(Error::InvalidInvitation)?;
         if canonical(&record.invitation.offer)? != canonical(&response.offer)? {
             return Err(Error::InvalidInvitation.into());
@@ -30,13 +33,23 @@ impl Vault {
 
     pub fn verify_join_receipt(&self, receipt: &AdmissionReceipt) -> Result<SpaceDescriptor> {
         let profile = self.profile.as_ref().ok_or(Error::UnauthorizedDevice)?;
-        let record = profile.sharing.accepted.get(&receipt.id()).ok_or(Error::InvalidInvitation)?;
-        let state = Machine::join_admission(&record.invitation, &record.admission, receipt,
-            record.invitation.descriptor(), &profile.sync_secret())?;
+        let record = profile
+            .sharing
+            .accepted
+            .get(&receipt.id())
+            .ok_or(Error::InvalidInvitation)?;
+        let state = Machine::join_admission(
+            &record.invitation,
+            &record.admission,
+            receipt,
+            record.invitation.descriptor(),
+            &profile.sync_secret(),
+        )?;
         if let Some(previous) = &profile.sync
             && previous.descriptor() == state.descriptor()
             && let Some(anchor) = previous.required_control
-            && !state.objects.contains_key(&anchor) {
+            && !state.objects.contains_key(&anchor)
+        {
             return Err(Error::MissingDependency.into());
         }
         Ok(state.descriptor())

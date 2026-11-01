@@ -22,8 +22,10 @@ pub(super) fn UnlockedView() -> Element {
     };
 
     let settings_open = unlocked.page == crate::app::workspace::Page::Settings;
+    let sharing_open = unlocked.page == crate::app::workspace::Page::Sharing;
     let editing = unlocked.is_editing();
     let has_detail = settings_open
+        || sharing_open
         || unlocked.selected.is_some()
         || unlocked.directories.selected.is_some()
         || editing;
@@ -32,11 +34,11 @@ pub(super) fn UnlockedView() -> Element {
         div { class: if has_detail { "workspace has-detail" } else { "workspace" },
             Sidebar {}
             section { class: "detail",
-                if settings_open || (!editing && has_detail) {
+                if settings_open || sharing_open || (!editing && has_detail) {
                     IconButton { class: "mobile-back quiet", icon: Icon::ArrowLeft,
-                        label: if settings_open { language.text(Text::BackToVault) } else { language.text(Text::BackToList) },
+                        label: if settings_open || sharing_open { language.text(Text::BackToVault) } else { language.text(Text::BackToList) },
                         onclick: move |_| edit_unlocked(state, |u| {
-                            if u.page == crate::app::workspace::Page::Settings { u.page = crate::app::workspace::Page::Vault; }
+                            if u.page != crate::app::workspace::Page::Vault { u.page = crate::app::workspace::Page::Vault; }
                             else { u.select_directory(None); }
                         }),
                     }
@@ -44,6 +46,7 @@ pub(super) fn UnlockedView() -> Element {
 
                 if let Some(error) = &unlocked.error { p { class: "error", role: "alert", {language.message(error)} } }
                 if settings_open { super::settings::SettingsView {} }
+                else if sharing_open { super::sharing::SharingView {} }
                 else { VaultContent {} }
             }
         }

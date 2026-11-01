@@ -231,6 +231,10 @@ input.switch:disabled { opacity: .45; cursor: default; }
 .settings-section { border: 1px solid var(--border); border-radius: 18px; padding: 20px; background: var(--surface); box-shadow: var(--shadow); }
 .settings-section h2 { margin-bottom: 4px; }
 .settings-section select { max-width: 50%; }
+.sharing-code { overflow-wrap: anywhere; user-select: text; font-size: 11px; line-height: 1.6; }
+.sharing-member { border-top: 1px solid var(--border); padding-top: 14px; margin-top: 6px; }
+.sharing-actions { flex-wrap: wrap; }
+.sharing-check { display: flex; align-items: flex-start; gap: 10px; font-size: 12px; line-height: 1.6; }
 .settings-back { align-self: flex-start; }
 .lock-actions select { max-width: 95px; min-height: 30px; border-color: transparent; background: transparent; color: var(--lock-secondary); font-size: 11px; cursor: pointer; }
 

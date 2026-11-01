@@ -128,11 +128,17 @@ impl Admission {
     pub fn verify_consent(&self) -> Result<()> {
         self.recipient().verify()?;
         let request = &self.request.body;
-        if request.profile != PROFILE || request.offer != self.offer_hash()?
-            || request.recipient != self.recipient().body.device {
+        if request.profile != PROFILE
+            || request.offer != self.offer_hash()?
+            || request.recipient != self.recipient().body.device
+        {
             return Err(Error::InvalidInvitation);
         }
-        super::crypto::verify(&self.request, &self.recipient().body.signing_key, JOIN_DOMAIN)
+        super::crypto::verify(
+            &self.request,
+            &self.recipient().body.signing_key,
+            JOIN_DOMAIN,
+        )
     }
 
     pub fn id(&self) -> Hash {
