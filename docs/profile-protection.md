@@ -67,6 +67,12 @@ commits share the same protected file adapter.
 | Missing witness | Preserve readable data; require a new admitted device |
 | Denial, unavailable or corrupt store | Preserve readable data; retry without reenrollment |
 
+Filesystem permission denial reports a local security folder access error,
+separately from Keychain unavailability. A desktop app launched inside a coding
+sandbox inherits its filesystem restrictions and may be unable to write signer
+locks in the installation directory. Launch the app outside that sandbox; do not
+move witnesses beside profiles or substitute an in-memory store.
+
 The adapter remembers a completed rename even when directory sync or witness
 acknowledgement fails. Retries cannot reuse that generation. Failed incoming
 commits also retain their candidate separately from the previous in-memory view.
@@ -152,10 +158,11 @@ symlinks, UI read-only behavior and fresh-device admission.
 
 The normal suite substitutes the credential store. An explicit macOS probe
 creates and removes one random witness item containing only fictional public
-metadata:
+metadata, plus its lock in the actual installation directory. Run outside a
+restricted coding sandbox so both production storage locations are exercised:
 
 ```sh
-cargo test --locked --lib infra::witness::keychain::tests::keychain_witness_round_trip -- --ignored --exact
+cargo test --locked --lib vault::witness::keychain::tests::keychain_witness_round_trip -- --ignored --exact
 ```
 
 That OS round trip and cleanup passed on 2026-11-01. It verifies the actual

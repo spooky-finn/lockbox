@@ -8,6 +8,10 @@ use serde::{Deserialize, Serialize};
 pub enum Error {
     #[error("profile witness is unavailable; signing and exchange are paused")]
     Unavailable,
+    #[error(
+        "Lockbox cannot access its local security folder. Check folder permissions and restart Lockbox outside the restricted sandbox."
+    )]
+    StorageAccessDenied,
     #[error("this signing identity is already open on this installation")]
     InUse,
     #[error("profile has no binding on this installation; use a new admitted device")]

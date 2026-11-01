@@ -5,26 +5,49 @@ use crate::desktop::{
 
 #[test]
 fn creation_requires_key_setup_before_storage_choice_and_cloud_fields() {
+    use crate::desktop::context::{Session, edit_locked};
+    use dioxus::{
+        dioxus_core::Mutation,
+        html::{EventData, SerializedFormData, SerializedHtmlEventConverter},
+        prelude::*,
+    };
+    dioxus::html::set_event_converter(Box::new(SerializedHtmlEventConverter));
     let mut dom = mounted();
-    update(&mut dom, |_| runtime::begin_create());
+    dom.in_scope(ScopeId::APP, runtime::begin_create);
+    let changes = dom.render_immediate_to_vec();
+    let submit_id = changes
+        .edits
+        .iter()
+        .find_map(|edit| match edit {
+            Mutation::NewEventListener { name, id } if name == "submit" => Some(*id),
+            _ => None,
+        })
+        .expect("key setup form submit listener");
+    let submit = || {
+        Event::new(
+            EventData::Form(SerializedFormData::new(String::new(), vec![])).into_any(),
+            true,
+        )
+    };
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("Настройте ключ шифрования"));
     assert!(html.contains("id=\"recovery-saved\""));
     assert!(!html.contains("storage-choices"));
     assert!(!html.contains("id=\"cloud-secret\""));
     assert!(!html.contains("id=\"master-password\""));
-    update(&mut dom, |state| {
-        crate::desktop::context::edit_locked(state, |form| {
-            form.continue_key_setup();
-        });
-    });
+    let event = submit();
+    dom.runtime()
+        .handle_event("submit", event.clone(), submit_id);
+    assert!(!event.default_action_enabled());
+    dom.render_immediate_to_vec();
     assert!(!dioxus_ssr::render(&dom).contains("storage-choices"));
-    update(&mut dom, |state| {
-        crate::desktop::context::edit_locked(state, |form| {
+    dom.in_scope(ScopeId::APP, || {
+        edit_locked(consume_context::<Session>(), |form| {
             form.words_saved = true;
-            form.continue_key_setup();
         });
     });
+    dom.runtime().handle_event("submit", submit(), submit_id);
+    dom.render_immediate_to_vec();
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("Однопользовательское"));
     assert!(html.contains("Многопользовательское"));
@@ -47,6 +70,36 @@ fn creation_requires_key_setup_before_storage_choice_and_cloud_fields() {
     assert!(!html.contains("id=\"master-password\""));
     update(&mut dom, |_| runtime::begin_create());
     assert!(!dioxus_ssr::render(&dom).contains("id=\"cloud-secret\""));
+}
+
+#[test]
+fn local_password_step_keeps_key_hidden_and_back_returns_to_sync_choice() {
+    use crate::desktop::context::edit_locked;
+    let mut dom = mounted();
+    let dir = tempfile::tempdir().unwrap();
+    update(&mut dom, |_| {
+        runtime::set_language(crate::settings::language::Language::English);
+        runtime::begin_create();
+    });
+    update(&mut dom, |state| {
+        edit_locked(state, |form| {
+            form.words_saved = true;
+            form.continue_key_setup();
+            form.choose_local_path(dir.path().join("local"));
+        });
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("id=\"master-password\""));
+    assert!(html.contains("id=\"repeat-password\""));
+    assert!(html.contains("Back to sync settings"));
+    assert!(!html.contains("id=\"recovery-words\""));
+    assert!(!html.contains("id=\"cloud-secret\""));
+    update(&mut dom, |state| {
+        edit_locked(state, |form| form.edit_sync_setup());
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("storage-choices"));
+    assert!(!html.contains("id=\"master-password\""));
 }
 
 #[test]

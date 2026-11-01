@@ -25,24 +25,26 @@ fn password() -> SecretString {
 }
 
 fn create(store: &ProfileStore, path: &Path) -> Vault {
-    store
-        .create_shared(
-            path,
-            &password(),
-            &SecretString::from("fixture recovery".to_owned()),
-            FAST,
-            SharedProfile {
-                username: "Fixture user".into(),
-                space_name: "Fixture space".into(),
-                provider: ProviderConfiguration {
-                    base_url: "https://gateway.storjshare.io".into(),
-                    bucket: "fixture-bucket".into(),
-                    access_key: "fixture-access".into(),
-                    secret_key: "fixture-secret".into(),
-                },
+    try_create(store, path).unwrap()
+}
+
+fn try_create(store: &ProfileStore, path: &Path) -> Result<Vault> {
+    store.create_shared(
+        path,
+        &password(),
+        &SecretString::from("fixture recovery".to_owned()),
+        FAST,
+        SharedProfile {
+            username: "Fixture user".into(),
+            space_name: "Fixture space".into(),
+            provider: ProviderConfiguration {
+                base_url: "https://gateway.storjshare.io".into(),
+                bucket: "fixture-bucket".into(),
+                access_key: "fixture-access".into(),
+                secret_key: "fixture-secret".into(),
             },
-        )
-        .unwrap()
+        },
+    )
 }
 
 fn add(vault: &mut Vault, title: &str) {
@@ -345,6 +347,53 @@ fn directory_witness_is_persistent_and_corruption_is_not_absence() {
     let blocked = second_store.open(&path, &password()).unwrap();
     assert_eq!(blocked.entries[0].title, "Persisted witness");
     assert_eq!(blocked.signing_error(), Some(anchor::Error::Unavailable));
+}
+
+#[cfg(unix)]
+#[test]
+fn denied_security_folder_blocks_creation_and_recovers_existing_profile_without_reenrollment() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path().join("installation");
+    let store = ProfileStore::new(Arc::new(DirectoryWitness::new(root.clone())));
+    let path = directory.path().join("existing.lbx");
+    let mut vault = create(&store, &path);
+    add(&mut vault, "Readable during access denial");
+    let witness_path = root.join(format!("{}.json", device(&vault)));
+    let witness = fs::read(&witness_path).unwrap();
+    let profile = fs::read(&path).unwrap();
+    drop(vault);
+
+    let permissions = fs::metadata(&root).unwrap().permissions();
+    fs::set_permissions(&root, fs::Permissions::from_mode(0o000)).unwrap();
+    // Privileged test runners can bypass Unix permissions.
+    if fs::File::open(&witness_path).is_ok() {
+        fs::set_permissions(&root, permissions).unwrap();
+        return;
+    }
+    let new_path = directory.path().join("new.lbx");
+    let creation = try_create(&store, &new_path);
+    let opened = store.open(&path, &password());
+    fs::set_permissions(&root, permissions).unwrap();
+
+    assert!(matches!(
+        creation,
+        Err(VaultError::ProfileProtection(
+            anchor::Error::StorageAccessDenied
+        ))
+    ));
+    assert!(!new_path.exists());
+    let blocked = opened.unwrap();
+    assert_eq!(
+        blocked.signing_error(),
+        Some(anchor::Error::StorageAccessDenied)
+    );
+    assert_eq!(blocked.entries()[0].title, "Readable during access denial");
+    blocked.reconcile_profile().unwrap();
+    assert!(blocked.signing_error().is_none());
+    assert_eq!(fs::read(&witness_path).unwrap(), witness);
+    assert_eq!(fs::read(&path).unwrap(), profile);
 }
 
 #[test]

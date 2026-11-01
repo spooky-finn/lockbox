@@ -207,13 +207,14 @@ fn ProtectionNotice(error: crate::vault::anchor::Error) -> Element {
         Error::Rollback => Text::ProfileRollbackReadOnly,
         Error::Legacy => Text::LegacyProfileReadOnly,
         Error::Unavailable => Text::LocalSecurityStorageUnavailable,
+        Error::StorageAccessDenied => Text::LocalSecurityStorageAccessDenied,
         Error::InUse => Text::SigningDeviceAlreadyOpen,
         Error::Exhausted => Text::ProfileRequiresReplacement,
     };
     let state = use_context::<Session>();
     rsx! {
         p { class: "notice", role: "status", {language.text(text)} }
-        if error == Error::Unavailable {
+        if matches!(error, Error::Unavailable | Error::StorageAccessDenied) {
             button { class: "quiet", onclick: move |_| edit_unlocked(state, |u| {
                 u.retry_profile_protection();
             }), {language.text(Text::RetrySync)} }

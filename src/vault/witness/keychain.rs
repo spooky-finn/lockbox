@@ -60,23 +60,31 @@ mod tests {
     #[ignore = "explicit OS probe: creates and removes one random witness item"]
     fn keychain_witness_round_trip() {
         use security_framework::passwords::delete_generic_password;
-        struct Cleanup(Option<String>);
+        struct Cleanup(Option<String>, PathBuf);
         impl Drop for Cleanup {
             fn drop(&mut self) {
                 if let Some(account) = &self.0 {
                     let _ = delete_generic_password(SERVICE, account);
                 }
+                let _ = std::fs::remove_file(&self.1);
             }
         }
 
-        let directory = tempfile::tempdir().unwrap();
+        // Exercise the installation directory too: a temporary directory can
+        // hide a sandbox denial of the real signer-lock location.
+        let root = dirs::data_local_dir()
+            .unwrap()
+            .join("lockbox/signer-witnesses");
         let mut bytes = [0; 32];
         getrandom::fill(&mut bytes).unwrap();
         let device = Hash(bytes);
-        let store = KeychainWitness::new(directory.path().to_owned());
+        let mut cleanup = Cleanup(
+            Some(device.to_string()),
+            root.join(format!("{device}.lock")),
+        );
+        let store = KeychainWitness::new(root);
         let mut lease = store.acquire(device).unwrap();
         assert!(lease.load().unwrap().is_none());
-        let mut cleanup = Cleanup(Some(device.to_string()));
         let first = Witness::reservation(Hash([1; 32]), Hash([2; 32]));
         lease.replace(None, first).unwrap();
         assert_eq!(lease.load().unwrap(), Some(first));

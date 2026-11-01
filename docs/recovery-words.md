@@ -4,9 +4,8 @@ New desktop vaults and cloud profiles use **12 English BIP39 words**. Creation
 starts with encryption-key setup, before selecting local or cloud sync. Generate
 new words or enter an existing valid phrase, then confirm that the words are
 saved. Joining a space follows the same key-first flow before connection setup.
-The app generates
-128 bits of operating-system randomness and the BIP39 checksum. It never derives
-these words from the master password. Save the words in order before creating
+The app generates 128 bits of operating-system randomness and the BIP39 checksum.
+It never derives these words from the master password. Save the words in order before creating
 the vault; they are hidden until requested and are not retained in the file.
 Going back to sync settings preserves the confirmed phrase and clears typed
 passwords. The native local-file picker also preserves the chosen recovery key.
@@ -16,8 +15,8 @@ BIP39 passphrase is used, so the 12 words alone reproduce the recovery keys.
 On the lock screen, select **Forgot master password?**, enter the words, and
 choose and confirm a new master password. The original password is not needed.
 Recovery preserves the user identity, device, records, and Touch ID data key.
-For cloud profiles, the new password also protects the root capsule. Previous backup files retain
-the password they had when saved.
+For cloud profiles, the new password also protects the root capsule. Previous
+backup files retain the password they had when saved.
 
 The vault file or a backup is still required: words recover keys, not records,
 attachments, storage credentials, or discovery of a storage bucket. Words are
@@ -37,14 +36,15 @@ fingerprint domains. Device signing/HPKE keys and space keys remain independentl
 random. Restoring an identity on a new device never derives or copies an old
 device signing key from the words.
 
-`core::mnemonic::RecoveryPhrase` validates exactly 12 English words and their
+`access::mnemonic::RecoveryPhrase` validates exactly 12 English words and their
 checksum. The pinned `bip39` dependency enables zeroization. Mnemonics, entropy,
 seeds, and derived keys are wiped on drop in Rust. Recovery errors do not include
 the input words. The UI uses no automatic clipboard export.
 
 ## File format v8
 
-Recoverable local vaults and cloud profiles use version 8; existing v1–v7 files remain readable.
+Recoverable local vaults and cloud profiles use version 8; existing v1–v7 files
+remain readable.
 Older clients reject v8 instead of discarding recovery slots. The original
 90-byte header is followed by two 72-byte key slots, then the encrypted payload:
 
@@ -63,11 +63,12 @@ nonce. Slot associated data is `lockbox.key-slot.v1\0`, the file salt, and the
 slot kind (`password` or `phrase`). The whole 234-byte header authenticates the
 payload, binding both slots and the password check to the encrypted records.
 
-Password reset rewraps the same data key with a fresh slot nonce and reseals the
-root capsule, then uses the existing atomic, witnessed save. The file salt,
-installation binding, and device identity stay stable. Recovery never resets
-or bypasses independent rollback witnesses. On another installation or with an
-untrusted backup, the app recovers read-only access and reports that password
+Password reset rewraps the same data key with a fresh slot nonce and uses the
+existing atomic save. Cloud profiles also reseal the root capsule and retain
+their witnessed save. The file salt, installation binding, and device identity
+stay stable. Recovery never resets or bypasses independent rollback witnesses.
+For cloud profiles on another installation or with an untrusted backup, the app
+recovers read-only access and reports that password
 reset requires admission of a fresh device. Device/controller recovery still
 requires independently authenticated control anchors and the established
 admission process.

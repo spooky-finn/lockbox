@@ -41,13 +41,13 @@ impl WitnessLease for Lease {
         let file = match File::open(&self.path) {
             Ok(file) => file,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(_) => return Err(Error::Unavailable),
+            Err(error) => return Err(storage_error(error)),
         };
 
         let mut bytes = Vec::new();
         file.take(4097)
             .read_to_end(&mut bytes)
-            .map_err(|_| Error::Unavailable)?;
+            .map_err(storage_error)?;
         decode(&bytes).map(Some)
     }
 
@@ -63,17 +63,17 @@ impl WitnessLease for Lease {
         match fs::remove_file(&temporary) {
             Ok(()) => {}
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(_) => return Err(Error::Unavailable),
+            Err(error) => return Err(storage_error(error)),
         }
 
         let mut file = options()
             .create_new(true)
             .open(&temporary)
-            .map_err(|_| Error::Unavailable)?;
+            .map_err(storage_error)?;
         file.write_all(&bytes)
             .and_then(|_| file.sync_all())
-            .map_err(|_| Error::Unavailable)?;
-        fs::rename(&temporary, &self.path).map_err(|_| Error::Unavailable)?;
+            .map_err(storage_error)?;
+        fs::rename(&temporary, &self.path).map_err(storage_error)?;
         sync_directory(self.path.parent().ok_or(Error::Unavailable)?)
     }
 }
@@ -85,6 +85,13 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Witness> {
     serde_json::from_slice(bytes).map_err(|_| Error::Unavailable)
 }
 
+fn storage_error(error: std::io::Error) -> Error {
+    match error.kind() {
+        std::io::ErrorKind::PermissionDenied => Error::StorageAccessDenied,
+        _ => Error::Unavailable,
+    }
+}
+
 pub(super) struct SignerLock {
     path: PathBuf,
     file: crate::vault::lease::ExclusiveFile,
@@ -94,8 +101,8 @@ impl SignerLock {
     /// A removed/replaced lock path must not leave an old lease usable while a
     /// different process locks a new inode at the same pathname.
     pub(super) fn check(&self) -> Result<()> {
-        let current = fs::symlink_metadata(&self.path).map_err(|_| Error::Unavailable)?;
-        let held = self.file.metadata().map_err(|_| Error::Unavailable)?;
+        let current = fs::symlink_metadata(&self.path).map_err(storage_error)?;
+        let held = self.file.metadata().map_err(storage_error)?;
 
         if !current.is_file() {
             return Err(Error::Unavailable);
@@ -122,7 +129,7 @@ pub(super) fn lock(root: &Path, device: Hash) -> Result<SignerLock> {
         use std::os::unix::fs::DirBuilderExt;
         builder.mode(0o700);
     }
-    builder.create(root).map_err(|_| Error::Unavailable)?;
+    builder.create(root).map_err(storage_error)?;
     let path = root.join(format!("{device}.lock"));
     let mut lease_options = options();
     #[cfg(windows)]
@@ -135,10 +142,10 @@ pub(super) fn lock(root: &Path, device: Hash) -> Result<SignerLock> {
     let file = lease_options
         .truncate(false)
         .open(&path)
-        .map_err(|_| Error::Unavailable)?;
+        .map_err(storage_error)?;
     let file = crate::vault::lease::ExclusiveFile::acquire(file).map_err(|error| match error {
         fs::TryLockError::WouldBlock => Error::InUse,
-        fs::TryLockError::Error(_) => Error::Unavailable,
+        fs::TryLockError::Error(error) => storage_error(error),
     })?;
     let lock = SignerLock { path, file };
     lock.check()?;
@@ -160,7 +167,7 @@ fn sync_directory(path: &Path) -> Result<()> {
     #[cfg(unix)]
     File::open(path)
         .and_then(|file| file.sync_all())
-        .map_err(|_| Error::Unavailable)?;
+        .map_err(storage_error)?;
     #[cfg(not(unix))]
     let _ = path;
     Ok(())

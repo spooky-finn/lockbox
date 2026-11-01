@@ -1,0 +1,8 @@
+Witness access
+
+- Cause: desktop launched inside coding sandbox. Keychain works; installation signer-lock writes denied (EPERM). Same directory writable outside sandbox.
+- Fix: launch desktop outside sandbox. Keep independent witness location and fail-closed signing checks.
+- Permission denial now distinct from unavailable/corrupt witness. English/Russian guidance; existing profiles retain read-only access and retry.
+- Regression: denied folder blocks new profile; existing records readable; restored access reconciles same witness without reenrollment.
+- Explicit macOS probe now checks actual installation lock directory plus Keychain; cleans random public test item and lock.
+- Validation: 334 unit, 4 integration, 2 doc tests pass; explicit macOS probe passes outside sandbox. Clippy all-targets, formatting, diff checks pass. Updated desktop launched outside sandbox; existing windows kept.

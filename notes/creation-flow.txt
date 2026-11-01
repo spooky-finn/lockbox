@@ -8,3 +8,4 @@ Creation flow
 - Local vaults use v8 password/recovery slots; no cloud profile/provider required. Words recover records/history; reset keeps data key and Touch ID access.
 - Existing files/API creation remain supported. Shared identity derivation/witness protection unchanged.
 - Tests: key-step gating, invalid/unsaved words, local/cloud/join order, back navigation, worker creation, local recovery/reset/reopen.
+- Validation: isolated from concurrent appearance edits. Full cargo test passes: 322 unit checks, integration/doc checks; 1 explicit OS probe ignored. Clippy all-targets + formatting pass. Local mock-server tests require sandbox exit for localhost binding.
