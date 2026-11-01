@@ -16,7 +16,9 @@ fn tabs_keep_each_others_changes() {
 
     first.update(|c| c.language = Language::Russian).unwrap();
     second.update(|c| c.auto_lock_minutes = 15).unwrap();
-    second.remember(Some(dir.path().join("cloud.lbx"))).unwrap();
+    second
+        .remember_profile(dir.path().join("cloud.lbx"), Some("Семья".into()))
+        .unwrap();
     first.set_touch_id("vault-id", true).unwrap();
 
     let saved = Config::load(&path);
@@ -24,4 +26,15 @@ fn tabs_keep_each_others_changes() {
     assert_eq!(saved.auto_lock_minutes, 15);
     assert_eq!(saved.last_vault, Some(dir.path().join("cloud.lbx")));
     assert_eq!(saved.touch_id, vec!["vault-id".to_owned()]);
+    assert_eq!(
+        saved
+            .space_names
+            .get(&dir.path().join("cloud.lbx"))
+            .map(String::as_str),
+        Some("Семья")
+    );
+    first.remember(None).unwrap();
+    let forgotten = Config::load(&path);
+    assert!(forgotten.last_vault.is_none());
+    assert!(forgotten.space_names.is_empty());
 }

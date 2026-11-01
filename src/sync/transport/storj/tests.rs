@@ -9,6 +9,7 @@ fn rejects_invalid_signing_regions_before_client_construction() {
             Storj::with_region(
                 "https://example.invalid",
                 "bucket",
+                "Team",
                 "access",
                 "secret",
                 region
@@ -26,7 +27,7 @@ fn rejects_insecure_endpoints_and_maps_provider_denial_without_body() {
         "https://example.com/path",
         "https://example.com?token=secret",
     ] {
-        assert!(Storj::new(endpoint, "bucket", "access", "secret").is_err());
+        assert!(Storj::new(endpoint, "bucket", "Team", "access", "secret").is_err());
     }
     assert_eq!(
         check(StatusCode::FORBIDDEN),
@@ -40,6 +41,21 @@ fn rejects_insecure_endpoints_and_maps_provider_denial_without_body() {
 
 #[test]
 fn signed_path_style_requests_round_trip_through_a_local_s3_server() {
+    for (name, segment, encoded) in [
+        (
+            "Команда & Team",
+            "Команда & Team",
+            "%D0%9A%D0%BE%D0%BC%D0%B0%D0%BD%D0%B4%D0%B0%20%26%20Team",
+        ),
+        ("Team / 100%", "Team %2F 100%25", "Team%20%252F%20100%2525"),
+        ("..", "%2E%2E", "%252E%252E"),
+        ("%2E%2E", "%252E%252E", "%25252E%25252E"),
+    ] {
+        named_space_round_trip(name, segment, encoded);
+    }
+}
+
+fn named_space_round_trip(space_name: &str, segment: &'static str, encoded: &str) {
     use std::{
         io::{BufRead, BufReader, Write},
         net::TcpListener,
@@ -65,7 +81,7 @@ fn signed_path_style_requests_round_trip_through_a_local_s3_server() {
     let hash = state.genesis;
     let bytes = state.objects[&hash].0.clone();
     let expected_bytes = bytes.clone();
-    let object_key = format!("/bucket/spaces/{namespace}/objects/{hash}.json");
+    let object_key = format!("/bucket/spaces/{encoded}/objects/{hash}.json");
     let expected_key = object_key.clone();
     let (sender, receiver) = mpsc::channel();
     let server = std::thread::spawn(move || {
@@ -107,9 +123,10 @@ fn signed_path_style_requests_round_trip_through_a_local_s3_server() {
                 assert_eq!(query["continuation-token"], "a+/=&x");
                 assert_eq!(query["list-type"], "2");
                 assert_eq!(query["max-keys"], "1000");
-                assert_eq!(query["prefix"], format!("spaces/{namespace}/objects/"));
+                assert_eq!(query["prefix"], format!("spaces/{segment}/objects/"));
+                let xml_segment = segment.replace('&', "&amp;");
                 format!(
-                    "<ListBucketResult><IsTruncated>false</IsTruncated><Contents><Key>spaces/{namespace}/objects/{hash}.json</Key></Contents></ListBucketResult>"
+                    "<ListBucketResult><IsTruncated>false</IsTruncated><Contents><Key>spaces/{xml_segment}/objects/{hash}.json</Key></Contents></ListBucketResult>"
                 )
             } else if request_index == 1 {
                 assert!(
@@ -148,6 +165,7 @@ fn signed_path_style_requests_round_trip_through_a_local_s3_server() {
     let mut storage = Storj::connect(
         &format!("http://{address}"),
         "bucket",
+        space_name,
         "fixture-access",
         "fixture-secret",
         "us-east-1",
@@ -205,6 +223,7 @@ fn sdk_preserves_denial_redirect_and_response_budget_errors() {
         let mut storage = Storj::connect(
             &format!("http://{address}"),
             "bucket",
+            "Team",
             "access",
             "secret",
             "us-east-1",

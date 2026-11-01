@@ -35,7 +35,29 @@ impl Settings {
     }
 
     pub fn remember(&mut self, path: Option<PathBuf>) -> Result<(), String> {
-        self.update(|config| config.last_vault = path)
+        self.update(|config| {
+            if path.is_none()
+                && let Some(previous) = &config.last_vault
+            {
+                config.space_names.remove(previous);
+            }
+            config.last_vault = path;
+        })
+    }
+
+    pub fn remember_profile(
+        &mut self,
+        path: PathBuf,
+        space_name: Option<String>,
+    ) -> Result<(), String> {
+        self.update(|config| {
+            if let Some(name) = space_name {
+                config.space_names.insert(path.clone(), name);
+            } else {
+                config.space_names.remove(&path);
+            }
+            config.last_vault = Some(path);
+        })
     }
 
     pub fn set_touch_id(&mut self, id: &str, enabled: bool) -> Result<(), String> {

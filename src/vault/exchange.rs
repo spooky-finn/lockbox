@@ -211,15 +211,16 @@ impl Vault {
     pub(crate) fn storage_factory(
         &self,
     ) -> Result<std::sync::Arc<dyn crate::sync::transport::StorageFactory>> {
-        let configuration = &self
+        let profile = self
             .profile
             .as_ref()
-            .ok_or(crate::sync::protocol::Error::UnauthorizedDevice)?
-            .provider;
+            .ok_or(crate::sync::protocol::Error::UnauthorizedDevice)?;
+        let configuration = &profile.provider;
         Ok(std::sync::Arc::new(
             crate::sync::transport::storj::StorjFactory::new(
                 &configuration.base_url,
                 &configuration.bucket,
+                &profile.space_name,
                 &configuration.access_key,
                 &configuration.secret_key,
             ),

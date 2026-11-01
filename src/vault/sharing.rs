@@ -165,9 +165,10 @@ impl Vault {
             Some(record) => record.invitation.clone(),
             None => {
                 Self::sharing_capacity(&profile.sharing)?;
-                Machine::offer_invitation(
+                Machine::offer_named_invitation(
                     state,
                     &profile.sync_secret(),
+                    Some(&profile.space_name),
                     recipient,
                     role,
                     expires_at,
@@ -369,9 +370,13 @@ impl Vault {
             return Err(Error::MissingDependency.into());
         }
         let replay = Machine::replay(&state, &device)?;
+        let space_name = record.invitation.space_name().map(str::to_owned);
         self.entries = replay.projection.entries();
         self.folders = replay.projection.folders();
         let profile = self.profile.as_mut().unwrap();
+        if let Some(name) = space_name {
+            profile.space_name = name;
+        }
         profile.space.space_id = state.space.0;
         profile.space.namespace = state.namespace.0;
         profile.sync = Some(state);

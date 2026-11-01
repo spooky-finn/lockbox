@@ -21,17 +21,23 @@ pub(crate) fn Toolbar() -> Element {
         return rsx! {};
     };
 
-    let filename = unlocked
+    let name = unlocked
         .vault
-        .path()
-        .file_name()
-        .unwrap_or_default()
-        .to_string_lossy();
+        .profile_summary()
+        .map(|profile| std::borrow::Cow::Borrowed(profile.space_name))
+        .unwrap_or_else(|| {
+            unlocked
+                .vault
+                .path()
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+        });
     rsx! {
         header { class: "toolbar",
             div { class: "brand",
                 div { class: "brand-icon", Symbol { icon: Icon::Key } }
-                div { strong { "lockbox" } span { class: "vault-name", "{filename}" } }
+                div { strong { "lockbox" } span { class: "vault-name", "{name}" } }
             }
             div { class: "toolbar-status",
                 if let Some(sync) = unlocked.vault.sync_state() {

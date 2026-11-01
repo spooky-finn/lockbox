@@ -115,3 +115,75 @@ fn joining_opens_sharing_and_survives_a_session_lock() {
     };
     assert!(form.joining);
 }
+
+#[test]
+fn space_name_is_available_after_lock_restart_and_selecting_the_profile() {
+    use crate::vault::{
+        KdfParams, ProfileStore, ProviderConfiguration, SharedProfile, witness::MemoryWitness,
+    };
+    use secrecy::SecretString;
+    use std::sync::Arc;
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("profile-random-id.lbx");
+    let name = "Семья <Family>";
+    let vault = ProfileStore::new(Arc::new(MemoryWitness::default()))
+        .create_shared(
+            &path,
+            &SecretString::from("master".to_owned()),
+            &SecretString::from("recovery".to_owned()),
+            KdfParams {
+                memory_kib: 8192,
+                passes: 1,
+                lanes: 1,
+            },
+            SharedProfile {
+                username: "Alice".into(),
+                space_name: name.into(),
+                provider: ProviderConfiguration {
+                    base_url: "https://gateway.storjshare.io".into(),
+                    bucket: "test-bucket".into(),
+                    access_key: "private-access-marker".into(),
+                    secret_key: "private-secret-marker".into(),
+                },
+            },
+        )
+        .unwrap();
+    let config_path = dir.path().join("config.json");
+    let mut settings = Settings {
+        config: Config::default(),
+        path: Some(config_path.clone()),
+    };
+    let fake = FakeBiometrics::default();
+    let mut native = security();
+    let mut screen = Screen::Locked(Box::new(Locked::new(None)));
+    screen.open(
+        Opened {
+            vault,
+            with_password: true,
+            recovery_notice: None,
+        },
+        &mut settings,
+        &fake,
+        &mut native,
+    );
+    screen.lock(&settings, &fake, &mut native, None);
+    let Screen::Locked(form) = screen else {
+        panic!("not locked")
+    };
+    assert_eq!(form.space_name.as_deref(), Some(name));
+
+    let settings = Settings {
+        config: Config::load(&config_path),
+        path: Some(config_path.clone()),
+    };
+    let Screen::Locked(form) = Screen::locked(&settings, &fake) else {
+        panic!("not locked")
+    };
+    assert_eq!(form.space_name.as_deref(), Some(name));
+    let selected = Locked::new(Some(path)).offer_touch_id(&settings.config, &fake, false);
+    assert_eq!(selected.space_name.as_deref(), Some(name));
+    let config = std::fs::read_to_string(config_path).unwrap();
+    assert!(!config.contains("private-access-marker"));
+    assert!(!config.contains("private-secret-marker"));
+}

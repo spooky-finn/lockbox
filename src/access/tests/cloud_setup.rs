@@ -102,6 +102,7 @@ fn form_and_transport_accept_the_same_connection_syntax_without_echoing_secrets(
         let transport = Storj::new(
             &setup.base_url,
             &setup.bucket,
+            &setup.space_name,
             &setup.access_key,
             &setup.secret_key,
         );

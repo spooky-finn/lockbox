@@ -5,7 +5,8 @@ The probe uses the production HTTPS/SigV4 adapter and two independently generate
 device profiles. It never uploads a profile or private device key.
 
 Provision two different S3 access keys with LIST, GET and PUT access to the test
-bucket. The test creates a fresh random `spaces/<namespace>/` prefix. It does not
+bucket. The test creates a unique `spaces/<space_name>/` prefix using a random
+suffix in the space name. It does not
 modify existing prefixes or require DELETE, bucket administration or public access.
 See [Storj setup](storj-setup.en.txt) for gateway credentials.
 
@@ -35,7 +36,7 @@ reopening both encrypted profiles. The same scenario runs without network in
 Only a final `PASS` confirms every assertion. A successful HTTP upload alone is
 insufficient. Missing configuration fails before network I/O. Errors report
 categories without provider response bodies, credentials or secret record values.
-The test reports its random namespace before exchange, so encrypted fixture
+The test reports its unique space prefix before exchange, so encrypted fixture
 objects can be removed from that exact prefix through the provider console.
 Local profiles, disposable passwords and an explicitly injected directory witness
 are temporary. The S3 probe does not access the personal Keychain; the separate

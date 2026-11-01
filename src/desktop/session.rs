@@ -42,6 +42,10 @@ impl Screen {
                 false,
             );
             locked.joining = unlocked.sharing.joining;
+            locked.space_name = unlocked
+                .vault
+                .profile_summary()
+                .map(|profile| profile.space_name.to_owned());
             locked.notice = reason.map(|reason| format!("Vault locked: {reason}"));
             *self = Self::Locked(Box::new(locked));
         }
@@ -63,7 +67,13 @@ impl Screen {
         let (touch_id, biometric_error) =
             TouchId::open(&opened.vault, settings, biometrics, opened.with_password);
         let config_error = settings
-            .remember(Some(opened.vault.path().to_path_buf()))
+            .remember_profile(
+                opened.vault.path().to_path_buf(),
+                opened
+                    .vault
+                    .profile_summary()
+                    .map(|profile| profile.space_name.to_owned()),
+            )
             .err();
         let mut unlocked = Unlocked::new(opened.vault);
         unlocked.touch_id = touch_id;

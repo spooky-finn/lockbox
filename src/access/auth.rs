@@ -47,6 +47,7 @@ pub(crate) use crate::access::cloud_setup::CloudSetup;
 
 pub(crate) struct Locked {
     pub(crate) path: Option<PathBuf>,
+    pub(crate) space_name: Option<String>,
     pub(crate) mode: Mode,
     pub(crate) storage_kind: Option<StorageKind>,
     pub(crate) cloud: CloudSetup,
@@ -79,6 +80,7 @@ impl Locked {
             .map(|path| format!("File not found: {}", path.display()));
         Self {
             path,
+            space_name: None,
             mode: Mode::Open,
             storage_kind: None,
             cloud: CloudSetup::default(),
@@ -117,6 +119,13 @@ impl Locked {
         biometrics: &dyn Biometrics,
         auto: bool,
     ) -> Self {
+        if self.space_name.is_none() {
+            self.space_name = self
+                .path
+                .as_ref()
+                .and_then(|path| config.space_names.get(path))
+                .cloned();
+        }
         self.touch_id = self
             .path
             .as_ref()

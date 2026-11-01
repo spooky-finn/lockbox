@@ -57,11 +57,13 @@ fn offers_responses_and_receipts_survive_restart_and_exact_retries() {
     let guest_path = directory.path().join("guest.lbx");
     let mut owner = create(&store, &owner_path);
     let mut guest = create(&store, &guest_path);
+    guest.profile.as_mut().unwrap().space_name = "Shared space".into();
     let certificate = guest.device_certificate().unwrap();
     let descriptor = owner.space_descriptor().unwrap();
     let offer = owner
         .issue_invitation(certificate.clone(), Role::Editor, Some(100))
         .unwrap();
+    assert_eq!(offer.space_name(), Some("Test space"));
     let response = guest.accept_invitation(offer.clone(), &descriptor).unwrap();
     drop(owner);
     drop(guest);
@@ -97,6 +99,7 @@ fn offers_responses_and_receipts_survive_restart_and_exact_retries() {
     );
     assert_eq!(owner.sync_state().unwrap().objects.len(), count);
     guest.join_invitation(receipt.clone()).unwrap();
+    assert_eq!(guest.profile_summary().unwrap().space_name, "Test space");
     let mut entry = Entry::new();
     entry.title = "Post admission edit".into();
     guest.entries.push(entry);
@@ -105,6 +108,9 @@ fn offers_responses_and_receipts_survive_restart_and_exact_retries() {
     guest.join_invitation(receipt).unwrap();
     assert_eq!(guest.sync_state().unwrap().objects.len(), event_count);
     assert_eq!(guest.entries.len(), 1);
+    drop(guest);
+    let guest = store.open(&guest_path, &password()).unwrap();
+    assert_eq!(guest.profile_summary().unwrap().space_name, "Test space");
 }
 
 #[test]

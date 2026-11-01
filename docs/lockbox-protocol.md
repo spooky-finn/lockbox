@@ -181,7 +181,8 @@ devices, membership changes. Change headers expose author device, causal links,
 epoch, ciphertext length. Provider also sees request timing and network origin.
 Reusing root identity links participation across spaces visible to provider.
 
-Record titles, passwords, TOTP secrets, folder hierarchy, display names,
+The space name is visible in S3 keys, signed invitations and local unlock settings.
+Record titles, passwords, TOTP secrets, folder hierarchy, participant aliases,
 transaction actions, and entity IDs stay encrypted. Protocol does not claim
 anonymous membership or unobservable traffic. Per-space pseudonyms and padding
 would require separate design and cost analysis.
@@ -1304,14 +1305,22 @@ Never interpret `ETag` as protocol hash or permission statement.
 ### Layout
 
 ```text
-spaces/<namespace>/objects/<object_hash>.json
-spaces/<namespace>/hints/control.json
-spaces/<namespace>/hints/devices/<device_id>.json
+spaces/<space_name>/objects/<object_hash>.json
 ```
 
-Namespace is random routing value, separate from space ID. Knowledge of namespace
-grants no decryption or write authority. All immutable objects use same hash-key
-scheme. Remote keys never become arbitrary local filesystem paths.
+The Storj adapter binds each client to the space name from its local profile.
+Names must be unique within a bucket and are visible in S3 object keys. Literal
+`%` and `/` are escaped as `%25` and `%2F` in the key segment; the names `.` and
+`..` use `%2E` for each dot. The SDK applies HTTP URL encoding separately.
+Signed invitations carry the name to joining devices; the verification code
+also covers it. The protocol retains its random namespace and space ID for
+internal scope, independently of the provider key prefix. Knowledge of a name
+grants no decryption or write authority. All immutable objects use the same
+hash-key scheme. Remote keys never become arbitrary local filesystem paths.
+
+Existing objects under `spaces/<namespace>/` are not moved automatically.
+Migrate that prefix to the corresponding name before continuing an existing
+deployment. Names are not a supported rename mechanism for a live space.
 
 Store canonical object bytes. Existing same-hash object must canonicalize to
 same object; different content is integrity fault, never reason to trust old

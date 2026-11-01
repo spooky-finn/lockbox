@@ -1,5 +1,5 @@
 //! Remembers which vault was opened last and where Touch ID is turned on.
-//! Holds only paths and vault identifiers, never secrets.
+//! Holds only paths, display names and vault identifiers, never secrets.
 
 use std::{
     fs::{self, OpenOptions},
@@ -14,6 +14,9 @@ pub struct Config {
     #[serde(default)]
     pub language: crate::settings::language::Language,
     pub last_vault: Option<PathBuf>,
+    /// Display names for cloud profiles, available before password unlock.
+    #[serde(default)]
+    pub space_names: std::collections::BTreeMap<PathBuf, String>,
     /// Vaults (by `Vault::id`) whose owner turned Touch ID on.
     #[serde(default)]
     pub touch_id: Vec<String>,
@@ -31,6 +34,7 @@ impl Default for Config {
         Self {
             language: crate::settings::language::Language::default(),
             last_vault: None,
+            space_names: Default::default(),
             touch_id: Vec::new(),
             auto_lock_minutes: default_auto_lock(),
         }

@@ -23,6 +23,28 @@ fn complete(state: &mut SyncState, owner: &DeviceSecret, proof: Admission) -> Ha
 }
 
 #[test]
+fn space_name_survives_serialization_and_tampering_invalidates_the_invitation() {
+    let (state, owner) = owner();
+    let (_, certificate) = identity(2);
+    let invitation = Machine::offer_named_invitation(
+        &state,
+        &owner,
+        Some("Команда / Team"),
+        certificate,
+        Role::Editor,
+        None,
+    )
+    .unwrap();
+    let mut decoded = Invitation::decode(&invitation.bytes().unwrap()).unwrap();
+    assert_eq!(decoded.space_name(), Some("Команда / Team"));
+    Machine::verify_invitation(&decoded, &state.descriptor()).unwrap();
+    let code = decoded.verification_code().unwrap();
+    decoded.offer.body.space_name = Some("Another space".into());
+    assert_ne!(decoded.verification_code().unwrap(), code);
+    assert!(Machine::verify_invitation(&decoded, &state.descriptor()).is_err());
+}
+
+#[test]
 fn signed_admission_bootstraps_current_checkpoint_and_is_retry_stable() {
     let (mut state, owner) = owner();
     edit(&mut state, &owner, vec![entry(1, "prior history")]);

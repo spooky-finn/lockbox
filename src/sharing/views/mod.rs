@@ -19,9 +19,21 @@ use flow::{Path, Step, Workflow};
 fn act(action: Action) {
     let state = consume_context::<Session>();
     let now = *(consume_context::<Clock>().0).peek();
+    let mut settings = consume_context::<Signal<crate::settings::state::Settings>>();
     let mut save = false;
     edit_unlocked(state, |u| {
         u.sharing_action(action, now);
+        if matches!(action, Action::Join) && u.error.is_none() {
+            u.error = settings
+                .write()
+                .remember_profile(
+                    u.vault.path().to_path_buf(),
+                    u.vault
+                        .profile_summary()
+                        .map(|profile| profile.space_name.to_owned()),
+                )
+                .err();
+        }
         save = u.error.is_none() && u.sharing.output.is_some();
     });
     if save {

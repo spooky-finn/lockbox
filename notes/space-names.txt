@@ -1,0 +1,11 @@
+Space names
+
+- S3: spaces/<space name>/objects/<hash>.json. LIST, GET, PUT share prefix.
+- Escape literal %, /; dot-only names escaped. Unicode, spaces retained in object keys; SDK handles HTTP encoding.
+- Header shows space name. Local vault keeps filename.
+- Unlock retains name through lock, restart, file selection. Local settings cache names by profile path; no credentials.
+- Signed invitations carry name; verification code covers name. Joined profile adopts owner name; settings refreshed after join.
+- Names unique per bucket. Existing namespace objects need prefix migration; no remote rename performed.
+- Random protocol IDs, namespace, signatures, encryption retained.
+- Validation: 311 unit, 4 integration, 2 doc tests pass; 1 OS probe ignored. Full suite needs loopback sockets.
+- Strict all-target Clippy, format, diff checks pass.

@@ -256,8 +256,18 @@ fn wizard_follows_file_outputs_through_a_complete_admission() {
         });
     });
     assert!(dioxus_ssr::render(&guest_dom).contains("<h2>Finish connecting</h2>"));
-    update(&mut guest_dom, |state| {
-        edit_unlocked(state, |u| u.sharing_action(Action::Join, 0));
+    update(&mut guest_dom, |_| {
+        act(Action::Join);
+        let settings = consume_context::<Signal<crate::settings::state::Settings>>();
+        assert_eq!(
+            settings
+                .read()
+                .config
+                .space_names
+                .get(&directory.path().join("guest.lbx"))
+                .map(String::as_str),
+            Some("Shared fixture")
+        );
     });
     let html = dioxus_ssr::render(&guest_dom);
     assert!(html.contains("This device joined the space"));

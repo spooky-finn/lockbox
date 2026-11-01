@@ -1,4 +1,4 @@
-//! Live acceptance probe. Uses a new random namespace and fictional records.
+//! Live acceptance probe. Uses a unique space name and fictional records.
 //! Required environment names and operational details: docs/sync-live-test.md.
 
 #[path = "../tests/support/sync_scenario.rs"]
@@ -46,6 +46,10 @@ fn main() -> scenario::Result<()> {
     let profiles = ProfileStore::new(Arc::new(DirectoryWitness::new(
         witness_directory.path().to_owned(),
     )));
+    let mut suffix = [0; 16];
+    getrandom::fill(&mut suffix).map_err(|_| "operating system randomness unavailable")?;
+    let suffix: String = suffix.iter().map(|byte| format!("{byte:02x}")).collect();
+    let space_name = format!("Disposable Storj probe {suffix}");
     let create = |name: &str, access: &str, secret: &str| {
         Ok::<_, Box<dyn std::error::Error>>(profiles.create_shared(
             directory.path().join(format!("{name}.lbx")),
@@ -54,7 +58,7 @@ fn main() -> scenario::Result<()> {
             KdfParams::default(),
             SharedProfile {
                 username: name.into(),
-                space_name: "Disposable Storj probe".into(),
+                space_name: space_name.clone(),
                 provider: ProviderConfiguration {
                     base_url: endpoint.to_string(),
                     bucket: bucket.to_string(),
@@ -66,15 +70,23 @@ fn main() -> scenario::Result<()> {
     };
     let mut owner = create("Owner", &owner_access, &owner_secret)?;
     let mut editor = create("Editor", &editor_access, &editor_secret)?;
-    let namespace = owner
-        .space_descriptor()
-        .ok_or("missing descriptor")?
-        .namespace;
-    println!("Disposable probe namespace: spaces/{namespace}/");
-    let mut owner_storage =
-        Storj::with_region(&endpoint, &bucket, &owner_access, &owner_secret, &region)?;
-    let mut editor_storage =
-        Storj::with_region(&endpoint, &bucket, &editor_access, &editor_secret, &region)?;
+    println!("Disposable probe prefix: spaces/{space_name}/");
+    let mut owner_storage = Storj::with_region(
+        &endpoint,
+        &bucket,
+        &space_name,
+        &owner_access,
+        &owner_secret,
+        &region,
+    )?;
+    let mut editor_storage = Storj::with_region(
+        &endpoint,
+        &bucket,
+        &space_name,
+        &editor_access,
+        &editor_secret,
+        &region,
+    )?;
     scenario::exercise(
         &mut owner,
         &mut editor,

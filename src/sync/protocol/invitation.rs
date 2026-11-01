@@ -15,6 +15,9 @@ pub(super) const RECEIPT_DOMAIN: &[u8] = b"lockbox.sync.admission-receipt\0";
 #[serde(deny_unknown_fields)]
 pub struct InviteOffer {
     pub(crate) descriptor: SpaceDescriptor,
+    /// Controller-signed display name and S3 routing segment.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) space_name: Option<String>,
     pub(crate) anchor: Hash,
     pub(crate) id: Hash,
     pub(crate) author: Hash,
@@ -89,9 +92,13 @@ impl Invitation {
     /// Compare through an independent channel. Includes the entire descriptor
     /// and signed control anchor, not only a displayed owner name or root key.
     pub fn verification_code(&self) -> Result<Hash> {
+        let metadata = match self.space_name() {
+            Some(name) => canonical(&(self.descriptor(), self.anchor(), name))?,
+            None => canonical(&(self.descriptor(), self.anchor()))?,
+        };
         Ok(Hash::digest(
             b"lockbox.sync.invitation-verification\0",
-            &canonical(&(self.descriptor(), self.anchor()))?,
+            &metadata,
         ))
     }
 
@@ -100,6 +107,9 @@ impl Invitation {
     }
     pub fn descriptor(&self) -> &SpaceDescriptor {
         &self.offer.body.descriptor
+    }
+    pub fn space_name(&self) -> Option<&str> {
+        self.offer.body.space_name.as_deref()
     }
     pub fn anchor(&self) -> Hash {
         self.offer.body.anchor

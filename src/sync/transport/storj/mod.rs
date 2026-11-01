@@ -16,10 +16,13 @@ use zeroize::Zeroizing;
 
 mod transport;
 
+/// Client bound to one space name. Protocol namespaces remain in sync state;
+/// the provider prefix comes from the name supplied at construction.
 pub struct Storj {
     client: Client,
     runtime: Runtime,
     bucket: String,
+    prefix: String,
 }
 
 /// Configuration-only factory; the HTTP client is created on a worker thread.
@@ -27,6 +30,7 @@ pub struct Storj {
 pub struct StorjFactory {
     endpoint: String,
     bucket: String,
+    space_name: String,
     access: Zeroizing<String>,
     secret: Zeroizing<String>,
     region: String,
@@ -34,14 +38,15 @@ pub struct StorjFactory {
 
 impl StorjFactory {
     /// Retain configuration without opening a connection or logging credentials.
-    pub fn new(endpoint: &str, bucket: &str, access: &str, secret: &str) -> Self {
-        Self::with_region(endpoint, bucket, access, secret, "us-east-1")
+    pub fn new(endpoint: &str, bucket: &str, space_name: &str, access: &str, secret: &str) -> Self {
+        Self::with_region(endpoint, bucket, space_name, access, secret, "us-east-1")
     }
 
     /// Use an explicit signing region; validation occurs in [`StorageFactory::connect`].
     pub fn with_region(
         endpoint: &str,
         bucket: &str,
+        space_name: &str,
         access: &str,
         secret: &str,
         region: &str,
@@ -49,6 +54,7 @@ impl StorjFactory {
         Self {
             endpoint: endpoint.into(),
             bucket: bucket.into(),
+            space_name: space_name.into(),
             access: Zeroizing::new(access.into()),
             secret: Zeroizing::new(secret.into()),
             region: region.into(),
@@ -61,6 +67,7 @@ impl StorageFactory for StorjFactory {
         Ok(Box::new(Storj::with_region(
             &self.endpoint,
             &self.bucket,
+            &self.space_name,
             &self.access,
             &self.secret,
             &self.region,
@@ -69,13 +76,20 @@ impl StorageFactory for StorjFactory {
 }
 
 impl Storj {
-    pub fn new(endpoint: &str, bucket: &str, access: &str, secret: &str) -> Result<Self> {
-        Self::with_region(endpoint, bucket, access, secret, "us-east-1")
+    pub fn new(
+        endpoint: &str,
+        bucket: &str,
+        space_name: &str,
+        access: &str,
+        secret: &str,
+    ) -> Result<Self> {
+        Self::with_region(endpoint, bucket, space_name, access, secret, "us-east-1")
     }
 
     pub fn with_region(
         endpoint: &str,
         bucket: &str,
+        space_name: &str,
         access: &str,
         secret: &str,
         region: &str,
@@ -86,17 +100,38 @@ impl Storj {
         if region.is_empty() || region.chars().any(|c| c.is_whitespace() || c.is_control()) {
             return Err(TransportError::InvalidResponse);
         }
-        Self::connect(endpoint.as_str(), bucket, access, secret, region, true)
+        Self::connect(
+            endpoint.as_str(),
+            bucket,
+            space_name,
+            access,
+            secret,
+            region,
+            true,
+        )
     }
 
     fn connect(
         endpoint: &str,
         bucket: &str,
+        space_name: &str,
         access: &str,
         secret: &str,
         region: &str,
         https_only: bool,
     ) -> Result<Self> {
+        if space_name.trim().is_empty()
+            || space_name.len() > 256
+            || space_name.chars().any(char::is_control)
+        {
+            return Err(TransportError::InvalidResponse);
+        }
+        // Keep names in one S3 key segment. Escape literal percent signs first
+        // so names containing escape sequences cannot alias another space.
+        let mut segment = space_name.replace('%', "%25").replace('/', "%2F");
+        if matches!(segment.as_str(), "." | "..") {
+            segment = segment.replace('.', "%2E");
+        }
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
@@ -126,20 +161,21 @@ impl Storj {
             client,
             runtime,
             bucket: bucket.into(),
+            prefix: format!("spaces/{segment}/objects/"),
         })
     }
 }
 
 impl Storage for Storj {
-    fn list(&mut self, namespace: Hash, cursor: Option<&str>) -> Result<Page> {
-        let prefix = format!("spaces/{namespace}/objects/");
+    fn list(&mut self, _namespace: Hash, cursor: Option<&str>) -> Result<Page> {
+        let prefix = &self.prefix;
         let listing = self
             .runtime
             .block_on(
                 self.client
                     .list_objects_v2()
                     .bucket(&self.bucket)
-                    .prefix(&prefix)
+                    .prefix(prefix)
                     .max_keys(1000)
                     .set_continuation_token(cursor.map(str::to_owned))
                     .send(),
@@ -164,7 +200,7 @@ impl Storage for Storj {
                 object
                     .key
                     .as_deref()?
-                    .strip_prefix(&prefix)?
+                    .strip_prefix(prefix)?
                     .strip_suffix(".json")?
                     .parse()
                     .ok()
@@ -173,8 +209,8 @@ impl Storage for Storj {
         Ok(Page { objects, next })
     }
 
-    fn get(&mut self, namespace: Hash, hash: Hash) -> Result<Vec<u8>> {
-        let key = format!("spaces/{namespace}/objects/{hash}.json");
+    fn get(&mut self, _namespace: Hash, hash: Hash) -> Result<Vec<u8>> {
+        let key = format!("{}{hash}.json", self.prefix);
         self.runtime.block_on(async {
             let response = self
                 .client
@@ -194,7 +230,7 @@ impl Storage for Storj {
         })
     }
 
-    fn put(&mut self, namespace: Hash, hash: Hash, bytes: &[u8]) -> Result<()> {
+    fn put(&mut self, _namespace: Hash, hash: Hash, bytes: &[u8]) -> Result<()> {
         if bytes.len() > MAX_OBJECT_BYTES {
             return Err(TransportError::Budget);
         }
@@ -208,7 +244,7 @@ impl Storage for Storj {
             ));
         }
 
-        let key = format!("spaces/{namespace}/objects/{hash}.json");
+        let key = format!("{}{hash}.json", self.prefix);
         // Equal content always has equal key. Correctness does not depend on
         // gateway conditional-write support; hostile replacement is hash-checked.
         self.runtime

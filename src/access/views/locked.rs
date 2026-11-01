@@ -39,12 +39,14 @@ pub(crate) fn LockedView() -> Element {
             .as_ref()
             .is_some_and(|path| create || path.exists());
     let touch_id = ready && !create && locked.touch_id.is_some();
-    let filename = locked
-        .path
-        .as_ref()
-        .and_then(|path| path.file_name())
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_default();
+    let filename = locked.space_name.clone().unwrap_or_else(|| {
+        locked
+            .path
+            .as_ref()
+            .and_then(|path| path.file_name())
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    });
     let path = locked
         .path
         .as_ref()

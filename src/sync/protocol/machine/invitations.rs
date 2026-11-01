@@ -34,6 +34,23 @@ impl Machine {
         role: Role,
         expires_at: Option<u64>,
     ) -> Result<Invitation> {
+        Self::offer_named_invitation(state, device, None, recipient, role, expires_at)
+    }
+
+    /// Include the authenticated display name used by the provider adapter.
+    pub fn offer_named_invitation(
+        state: &SyncState,
+        device: &DeviceSecret,
+        space_name: Option<&str>,
+        recipient: Signed<Certificate>,
+        role: Role,
+        expires_at: Option<u64>,
+    ) -> Result<Invitation> {
+        if space_name.is_some_and(|name| {
+            name.trim().is_empty() || name.len() > 256 || name.chars().any(char::is_control)
+        }) {
+            return Err(Error::InvalidInvitation);
+        }
         state.require_idle()?;
         let replay = Self::replay(state, device)?;
 
@@ -51,6 +68,7 @@ impl Machine {
             }
             let offer = InviteOffer {
                 descriptor: state.descriptor(),
+                space_name: space_name.map(str::to_owned),
                 anchor,
                 id: Hash(*crypto::random32()?),
                 author: device.id(),
@@ -354,7 +372,11 @@ fn verify_offer(
 ) -> Result<()> {
     let body = &offer.body;
 
-    if body.descriptor != state.descriptor() {
+    if body.descriptor != state.descriptor()
+        || body.space_name.as_ref().is_some_and(|name| {
+            name.trim().is_empty() || name.len() > 256 || name.chars().any(char::is_control)
+        })
+    {
         return Err(Error::InvalidInvitation);
     }
     let index = ancestors
