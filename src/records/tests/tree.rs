@@ -6,6 +6,24 @@ use crate::{
     records::tree::{Node, project},
 };
 
+fn outline(nodes: &[Node<'_>]) -> Vec<String> {
+    fn visit(nodes: &[Node<'_>], depth: usize, lines: &mut Vec<String>) {
+        for node in nodes {
+            match node {
+                Node::Folder(folder, children) => {
+                    lines.push(format!("{depth}:folder:{}", folder.name));
+                    visit(children, depth + 1, lines);
+                }
+                Node::Record(entry) => lines.push(format!("{depth}:entry:{}", entry.title)),
+            }
+        }
+    }
+
+    let mut lines = Vec::new();
+    visit(nodes, 0, &mut lines);
+    lines
+}
+
 #[test]
 fn search_matches_title_username_and_url_ignoring_case() {
     let dir = tempfile::tempdir().unwrap();
@@ -62,4 +80,120 @@ fn concurrent_folder_cycles_and_dangling_parents_do_not_hide_records() {
         project(&workspace.vault, "find").as_slice(),
         [Node::Record(_)]
     ));
+}
+
+#[test]
+fn branches_keep_sorted_siblings_and_inherit_matching_folder_names() {
+    use crate::records::{entry::Entry, folder::Folder};
+    let dir = tempfile::tempdir().unwrap();
+    let mut workspace = unlocked(&dir);
+    *workspace.vault.test_folders_mut() = [
+        ("beta", "beta", None),
+        ("nested", "Nested", Some("alpha")),
+        ("alpha", "ALPHA", None),
+    ]
+    .into_iter()
+    .map(|(id, name, parent)| Folder {
+        id: id.into(),
+        name: name.into(),
+        parent_id: parent.map(str::to_owned),
+    })
+    .collect();
+    *workspace.vault.test_entries_mut() = [
+        ("z root", None),
+        ("z child", Some("alpha")),
+        ("Hidden Match", Some("nested")),
+        ("Alpha root", None),
+        ("alpha child", Some("alpha")),
+    ]
+    .into_iter()
+    .map(|(title, parent)| {
+        let mut entry = Entry::new();
+        entry.title = title.into();
+        entry.folder_id = parent.map(str::to_owned);
+        entry
+    })
+    .collect();
+
+    assert_eq!(
+        outline(&project(&workspace.vault, "")),
+        [
+            "0:folder:ALPHA",
+            "1:folder:Nested",
+            "2:entry:Hidden Match",
+            "1:entry:alpha child",
+            "1:entry:z child",
+            "0:folder:beta",
+            "0:entry:Alpha root",
+            "0:entry:z root",
+        ]
+    );
+    assert_eq!(
+        outline(&project(&workspace.vault, "alpha")),
+        [
+            "0:folder:ALPHA",
+            "1:folder:Nested",
+            "2:entry:Hidden Match",
+            "1:entry:alpha child",
+            "1:entry:z child",
+            "0:entry:Alpha root",
+        ]
+    );
+    for query in [" HIDDEN ", " nested "] {
+        assert_eq!(
+            outline(&project(&workspace.vault, query)),
+            ["0:folder:ALPHA", "1:folder:Nested", "2:entry:Hidden Match",]
+        );
+    }
+}
+
+#[test]
+fn excessive_depth_keeps_unreachable_items_at_root_and_searchable() {
+    use crate::records::{
+        entry::Entry,
+        folder::{Folder, MAX_DEPTH},
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let mut workspace = unlocked(&dir);
+    *workspace.vault.test_folders_mut() = (0..MAX_DEPTH + 3)
+        .map(|index| Folder {
+            id: format!("f{index}"),
+            name: format!("Level {index}"),
+            parent_id: index.checked_sub(1).map(|parent| format!("f{parent}")),
+        })
+        .collect();
+    *workspace.vault.test_entries_mut() = [
+        ("Deep target", format!("f{MAX_DEPTH}")),
+        ("Orphan target", "missing".into()),
+    ]
+    .into_iter()
+    .map(|(title, parent)| {
+        let mut entry = Entry::new();
+        entry.title = title.into();
+        entry.folder_id = Some(parent);
+        entry
+    })
+    .collect();
+
+    let nodes = project(&workspace.vault, "");
+    assert_eq!(nodes.len(), 5);
+    let lines = outline(&nodes);
+    assert_eq!(lines.len(), MAX_DEPTH + 5);
+    assert_eq!(
+        lines[MAX_DEPTH],
+        format!("{MAX_DEPTH}:folder:Level {MAX_DEPTH}")
+    );
+    assert_eq!(
+        &lines[MAX_DEPTH + 1..],
+        [
+            format!("0:folder:Level {}", MAX_DEPTH + 1),
+            format!("0:folder:Level {}", MAX_DEPTH + 2),
+            "0:entry:Deep target".into(),
+            "0:entry:Orphan target".into(),
+        ]
+    );
+    assert_eq!(
+        outline(&project(&workspace.vault, "target")),
+        ["0:entry:Deep target", "0:entry:Orphan target"]
+    );
 }

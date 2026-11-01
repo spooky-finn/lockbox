@@ -6,13 +6,15 @@ Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
 
-Cycle 2: Import duplicate selection
-- Compare mapped folder and normalized TOTP before cloning full source Entry.
-- Skipped records no longer clone passwords/attachments or allocate new IDs.
-- Preserve attachment content/order equality, source values and repeat-import rules.
-- Verification: 25 import tests, formatting, strict all-target Clippy passed.
-- Added regression coverage: mapped/normalized duplicate selection, immutable
-  sources, attachment IDs ignored but names/bytes/order retained.
+Cycle 3: Sidebar hierarchy
+- Index borrowed folders/entries by parent once; sort sibling buckets once.
+- Recursive branches use parent lookups instead of rescanning vault collections.
+- Preserve folder-first order, search inheritance, MAX_DEPTH and orphan fallback.
+- New ordering/search/depth regressions passed against pre-refactor code.
+- Verification: 66 record tests, full formatting, strict all-target Clippy passed
+  in isolated snapshot. Source/test formatting and whitespace passed in workspace.
+- Concurrent favicon/runtime/translation edits left untouched. Validate isolated
+  snapshot at /tmp/lockbox-refactor-3.33bWXV when workspace cannot compile.
 
-Next search: folder traversal, history indexing, browser/session workflows.
+Next search: local history indexing, browser/session workflows, folder breadcrumbs.
 Inspect current code and tests before choosing; no quota-driven edits.
