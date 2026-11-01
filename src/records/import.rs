@@ -12,7 +12,10 @@ use crate::{
     vault::{Records, Vault},
 };
 use secrecy::SecretString;
-use std::path::PathBuf;
+use std::{
+    io::{self, Write},
+    path::PathBuf,
+};
 use zeroize::Zeroizing;
 
 /// Stay well inside one shared transaction (mutation count and encoded size).
@@ -177,6 +180,26 @@ fn partial(saved: usize, total: usize, error: &str) -> String {
     format!("Imported {saved} of {total} entries; repeat the import to continue: {error}")
 }
 
+/// Measure serializer output without retaining a plaintext copy of the entry.
+#[derive(Default)]
+struct ByteCount {
+    bytes: usize,
+}
+
+impl Write for ByteCount {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        self.bytes = self
+            .bytes
+            .checked_add(bytes.len())
+            .ok_or_else(|| io::Error::other("serialized entry size overflow"))?;
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
 /// Splits entries so that each shared transaction stays within its limits.
 fn entry_batches(entries: &[Entry]) -> Vec<&[Entry]> {
     let mut batches = Vec::new();
@@ -184,8 +207,9 @@ fn entry_batches(entries: &[Entry]) -> Vec<&[Entry]> {
     let mut bytes = 0;
 
     for (index, entry) in entries.iter().enumerate() {
+        let mut counter = ByteCount::default();
         let size =
-            serde_json::to_vec(entry).map_or(BATCH_BYTES, |encoded| Zeroizing::new(encoded).len());
+            serde_json::to_writer(&mut counter, entry).map_or(BATCH_BYTES, |_| counter.bytes);
 
         if index > start && (index - start == BATCH_MUTATIONS || bytes + size > BATCH_BYTES) {
             batches.push(&entries[start..index]);

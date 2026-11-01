@@ -8,17 +8,15 @@ No delegation requested. Keep unrelated work outside refactor commits.
 Last full suite: cycle 12; 382 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 12: Borrowed projection views
-- Share borrowed filters for records with a single live head.
-- entries()/folders() retain owned snapshots; structural_conflicts borrows values
-  instead of cloning passwords, attachments and folders for read-only checks.
-- Preserve ASCII sibling comparison, cycle/orphan evidence, conflicted/deleted
-  folder handling, record order and empty-head behavior.
-- Four new model contract tests passed before refactor.
-- Verification: full suite above, full formatting and strict all-target Clippy
-  passed in isolated snapshot. Canonical wire fixture unchanged.
+Cycle 13: Import batch size counting
+- Count serializer output with a Write sink; no full plaintext JSON entry buffer.
+- Preserve byte/mutation limits, oversized-record handling and error fallback.
+- Boundary regression passed before refactor: exact byte limit versus one byte
+  above, with escaping, Unicode and binary attachment metadata.
+- Verification: 28 import tests, full formatting and strict all-target Clippy
+  passed in isolated snapshot. Workspace changes passed whitespace checks.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-12.ojlBHr when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-13.nKNyxC when workspace cannot compile.
 
-Next search: transport discovery budgets, attachment batching, UI status calculations.
+Next search: UI status calculations, protocol history, worker/mailbox state.
 Inspect current code and tests before choosing; no quota-driven edits.

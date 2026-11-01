@@ -238,3 +238,43 @@ fn large_imports_are_split_into_bounded_batches() {
     }));
     assert!(batches.len() >= 3);
 }
+
+#[test]
+fn batch_byte_boundaries_match_json_escaping_unicode_and_attachments() {
+    let mut first = Entry::new();
+    first.title = "Quoted \"title\" and backslash \\".into();
+    first
+        .add_attachment("ключ.bin".into(), vec![0, 255, 42])
+        .unwrap();
+    let mut second = Entry::new();
+    second.title = "Unicode 🗝️".into();
+    second.username = "名\n\t\"\\".into();
+    let mut third = Entry::new();
+    third.title = "Third".into();
+    let encoded_len = |entry: &Entry| serde_json::to_vec(entry).unwrap().len();
+    let padding = BATCH_BYTES - encoded_len(&first) - encoded_len(&second);
+    first.notes = "a".repeat(padding / 2);
+    second.notes = "b".repeat(padding - padding / 2);
+    assert_eq!(encoded_len(&first) + encoded_len(&second), BATCH_BYTES);
+    let mut entries = [first, second, third];
+
+    assert_eq!(
+        entry_batches(&entries)
+            .iter()
+            .map(|batch| batch.len())
+            .collect::<Vec<_>>(),
+        [2, 1]
+    );
+    entries[1].notes.push('x');
+    assert_eq!(
+        encoded_len(&entries[0]) + encoded_len(&entries[1]),
+        BATCH_BYTES + 1
+    );
+    assert_eq!(
+        entry_batches(&entries)
+            .iter()
+            .map(|batch| batch.len())
+            .collect::<Vec<_>>(),
+        [1, 2]
+    );
+}
