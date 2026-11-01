@@ -5,6 +5,7 @@ pub(crate) mod biometrics;
 pub(crate) mod cloud_setup;
 pub(crate) mod directories;
 pub(crate) mod editor;
+pub(crate) mod import;
 pub(crate) mod security;
 pub(crate) mod session;
 pub(crate) mod settings;

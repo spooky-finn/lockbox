@@ -141,3 +141,34 @@ fn english_translates_existing_errors_and_creation_without_translating_user_data
     assert!(html.contains("Enter a username"));
     assert!(html.contains("How to set up Storj"));
 }
+
+#[test]
+fn import_section_asks_for_a_file_then_its_password_and_shows_the_result() {
+    let mut dom = mounted();
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| u.open_settings())
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("Импорт хранилища"));
+    assert!(html.contains("Файл не выбран"));
+    assert!(!html.contains("import-password"));
+
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| {
+            u.choose_import(std::path::PathBuf::from("/tmp/old-vault.lbx"));
+            *u.import.password = "typed-import-secret".into();
+        })
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("old-vault.lbx"));
+    assert!(html.contains("import-password"));
+    assert!(html.contains("Импортировать"));
+
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| {
+            u.import.notice = Some("Imported 2 entries and 1 folders; 0 duplicates skipped".into());
+        })
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("Импортировано записей: 2, папок: 1; пропущено дубликатов: 0"));
+}

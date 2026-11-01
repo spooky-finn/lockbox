@@ -4,6 +4,7 @@ pub mod entry;
 pub mod folder;
 pub mod generator;
 pub(crate) mod id;
+pub mod import;
 pub mod language;
 pub mod sync;
 pub mod totp;

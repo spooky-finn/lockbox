@@ -177,6 +177,7 @@ h2 { font-size: 15px; font-weight: 600; letter-spacing: -.2px; }
 .toolbar .icon-button:not(.primary) { background: transparent; box-shadow: none; border-color: transparent; }
 summary { cursor: pointer; }
 .preference-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 36px; font-size: 12px; }
+.import-file { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 input.switch { appearance: none; -webkit-appearance: none; position: relative; width: 34px; height: 21px; flex: 0 0 34px; border: 0; border-radius: 99px; background: var(--muted); cursor: pointer; transition: background 150ms; }
 input.switch::after { content: ""; position: absolute; left: 2px; top: 2px; width: 17px; height: 17px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgb(0 0 0 / 15%); transition: transform 150ms; }
 input.switch:checked { background: #34c759; }

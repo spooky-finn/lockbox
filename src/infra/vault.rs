@@ -136,11 +136,13 @@ use format::{
     decrypt, derive,
 };
 mod protection;
+mod records;
 mod shared;
 mod sharing;
 mod store;
 
 pub use crate::infra::profile::{AcceptedInvitationInfo, InvitationStatus, IssuedInvitationInfo};
+pub use records::Records;
 pub use store::{DeviceRecovery, ProfileStore, SharedProfile};
 
 enum Unlock<'a> {

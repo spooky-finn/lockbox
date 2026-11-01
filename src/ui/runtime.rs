@@ -16,7 +16,9 @@ use std::{
     time::{Duration, Instant, SystemTime},
 };
 
+mod import;
 mod sharing;
+pub(super) use import::choose_import_file;
 pub(super) use sharing::{export_sharing_file, import_sharing_file};
 
 pub(super) fn use_runtime() -> Session {
@@ -69,7 +71,9 @@ pub(super) fn tick() {
     let pending = match &*consume_context::<Session>().peek() {
         Screen::Locked(form) => form.pending.is_some() || form.auto_touch_id,
         Screen::Unlocked(workspace) => {
-            workspace.touch_id.pending.is_some() || workspace.sharing.needs_poll()
+            workspace.touch_id.pending.is_some()
+                || workspace.sharing.needs_poll()
+                || (workspace.import.needs_poll() && !workspace.is_editing())
         }
     };
 
@@ -165,6 +169,7 @@ pub(super) fn poll_workers() {
         }
         Screen::Unlocked(workspace) => {
             workspace.poll_sharing(unix_now());
+            workspace.poll_import();
             if let Some(result) = workspace
                 .touch_id
                 .poll(&workspace.vault, &mut settings.write())
