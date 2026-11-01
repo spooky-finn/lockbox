@@ -39,8 +39,14 @@ pub enum Value {
     Folder(Folder),
 }
 
-impl Value {
-    pub fn entity(&self) -> Entity {
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ValueRef<'a> {
+    Entry(&'a Entry),
+    Folder(&'a Folder),
+}
+
+impl ValueRef<'_> {
+    fn entity(self) -> Entity {
         match self {
             Self::Entry(entry) => Entity {
                 kind: EntityKind::Entry,
@@ -52,6 +58,27 @@ impl Value {
             },
         }
     }
+
+    fn into_owned(self) -> Value {
+        match self {
+            Self::Entry(entry) => Value::Entry(entry.clone()),
+            Self::Folder(folder) => Value::Folder(folder.clone()),
+        }
+    }
+}
+
+impl Value {
+    pub fn entity(&self) -> Entity {
+        self.as_ref().entity()
+    }
+
+    fn as_ref(&self) -> ValueRef<'_> {
+        match self {
+            Self::Entry(entry) => ValueRef::Entry(entry),
+            Self::Folder(folder) => ValueRef::Folder(folder),
+        }
+    }
+
     fn validate(&self) -> Result<()> {
         match self {
             Self::Entry(entry) => {
@@ -389,9 +416,8 @@ impl Transaction {
 
         for value in entries
             .iter()
-            .cloned()
-            .map(Value::Entry)
-            .chain(folders.iter().cloned().map(Value::Folder))
+            .map(ValueRef::Entry)
+            .chain(folders.iter().map(ValueRef::Folder))
         {
             if desired.insert(value.entity(), value).is_some() {
                 return Err(Error::InvalidTransaction);
@@ -408,22 +434,22 @@ impl Transaction {
                 continue;
             }
 
-            let previous = &record.versions[0].value;
+            let previous = record.versions[0].value.as_ref().map(Value::as_ref);
             let next = desired.remove(&record.entity);
 
-            if *previous == next {
+            if previous == next {
                 continue;
             }
             mutations.push(Mutation {
                 entity: record.entity.clone(),
                 bases: before.heads(&record.entity),
-                action: match (previous, &next) {
+                action: match (previous, next) {
                     (Some(_), Some(_)) => Action::Put,
                     (Some(_), None) => Action::Delete,
                     (None, Some(_)) => Action::Restore,
                     (None, None) => continue,
                 },
-                value: next,
+                value: next.map(ValueRef::into_owned),
             });
         }
 
@@ -432,7 +458,7 @@ impl Transaction {
                 entity,
                 bases: vec![],
                 action: Action::Put,
-                value: Some(value),
+                value: Some(value.into_owned()),
             });
         }
         mutations.sort_by(|a, b| a.entity.cmp(&b.entity));

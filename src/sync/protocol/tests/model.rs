@@ -201,3 +201,125 @@ fn read_views_ignore_empty_head_sets() {
     assert!(projection.folders().is_empty());
     assert!(projection.structural_conflicts().is_empty());
 }
+
+#[test]
+fn diff_keeps_order_actions_bases_and_owned_payloads_for_mixed_changes() {
+    let mut kept = entry(1, None);
+    kept.add_attachment("keep.bin".into(), vec![0, 255, 42])
+        .unwrap();
+    let before = projection(vec![
+        live(Value::Entry(kept.clone()), 1),
+        live(Value::Entry(entry(2, None)), 2),
+        live(Value::Entry(entry(3, None)), 3),
+        deleted(EntityKind::Entry, 4, 4),
+        conflict(
+            Value::Entry(entry(5, None)),
+            Value::Entry(entry(5, None)),
+            5,
+        ),
+        live(Value::Folder(folder(11, "Before", None)), 11),
+        live(Value::Folder(folder(12, "Removed", None)), 12),
+        deleted(EntityKind::Folder, 13, 13),
+        live(Value::Folder(folder(14, "Kept", None)), 14),
+        conflict(
+            Value::Folder(folder(15, "Conflict A", None)),
+            Value::Folder(folder(15, "Conflict B", None)),
+            15,
+        ),
+    ]);
+    before.validate().unwrap();
+    let mut changed = entry(2, None);
+    changed.password = "edited password".into();
+    changed
+        .add_attachment("edited.bin".into(), vec![3, 2, 1])
+        .unwrap();
+    let mut entries = vec![entry(6, None), changed, entry(4, None), kept];
+    let mut folders = vec![
+        folder(16, "New", None),
+        folder(14, "Kept", None),
+        folder(11, "After", None),
+        folder(13, "Restored", None),
+    ];
+    let transaction = Transaction::diff(&before, &entries, &folders).unwrap();
+    transaction.validate(&before).unwrap();
+    let expected = [
+        (EntityKind::Entry, 2, Action::Put, Some(2)),
+        (EntityKind::Entry, 3, Action::Delete, Some(3)),
+        (EntityKind::Entry, 4, Action::Restore, Some(4)),
+        (EntityKind::Entry, 6, Action::Put, None),
+        (EntityKind::Folder, 11, Action::Put, Some(11)),
+        (EntityKind::Folder, 12, Action::Delete, Some(12)),
+        (EntityKind::Folder, 13, Action::Restore, Some(13)),
+        (EntityKind::Folder, 16, Action::Put, None),
+    ];
+    assert_eq!(transaction.mutations.len(), expected.len());
+    assert!(transaction.rebased_from.is_none());
+    for (mutation, (kind, id, action, base)) in transaction.mutations.iter().zip(expected) {
+        assert_eq!(mutation.entity, entity(kind, id));
+        assert_eq!(mutation.action, action);
+        assert_eq!(
+            mutation.bases,
+            base.map(|revision| version(revision, None).revision)
+                .into_iter()
+                .collect::<Vec<_>>()
+        );
+        match &mutation.value {
+            Some(Value::Entry(actual)) => {
+                assert_eq!(actual, entries.iter().find(|e| e.id == actual.id).unwrap());
+            }
+            Some(Value::Folder(actual)) => {
+                assert_eq!(actual, folders.iter().find(|f| f.id == actual.id).unwrap());
+            }
+            None => assert_eq!(action, Action::Delete),
+        }
+    }
+    let serialized = canonical(&transaction).unwrap();
+    entries[1].password = "later edit".into();
+    entries[1].attachments[0].data[0] = 9;
+    folders[2].name = "Later folder edit".into();
+    assert_eq!(canonical(&transaction).unwrap(), serialized);
+}
+
+#[test]
+fn diff_rejects_duplicate_and_conflicted_entities_but_distinguishes_kinds() {
+    let before = projection(vec![
+        conflict(
+            Value::Entry(entry(1, None)),
+            Value::Entry(entry(1, None)),
+            1,
+        ),
+        conflict(
+            Value::Folder(folder(11, "First", None)),
+            Value::Folder(folder(11, "Second", None)),
+            3,
+        ),
+    ]);
+    for (entries, folders) in [
+        (vec![entry(1, None)], vec![]),
+        (vec![], vec![folder(11, "First", None)]),
+        (vec![entry(2, None), entry(2, None)], vec![]),
+        (
+            vec![],
+            vec![folder(12, "Same", None), folder(12, "Same", None)],
+        ),
+    ] {
+        assert!(matches!(
+            Transaction::diff(&before, &entries, &folders),
+            Err(Error::InvalidTransaction)
+        ));
+    }
+    assert!(
+        Transaction::diff(&before, &[], &[])
+            .unwrap()
+            .mutations
+            .is_empty()
+    );
+    let transaction = Transaction::diff(
+        &before,
+        &[entry(2, None)],
+        &[folder(2, "Different kind", None)],
+    )
+    .unwrap();
+    assert_eq!(transaction.mutations.len(), 2);
+    transaction.validate(&before).unwrap();
+}

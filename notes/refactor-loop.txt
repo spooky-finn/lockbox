@@ -5,19 +5,20 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 21; 389 library, four integration, two doctests passed.
+Last full suite: cycle 23; 391 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 22: Borrow replay control map
-- Causal validation uses existing control map for membership lookup; remove
-  identical hash-set allocation and copying per readable epoch.
-- Include all parsed controls, including quarantine, exactly as prior set did.
-- Expanded regression passed before refactor: old/current control and old-epoch
-  parent rejection now also covers quarantined control parent.
-- All 44 protocol tests, formatting and strict all-target Clippy passed. Changed
-  source byte-matches verified snapshot; workspace whitespace checks passed.
+Cycle 23: Borrow desired transaction values
+- Private ValueRef compares input entries/folders against projection; clone only
+  mutation payloads. Reuse entity extraction; public Value/API/wire unchanged.
+- Two regressions passed before refactor: mixed action/order/base/payload cases,
+  unchanged/conflicted omission, duplicate rejection and same ID across kinds.
+- Owned mutation payloads remain independent of later password/file/folder edits.
+- Full suite passed: 391 library, four integration, two doctests; two OS probes
+  ignored. Formatting and strict all-target Clippy passed. Changed source
+  byte-matches verified snapshot; workspace whitespace checks passed.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-22.daSJbz when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-23.5rCwdB when workspace cannot compile.
 
-Next search: transaction diff snapshots, attachment validation, settings.
+Next search: mapped ordering checks, attachment identifiers, settings.
 Inspect current code and tests before choosing; no quota-driven edits.
