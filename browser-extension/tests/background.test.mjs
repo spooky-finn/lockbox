@@ -22,6 +22,7 @@ async function fixture(options = {}) {
         disconnect() { this.onDisconnect.fire(); },
         postMessage(message) {
           requests.push(message.request);
+          if (options.post) return options.post(message, port);
           queueMicrotask(() => port.onMessage.fire({ id: message.id, status: "ok", data:
             message.request.action === "credential" ? { username: "fictional-user", password: "fictional-password" } :
             message.request.action === "save_generated" ? { entry_id: "fictional-id" } : { unlocked: true } }));
@@ -120,4 +121,50 @@ test("browser idle and screen lock disconnect native session", async () => {
     assert.equal(closed, true);
     f.close();
   }
+});
+
+test("unmatched replies are ignored and native failures preserve the connection", async () => {
+  const posted = [];
+  const f = await fixture({ post: (message) => posted.push(message) });
+  const body = { action: "unlock", path: "/fictional-vault", password: "fictional-password" };
+  let settled = false;
+  const opening = f.message(body).then((reply) => { settled = true; return reply; });
+  await new Promise((resolve) => setImmediate(resolve));
+  const connection = f.connections[0];
+  connection.onMessage.fire({ id: posted[0].id + 1, status: "ok", data: { unlocked: true } });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(settled, false);
+  connection.onMessage.fire({ id: posted[0].id, status: "error", error: "Fictional denial" });
+  assert.deepEqual(await opening, { ok: false, error: "Fictional denial" });
+  assert.equal(body.password, "");
+
+  const status = f.message({ action: "status" });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(f.connections.length, 1);
+  connection.onMessage.fire({ id: posted[1].id, status: "ok", data: { unlocked: false } });
+  assert.deepEqual(await status, { ok: true, data: { unlocked: false } });
+  f.close();
+});
+
+test("disconnection rejects pending work and old ports cannot reply to new requests", async () => {
+  const posted = [];
+  const f = await fixture({ post: (message) => posted.push(message) });
+  const first = f.message({ action: "status" });
+  await new Promise((resolve) => setImmediate(resolve));
+  const old = f.connections[0];
+  f.close();
+  assert.deepEqual(await first, { ok: false, error: "Vault disconnected or locked. Unlock again." });
+
+  let settled = false;
+  const next = f.message({ action: "status" }).then((reply) => { settled = true; return reply; });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(f.connections.length, 2);
+  assert.ok(posted[1].id > posted[0].id);
+  old.onMessage.fire({ id: posted[1].id, status: "ok", data: { unlocked: true } });
+  old.onDisconnect.fire();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(settled, false);
+  f.connections[1].onMessage.fire({ id: posted[1].id, status: "ok", data: { unlocked: false } });
+  assert.deepEqual(await next, { ok: true, data: { unlocked: false } });
+  f.close();
 });
