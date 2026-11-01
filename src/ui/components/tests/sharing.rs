@@ -54,9 +54,11 @@ fn sharing_page_renders_member_controls_without_record_or_provider_secrets() {
         });
     });
     let html = dioxus_ssr::render(&dom);
-    assert!(html.contains("Participant devices"));
+    assert!(html.contains("People and access"));
     assert!(html.contains("Open recipient device file"));
     assert!(html.contains("Controls membership"));
+    assert!(html.contains("<h3>owner</h3>"));
+    assert!(html.contains("Devices and access"));
     for secret in [
         "private-record-marker",
         "private-provider-marker",
@@ -232,4 +234,58 @@ fn wizard_follows_file_outputs_through_a_complete_admission() {
     assert!(html.contains("This device joined the space"));
     assert!(!html.contains("sharing-navigation"));
     assert!(!html.contains("Open admission confirmation"));
+}
+
+#[test]
+fn participant_names_are_rendered_and_saved_in_the_encrypted_profile() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut owner = vault(&directory, "owner");
+    let mut guest = vault(&directory, "guest");
+    let certificate = guest.device_certificate().unwrap();
+    let user = certificate.body.user;
+    let offer = owner
+        .issue_invitation(certificate, Role::Reader, None)
+        .unwrap();
+    let response = guest
+        .accept_invitation(offer.clone(), offer.descriptor())
+        .unwrap();
+    owner.admit_invitation(response, 0).unwrap();
+    owner
+        .profile
+        .as_mut()
+        .unwrap()
+        .participant_names
+        .insert(user, "Alice <Admin>".into());
+    owner.save().unwrap();
+    let bytes = std::fs::read(directory.path().join("owner.lbx")).unwrap();
+    assert!(!String::from_utf8_lossy(&bytes).contains("Alice <Admin>"));
+    // Serialization keeps names while older profiles without this field remain readable.
+    let profile = owner.profile.as_ref().unwrap();
+    let mut serialized = serde_json::to_value(profile).unwrap();
+    let restored: crate::infra::profile::BootstrapProfile =
+        serde_json::from_value(serialized.clone()).unwrap();
+    assert_eq!(
+        restored.participant_names.get(&user).unwrap(),
+        "Alice <Admin>"
+    );
+    serialized
+        .as_object_mut()
+        .unwrap()
+        .remove("participant_names");
+    let legacy: crate::infra::profile::BootstrapProfile =
+        serde_json::from_value(serialized).unwrap();
+    assert!(legacy.participant_names.is_empty());
+    let mut dom = mounted();
+    update(&mut dom, |state| {
+        runtime::set_language(crate::core::language::Language::English);
+        edit_unlocked(state, |u| {
+            u.vault = owner;
+            u.open_sharing();
+        });
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("<h3>Alice &#60;Admin&#62;</h3>"));
+    assert!(html.contains("Allow editing"));
+    assert!(html.contains("Remove device access"));
+    assert!(html.contains("Names are saved on this device only"));
 }

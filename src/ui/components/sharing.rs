@@ -293,29 +293,78 @@ fn Members(blocked: bool) -> Element {
     };
     let controller = u.vault.space_controller().ok();
     let can_manage = u.is_controller();
+    let mut users = std::collections::BTreeMap::new();
+    for (certificate, role) in members {
+        users
+            .entry(certificate.body.user)
+            .or_insert_with(|| (role, Vec::new()))
+            .1
+            .push(certificate);
+    }
     rsx! {
         section { class: "settings-section stack",
             h2 { {language.text(Text::SharingMembers)} }
             p { class: "muted", {language.text(Text::SharingRolesApplyToUser)} }
-            for (certificate, role) in members {
-                div { class: "sharing-member stack", key: "{certificate.body.device}",
-                    code { class: "sharing-code", "{certificate.body.user}" }
-                    code { class: "sharing-code muted", "{certificate.body.device}" }
-                    p { {language.text(role_text(role))} }
-                    if Some(certificate.body.device) == controller { p { class: "muted", {language.text(Text::SharingController)} } }
+            for (user, (role, devices)) in users {
+                div { class: "sharing-member stack", key: "{user}",
+                    div { class: "sharing-member-heading",
+                        h3 { {u.vault.profile.as_ref().and_then(|p| {
+                            p.participant_names.get(&user).cloned().or_else(|| {
+                                p.certificate.as_ref().filter(|c| c.body.user == user).map(|_| p.username.clone())
+                            })
+                        }).unwrap_or_else(|| language.text(Text::SharingUnnamedUser).to_string())} }
+                        span { class: "sharing-role", {language.text(role_text(role))} }
+                    }
+                    if devices.iter().any(|c| Some(c.body.device) == controller) {
+                        p { class: "muted", {language.text(Text::SharingController)} }
+                    }
                     if can_manage {
-                        div { class: "actions sharing-actions",
-                            if role != Role::Owner {
-                                button { disabled: blocked, onclick: { let user = certificate.body.user; move |_| act(Action::Role(user, if role == Role::Reader { Role::Editor } else { Role::Reader })) },
-                                    {language.text(if role == Role::Reader { Text::SharingAllowEditing } else { Text::SharingMakeReader })} }
+                        details {
+                            summary { {language.text(Text::SharingEditName)} }
+                            label { r#for: "participant-name-{user}", {language.text(Text::SharingLocalName)} }
+                            input { id: "participant-name-{user}", maxlength: 256,
+                                value: u.vault.profile.as_ref().and_then(|p| p.participant_names.get(&user)).cloned().unwrap_or_default(),
+                                disabled: blocked,
+                                onchange: move |event| edit_unlocked(state, |u| {
+                                    let name = event.value().trim().to_owned();
+                                    if name.len() > 256 || name.chars().any(char::is_control) { return; }
+                                    if let Some(profile) = u.vault.profile.as_mut() {
+                                        let previous = profile.participant_names.get(&user).cloned();
+                                        if name.is_empty() { profile.participant_names.remove(&user); }
+                                        else { profile.participant_names.insert(user, name); }
+                                        if let Err(error) = u.vault.save() {
+                                            if let Some(profile) = u.vault.profile.as_mut() {
+                                                if let Some(previous) = previous { profile.participant_names.insert(user, previous); }
+                                                else { profile.participant_names.remove(&user); }
+                                            }
+                                            u.error = Some(error.to_string());
+                                        }
+                                    }
+                                }),
                             }
-                            if Some(certificate.body.device) != controller {
-                                if u.sharing.confirm_remove == Some(certificate.body.device) {
-                                    p { class: "notice", {language.text(Text::SharingRemovalHint)} }
-                                    button { class: "danger", disabled: blocked, onclick: { let device = certificate.body.device; move |_| act(Action::Remove(device)) }, {language.text(Text::SharingConfirmRemoval)} }
-                                    button { class: "quiet", onclick: move |_| edit_unlocked(state, |u| u.sharing.confirm_remove = None), {language.text(Text::Cancel)} }
-                                } else {
-                                    button { class: "quiet", disabled: blocked, onclick: { let device = certificate.body.device; move |_| edit_unlocked(state, |u| u.sharing.confirm_remove = Some(device)) }, {language.text(Text::SharingRemoveDevice)} }
+                            p { class: "muted", {language.text(Text::SharingLocalNameHint)} }
+                        }
+                        if role != Role::Owner {
+                            button { disabled: blocked, onclick: move |_| act(Action::Role(user, if role == Role::Reader { Role::Editor } else { Role::Reader })),
+                                {language.text(if role == Role::Reader { Text::SharingAllowEditing } else { Text::SharingMakeReader })} }
+                        }
+                    }
+                    details { class: "sharing-devices",
+                        summary { {language.text(Text::SharingDevices)} " ({devices.len()})" }
+                        p { class: "muted", {language.text(Text::UserFingerprint)} }
+                        code { class: "sharing-code", "{user}" }
+                        for certificate in devices {
+                            div { class: "sharing-device stack", key: "{certificate.body.device}",
+                                p { class: "muted", {language.text(Text::DeviceFingerprint)} }
+                                code { class: "sharing-code", "{certificate.body.device}" }
+                                if can_manage && Some(certificate.body.device) != controller {
+                                    if u.sharing.confirm_remove == Some(certificate.body.device) {
+                                        p { class: "notice", {language.text(Text::SharingRemovalHint)} }
+                                        button { class: "danger", disabled: blocked, onclick: { let device = certificate.body.device; move |_| act(Action::Remove(device)) }, {language.text(Text::SharingConfirmRemoval)} }
+                                        button { class: "quiet", onclick: move |_| edit_unlocked(state, |u| u.sharing.confirm_remove = None), {language.text(Text::Cancel)} }
+                                    } else {
+                                        button { class: "quiet", disabled: blocked, onclick: { let device = certificate.body.device; move |_| edit_unlocked(state, |u| u.sharing.confirm_remove = Some(device)) }, {language.text(Text::SharingRemoveDevice)} }
+                                    }
                                 }
                             }
                         }

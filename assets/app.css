@@ -499,3 +499,9 @@ button.copy-value:active:not(:disabled) { transform: none; }
 .copy-indicator { color: #248a3d; font-size: 12px; white-space: nowrap; }
 @media (prefers-color-scheme: dark) { .copy-indicator { color: #32d74b; } }
 button.copy-value:disabled { opacity: 1; }
+
+.sharing-member-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.sharing-member-heading h3 { margin: 0; overflow-wrap: anywhere; }
+.sharing-role { border: 1px solid var(--border); border-radius: 20px; padding: 4px 10px; font-size: 12px; }
+.sharing-devices summary { cursor: pointer; }
+.sharing-device { border-top: 1px solid var(--border); margin-top: 12px; padding-top: 12px; }

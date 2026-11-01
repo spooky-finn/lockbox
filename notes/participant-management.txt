@@ -1,0 +1,6 @@
+Participant management
+- Group devices by user. One role control per user.
+- Own name from profile. Other names editable; encrypted local profile stores labels.
+- Labels local only; fingerprints remain identity authority. No protocol/signature changes.
+- Device removal keeps confirmation. Controller device protected.
+- English/Russian strings added. Legacy profiles default empty name map.

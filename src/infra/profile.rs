@@ -31,6 +31,9 @@ pub(crate) struct BootstrapProfile {
     #[zeroize(skip)]
     schema_version: u16,
     pub(crate) username: String,
+    #[serde(default)]
+    #[zeroize(skip)]
+    pub(crate) participant_names: std::collections::BTreeMap<crate::core::sync::Hash, String>,
     pub(crate) space_name: String,
     pub(crate) identity: PublicIdentity,
     device: DeviceKeys,
@@ -108,6 +111,7 @@ impl BootstrapProfile {
         Ok(Self {
             schema_version: 5,
             username,
+            participant_names: Default::default(),
             space_name,
             identity,
             device,
