@@ -171,42 +171,41 @@ impl Projection {
     }
 
     pub fn entries(&self) -> Vec<Entry> {
-        self.records
-            .iter()
-            .filter_map(|r| {
-                if r.versions.len() != 1 {
-                    return None;
-                }
-
-                match &r.versions[0].value {
-                    Some(Value::Entry(entry)) => Some(entry.clone()),
-                    _ => None,
-                }
-            })
-            .collect()
+        self.entry_values().cloned().collect()
     }
 
     pub fn folders(&self) -> Vec<Folder> {
+        self.folder_values().cloned().collect()
+    }
+
+    /// Only a single live head belongs in these views; conflicts retain every version.
+    fn values(&self) -> impl Iterator<Item = &Value> {
         self.records
             .iter()
-            .filter_map(|r| {
-                if r.versions.len() != 1 {
-                    return None;
-                }
-
-                match &r.versions[0].value {
-                    Some(Value::Folder(folder)) => Some(folder.clone()),
-                    _ => None,
-                }
+            .filter_map(|record| match record.versions.as_slice() {
+                [version] => version.value.as_ref(),
+                _ => None,
             })
-            .collect()
+    }
+
+    fn entry_values(&self) -> impl Iterator<Item = &Entry> {
+        self.values().filter_map(|value| match value {
+            Value::Entry(entry) => Some(entry),
+            _ => None,
+        })
+    }
+
+    fn folder_values(&self) -> impl Iterator<Item = &Folder> {
+        self.values().filter_map(|value| match value {
+            Value::Folder(folder) => Some(folder),
+            _ => None,
+        })
     }
 
     /// Evidence uses entity IDs and stable ASCII name comparison. The experimental
     /// profile intentionally does not claim the draft's pinned Unicode rules.
     pub fn structural_conflicts(&self) -> BTreeSet<Entity> {
-        let folders = self.folders();
-        let by_id: BTreeMap<_, _> = folders.iter().map(|f| (f.id.as_str(), f)).collect();
+        let by_id: BTreeMap<_, _> = self.folder_values().map(|f| (f.id.as_str(), f)).collect();
         let entity = |kind, id: &str| Entity {
             kind,
             id: id.to_owned(),
@@ -215,7 +214,7 @@ impl Projection {
         let mut bad = BTreeSet::new();
         let mut names = BTreeMap::new();
 
-        for folder in &folders {
+        for folder in self.folder_values() {
             let name = trim_whitespace(&folder.name).to_ascii_lowercase();
             let key = (folder.parent_id.clone(), name);
 
@@ -241,7 +240,7 @@ impl Projection {
             }
         }
 
-        for entry in self.entries() {
+        for entry in self.entry_values() {
             if entry.folder_id.as_ref().is_some_and(|id| {
                 !by_id.contains_key(id.as_str()) || bad.contains(&entity(EntityKind::Folder, id))
             }) {
@@ -509,3 +508,7 @@ pub(super) fn project<'a>(
             .collect(),
     }
 }
+
+#[cfg(test)]
+#[path = "tests/model.rs"]
+mod tests;

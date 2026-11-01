@@ -5,19 +5,20 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 10; 378 library, four integration, two doctests passed.
+Last full suite: cycle 12; 382 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 11: Scheduler provider setup
-- Download/upload share factory selection and worker-side connection setup.
-- Operation plans stay validated before worker start; vault stays on caller.
-- Keep typed failures, cancellation, scope gates and retry/recovery schedules.
-- Extended provider fixture proves both connections run off caller thread;
-  assertion passed before refactor.
-- Verification: 12 scheduler tests, full formatting and strict all-target Clippy
-  passed in isolated snapshot. Workspace changes passed whitespace checks.
+Cycle 12: Borrowed projection views
+- Share borrowed filters for records with a single live head.
+- entries()/folders() retain owned snapshots; structural_conflicts borrows values
+  instead of cloning passwords, attachments and folders for read-only checks.
+- Preserve ASCII sibling comparison, cycle/orphan evidence, conflicted/deleted
+  folder handling, record order and empty-head behavior.
+- Four new model contract tests passed before refactor.
+- Verification: full suite above, full formatting and strict all-target Clippy
+  passed in isolated snapshot. Canonical wire fixture unchanged.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-11.Z8OhjS when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-12.ojlBHr when workspace cannot compile.
 
-Next search: attachment boundaries, read-only sync projections, transport discovery.
+Next search: transport discovery budgets, attachment batching, UI status calculations.
 Inspect current code and tests before choosing; no quota-driven edits.
