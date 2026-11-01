@@ -94,6 +94,14 @@ Webview owns pointer capture; component unmount removes listeners and observer.
 English is the default interface language when no preference is saved or a language
 code is unknown. Preserve explicit preferences, including Russian.
 
+Appearance/language: Settings only. System/light/dark theme + custom accent/background;
+apply immediately, persist in local config, survive locking/restart.
+System remains default; colors reset independently. Custom background covers workspace,
+controls and lock screen; native backdrop matches. Background brightness determines
+readable text/native appearance; resetting background restores saved theme mode.
+Accent fills keep chosen RGB; text/focus adapt for actual surfaces.
+Invalid saved color falls back alone.
+
 For persistence and sync changes, exercise failure and recovery paths as well as
 successful operations. Local saves must work offline. See
 [sync-engine.md](sync-engine.md) for the implemented synchronization profile;

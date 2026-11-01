@@ -7,8 +7,11 @@ const CSS: &str = include_str!("../../assets/app.css");
 
 #[component]
 pub fn App() -> Element {
-    let theme = theme::use_system_theme();
     let state = runtime::use_runtime();
+    let theme = theme::use_theme();
+    let settings = use_context::<Signal<crate::settings::state::Settings>>();
+    let appearance_style =
+        theme::appearance_style(settings.read().config.appearance, theme.is_dark());
     let language = crate::desktop::i18n::use_language();
     let last_motion =
         use_hook(|| std::rc::Rc::new(std::cell::Cell::new(std::time::Instant::now())));
@@ -25,7 +28,8 @@ pub fn App() -> Element {
         main {
             lang: language.code(),
             class: format!("app{}{}", if cfg!(target_os = "macos") { " macos" } else { "" }, if locked { " is-locked" } else { "" }),
-            "data-theme": theme,
+            "data-theme": theme.name(),
+            style: appearance_style,
             onpointerdown: move |_| runtime::record_activity(),
             onkeydown: move |_| runtime::record_activity(),
             onwheel: move |_| runtime::record_activity(),

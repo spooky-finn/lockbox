@@ -1,0 +1,10 @@
+Appearance preferences
+
+- Settings: system/light/dark + custom RGB accent/background. Auto-save; apply immediately.
+- Local config owns preferences; vault data unchanged. Defaults: system + per-theme blue.
+- Custom fills stay exact; foreground/text/focus/status adapt for actual backgrounds.
+- Background covers workspace, controls, lock screen, native backdrop. Brightness selects readable text/native appearance.
+- Independent resets: accent restores per-theme blue; background restores saved system/light/dark mode. Neither erases other color.
+- Language picker lives only in Settings; lock screen uses saved language.
+- Theme covers workspace + lock screen; native chrome matches resolved appearance.
+- Checks: config restart/defaults, accent-only configs, invalid colors, stale-tab merges, draft preservation, lock persistence, palette contrast, independent reset events.

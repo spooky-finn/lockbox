@@ -1,5 +1,5 @@
-//! Remembers which vault was opened last and where Touch ID is turned on.
-//! Holds only paths, display names and vault identifiers, never secrets.
+//! Remembers appearance, language, the last vault and where Touch ID is turned on.
+//! Holds only local preferences and vault metadata, never secrets.
 
 use std::{
     fs::{self, OpenOptions},
@@ -13,6 +13,8 @@ use serde::{Deserialize, Serialize};
 pub struct Config {
     #[serde(default)]
     pub language: crate::settings::language::Language,
+    #[serde(default)]
+    pub appearance: crate::settings::appearance::Appearance,
     pub last_vault: Option<PathBuf>,
     /// Display names for cloud profiles, available before password unlock.
     #[serde(default)]
@@ -33,6 +35,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             language: crate::settings::language::Language::default(),
+            appearance: crate::settings::appearance::Appearance::default(),
             last_vault: None,
             space_names: Default::default(),
             touch_id: Vec::new(),

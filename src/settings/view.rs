@@ -11,13 +11,13 @@ use crate::{
     },
     platform::autolock,
     records::editor::replace_secret,
-    settings::{language::Language, state::Settings},
+    settings::{appearance::ThemeMode, language::Language, state::Settings},
 };
 use dioxus::prelude::*;
 use zeroize::Zeroizing;
 
 #[component]
-pub(crate) fn LanguageSelect(id: &'static str) -> Element {
+fn LanguageSelect(id: &'static str) -> Element {
     let language = use_language();
     rsx! {
         select { id, aria_label: language.text(Text::InterfaceLanguage), value: language.code(),
@@ -59,6 +59,7 @@ pub(crate) fn SettingsView() -> Element {
                     LanguageSelect { id: "settings-language" }
                 }
             }
+            AppearanceSection {}
             section { class: "settings-section stack",
                 h2 { {language.text(Text::Security)} }
                 div { class: "preference-row",
@@ -100,6 +101,82 @@ pub(crate) fn SettingsView() -> Element {
                 onclick: move |_| edit_unlocked(state, |u| u.page = Page::Vault),
                 Symbol { icon: Icon::ArrowLeft }
                 {language.text(Text::BackToVault)}
+            }
+        }
+    }
+}
+
+#[component]
+fn AppearanceSection() -> Element {
+    let language = use_language();
+    let settings = use_context::<Signal<Settings>>();
+    let appearance = settings.read().config.appearance;
+    let dark = try_use_context::<crate::desktop::widgets::theme::ResolvedTheme>()
+        .map(|theme| theme.is_dark())
+        .unwrap_or_else(|| crate::desktop::widgets::theme::effective_dark(appearance, false));
+    let color = appearance
+        .accent
+        .map(|color| color.hex())
+        .unwrap_or_else(|| if dark { "#409cff" } else { "#007aff" }.into());
+    let background = appearance
+        .background
+        .map(|color| color.hex())
+        .unwrap_or_else(|| if dark { "#202124" } else { "#f5f5f7" }.into());
+    rsx! {
+        section { class: "settings-section stack",
+            h2 { {language.text(Text::Appearance)} }
+            div { class: "preference-row",
+                div { class: "preference-copy",
+                    label { r#for: "settings-theme", {language.text(Text::ColorTheme)} }
+                    p { class: "muted", {language.text(Text::ColorThemeDescription)} }
+                }
+                select { id: "settings-theme", value: appearance.theme.code(),
+                    onchange: move |event| match event.value().as_str() {
+                        "system" => runtime::set_theme(ThemeMode::System),
+                        "light" => runtime::set_theme(ThemeMode::Light),
+                        "dark" => runtime::set_theme(ThemeMode::Dark),
+                        _ => {},
+                    },
+                    for (theme, label) in [
+                        (ThemeMode::System, Text::FollowSystem),
+                        (ThemeMode::Light, Text::LightTheme),
+                        (ThemeMode::Dark, Text::DarkTheme),
+                    ] {
+                        option { value: theme.code(), selected: appearance.theme == theme, {language.text(label)} }
+                    }
+                }
+            }
+            div { class: "preference-row",
+                div { class: "preference-copy",
+                    label { r#for: "settings-accent", {language.text(Text::AccentColor)} }
+                    p { id: "accent-description", class: "muted", {language.text(Text::AccentColorDescription)} }
+                }
+                div { class: "color-controls",
+                    input { id: "settings-accent", r#type: "color", value: "{color}",
+                        aria_describedby: "accent-description",
+                        onchange: move |event| runtime::set_accent_color(Some(&event.value())),
+                    }
+                    button { class: "quiet", r#type: "button", disabled: appearance.accent.is_none(),
+                        onclick: move |_| runtime::set_accent_color(None),
+                        {language.text(Text::ResetAccentColor)}
+                    }
+                }
+            }
+            div { class: "preference-row",
+                div { class: "preference-copy",
+                    label { r#for: "settings-background", {language.text(Text::BackgroundColor)} }
+                    p { id: "background-description", class: "muted", {language.text(Text::BackgroundColorDescription)} }
+                }
+                div { class: "color-controls",
+                    input { id: "settings-background", r#type: "color", value: "{background}",
+                        aria_describedby: "background-description",
+                        onchange: move |event| runtime::set_background_color(Some(&event.value())),
+                    }
+                    button { class: "quiet", r#type: "button", disabled: appearance.background.is_none(),
+                        onclick: move |_| runtime::set_background_color(None),
+                        {language.text(Text::ResetBackgroundColor)}
+                    }
+                }
             }
         }
     }

@@ -319,9 +319,44 @@ pub(crate) fn set_auto_lock(minutes: u32) {
 }
 
 pub(crate) fn set_language(language: crate::settings::language::Language) {
+    update_preferences(|config| config.language = language);
+}
+
+pub(crate) fn set_theme(theme: crate::settings::appearance::ThemeMode) {
+    update_preferences(|config| config.appearance.theme = theme);
+}
+
+pub(crate) fn set_accent_color(value: Option<&str>) {
+    set_color(value, |config, color| config.appearance.accent = color);
+}
+
+pub(crate) fn set_background_color(value: Option<&str>) {
+    set_color(value, |config, color| config.appearance.background = color);
+}
+
+fn set_color(
+    value: Option<&str>,
+    change: impl FnOnce(
+        &mut crate::settings::config::Config,
+        Option<crate::settings::appearance::RgbColor>,
+    ),
+) {
+    let color = match value {
+        Some(value) => {
+            let Some(color) = crate::settings::appearance::RgbColor::parse(value) else {
+                return;
+            };
+            Some(color)
+        }
+        None => None,
+    };
+    update_preferences(|config| change(config, color));
+}
+
+fn update_preferences(change: impl FnOnce(&mut crate::settings::config::Config)) {
     let mut settings = consume_context::<Signal<Settings>>();
     let mut state = consume_context::<Session>();
-    let saved = settings.write().update(|config| config.language = language);
+    let saved = settings.write().update(change);
 
     if let Err(error) = saved {
         match &mut *state.write() {

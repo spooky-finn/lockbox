@@ -220,7 +220,6 @@ pub(crate) fn LockedView() -> Element {
                 }
             }
             nav { class: "lock-actions", aria_label: language.text(Text::VaultActions),
-                crate::settings::view::LanguageSelect { id: "locked-language" }
                 IconButton { class: "quiet", icon: Icon::Folder, label: language.text(Text::OpenVault), disabled: busy,
                     onclick: move |_| runtime::pick_vault(false),
                 }
