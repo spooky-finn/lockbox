@@ -8,14 +8,15 @@ No delegation requested. Keep unrelated work outside refactor commits.
 Last full suite: cycle 12; 382 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 14: Active history page data
-- Load selected History or Trash once; enum keeps rendered data tied to page.
-- Trash skips unused revision copy and second shared replay. Keep outer error
-  alert, masking, reveal state, restore guards and navigation behavior.
-- Verification: eight record-view tests, full formatting and strict all-target
-  Clippy passed in isolated snapshot. Workspace whitespace checks passed.
+Cycle 15: Borrow saved clipboard fields
+- Borrow username/password/URL through synchronous clipboard write; remove
+  temporary secret copies. Generated TOTP stays in zeroizing owned buffer.
+- Regression passed before refactor: missing/invalid TOTP keeps clipboard and
+  deadline; valid generated code remains correct and clears on request.
+- Verification: copy-filtered three tests, clipboard-filtered eight tests;
+  full formatting and strict all-target Clippy passed in isolated snapshot.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-14.6a9YMx when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-15.lom12r when workspace cannot compile.
 
-Next search: clipboard ownership, protocol history, worker/mailbox state.
+Next search: protocol history, worker/mailbox state, export serialization.
 Inspect current code and tests before choosing; no quota-driven edits.

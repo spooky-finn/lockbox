@@ -71,20 +71,28 @@ impl Security {
     }
 
     pub fn copy(&mut self, entry: &Entry, field: CopyField) -> Result<(), String> {
+        let generated;
         let text = match field {
-            CopyField::Username => Zeroizing::new(entry.username.clone()),
-            CopyField::Password => Zeroizing::new(entry.password.clone()),
-            CopyField::Url => Zeroizing::new(entry.url.clone()),
+            CopyField::Username => entry.username.as_str(),
+            CopyField::Password => entry.password.as_str(),
+            CopyField::Url => entry.url.as_str(),
             CopyField::Totp => match &entry.totp {
-                Some(settings) => Zeroizing::new(
-                    totp::code(settings, unix_now()).map_err(|error| error.to_string())?,
-                ),
+                Some(settings) => {
+                    generated = Zeroizing::new(
+                        totp::code(settings, unix_now()).map_err(|error| error.to_string())?,
+                    );
+                    generated.as_str()
+                }
                 None => return Ok(()),
             },
         };
 
         self.clipboard
-            .copy(&text, Instant::now())
+            .copy(text, Instant::now())
             .map_err(|error| format!("Could not copy: {error}"))
     }
 }
+
+#[cfg(test)]
+#[path = "tests/security.rs"]
+mod tests;
