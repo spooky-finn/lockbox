@@ -79,8 +79,9 @@ fn map_folders<'a>(
     let mut mapping: BTreeMap<&str, Option<String>> = BTreeMap::new();
     let mut depth: BTreeMap<Option<String>, usize> = BTreeMap::from([(None, 0)]);
 
+    let hierarchy = folder::Hierarchy::new(folders);
     for folder in folders {
-        let path = folder::ancestors(folders, &folder.id);
+        let path = hierarchy.ancestors(&folder.id);
         depth.insert(Some(folder.id.clone()), path.len());
     }
 

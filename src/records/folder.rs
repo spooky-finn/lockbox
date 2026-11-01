@@ -78,45 +78,70 @@ pub(crate) fn validate(folders: &[Folder], entries: &[Entry]) -> Result<(), &'st
     Ok(())
 }
 
-/// Root-to-leaf breadcrumbs, bounded even for an invalid in-memory hierarchy.
-pub(crate) fn ancestors<'a>(folders: &'a [Folder], id: &str) -> Vec<&'a Folder> {
-    let mut path = Vec::new();
-    let mut current = Some(id);
+/// Borrowed lookups reused by breadcrumbs, selectors and subtree checks.
+pub(crate) struct Hierarchy<'a> {
+    folders: &'a [Folder],
+    by_id: BTreeMap<&'a str, &'a Folder>,
+}
 
-    while let Some(id) = current {
-        let Some(folder) = folders.iter().find(|folder| folder.id == id) else {
-            break;
-        };
-
-        if path.iter().any(|item: &&Folder| item.id == id) || path.len() == MAX_DEPTH {
-            break;
+impl<'a> Hierarchy<'a> {
+    pub(crate) fn new(folders: &'a [Folder]) -> Self {
+        let mut by_id = BTreeMap::new();
+        // Preserve the first match even in malformed input with duplicate IDs.
+        for folder in folders {
+            by_id.entry(folder.id.as_str()).or_insert(folder);
         }
-        path.push(folder);
-        current = folder.parent_id.as_deref();
+        Self { folders, by_id }
     }
-    path.reverse();
-    path
+
+    fn lineage(&self, id: &str) -> impl Iterator<Item = &'a Folder> {
+        let mut current = self.by_id.get(id).copied();
+        let mut visited = BTreeSet::new();
+        std::iter::from_fn(move || {
+            let folder = current.take()?;
+            if !visited.insert(folder.id.as_str()) {
+                return None;
+            }
+            current = folder
+                .parent_id
+                .as_deref()
+                .and_then(|id| self.by_id.get(id))
+                .copied();
+            Some(folder)
+        })
+        .take(MAX_DEPTH)
+    }
+
+    /// Root-to-leaf breadcrumbs, bounded even for an invalid in-memory hierarchy.
+    pub(crate) fn ancestors(&self, id: &str) -> Vec<&'a Folder> {
+        let mut path: Vec<_> = self.lineage(id).collect();
+        path.reverse();
+        path
+    }
+
+    fn path(&self, id: &str) -> String {
+        self.ancestors(id)
+            .iter()
+            .map(|folder| folder.name.as_str())
+            .collect::<Vec<_>>()
+            .join(" / ")
+    }
+
+    pub(crate) fn options(&self) -> Vec<(&'a Folder, String)> {
+        let mut options: Vec<_> = self
+            .folders
+            .iter()
+            .map(|folder| (folder, self.path(&folder.id)))
+            .collect();
+        options.sort_by_key(|(_, path)| path.to_lowercase());
+        options
+    }
+
+    pub(crate) fn contains(&self, ancestor: &str, id: &str) -> bool {
+        self.lineage(id).any(|folder| folder.id == ancestor)
+    }
 }
 
-pub(crate) fn path(folders: &[Folder], id: &str) -> String {
-    ancestors(folders, id)
-        .iter()
-        .map(|folder| folder.name.as_str())
-        .collect::<Vec<_>>()
-        .join(" / ")
-}
-
-pub(crate) fn options(folders: &[Folder]) -> Vec<(&Folder, String)> {
-    let mut options: Vec<_> = folders
-        .iter()
-        .map(|folder| (folder, path(folders, &folder.id)))
-        .collect();
-    options.sort_by_key(|(_, path)| path.to_lowercase());
-    options
-}
-
-pub(crate) fn contains(folders: &[Folder], ancestor: &str, id: &str) -> bool {
-    ancestors(folders, id)
-        .iter()
-        .any(|folder| folder.id == ancestor)
-}
+#[cfg(test)]
+#[path = "tests/folder.rs"]
+mod tests;

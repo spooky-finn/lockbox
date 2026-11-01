@@ -5,18 +5,19 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 4; 370 library, four integration, two doctests passed.
+Last full suite: cycle 6; 375 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 5: Browser account lookup
-- Credential reads/generated-password updates share one exact-origin lookup.
-- Preserve request validation order, locked-session behavior, limits and errors.
-- Cross-origin update regression passed before refactor; generated password
-  remains available after rejected account update, original record unchanged.
-- Verification: 10 browser-related unit tests, two native-host integration tests,
-  formatting and strict all-target Clippy passed in isolated snapshot.
+Cycle 6: Folder hierarchy traversal
+- Borrowed Hierarchy shares ID index and bounded lineage iterator.
+- Breadcrumbs/options, selectors, counters, import depth and subtree deletion
+  reuse lookups; membership checks stop early without building breadcrumb Vec.
+- Preserve first duplicate ID, cycles, missing parents, MAX_DEPTH and stable order.
+- Four new hierarchy contract tests passed before refactor.
+- Verification: full suite above, full formatting, strict all-target Clippy passed
+  in isolated snapshot. Workspace changes passed whitespace checks.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-5.E8hKCK when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-6.BbPcqM when workspace cannot compile.
 
-Next search: folder breadcrumbs, import folder placement, record editor state.
+Next search: import folder placement, record editor state, vault file helpers.
 Inspect current code and tests before choosing; no quota-driven edits.

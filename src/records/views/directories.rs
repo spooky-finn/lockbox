@@ -35,7 +35,8 @@ pub(crate) fn DirectoryView() -> Element {
         return rsx! {};
     };
 
-    let breadcrumbs = folder::ancestors(workspace.vault.folders(), selected);
+    let hierarchy = folder::Hierarchy::new(workspace.vault.folders());
+    let breadcrumbs = hierarchy.ancestors(selected);
     let records = workspace
         .vault
         .entries()
@@ -44,17 +45,14 @@ pub(crate) fn DirectoryView() -> Element {
             entry
                 .folder_id
                 .as_deref()
-                .is_some_and(|id| folder::contains(workspace.vault.folders(), selected, id))
+                .is_some_and(|id| hierarchy.contains(selected, id))
         })
         .count();
     let folders = workspace
         .vault
         .folders()
         .iter()
-        .filter(|folder| {
-            folder.id != selected
-                && folder::contains(workspace.vault.folders(), selected, &folder.id)
-        })
+        .filter(|folder| folder.id != selected && hierarchy.contains(selected, &folder.id))
         .count();
     rsx! {
         article { class: "directory-detail",

@@ -24,7 +24,8 @@ pub(crate) fn FolderSelect(
         return rsx! {};
     };
 
-    let options = folder::options(workspace.vault.folders());
+    let hierarchy = folder::Hierarchy::new(workspace.vault.folders());
+    let options = hierarchy.options();
     rsx! {
         div { class: "select-field",
             select { id, value: value.as_deref().unwrap_or(""),
@@ -34,7 +35,7 @@ pub(crate) fn FolderSelect(
                 },
                 option { value: "", selected: value.is_none(), {language.text(Text::VaultRoot)} }
                 for (folder, path) in options {
-                    if !exclude.as_deref().is_some_and(|id| folder::contains(workspace.vault.folders(), id, &folder.id)) {
+                    if !exclude.as_deref().is_some_and(|id| hierarchy.contains(id, &folder.id)) {
                         option { value: "{folder.id}", selected: value.as_deref() == Some(folder.id.as_str()), "{path}" }
                     }
                 }

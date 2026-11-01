@@ -108,12 +108,14 @@ impl Vault {
             return Ok(());
         };
         let parent = selected.parent_id.clone();
-        let removed: BTreeSet<_> = self
-            .folders
-            .iter()
-            .filter(|item| folder::contains(&self.folders, id, &item.id))
-            .map(|item| item.id.clone())
-            .collect();
+        let removed: BTreeSet<_> = {
+            let hierarchy = folder::Hierarchy::new(&self.folders);
+            self.folders
+                .iter()
+                .filter(|item| hierarchy.contains(id, &item.id))
+                .map(|item| item.id.clone())
+                .collect()
+        };
         let shared = self.shared_snapshot();
         let previous = self.folders.clone();
         let mut assignments = Vec::new();
