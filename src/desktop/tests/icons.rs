@@ -92,6 +92,32 @@ fn search_puts_prefix_matches_first() {
 }
 
 #[test]
+fn search_preserves_title_matches_and_stable_ranking_after_normalization() {
+    let catalog = Catalog::parse(
+        r#"{"slug":"agitaa","title":"Other","hex":"000000","path":""}
+{"slug":"gitx","title":"Other","hex":"000000","path":""}
+{"slug":"zzzz","title":"GİT Toolbox","hex":"000000","path":""}
+{"slug":"agityy","title":"Other","hex":"000000","path":""}
+{"slug":"git","title":"Other","hex":"000000","path":""}
+{"slug":"gitq","title":"Other","hex":"000000","path":""}"#,
+    );
+    let slugs = |query, limit| {
+        catalog
+            .search(query, limit)
+            .into_iter()
+            .map(|icon| icon.slug.as_str())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        slugs(" G.İ-T! ", 10),
+        ["git", "gitx", "gitq", "zzzz", "agitaa", "agityy"]
+    );
+    assert_eq!(slugs("git", 3), ["git", "gitx", "gitq"]);
+    assert!(slugs("git", 0).is_empty());
+    assert!(slugs("!!!", 10).is_empty());
+}
+
+#[test]
 fn letter_tiles_are_stable() {
     assert_eq!(letter("  сбер"), "С");
     assert_eq!(letter(""), "?");

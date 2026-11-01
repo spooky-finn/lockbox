@@ -30,6 +30,7 @@ pub struct Icon {
 
 pub struct Catalog {
     icons: Vec<Icon>,
+    search_titles: Vec<String>,
     by_slug: HashMap<String, usize>,
     by_domain: HashMap<String, usize>,
 }
@@ -47,6 +48,7 @@ impl Catalog {
             .filter(|line| !line.is_empty())
             .map(|line| serde_json::from_str(line).expect("assets/icons.jsonl is valid"))
             .collect();
+        let search_titles = icons.iter().map(|icon| normalized(&icon.title)).collect();
         let mut by_slug = HashMap::new();
         let mut by_domain = HashMap::new();
 
@@ -59,6 +61,7 @@ impl Catalog {
         }
         Self {
             icons,
+            search_titles,
             by_slug,
             by_domain,
         }
@@ -110,14 +113,16 @@ impl Catalog {
     pub fn search(&self, query: &str, limit: usize) -> Vec<&Icon> {
         let query = normalized(query);
 
-        if query.is_empty() {
+        if query.is_empty() || limit == 0 {
             return Vec::new();
         }
 
         let mut found: Vec<&Icon> = self
             .icons
             .iter()
-            .filter(|icon| icon.slug.contains(&query) || normalized(&icon.title).contains(&query))
+            .zip(&self.search_titles)
+            .filter(|(icon, title)| icon.slug.contains(&query) || title.contains(&query))
+            .map(|(icon, _)| icon)
             .collect();
         found.sort_by_key(|icon| (!icon.slug.starts_with(&query), icon.slug.len()));
         found.truncate(limit);
