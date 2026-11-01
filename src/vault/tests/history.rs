@@ -113,3 +113,120 @@ fn shared_trash_excludes_delete_edit_conflicts_and_folder_tombstones_with_same_i
         1
     );
 }
+
+#[test]
+fn batch_history_orders_changed_ids_and_distinguishes_put_delete_and_restore_on_retry() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("batch.lbx");
+    let password = SecretString::from("test master".to_owned());
+    let mut vault = Vault::create(
+        &path,
+        &password,
+        KdfParams {
+            memory_kib: 8192,
+            passes: 1,
+            lanes: 1,
+        },
+    )
+    .unwrap();
+    let restored = entry("1", "Restore");
+    let original = entry("2", "Update");
+    let deleted = entry("3", "Delete");
+    let unchanged = entry("4", "Unchanged");
+    vault
+        .append_records(
+            &[],
+            &[
+                unchanged.clone(),
+                deleted.clone(),
+                original.clone(),
+                restored.clone(),
+            ],
+        )
+        .unwrap();
+    vault.delete_entry(&restored.id).unwrap();
+    let count = vault.record_history().unwrap().len();
+    let mut updated = original.clone();
+    updated.password = "updated fictional password".into();
+    let created = entry("5", "Create");
+    let desired = vec![
+        unchanged,
+        created.clone(),
+        updated.clone(),
+        restored.clone(),
+    ];
+    *vault.test_entries_mut() = desired.clone();
+    let before = std::fs::read(&path).unwrap();
+    let temporary = path.with_extension("lbx.tmp");
+    std::fs::create_dir(&temporary).unwrap();
+
+    assert!(vault.save_changes().is_err());
+    assert_eq!(vault.record_history().unwrap().len(), count);
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+    std::fs::remove_dir(temporary).unwrap();
+    vault.save_changes().unwrap();
+    let history = vault.record_history().unwrap();
+    let changes = &history[count..];
+    assert_eq!(changes.len(), 4);
+    assert_eq!(
+        changes
+            .iter()
+            .map(|change| (change.id.as_str(), change.action.as_str()))
+            .collect::<Vec<_>>(),
+        [
+            (restored.id.as_str(), "Restore"),
+            (updated.id.as_str(), "Put"),
+            (deleted.id.as_str(), "Delete"),
+            (created.id.as_str(), "Put"),
+        ]
+    );
+    assert!(changes[0].before.is_empty());
+    assert_eq!(changes[0].after.as_ref(), Some(&restored));
+    assert_eq!(changes[1].before, [original]);
+    assert_eq!(changes[1].after.as_ref(), Some(&updated));
+    assert_eq!(changes[2].before, [deleted]);
+    assert!(changes[2].after.is_none());
+    assert!(changes[3].before.is_empty());
+    assert_eq!(changes[3].after.as_ref(), Some(&created));
+
+    drop(vault);
+    let reopened = Vault::open(&path, &password).unwrap();
+    assert_eq!(reopened.entries(), desired);
+    reopened.save().unwrap();
+    assert_eq!(reopened.record_history().unwrap().len(), count + 4);
+}
+
+#[test]
+fn legacy_duplicate_ids_keep_first_occurrence_history_semantics() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut vault = Vault::create(
+        directory.path().join("legacy.lbx"),
+        &SecretString::from("test master".to_owned()),
+        KdfParams {
+            memory_kib: 8192,
+            passes: 1,
+            lanes: 1,
+        },
+    )
+    .unwrap();
+    let first = entry("1", "First occurrence");
+    let mut second = entry("1", "Second occurrence");
+    vault
+        .append_records(&[], &[first.clone(), second.clone()])
+        .unwrap();
+    let history = vault.record_history().unwrap();
+    assert_eq!(history.len(), 1);
+    assert_eq!(history[0].after.as_ref(), Some(&first));
+
+    second.title = "Changed second occurrence".into();
+    vault.test_entries_mut()[1] = second.clone();
+    vault.save_changes().unwrap();
+    assert_eq!(vault.record_history().unwrap().len(), 1);
+
+    vault.test_entries_mut().remove(0);
+    vault.save_changes().unwrap();
+    let history = vault.record_history().unwrap();
+    assert_eq!(history.len(), 2);
+    assert_eq!(history[1].before, [first]);
+    assert_eq!(history[1].after.as_ref(), Some(&second));
+}

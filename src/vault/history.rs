@@ -13,17 +13,24 @@ impl Vault {
             return history;
         }
         let saved = self.saved_entries.borrow();
-        let ids: std::collections::BTreeSet<_> =
-            saved.iter().chain(&self.entries).map(|e| &e.id).collect();
-        for id in ids {
-            let before = saved.iter().find(|e| &e.id == id);
-            let after = self.entries.iter().find(|e| &e.id == id);
+        let mut changes = BTreeMap::new();
+        // Legacy local files may repeat IDs; history uses the first value.
+        for entry in saved.iter() {
+            changes
+                .entry(entry.id.as_str())
+                .or_insert((Some(entry), None));
+        }
+        for entry in &self.entries {
+            let (_, after) = changes.entry(entry.id.as_str()).or_insert((None, None));
+            after.get_or_insert(entry);
+        }
+        for (id, (before, after)) in changes {
             if before == after {
                 continue;
             }
-            let restored = before.is_none() && history.iter().any(|h| &h.id == id);
+            let restored = before.is_none() && history.iter().any(|h| h.id == id);
             history.push(RecordChange {
-                id: id.clone(),
+                id: id.to_owned(),
                 revision: crate::records::id::new(),
                 actor: "Local user".into(),
                 device: "Local vault".into(),

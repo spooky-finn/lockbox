@@ -5,16 +5,20 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
+Last full suite: cycle 4; 370 library, four integration, two doctests passed.
+Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 3: Sidebar hierarchy
-- Index borrowed folders/entries by parent once; sort sibling buckets once.
-- Recursive branches use parent lookups instead of rescanning vault collections.
-- Preserve folder-first order, search inheritance, MAX_DEPTH and orphan fallback.
-- New ordering/search/depth regressions passed against pre-refactor code.
-- Verification: 66 record tests, full formatting, strict all-target Clippy passed
-  in isolated snapshot. Source/test formatting and whitespace passed in workspace.
+Cycle 4: Local history comparison
+- Borrowed BTreeMap pairs saved/current entries once; remove repeated list searches.
+- Keep lexicographic revision order and first-occurrence semantics for duplicate IDs.
+- Preserve Put/Delete/Restore rules, unchanged records and atomic failure/retry.
+- New batch/retry/reopen and duplicate-ID regressions passed before refactor.
+- Verification: full suite above, formatting, strict all-target Clippy passed.
+  Workspace source/test formatting and whitespace passed.
+- Separate correction 11271e1: shared-import regression now compares contents
+  without assuming insertion order. Reproduced old failure; 12 new runs passed.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-3.33bWXV when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-4.5jyvDf when workspace cannot compile.
 
-Next search: local history indexing, browser/session workflows, folder breadcrumbs.
+Next search: browser/session workflows, folder breadcrumbs, import folder placement.
 Inspect current code and tests before choosing; no quota-driven edits.
