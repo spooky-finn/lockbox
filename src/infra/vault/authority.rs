@@ -77,6 +77,13 @@ impl Vault {
     pub fn finish_control_transfer(&mut self, approval: Signed<ControlApproval>) -> Result<()> {
         self.ensure_exchange_committed()?;
         self.ensure_profile_writable()?;
+        self.ensure_sync_projection()?;
+        if Machine::control_transfer_completed(
+            self.sync_state().ok_or(Error::UnauthorizedDevice)?,
+            &approval,
+        )? {
+            return self.save_inner(false);
+        }
         let profile = self.profile.as_mut().ok_or(Error::UnauthorizedDevice)?;
         Machine::approve_control_transfer(
             profile.sync.as_mut().ok_or(Error::UnauthorizedDevice)?,
@@ -99,6 +106,12 @@ impl Vault {
     pub fn approve_controller_recovery(&mut self, recovery_password: &SecretString) -> Result<()> {
         self.ensure_exchange_committed()?;
         self.ensure_profile_writable()?;
+        if self.sync_state().is_some_and(|s| {
+            Machine::pending_control_transition(s) == Some(ControlTransition::Recovery)
+        }) && self.pending_control_approval().is_none()
+        {
+            return self.recover_sync();
+        }
         if self.pending_control_approval() != Some(ControlTransition::Recovery) {
             return Err(Error::PendingIntent.into());
         }

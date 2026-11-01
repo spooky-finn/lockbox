@@ -90,7 +90,7 @@ pub(super) fn DirectoryView() -> Element {
                     }
                 }
             } else {
-                div { class: "actions entry-actions",
+                div { class: "actions directory-actions",
                     IconButton { icon: Icon::Edit, label: language.text(Text::EditFolder), disabled: workspace.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.edit_directory()) }
                     IconButton { class: "danger quiet", icon: Icon::Trash, label: language.text(Text::DeleteFolder2), disabled: workspace.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.directories.confirm_delete = true) }
                 }

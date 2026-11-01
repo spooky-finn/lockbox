@@ -2,8 +2,8 @@
 
 The synchronization engine keeps the `Machine` and `Vault` facades while
 separating protocol rules, durable storage, transport construction and session
-scheduling. New spaces use experimental `LBX-SYNC-1`; `LBX-SYNC-0` histories retain
-their original rules. Protected shared profiles use bootstrap schema 4 with an
+scheduling. New spaces use experimental `LBX-SYNC-2`; `LBX-SYNC-0/1` histories retain
+their original rules. Protected shared profiles use bootstrap schema 5 with an
 invitation ledger and independent witness evidence.
 See [sync-engine.md](sync-engine.md) for protocol behavior and
 [profile-protection.md](profile-protection.md) for durability and recovery rules.
@@ -39,6 +39,8 @@ flowchart TD
 | `core/sync/machine/state.rs` | Serialized ciphertext journal, trust anchors, replay result contracts | Persistence or automatic recovery |
 | `core/sync/machine/commands.rs` | Command validation, encryption, reserved-intent completion | When the host has durably saved a body |
 | `core/sync/machine/membership.rs` | Owner authority, certificates, rosters, grants and epoch checkpoints | Provider permissions or discovery |
+| `core/sync/machine/authority/` | Exact controller handoff consent and root-approved recovery | Root password handling or publication |
+| `core/sync/machine/relay.rs` | Signature and ancestry checks for relayed closed ciphertext | Claims about unavailable old plaintext |
 | `core/sync/invitation.rs` | Canonical public invitation, consent and receipt artifacts | Local cancellation policy or persistence |
 | `core/sync/machine/invitations.rs` | Addressed signature proofs, consent-bound admission and receipt verification | Clock-based expiry or artifact export |
 | `core/sync/machine/profile.rs` | Explicit protocol versions and signature domains | Implicit upgrade or downgrade |
@@ -52,6 +54,9 @@ flowchart TD
 | `infra/witness/` | Exclusive device leases, Keychain/directory storage and injected memory adapter | Signing keys or membership |
 | `infra/vault/store.rs` | Host witness composition and new-device identity recovery | Automatic admission or controller recovery |
 | `infra/vault/shared.rs` | Application operations and the durable signing-intent boundary | Alternate protocol rules |
+| `infra/vault/authority.rs` | Durable controller transitions and pending approval resume | Alternate authority rules |
+| `infra/vault/root_journal.rs` | Exclusive root-claim reservation through the independent CAS store | Global freshness or automatic fork selection |
+| `infra/lease.rs` | Explicit lifetime of exclusive file locks | Cryptographic authority |
 | `infra/vault/sharing.rs` | Durable artifact export, local issuance policy and join installation | Independent protocol authority |
 | `infra/profile/sharing.rs` | Bounded encrypted ledger and invitation status | Provider access or replicated event authority |
 | `infra/vault/exchange.rs` | Candidate receive commits, acknowledgement rollback and retained pending commits | Signing new local mutations |

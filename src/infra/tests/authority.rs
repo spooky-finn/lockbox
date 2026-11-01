@@ -121,7 +121,10 @@ fn transfer_reservation_and_consent_survive_restart_without_old_controller_equiv
             .unwrap(),
         consent.bytes().unwrap()
     );
+    owner.finish_control_transfer(consent.clone()).unwrap();
+    let completed = owner.sync_state().unwrap().objects.clone();
     owner.finish_control_transfer(consent).unwrap();
+    assert_eq!(owner.sync_state().unwrap().objects, completed);
     peer.receive_sync(delivery(&owner)).unwrap();
     assert_eq!(peer.space_controller().unwrap(), target);
     assert_eq!(peer.entries[0].title, "Preserved record");

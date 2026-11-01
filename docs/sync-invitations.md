@@ -1,6 +1,6 @@
 # Addressed invitations and admission
 
-New spaces use experimental `LBX-SYNC-1`. It retains the causal event, HPKE,
+New spaces use experimental `LBX-SYNC-2`, extending `LBX-SYNC-1`. Both retain the causal event, HPKE,
 checkpoint and durability rules of `LBX-SYNC-0` and requires signed consent for
 every added device certificate. These profiles remain separate from the broader
 [protocol proposal](lockbox-protocol.md). The desktop implements the invitation
@@ -104,7 +104,7 @@ control prefix. The exact certificate and role must match the added roster entry
 Invitations cannot be consumed twice. A device ID that appeared in any previous
 roster cannot be admitted again; device replacement requires fresh signing and
 HPKE keys. Additional devices of one user must have the same role. Only devices
-of the owner's user identity can have `Owner`; the fixed controller remains the
+of the owner's user identity can have `Owner`; the verified current controller remains the
 only membership authority.
 
 `set_space_members` remains the API for changes to existing roles, removal and
@@ -168,6 +168,7 @@ and a witness acknowledgement failure after the receipt file
 commit. The shared memory/live acceptance scenario now uses the full invitation
 exchange before concurrent edits, resolution, reader restrictions and revocation.
 
-Controller transfer/recovery, the desktop identity-recovery wizard, scalable
+Controller transfer/recovery have a [separate API](sync-control-recovery.md).
+The desktop identity/control recovery wizards, scalable
 proof compaction, a live Storj run and independent security review remain
 [production release work](sync-production-plan.md).

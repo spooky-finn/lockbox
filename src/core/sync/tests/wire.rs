@@ -58,6 +58,33 @@ fn profile_one_change_matches_independently_generated_signature_fixture() {
 }
 
 #[test]
+fn profile_two_change_matches_independent_signature_fixture_and_rejects_old_domains() {
+    let signing = SigningKey::from_bytes(&[11; 32]);
+    let Object::Change(previous) =
+        decode::<Object>(include_bytes!("../fixtures/change-v1.json")).unwrap()
+    else {
+        panic!()
+    };
+    let mut body = previous.body;
+    body.header.profile = super::super::profile::PROFILE.into();
+    let domain = super::super::profile::Profile::Current.change_domain();
+    let signed = crypto::sign(body, &signing, domain).unwrap();
+    crypto::verify(&signed, &signing.verifying_key().to_bytes(), domain).unwrap();
+    assert!(
+        crypto::verify(
+            &signed,
+            &signing.verifying_key().to_bytes(),
+            super::super::profile::Profile::Consent.change_domain()
+        )
+        .is_err()
+    );
+    assert_eq!(
+        Object::Change(signed).bytes().unwrap(),
+        include_bytes!("../fixtures/change-v2.json")
+    );
+}
+
+#[test]
 fn wire_rejects_duplicates_unknown_fields_and_noncanonical_primitives() {
     assert!(decode::<Counter>(b"\"01\"").is_err());
     assert!(decode::<Counter>(b"\"18446744073709551616\"").is_err());

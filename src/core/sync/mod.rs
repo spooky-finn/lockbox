@@ -1,8 +1,8 @@
 //! Deterministic, provider-independent shared-space state machine.
 //!
-//! `LBX-SYNC-1` adds addressed consent to the experimental `LBX-SYNC-0` profile.
-//! Both are separate from the proposal in docs/lockbox-protocol.md. Only canonical
-//! objects enter replay; new spaces require signed recipient consent.
+//! `LBX-SYNC-2` adds approved control handoff and owner-root recovery to the
+//! consent rules in `LBX-SYNC-1`. Legacy profile 0 remains readable. These are
+//! separate from docs/lockbox-protocol.md; only canonical objects enter replay.
 //!
 //! # Host durability contract
 //!

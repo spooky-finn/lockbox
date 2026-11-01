@@ -5,6 +5,7 @@ use super::{
     Result, VaultError,
     format::{Header, PROFILE_VERSION},
 };
+use crate::infra::lease::ExclusiveFile;
 use std::{
     fs::{self, File, OpenOptions},
     io::{self, Write},
@@ -22,7 +23,7 @@ pub(super) fn refresh_profile_snapshot(
     path: &Path,
     data: Vec<u8>,
     header: Header,
-    lock: &Option<File>,
+    lock: &Option<ExclusiveFile>,
 ) -> Result<(Vec<u8>, Header)> {
     if lock.is_none() {
         return Ok((data, header));
@@ -39,7 +40,7 @@ pub(super) fn refresh_profile_snapshot(
 }
 
 /// Stable sidecar: replacing the encrypted file must not release the process lock.
-pub(super) fn lock_profile(path: &Path) -> Result<File> {
+pub(super) fn lock_profile(path: &Path) -> Result<ExclusiveFile> {
     let parent = path
         .parent()
         .filter(|path| !path.as_os_str().is_empty())
@@ -63,8 +64,10 @@ pub(super) fn lock_profile(path: &Path) -> Result<File> {
     }
 
     let file = options.open(sibling(&canonical, "lock"))?;
-    file.try_lock().map_err(|_| VaultError::ProfileInUse)?;
-    Ok(file)
+    ExclusiveFile::acquire(file).map_err(|error| match error {
+        fs::TryLockError::WouldBlock => VaultError::ProfileInUse,
+        fs::TryLockError::Error(error) => VaultError::Io(error),
+    })
 }
 
 /// Readable and writable by the owner only.

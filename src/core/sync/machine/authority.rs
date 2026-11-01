@@ -196,6 +196,33 @@ impl Signed<ControlApproval> {
 }
 
 impl super::Machine {
+    pub fn pending_control_transition(state: &SyncState) -> Option<ControlTransition> {
+        match &state.intent {
+            Some(PreparedChange::Control(control)) => control.transition,
+            _ => None,
+        }
+    }
+
+    pub fn control_transfer_completed(
+        state: &SyncState,
+        approval: &Signed<ControlApproval>,
+    ) -> Result<bool> {
+        with_history(state, |history| {
+            for (_, control) in &history.chain {
+                if control.body.transition == Some(ControlTransition::Transfer)
+                    && let Some(saved) = &control.body.approval
+                    && saved.id() == approval.id()
+                {
+                    if canonical(saved.as_ref())? != canonical(approval)? {
+                        return Err(Error::UnauthorizedDevice);
+                    }
+                    return Ok(true);
+                }
+            }
+            Ok(false)
+        })
+    }
+
     pub fn pending_control_approval(state: &SyncState) -> Option<ControlTransition> {
         state.pending_control_approval()
     }

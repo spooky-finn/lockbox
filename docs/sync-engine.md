@@ -1,7 +1,8 @@
 # Shared-space synchronization engine
 
-New spaces use the experimental **LBX-SYNC-1** profile; existing **LBX-SYNC-0**
-histories remain supported. Profile 1 adds signed recipient consent. It implements
+New spaces use experimental **LBX-SYNC-2**; existing **LBX-SYNC-0/1** histories
+remain supported. Profile 1 adds signed recipient consent; profile 2 adds
+[controller transfer and recovery](sync-control-recovery.md). It implements
 the deterministic event model from [the proposal](lockbox-protocol.md), with a
 smaller, separately versioned wire schema. It does not claim proposal-v1
 interoperability or a completed security review.
@@ -243,10 +244,10 @@ and can be activated through the inline recovery-password form or
 `Vault::activate_sync`. Activation certifies a fresh device and journals
 its existing entries/folders; it preserves data on failed writes. It requires
 the separate recovery password and never silently unlocks root authority.
-New shared profiles use bootstrap schema 4 and authenticated file generations so
+New shared profiles use bootstrap schema 5 and authenticated file generations so
 older applications reject them instead of dropping their protection metadata.
 
-Ownership/control transfer, lost-controller recovery, a desktop recovery wizard,
+Root ownership transfer, fork repair, desktop control/recovery wizards,
 multipart checkpoints, compaction and external audit remain unfinished. The local
 witness is not a hardware monotonic counter: full machine rollback including all
 witnesses still requires independently authenticated peer history or fresh-device

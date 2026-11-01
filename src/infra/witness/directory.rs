@@ -87,7 +87,7 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Witness> {
 
 pub(super) struct SignerLock {
     path: PathBuf,
-    file: File,
+    file: crate::infra::lease::ExclusiveFile,
 }
 
 impl SignerLock {
@@ -136,7 +136,7 @@ pub(super) fn lock(root: &Path, device: Hash) -> Result<SignerLock> {
         .truncate(false)
         .open(&path)
         .map_err(|_| Error::Unavailable)?;
-    file.try_lock().map_err(|error| match error {
+    let file = crate::infra::lease::ExclusiveFile::acquire(file).map_err(|error| match error {
         fs::TryLockError::WouldBlock => Error::InUse,
         fs::TryLockError::Error(_) => Error::Unavailable,
     })?;

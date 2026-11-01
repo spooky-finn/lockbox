@@ -54,6 +54,104 @@ impl Storage for Memory {
 }
 
 #[test]
+fn owner_recovery_uses_current_reader_content_with_an_old_read_only_authority_backup()
+-> scenario::Result<()> {
+    use lockbox::{
+        core::{entry::Entry, sync::Role},
+        infra::vault::{ControllerRecovery, Vault},
+    };
+    let directory = tempfile::tempdir()?;
+    let profiles = ProfileStore::new(Arc::new(MemoryWitness::default()));
+    let password = SecretString::from("disposable master".to_owned());
+    let recovery_password = SecretString::from("disposable root recovery".to_owned());
+    let kdf = KdfParams {
+        memory_kib: 8192,
+        passes: 1,
+        lanes: 1,
+    };
+    let configuration = |name: &str| SharedProfile {
+        username: name.into(),
+        space_name: "Recovery fixture".into(),
+        provider: ProviderConfiguration {
+            base_url: "https://gateway.storjshare.io".into(),
+            bucket: "fixture".into(),
+            access_key: format!("{name}-fictional-access"),
+            secret_key: format!("{name}-fictional-secret"),
+        },
+    };
+    let mut owner = profiles.create_shared(
+        directory.path().join("owner.lbx"),
+        &password,
+        &recovery_password,
+        kdf,
+        configuration("Owner"),
+    )?;
+    let mut reader = profiles.create_shared(
+        directory.path().join("reader.lbx"),
+        &password,
+        &recovery_password,
+        kdf,
+        configuration("Reader"),
+    )?;
+    let mut record = Entry::new();
+    record.title = "Old backup content".into();
+    record.password = "fictional secret".into();
+    owner.entries.push(record);
+    owner.save_changes()?;
+    let backup = directory.path().join("old-authority-backup.lbx");
+    std::fs::copy(owner.path(), &backup)?;
+    let offer = owner.issue_invitation(reader.device_certificate().unwrap(), Role::Reader, None)?;
+    let response = reader.accept_invitation(offer, &owner.space_descriptor().unwrap())?;
+    reader.join_invitation(owner.admit_invitation(response, 0)?)?;
+    owner.entries[0].title = "Latest content held by the reader".into();
+    owner.save_changes()?;
+    let mut storage = Memory(Arc::new(Mutex::new(BTreeMap::new())));
+    owner.synchronize(&mut storage)?;
+    reader.synchronize(&mut storage)?;
+    let anchor = reader.recovery_anchor()?;
+    let old_device = owner.device_certificate().unwrap().body.device;
+    drop(owner);
+    let read_only_store = ProfileStore::new(Arc::new(MemoryWitness::default()));
+    let authority: Vault = read_only_store.open(&backup, &password)?;
+    assert!(authority.signing_error().is_some());
+    assert_eq!(authority.entries[0].title, "Old backup content");
+    let mut recovered = profiles.recover_controller(
+        directory.path().join("recovered.lbx"),
+        &password,
+        kdf,
+        ControllerRecovery {
+            authority: &authority,
+            content: &reader,
+            recovery_password: &recovery_password,
+            anchor,
+            configuration: configuration("Recovered owner"),
+        },
+    )?;
+    assert_ne!(
+        recovered.device_certificate().unwrap().body.device,
+        old_device
+    );
+    assert_eq!(
+        recovered.entries[0].title,
+        "Latest content held by the reader"
+    );
+    recovered.synchronize(&mut storage)?;
+    reader.synchronize(&mut storage)?;
+    assert_eq!(
+        reader.space_controller()?,
+        recovered.device_certificate().unwrap().body.device
+    );
+    assert_eq!(reader.sync_replay()?.unwrap().role, Some(Role::Reader));
+    recovered.entries[0].title = "Edit by the recovered controller".into();
+    recovered.save_changes()?;
+    recovered.synchronize(&mut storage)?;
+    reader.synchronize(&mut storage)?;
+    assert_eq!(reader.entries, recovered.entries);
+    assert_eq!(authority.entries[0].title, "Old backup content");
+    Ok(())
+}
+
+#[test]
 fn release_scenario_survives_conflicts_role_changes_revocation_and_restart() -> scenario::Result<()>
 {
     let directory = tempfile::tempdir()?;

@@ -21,8 +21,7 @@
 
 use std::{
     cell::RefCell,
-    fs::{self, File},
-    io,
+    fs, io,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -123,7 +122,7 @@ pub struct Vault {
     pub folders: Vec<Folder>,
     pub(crate) profile: Option<BootstrapProfile>,
     pending_exchange: Option<exchange::PendingExchange>,
-    _profile_lock: Option<File>,
+    _profile_lock: Option<crate::infra::lease::ExclusiveFile>,
     witnesses: Arc<dyn WitnessStore>,
     protection: Option<RefCell<protection::Protection>>,
 }
@@ -502,7 +501,7 @@ impl Header {
         path: PathBuf,
         key: Zeroizing<[u8; 32]>,
         contents: Contents,
-        profile_lock: Option<File>,
+        profile_lock: Option<crate::infra::lease::ExclusiveFile>,
         witnesses: Arc<dyn WitnessStore>,
     ) -> Vault {
         Vault {
