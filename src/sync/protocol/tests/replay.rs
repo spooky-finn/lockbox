@@ -328,7 +328,14 @@ fn present_parents_from_another_epoch_or_object_kind_are_invalid() {
     let members = Machine::members(&state, &device).unwrap();
     state.intent = Some(Machine::prepare_membership(&state, &device, members).unwrap());
     let membership = Machine::complete_intent(&mut state, &device).unwrap();
-    for parent in [old, state.genesis, membership] {
+    let mut pending_control = control_at(&state, membership).unwrap();
+    pending_control.body.epoch.previous = Some(Hash([99; 32]));
+    let pending_control = Object::Control(pending_control);
+    let pending = pending_control.hash().unwrap();
+    Machine::receive(&mut state, pending, pending_control.bytes().unwrap()).unwrap();
+    assert!(state.candidates.contains_key(&pending));
+
+    for parent in [old, state.genesis, membership, pending] {
         let mut receiver = state.clone();
         let object = encrypted_change(
             &state,

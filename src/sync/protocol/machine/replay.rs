@@ -158,7 +158,7 @@ impl Machine {
                 &baseline,
                 authenticated,
                 &changes,
-                &controls.keys().copied().collect(),
+                &controls,
                 next,
             )?;
             result.history.extend(replayed.history);
@@ -196,7 +196,7 @@ fn replay_epoch(
     baseline: &Projection,
     authenticated: AuthenticatedChanges,
     changes: &BTreeMap<Hash, Signed<Change>>,
-    controls: &BTreeSet<Hash>,
+    controls: &BTreeMap<Hash, Signed<Control>>,
     next: Option<&Control>,
 ) -> Result<Replay> {
     let AuthenticatedChanges {
@@ -510,7 +510,7 @@ fn apply_causal_changes(
     mut verified: BTreeMap<Hash, VerifiedChange>,
     rejected: &mut BTreeMap<Hash, Error>,
     changes: &BTreeMap<Hash, Signed<Change>>,
-    controls: &BTreeSet<Hash>,
+    controls: &BTreeMap<Hash, Signed<Control>>,
     closed: bool,
 ) -> Result<CausalChanges> {
     let mut accepted: BTreeMap<Hash, VerifiedChange> = BTreeMap::new();
@@ -523,7 +523,7 @@ fn apply_causal_changes(
             .filter(|(_, change)| {
                 change.signed.body.header.parents.iter().any(|parent| {
                     rejected.contains_key(parent)
-                        || controls.contains(parent)
+                        || controls.contains_key(parent)
                         || changes
                             .get(parent)
                             .is_some_and(|c| c.body.header.membership != membership)

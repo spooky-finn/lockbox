@@ -8,17 +8,16 @@ No delegation requested. Keep unrelated work outside refactor commits.
 Last full suite: cycle 21; 389 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 21: Reuse replay checkpoint projection
-- Compare next baseline against retained result projection; bool tracks whether
-  adjacent prior epoch was independently verified. Remove full secret clone.
-- Missing grant resets comparison eligibility; readable snapshot retained.
-- Expanded regression passed before refactor: bootstrap after three keyless
-  epochs, then reject forged checkpoint for original owner and new editor.
-- Full suite passed: 389 library, four integration, two doctests; two OS probes
-  ignored. Formatting and strict all-target Clippy passed. Changed source
-  byte-matches verified snapshot; workspace whitespace checks passed.
+Cycle 22: Borrow replay control map
+- Causal validation uses existing control map for membership lookup; remove
+  identical hash-set allocation and copying per readable epoch.
+- Include all parsed controls, including quarantine, exactly as prior set did.
+- Expanded regression passed before refactor: old/current control and old-epoch
+  parent rejection now also covers quarantined control parent.
+- All 44 protocol tests, formatting and strict all-target Clippy passed. Changed
+  source byte-matches verified snapshot; workspace whitespace checks passed.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-21.sAWtkE when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-22.daSJbz when workspace cannot compile.
 
-Next search: replay control-key collection, attachment validation, settings.
+Next search: transaction diff snapshots, attachment validation, settings.
 Inspect current code and tests before choosing; no quota-driven edits.
