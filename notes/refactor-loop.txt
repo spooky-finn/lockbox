@@ -8,17 +8,16 @@ No delegation requested. Keep unrelated work outside refactor commits.
 Last full suite: cycle 31; 397 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 32: Narrow acknowledgement rollback
-- Retain references to actually removed receipt hashes; restore those on save
-  failure. Remove full outbox clone. Save borrows self; outbox cannot change.
-- Preserve timestamp rollback, partial acknowledgements and later pending edits.
-- Expanded regression passed before refactor: partial/duplicate/unknown receipts,
-  failed save with removals and with no removals, successful retry/completion.
-- Ack regression, 12 scheduler tests and both sync integration tests passed.
-  Formatting and strict all-target Clippy passed. Source byte-matches snapshot;
-  workspace whitespace checks passed. Tests use memory transport; no live cloud.
+Cycle 33: Share buffered identity hex encoding
+- Local salt IDs reuse existing identity encoder; remove identical vault helper.
+- Format bytes into one preallocated String instead of per-byte temporary text.
+  Keep byte order, lowercase padding and existing public IDs/fingerprints.
+- Existing suites passed: 22 vault, three mnemonic reference-vector, 17 Touch ID
+  tests; one OS prompt probe ignored. No new tests for encoder consolidation.
+- Formatting and strict all-target Clippy passed. Source byte-matches verified
+  snapshot; workspace whitespace checks passed.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-32.7VO3fn when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-33.Q5W5Cm when workspace cannot compile.
 
-Next search: salt ID formatting, publication setup, settings updates.
+Next search: bounded dependency iterators, publication setup, settings updates.
 Inspect current code and tests before choosing; no quota-driven edits.

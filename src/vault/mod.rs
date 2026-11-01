@@ -20,7 +20,7 @@
 //! This facade keeps file-generation and witness commit ordering explicit.
 //! The public [`Vault`] facade retains the existing import paths for both modes.
 
-use crate::sync::identity::Key;
+use crate::sync::identity::{Key, hex};
 #[cfg(test)]
 use std::fs;
 use std::{
@@ -658,10 +658,6 @@ impl Header {
             protection: None,
         }
     }
-}
-
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 fn random(buffer: &mut [u8]) {

@@ -6,6 +6,7 @@ use hkdf::Hkdf;
 use hpke::{Deserializable, Kem, Serializable, kem::X25519HkdfSha256};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::fmt::Write;
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 pub(crate) type Key = [u8; 32];
@@ -47,7 +48,11 @@ pub(crate) fn fingerprint(domain: &[u8], key: &Key) -> Key {
 }
 
 pub(crate) fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+    let mut encoded = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        write!(&mut encoded, "{byte:02x}").expect("writing to String");
+    }
+    encoded
 }
 
 impl DeviceKeys {
