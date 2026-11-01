@@ -51,8 +51,11 @@ fn flip_byte(path: &Path, offset: usize) {
 fn saved_entries_open_unchanged() {
     let dir = tempfile::tempdir().unwrap();
     let (path, vault) = new_vault(&dir);
+    let expected = vault.entries.clone();
+    // The writer holds the file lock until it closes.
+    drop(vault);
     let opened = Vault::open(&path, &password("master")).unwrap();
-    assert_eq!(opened.entries, vault.entries);
+    assert_eq!(opened.entries, expected);
     assert_eq!(opened.kdf, FAST);
 }
 
@@ -86,6 +89,7 @@ fn vaults_written_before_folders_open_without_migration() {
     let mut data = header.to_vec();
     data.extend(encrypted);
     fs::write(&path, data).unwrap();
+    drop(vault);
     let opened = Vault::open(&path, &password("master")).unwrap();
     assert!(opened.folders.is_empty());
     assert!(opened.entries[0].folder_id.is_none());
@@ -93,12 +97,9 @@ fn vaults_written_before_folders_open_without_migration() {
     opened.save().unwrap();
     let upgraded = fs::read(&path).unwrap();
     assert_eq!(u16::from_le_bytes([upgraded[4], upgraded[5]]), VERSION);
-    assert_eq!(
-        Vault::open_with_key(&path, &opened.export_key())
-            .unwrap()
-            .entries,
-        opened.entries
-    );
+    let (key, entries) = (opened.export_key(), opened.entries.clone());
+    drop(opened);
+    assert_eq!(Vault::open_with_key(&path, &key).unwrap().entries, entries);
 }
 
 #[test]
@@ -183,6 +184,7 @@ fn previous_version_is_kept_as_backup() {
     vault.save().unwrap();
     let backup = Vault::open(sibling(&path, "bak"), &password("master")).unwrap();
     assert_eq!(backup.entries.len(), 1);
+    drop(vault);
     assert!(
         Vault::open(&path, &password("master"))
             .unwrap()
@@ -212,14 +214,15 @@ fn create_never_overwrites_an_existing_file() {
 #[test]
 fn exported_key_opens_the_vault_without_the_password() {
     let dir = tempfile::tempdir().unwrap();
-    let (path, mut vault) = new_vault(&dir);
+    let (path, vault) = new_vault(&dir);
     let key = vault.export_key();
-    let opened = Vault::open_with_key(&path, &key).unwrap();
-    assert_eq!(opened.entries, vault.entries);
-    // A vault opened by key saves a file the password still opens.
-    vault.entries.clear();
+    let expected = vault.entries.clone();
     drop(vault);
+    let opened = Vault::open_with_key(&path, &key).unwrap();
+    assert_eq!(opened.entries, expected);
+    // A vault opened by key saves a file the password still opens.
     opened.save().unwrap();
+    drop(opened);
     assert_eq!(
         Vault::open(&path, &password("master"))
             .unwrap()
@@ -349,4 +352,28 @@ fn unchanged_save_does_not_add_revision() {
     let (_, vault) = new_vault(&dir);
     vault.save().unwrap();
     assert_eq!(vault.record_history().unwrap().len(), 1);
+}
+
+#[test]
+fn a_local_vault_cannot_be_open_twice() {
+    let dir = tempfile::tempdir().unwrap();
+    let (path, vault) = new_vault(&dir);
+    // Another window would otherwise overwrite this session's saves.
+    assert!(matches!(
+        Vault::open(&path, &password("master")),
+        Err(VaultError::ProfileInUse)
+    ));
+    assert!(matches!(
+        Vault::open_with_key(&path, &vault.export_key()),
+        Err(VaultError::ProfileInUse)
+    ));
+    // Importing only reads the file and needs no lock.
+    assert_eq!(
+        Vault::read_records(&path, &password("master"))
+            .unwrap()
+            .entries,
+        vault.entries
+    );
+    drop(vault);
+    assert!(Vault::open(&path, &password("master")).is_ok());
 }

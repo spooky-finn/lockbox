@@ -33,8 +33,11 @@ fn nested_folders_and_record_locations_survive_password_and_key_reopen() {
     assert_eq!(saved.folders.len(), 2);
     assert_eq!(saved.folders[1].parent_id.as_deref(), Some(parent.as_str()));
     assert_eq!(saved.entries[0].folder_id.as_deref(), Some(child.as_str()));
-    let key = saved.export_key();
-    let biometric = Vault::open_with_key(saved.path(), &key).unwrap();
+    let key = workspace.vault.export_key();
+    let path = workspace.vault.path().to_path_buf();
+    // The session holds the file lock; a second open succeeds once it closes.
+    drop(workspace);
+    let biometric = Vault::open_with_key(path, &key).unwrap();
     assert_eq!(biometric.folders, saved.folders);
     assert_eq!(biometric.entries, saved.entries);
 }

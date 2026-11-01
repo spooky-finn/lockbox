@@ -47,7 +47,7 @@ pub enum VaultError {
     Io(#[from] io::Error),
     #[error("could not obtain random data from the operating system")]
     Random,
-    #[error("profile is already open in another process")]
+    #[error("vault is already open in another window or process")]
     ProfileInUse,
     #[error("vault already exists: {0}")]
     AlreadyExists(PathBuf),
@@ -163,6 +163,9 @@ impl Vault {
             return Err(VaultError::AlreadyExists(path));
         }
 
+        // Local vaults are locked like profiles: two windows editing one file
+        // would otherwise silently overwrite each other's saves.
+        let file_lock = lock_profile(&path)?;
         let kdf = kdf.validate()?;
         let mut salt = [0u8; SALT_LEN];
         random(&mut salt);
@@ -179,7 +182,7 @@ impl Vault {
             folders: Vec::new(),
             profile: None,
             pending_exchange: None,
-            _profile_lock: None,
+            _profile_lock: Some(file_lock),
             witnesses: witness::system(),
             protection: None,
         };
@@ -297,6 +300,12 @@ impl Vault {
         };
 
         let (data, header) = refresh_profile_snapshot(&path, data, header, &profile_lock)?;
+        // Profiles re-read their snapshot under the lock above; a local vault
+        // takes the same sidecar lock so another window cannot open it too.
+        let profile_lock = match profile_lock {
+            Some(lock) => Some(lock),
+            None => Some(lock_profile(&path)?),
+        };
         let (key, failed_decryption) = match unlock {
             Unlock::Password(password) => {
                 let (key, check) = derive(password, &header.salt, header.kdf)?;

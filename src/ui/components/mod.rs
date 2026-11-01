@@ -38,6 +38,13 @@ pub fn App() -> Element {
     let last_motion =
         use_hook(|| std::rc::Rc::new(std::cell::Cell::new(std::time::Instant::now())));
     let locked = matches!(&*state.read(), Screen::Locked(_));
+    let title = crate::ui::window::title(&state.read(), language);
+    let shown_title = use_hook(|| std::rc::Rc::new(std::cell::RefCell::new(String::new())));
+
+    if *shown_title.borrow() != title {
+        dioxus::desktop::window().set_title(&title);
+        *shown_title.borrow_mut() = title;
+    }
     rsx! {
         style { "{CSS}" }
         main {

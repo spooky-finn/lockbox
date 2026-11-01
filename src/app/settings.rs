@@ -23,18 +23,32 @@ impl Settings {
         })
     }
 
-    pub fn remember(&mut self, path: Option<PathBuf>) -> Result<(), String> {
-        self.config.last_vault = path;
+    /// Every tab keeps its own copy of the preferences. Reload the file first
+    /// and apply only this change, so tabs never revert each other's settings.
+    pub fn update(&mut self, change: impl FnOnce(&mut Config)) -> Result<(), String> {
+        if let Some(path) = self.path.as_deref() {
+            self.config = Config::load(path);
+        }
+
+        change(&mut self.config);
         self.save()
+    }
+
+    pub fn remember(&mut self, path: Option<PathBuf>) -> Result<(), String> {
+        self.update(|config| config.last_vault = path)
     }
 
     pub fn set_touch_id(&mut self, id: &str, enabled: bool) -> Result<(), String> {
-        self.config.touch_id.retain(|known| known != id);
+        self.update(|config| {
+            config.touch_id.retain(|known| known != id);
 
-        if enabled {
-            self.config.touch_id.push(id.to_owned());
-        }
-
-        self.save()
+            if enabled {
+                config.touch_id.push(id.to_owned());
+            }
+        })
     }
 }
+
+#[cfg(test)]
+#[path = "tests/settings.rs"]
+mod tests;
