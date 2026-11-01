@@ -9,29 +9,26 @@ Last full suite: cycle 72; 417 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 72: Use state-only replay for Vault operations
-- Seven direct state-only Machine calls in save/projection/recovery, exchange,
-  sharing join and recovery-store creation omit display revisions. resolve_sync
-  and space_anchor use new crate-private Vault.sync_replay_state too.
-- Public sync_replay and private state entry share replay_using callback selector.
-  Pending-exchange guard, profile/sync Option lookup, ephemeral device secret and
-  error conversion match original after expression-closure style adaptation.
-  Public record_history/trash keep full replay; no persisted data/schema change.
-- Three boundary fixtures passed before refactor then state path: local None,
-  shared projection/status parity and exact public record-history bytes after
-  state call, attachment-backed trash restoration, both paths reject pending
-  exchange commit. Core full-vs-state diagnostics tests remain green.
-- Full suite: 417 library, four integration, two doctests passed; two OS probes
-  ignored. Formatting/strict all-target Clippy passed. Six sources match verified
-  snapshot; whitespace clean. Unrelated edits untouched.
-- Snapshot: /tmp/lockbox-refactor-72.n9cet12b.
+Cycle 73: Use state replay for scheduling and conflict review
+- Switch scheduler downloaded/uploaded checks and desktop SyncReview to guarded
+  Vault.sync_replay_state. All read projection/role/readiness/diagnostics, never
+  display revision records. Omit unused before/after entry and attachment clones.
+- Preserve commit-before-publication, fresh upload validation, acknowledgement
+  order/statuses, incomplete-history notice, conflict contents and reveal hooks.
+- Production caller audit now leaves only Vault record_history/trash using full
+  sync_replay. Public Machine/Vault replay APIs still return full history.
+- Formatting/strict all-target Clippy passed. 12 scheduler, 45 desktop,
+  two sync integration tests passed. Both sources match verified snapshot;
+  whitespace clean. Unrelated edits untouched.
+- Snapshot: /tmp/lockbox-refactor-73.dy1og_z5.
 
-Next goal: remaining production non-history consumers of Vault.sync_replay are
-scheduler.downloaded/uploaded (two calls) and desktop.SyncReview (one call).
-Audit confirms current code reads role/readiness/projection/history_verified/
-excluded sets, never record history. Consider sync_replay_state for all three.
-Preserve fresh upload authorization, commit-before-plan ordering, statuses, UI
-conflict contents/reveal hooks, incomplete-history notice and recovery behavior.
-Existing scheduler, desktop rendering and integration tests cover these paths.
-Afterward grep production callers: only Vault history/trash should request full
-record history; public APIs must remain available and unchanged. Inspect first.
+Next search: materialize_history baseline fallback scans all checkpoint versions
+for every mutation base absent from current accepted changes. Consider a lazy
+OnceCell index Revision -> Option<&Value>, built only on first fallback; preserve
+first checkpoint match including None, and accepted-value precedence. No index
+needed when no history/materialization or only current-epoch values are used.
+Existing state/full replay test covers checkpoint before-values and attachment
+conflicts. Consider baseline public-history regression with multiple checkpoint
+records, delete/restore tombstone and later same-epoch edits before changing lookup.
+Keep every causal/crypto validation and history order unchanged; inspect current
+code and exact Revision type before selecting implementation.

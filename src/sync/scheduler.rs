@@ -189,7 +189,7 @@ impl SpaceSync {
         let incomplete = batch.incomplete;
         vault.receive_sync(batch)?;
         let replay = vault
-            .sync_replay()?
+            .sync_replay_state()?
             .ok_or(crate::sync::protocol::Error::UnauthorizedDevice)?;
 
         if replay.role.is_none() {
@@ -228,7 +228,7 @@ impl SpaceSync {
 
     fn uploaded(&mut self, vault: &mut Vault, receipts: Vec<Hash>) -> VaultResult<()> {
         let replay = vault
-            .sync_replay()?
+            .sync_replay_state()?
             .ok_or(crate::sync::protocol::Error::UnauthorizedDevice)?;
 
         if replay.role.is_none() {

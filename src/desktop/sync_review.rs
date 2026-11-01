@@ -20,7 +20,7 @@ pub(super) fn SyncReview() -> Element {
         return rsx! {};
     };
     rsx! {
-        if let Ok(Some(replay)) = unlocked.vault.sync_replay() {
+        if let Ok(Some(replay)) = unlocked.vault.sync_replay_state() {
             if !replay.history_verified {
                 p { class: "notice", {language.text(Text::TheOwnerConfirmedTheInitialStateThisDeviceHasNotVerifiedEarlierChanges)} }
             }
