@@ -40,6 +40,26 @@ impl Kind {
             Self::Receipt => "lockbox-confirmation.json",
         }
     }
+
+    fn detect(bytes: &[u8]) -> Result<Self, String> {
+        // Filenames never establish artifact type; select only a structural hint.
+        if bytes.len() > crate::sync::protocol::MAX_INVITATION_BYTES {
+            return Err("Sharing file is too large".into());
+        }
+        let value: serde_json::Value = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
+        let object = value.as_object().ok_or("Unrecognized sharing file")?;
+        Ok(if object.contains_key("confirmation") {
+            Self::Receipt
+        } else if object.contains_key("request") {
+            Self::Response
+        } else if object.contains_key("offer") {
+            Self::Invitation
+        } else if object.contains_key("body") {
+            Self::Certificate
+        } else {
+            return Err("Unrecognized sharing file".into());
+        })
+    }
 }
 
 #[derive(Clone)]
@@ -52,25 +72,8 @@ pub(crate) enum Artifact {
 
 impl Artifact {
     fn detect(bytes: &[u8]) -> Result<Self, String> {
-        // Select by structure, then use the same strict decoder and signature
-        // checks as explicit imports. Filenames never establish artifact type.
-        if bytes.len() > crate::sync::protocol::MAX_INVITATION_BYTES {
-            return Err("Sharing file is too large".into());
-        }
-        let value: serde_json::Value = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
-        let object = value.as_object().ok_or("Unrecognized sharing file")?;
-        let kind = if object.contains_key("confirmation") {
-            Kind::Receipt
-        } else if object.contains_key("request") {
-            Kind::Response
-        } else if object.contains_key("offer") {
-            Kind::Invitation
-        } else if object.contains_key("body") {
-            Kind::Certificate
-        } else {
-            return Err("Unrecognized sharing file".into());
-        };
-        Self::decode(kind, bytes)
+        // Drop the untyped detection tree before strict decoding and verification.
+        Self::decode(Kind::detect(bytes)?, bytes)
     }
 
     fn decode(kind: Kind, bytes: &[u8]) -> Result<Self, String> {

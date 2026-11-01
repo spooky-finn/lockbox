@@ -9,26 +9,22 @@ Last full suite: cycle 62; 414 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 62: Share change header shape validation
-- ChangeHeader.validate(space, epoch) owns shared space/epoch/nonzero sequence/
-  bounded strictly ordered parents checks. Candidate authentication, replay and
-  relay delegate; wire schema and public APIs stay unchanged.
-- Keep membership filtering, caller-specific space source, nonce/ciphertext and
-  role/signature checks separate. Replay checks nonce after signature; candidate
-  and relay reject malformed nonce/ciphertext before signature verification.
-- New eight-case regression passed before extraction: public receive, legacy
-  replay and closed-history relay preserve exact rejection precedence for bad
-  space/epoch/sequence/parent count/duplicates/order/nonce/ciphertext with stale
-  signatures. No malformed event is accepted or promoted.
-- Full suite: 414 library, four integration, two doctests passed; two OS probes
-  ignored. Formatting/strict all-target Clippy passed. All five sources match
-  verified snapshot; whitespace clean. Unrelated edits untouched.
-- Snapshot: /tmp/lockbox-refactor-62.ujenvp13.
+Cycle 63: Separate artifact kind detection
+- Move size/JSON/structure hint selection into private Kind.detect. Artifact.detect
+  passes resulting Kind to existing strict decoder. Untyped serde_json tree drops
+  when kind detection returns, before second typed parse and verification start.
+- Preserve 96 MiB preparse limit, confirmation/request/offer/body precedence,
+  JSON/unrecognized errors, canonical decoding and signature checks. No new parser
+  or weaker structural-only acceptance; filenames still supply no authority.
+- Formatting/strict all-target Clippy passed. 14 sharing, five vault sharing,
+  six protocol invitation tests passed. Existing detection coverage accepts all
+  four artifacts and rejects mixed/tampered/invalid inputs. Source matches verified
+  snapshot; whitespace clean. Unrelated edits untouched.
+- Snapshot: /tmp/lockbox-refactor-63.ehbivbod.
 
-Next search: sharing Artifact.detect parses a full serde_json::Value solely to
-choose Kind, then retains it while strict typed decoder parses bytes again.
-Consider moving size/structure detection to private Kind.detect, returning only
-Kind before Artifact.decode starts. Scope boundary drops potentially large
-untyped tree first; preserve detection precedence/errors and strict verification.
-Existing artifact detection test covers all four types plus mixed/tampered/invalid
-inputs. Inspect current file and coverage before editing; no parser redesign.
+Next search: apply_sharing clones entire review enum before matching required
+variant in Issue/Accept/Admit/Join. Borrow review via as_ref, perform cheap guards,
+clone only matched payload at owned Vault API call. Wrong-type and invalid-code
+paths should avoid copying large unrelated artifacts. Check all Artifact clone
+uses; enum derive(Clone) may become unnecessary. Preserve review on failures and
+all guards, durable operations and success resets; use existing workflow tests.
