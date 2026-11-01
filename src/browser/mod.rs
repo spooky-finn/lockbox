@@ -129,6 +129,14 @@ fn matches(entry: &Entry, expected: &str) -> bool {
     origin(&entry.url).is_ok_and(|actual| actual == expected)
 }
 
+/// Credential reads and password updates must enforce the same account-origin check.
+fn account<'a>(entries: &'a [Entry], id: &str, website: &str) -> Result<&'a Entry, &'static str> {
+    entries
+        .iter()
+        .find(|entry| entry.id == id && matches(entry, website))
+        .ok_or("No matching account for this exact origin.")
+}
+
 impl Session {
     fn lock(&mut self) {
         // Vault/Entry/Zeroizing own wiping; dropping also releases the file lease.
@@ -207,11 +215,7 @@ impl Session {
                 entry_id,
             } => {
                 let website = origin(&website)?;
-                let entry = vault
-                    .entries()
-                    .iter()
-                    .find(|entry| entry.id == entry_id && matches(entry, &website))
-                    .ok_or("No matching account for this exact origin.")?;
+                let entry = account(vault.entries(), &entry_id, &website)?;
                 if entry.username.len() > 4096 || entry.password.len() > 4096 {
                     return Err("This account is too large for browser autofill.");
                 }
@@ -257,12 +261,7 @@ impl Session {
                     .filter(|value| value.origin == website)
                     .ok_or("Generate a new password for this website first.")?;
                 let mut entry = match entry_id {
-                    Some(id) => vault
-                        .entries()
-                        .iter()
-                        .find(|entry| entry.id == id && matches(entry, &website))
-                        .cloned()
-                        .ok_or("No matching account for this exact origin.")?,
+                    Some(id) => account(vault.entries(), &id, &website)?.clone(),
                     None => {
                         let mut entry = Entry::new();
                         entry.title = if title.trim().is_empty() {

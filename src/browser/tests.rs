@@ -101,6 +101,51 @@ fn suggestions_exclude_secrets_and_credential_requests_recheck_origin() {
 }
 
 #[test]
+fn credential_reads_and_generated_updates_enforce_the_same_account_origin() {
+    let (_directory, mut session, id) = fixture();
+    let original = session.vault.as_ref().unwrap().entries()[0].clone();
+
+    for website in [
+        "https://accounts.example.attacker.test",
+        "https://sub.accounts.example",
+        "https://accounts.example:444",
+    ] {
+        session
+            .handle(Request::Generate {
+                origin: website.into(),
+                length: 24,
+                symbols: false,
+            })
+            .unwrap();
+        assert_eq!(
+            session
+                .handle(Request::Credential {
+                    origin: website.into(),
+                    entry_id: id.clone(),
+                })
+                .err(),
+            Some("No matching account for this exact origin.")
+        );
+        assert_eq!(
+            session
+                .handle(Request::SaveGenerated {
+                    origin: website.into(),
+                    title: "".into(),
+                    username: Zeroizing::new("".into()),
+                    entry_id: Some(id.clone()),
+                })
+                .err(),
+            Some("No matching account for this exact origin.")
+        );
+        assert!(session.generated.is_some());
+        assert_eq!(
+            session.vault.as_ref().unwrap().entries(),
+            std::slice::from_ref(&original)
+        );
+    }
+}
+
+#[test]
 fn generated_password_save_preserves_metadata_and_history() {
     let (directory, mut session, id) = fixture();
     session

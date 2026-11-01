@@ -8,17 +8,15 @@ No delegation requested. Keep unrelated work outside refactor commits.
 Last full suite: cycle 4; 370 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 4: Local history comparison
-- Borrowed BTreeMap pairs saved/current entries once; remove repeated list searches.
-- Keep lexicographic revision order and first-occurrence semantics for duplicate IDs.
-- Preserve Put/Delete/Restore rules, unchanged records and atomic failure/retry.
-- New batch/retry/reopen and duplicate-ID regressions passed before refactor.
-- Verification: full suite above, formatting, strict all-target Clippy passed.
-  Workspace source/test formatting and whitespace passed.
-- Separate correction 11271e1: shared-import regression now compares contents
-  without assuming insertion order. Reproduced old failure; 12 new runs passed.
+Cycle 5: Browser account lookup
+- Credential reads/generated-password updates share one exact-origin lookup.
+- Preserve request validation order, locked-session behavior, limits and errors.
+- Cross-origin update regression passed before refactor; generated password
+  remains available after rejected account update, original record unchanged.
+- Verification: 10 browser-related unit tests, two native-host integration tests,
+  formatting and strict all-target Clippy passed in isolated snapshot.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-4.5jyvDf when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-5.E8hKCK when workspace cannot compile.
 
-Next search: browser/session workflows, folder breadcrumbs, import folder placement.
+Next search: folder breadcrumbs, import folder placement, record editor state.
 Inspect current code and tests before choosing; no quota-driven edits.
