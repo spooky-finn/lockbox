@@ -125,11 +125,12 @@ impl<'a> Hierarchy<'a> {
     }
 
     fn path(&self, id: &str) -> String {
-        self.ancestors(id)
-            .iter()
+        let mut names: Vec<_> = self
+            .lineage(id)
             .map(|folder| folder.name.as_str())
-            .collect::<Vec<_>>()
-            .join(" / ")
+            .collect();
+        names.reverse();
+        names.join(" / ")
     }
 
     pub(crate) fn options(&self) -> Vec<(&'a Folder, String)> {

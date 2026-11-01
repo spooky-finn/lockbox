@@ -9,22 +9,18 @@ Last full suite: cycle 78; 419 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 79: Select events with displayed record revisions
-- RecordHistory.includes takes Mutation; Entry-kind and optional ID match live
-  once. Ordering collector and row materializer share predicate.
-- Every included event still runs fallible ancestry validation first. Only events
-  with matching Entry mutations enter display sort and actor lookup. Depth/hash
-  order and original mutation indices unchanged. Omit still scans no mutations.
-- Baseline full-filter oracle passed before change. Fixture adds mixed Entry and
-  Folder sharing ID, folder-only edit, empty event, expected seven record rows;
-  retains checkpoints, conflicts, missing dependencies, faults and error parity.
-- Formatting/strict all-target Clippy passed. 58 protocol, five vault-history,
-  nine record-view and two integration tests passed. Both sources match verified
-  snapshot; whitespace clean. Unrelated edits untouched.
-- Snapshot: /tmp/lockbox-refactor-79.dlg4m9_n.
+Cycle 80: Format folder paths with one name vector
+- Map bounded leaf-to-root lineage directly into borrowed names; reverse and
+  join. Remove intermediate ancestors Vec<&Folder> and second traversal.
+- Same first duplicate-ID lookup, cycle/depth bounds, orphan behavior, separator,
+  root-to-leaf text and stable sorted options. Breadcrumb API unchanged.
+- Formatting/strict all-target Clippy and 77 record tests passed. Existing folder,
+  directory, import and view checks cover hierarchy consumers. Source matches
+  verified snapshot; whitespace clean. Unrelated edits untouched.
+- Snapshot: /tmp/lockbox-refactor-80.p9gg9opk.
 
-Next search: Hierarchy.path currently creates ancestors Vec<&Folder>, reverses,
-then collects a second Vec<&str> before join. Existing bounded lineage iterator
-can map names directly into one Vec, reverse once, join. Preserve first duplicate
-ID, cycles, missing parents, depth limit and stable options ordering; existing
-folder, directory and view tests cover boundaries. Inspect before changing.
+Next search: access/auth.rs repeats new-password minimum-character and confirmation
+rules in validate_creation, submit recovery and submit_identity. Consider one
+private pure error helper; preserve empty-password error precedence, cloud/key
+validation order, open-existing short-password compatibility and identity unlock
+bypass. Inspect existing auth, locked-view and identity tests before changing.
