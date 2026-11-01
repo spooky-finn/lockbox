@@ -5,7 +5,7 @@ use super::{
     Machine,
     history::{ControlHistory, with_history},
     profile::Profile,
-    protocol::{Control, ControlTransition},
+    protocol::Control,
     state::{PreparedChange, SpaceDescriptor, SyncState},
 };
 use crate::core::sync::{
@@ -35,14 +35,10 @@ impl Machine {
         role: Role,
         expires_at: Option<u64>,
     ) -> Result<Invitation> {
-        if state.intent.is_some() {
-            return Err(Error::PendingIntent);
-        }
+        state.require_idle()?;
         let replay = Self::replay(state, device)?;
 
-        if !replay.ready {
-            return Err(Error::MissingDependency);
-        }
+        replay.require_ready()?;
         with_history(state, |history| {
             let (anchor, current) = history.tip();
 
@@ -150,9 +146,7 @@ impl Machine {
         device: &DeviceSecret,
         admission: &Admission,
     ) -> Result<AdmissionReceipt> {
-        if state.intent.is_some() {
-            return Err(Error::PendingIntent);
-        }
+        state.require_idle()?;
         if !Self::replay(state, device)?.ready {
             return Err(Error::MissingDependency);
         }
@@ -310,9 +304,10 @@ pub(super) fn verify_admissions(
         if was_admitted(ancestors, member.certificate.body.device) {
             return Err(Error::RetiredDevice);
         }
-        if body.transition == Some(ControlTransition::Recovery)
+        if body.is_recovery()
             && member.certificate.body.device == body.controller
-            && member.certificate.body.user == body.owner {
+            && member.certificate.body.user == body.owner
+        {
             continue;
         }
         added.insert(member.certificate.body.device, member);

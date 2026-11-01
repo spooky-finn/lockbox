@@ -45,6 +45,12 @@ pub(crate) struct BootstrapProfile {
     #[serde(default)]
     #[zeroize(skip)]
     pub(crate) sharing: SharingState,
+    #[serde(default)]
+    #[zeroize(skip)]
+    pub(crate) control_approvals: std::collections::BTreeMap<
+        crate::core::sync::Hash,
+        crate::core::sync::Signed<crate::core::sync::ControlApproval>,
+    >,
     root_capsule: RootCapsule,
 }
 
@@ -100,7 +106,7 @@ impl BootstrapProfile {
             crate::core::sync::Hash(space.epoch_context),
         )?;
         Ok(Self {
-            schema_version: 4,
+            schema_version: 5,
             username,
             space_name,
             identity,
@@ -110,16 +116,23 @@ impl BootstrapProfile {
             sync: Some(sync),
             certificate: Some(certificate),
             sharing: SharingState::default(),
+            control_approvals: std::collections::BTreeMap::new(),
             root_capsule,
         })
     }
 
     pub(crate) fn validate(&self) -> bool {
         ((self.schema_version == 1 && self.sync.is_none())
-            || ((2..=4).contains(&self.schema_version)
+            || ((2..=5).contains(&self.schema_version)
                 && self.sync.is_some()
                 && self.certificate.is_some()))
-            && (self.schema_version == 4 || self.sharing.is_empty())
+            && (self.schema_version >= 4 || self.sharing.is_empty())
+            && (self.schema_version >= 5 || self.control_approvals.is_empty())
+            && self.control_approvals.len() <= 128
+            && self
+                .control_approvals
+                .iter()
+                .all(|(id, approval)| *id == approval.id() && approval.signature.0.len() == 64)
             && self.sharing.validate()
             && self.device.matches(&self.identity)
             && self.root_capsule.version == 1
@@ -145,11 +158,34 @@ impl BootstrapProfile {
     }
 
     pub(crate) fn requires_witness(&self) -> bool {
-        matches!(self.schema_version, 3 | 4)
+        (3..=5).contains(&self.schema_version)
     }
 
     pub(crate) fn enable_sharing(&mut self) {
-        self.schema_version = 4;
+        self.schema_version = self.schema_version.max(4);
+    }
+
+    pub(crate) fn enable_authority(&mut self) {
+        self.schema_version = 5;
+    }
+
+    pub(crate) fn approve_control_recovery(
+        &mut self,
+        recovery_password: &SecretString,
+    ) -> Result<()> {
+        let root = self
+            .root_capsule
+            .open(recovery_password, &self.identity.root_key)
+            .map_err(|_| VaultError::RecoveryFailed)?;
+        let device = self.sync_secret();
+        crate::core::sync::Machine::approve_control_recovery(
+            self.sync
+                .as_mut()
+                .ok_or(crate::core::sync::Error::UnauthorizedDevice)?,
+            &device,
+            &root,
+        )?;
+        Ok(())
     }
 
     pub(crate) fn recover_identity(
@@ -199,7 +235,7 @@ impl BootstrapProfile {
         self.sync = Some(sync);
         self.device = keys;
         self.identity = identity;
-        self.schema_version = 4;
+        self.schema_version = 5;
         Ok(())
     }
 

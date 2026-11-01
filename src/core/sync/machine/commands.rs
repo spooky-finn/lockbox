@@ -7,9 +7,8 @@ use super::super::{
     decode,
 };
 use super::{
-    authority::{control_domain, verify_approval},
     Machine,
-    protocol::{Change, ChangeHeader, Control, ControlTransition, Epoch, Member, PROFILE},
+    protocol::{Change, ChangeHeader, Control, Epoch, Member, PROFILE},
     state::{ExcludedEdit, PreparedChange, Replay, SyncState},
 };
 use super::{
@@ -160,12 +159,10 @@ impl Machine {
         device: &DeviceSecret,
         transaction: Transaction,
     ) -> Result<PreparedChange> {
-        if state.intent.is_some() {
-            return Err(Error::PendingIntent);
-        }
+        state.require_idle()?;
 
         let replay = Self::replay(state, device)?;
-        require_writer(&replay)?;
+        replay.require_writer()?;
         Self::prepare_transaction(state, device, transaction, replay, false)
     }
 
@@ -178,12 +175,10 @@ impl Machine {
         state: &SyncState,
         device: &DeviceSecret,
     ) -> Result<Option<PreparedChange>> {
-        if state.intent.is_some() {
-            return Err(Error::PendingIntent);
-        }
+        state.require_idle()?;
 
         let replay = Self::replay(state, device)?;
-        require_writer(&replay)?;
+        replay.require_writer()?;
 
         if replay.frontier.len() <= super::super::MAX_PARENTS {
             return Ok(None);
@@ -294,12 +289,10 @@ impl Machine {
         members: Vec<(Signed<Certificate>, Role)>,
         admissions: Vec<crate::core::sync::Admission>,
     ) -> Result<PreparedChange> {
-        if state.intent.is_some() {
-            return Err(Error::PendingIntent);
-        }
+        state.require_idle()?;
 
         let replay = Self::replay(state, device)?;
-        require_writer(&replay)?;
+        replay.require_writer()?;
         let previous = control_at(state, replay.membership)?;
 
         if previous.body.controller != device.id() {
@@ -329,7 +322,9 @@ impl Machine {
         };
 
         let epoch = Epoch {
-            profile: if admissions.is_empty() || Profile::parse(&previous.body.epoch.profile)? >= Profile::Consent {
+            profile: if admissions.is_empty()
+                || Profile::parse(&previous.body.epoch.profile)? >= Profile::Consent
+            {
                 previous.body.epoch.profile.clone()
             } else {
                 super::profile::CONSENT_PROFILE.into()
@@ -369,9 +364,7 @@ impl Machine {
     pub fn complete_intent(state: &mut SyncState, device: &DeviceSecret) -> Result<Hash> {
         let prepared = state.intent.clone().ok_or(Error::PendingIntent)?;
         let replay = Self::replay(state, device)?;
-        if !matches!(&prepared, PreparedChange::Control(c) if c.transition == Some(ControlTransition::Recovery)) {
-            require_writer(&replay)?;
-        } else if !replay.pending.is_empty() { return Err(Error::MissingDependency); }
+        prepared.verify_signing_authority(&replay)?;
         let object = match prepared {
             PreparedChange::Change(change) => {
                 if change.header.membership != replay.membership
@@ -390,33 +383,23 @@ impl Machine {
 
                 let previous = control_at(state, replay.membership)?;
 
-                if (control.transition == Some(ControlTransition::Recovery) && control.controller != device.id())
-                    || (control.transition != Some(ControlTransition::Recovery) && previous.body.controller != device.id()) {
+                if control.signing_controller(&previous.body) != device.id() {
                     return Err(Error::InsufficientRole);
                 }
                 with_history(state, |history| {
                     validate_control_body(&control, Some(&previous), state, &history.chain)
                 })?;
-                verify_approval(&control, Some(&previous), state)?;
-                let domain = control_domain(&control)?;
+                control.verify_approval(Some(&previous), state)?;
+                let domain = control.signing_domain()?;
                 let signed = crypto::sign(control, &device.signer(), domain)?;
                 Object::Control(signed)
             }
         };
 
         let hash = object.hash()?;
-        let is_control = matches!(object, Object::Control(_));
         let inserted = Self::receive(state, hash, object.bytes()?)?;
-        let check = Self::replay(state, device).and_then(|checked| {
-            if !checked.ready
-                || (is_control && checked.membership != hash)
-                || (!is_control && !checked.accepted.contains(&hash))
-            {
-                return Err(Error::InvalidTransaction);
-            }
-
-            Ok(())
-        });
+        let check =
+            Self::replay(state, device).and_then(|checked| checked.verify_applied(&object, hash));
 
         if let Err(error) = check {
             if inserted {
@@ -489,7 +472,7 @@ impl Machine {
     ) -> Result<PreparedChange> {
         use super::super::{Action, Mutation};
         let replay = Self::replay(state, device)?;
-        require_writer(&replay)?;
+        replay.require_writer()?;
         let edit = Self::excluded_edits(state, device)?
             .into_iter()
             .find(|edit| edit.hash == excluded)
@@ -547,18 +530,6 @@ pub(super) fn capacity(state: &SyncState, bytes: usize) -> Result<()> {
     }
 
     Ok(())
-}
-
-fn require_writer(replay: &Replay) -> Result<()> {
-    if !replay.ready {
-        return Err(Error::MissingDependency);
-    }
-
-    match replay.role {
-        Some(Role::Owner | Role::Editor) => Ok(()),
-        Some(Role::Reader) => Err(Error::InsufficientRole),
-        None => Err(Error::UnauthorizedDevice),
-    }
 }
 
 pub(super) fn control_at(state: &SyncState, hash: Hash) -> Result<Signed<Control>> {

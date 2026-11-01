@@ -46,7 +46,10 @@ pub use invitation::{
     Admission, AdmissionConfirmation, AdmissionReceipt, Invitation, InviteOffer, JoinRequest,
     MAX_INVITATION_BYTES,
 };
-pub use machine::{ControlApproval, ControlTransfer, ControlTransition, RecoveryAnchor, ExcludedEdit, Machine, PreparedChange, Replay, SpaceDescriptor, SyncState};
+pub use machine::{
+    ControlApproval, ControlTransfer, ControlTransition, ExcludedEdit, Machine, PreparedChange,
+    RecoveryAnchor, Replay, SpaceDescriptor, SyncState,
+};
 pub use model::{
     Action, Entity, EntityKind, Mutation, Projection, Record, Revision, Role, Transaction, Value,
     Version,
@@ -112,6 +115,8 @@ pub enum Error {
     RetiredDevice,
     #[error("the prepared control transition requires approval")]
     ControlApprovalRequired,
+    #[error("another controller recovery is reserved; resume its profile before starting another")]
+    RecoveryReserved,
 }
 
 impl Error {

@@ -5,7 +5,6 @@ use super::super::{
     canonical, crypto, wire::sorted_unique,
 };
 use super::{
-    authority::{control_domain, verify_approval},
     invitations::verify_admissions,
     profile::Profile,
     protocol::{Control, ControlTransition, Epoch, Grant, Member},
@@ -69,8 +68,8 @@ pub(super) fn validate_control(
     ancestors: &[(Hash, &Signed<Control>)],
 ) -> Result<()> {
     let key = validate_control_body(&control.body, previous, state, ancestors)?;
-    verify_approval(&control.body, previous, state)?;
-    crypto::verify(control, &key, control_domain(&control.body)?)
+    control.body.verify_approval(previous, state)?;
+    crypto::verify(control, &key, control.body.signing_domain()?)
 }
 
 pub(super) fn validate_control_body(
@@ -81,7 +80,9 @@ pub(super) fn validate_control_body(
 ) -> Result<[u8; 32]> {
     let key = ControlAuthority::new(body, state).signing_key(previous)?;
     verify_admissions(body, previous, state, ancestors)?;
-    if body.approval.is_some() { verify_approval(body, previous, state)?; }
+    if body.approval.is_some() {
+        body.verify_approval(previous, state)?;
+    }
     Ok(key)
 }
 
@@ -225,7 +226,7 @@ impl<'a> ControlAuthority<'a> {
 
         if body.epoch.space != self.state.space
             || body.owner != Hash::digest(b"lockbox.user.v1\0", &self.state.owner_root)
-            || body.closed_frontier.len() > if body.transition == Some(ControlTransition::Recovery) { Roster::MAX_DEVICES } else { super::super::MAX_PARENTS }
+            || body.closed_frontier.len() > body.frontier_limit()
             || !sorted_unique(&body.closed_frontier)
             || body.checkpoint_nonce.0.len() != 24
             || body.checkpoint.0.len() < 16
@@ -242,7 +243,8 @@ impl<'a> ControlAuthority<'a> {
         if body.epoch.number.0 != 0
             || body.epoch.previous.is_some()
             || !body.closed_frontier.is_empty()
-            || body.transition.is_some() || body.approval.is_some()
+            || body.transition.is_some()
+            || body.approval.is_some()
             || controller.certificate.body.root_key != self.state.owner_root
         {
             return Err(Error::UnauthorizedDevice);
@@ -254,8 +256,7 @@ impl<'a> ControlAuthority<'a> {
     fn successor_key(&self, previous: &Signed<Control>) -> Result<[u8; 32]> {
         let body = self.body;
 
-        if Profile::parse(&previous.body.epoch.profile)? > Profile::parse(&body.epoch.profile)?
-        {
+        if Profile::parse(&previous.body.epoch.profile)? > Profile::parse(&body.epoch.profile)? {
             return Err(Error::UnsupportedProtocol);
         }
         let author = Roster(&previous.body.members).member(previous.body.controller)?;
@@ -269,7 +270,9 @@ impl<'a> ControlAuthority<'a> {
         }
 
         match body.transition {
-            None if body.controller == previous.body.controller => Ok(author.certificate.body.signing_key),
+            None if body.controller == previous.body.controller => {
+                Ok(author.certificate.body.signing_key)
+            }
             Some(ControlTransition::Transfer) if body.controller != previous.body.controller => {
                 let old_target = Roster(&previous.body.members).controller(body.controller)?;
                 let new_target = self.roster.controller(body.controller)?;
@@ -279,7 +282,9 @@ impl<'a> ControlAuthority<'a> {
                 Ok(author.certificate.body.signing_key)
             }
             Some(ControlTransition::Recovery) if body.controller != previous.body.controller => {
-                if self.roster.member(previous.body.controller).is_ok() { return Err(Error::UnauthorizedDevice); }
+                if self.roster.member(previous.body.controller).is_ok() {
+                    return Err(Error::UnauthorizedDevice);
+                }
                 let target = self.roster.controller(body.controller)?;
                 if target.certificate.body.root_key != author.certificate.body.root_key {
                     return Err(Error::UnauthorizedDevice);

@@ -135,15 +135,17 @@ use format::{
     CHECK_LEN, Contents, ContentsRef, HEADER_LEN, Header, NONCE_LEN, PROFILE_VERSION, SALT_LEN,
     decrypt, derive,
 };
+mod authority;
 mod protection;
 mod records;
+mod root_journal;
 mod shared;
 mod sharing;
 mod store;
 
 pub use crate::infra::profile::{AcceptedInvitationInfo, InvitationStatus, IssuedInvitationInfo};
 pub use records::Records;
-pub use store::{DeviceRecovery, ProfileStore, SharedProfile};
+pub use store::{ControllerRecovery, DeviceRecovery, ProfileStore, SharedProfile};
 
 enum Unlock<'a> {
     Password(&'a SecretString),
@@ -198,6 +200,24 @@ impl Vault {
         profile: BootstrapProfile,
         witnesses: Arc<dyn WitnessStore>,
     ) -> Result<Self> {
+        Self::create_profile_snapshot(
+            path,
+            password,
+            kdf,
+            profile,
+            witnesses,
+            (Vec::new(), Vec::new()),
+        )
+    }
+
+    fn create_profile_snapshot(
+        path: &Path,
+        password: &SecretString,
+        kdf: KdfParams,
+        profile: BootstrapProfile,
+        witnesses: Arc<dyn WitnessStore>,
+        snapshot: (Vec<Entry>, Vec<crate::core::folder::Folder>),
+    ) -> Result<Self> {
         let path = path.to_path_buf();
 
         if path.exists() {
@@ -229,8 +249,8 @@ impl Vault {
             salt,
             check,
             key,
-            entries: Vec::new(),
-            folders: Vec::new(),
+            entries: snapshot.0,
+            folders: snapshot.1,
             profile: Some(profile),
             pending_exchange: None,
             _profile_lock: Some(profile_lock),
@@ -514,3 +534,7 @@ mod protection_tests;
 #[cfg(test)]
 #[path = "tests/sharing.rs"]
 mod sharing_tests;
+
+#[cfg(test)]
+#[path = "tests/authority.rs"]
+mod authority_tests;

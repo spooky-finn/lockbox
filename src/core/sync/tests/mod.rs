@@ -23,8 +23,8 @@ use std::collections::BTreeSet;
 mod support;
 use support::*;
 
-mod intents;
 mod authority;
+mod intents;
 mod invitations;
 mod membership;
 mod replay;

@@ -3,18 +3,21 @@
 //! Public methods are implemented by responsibility in `commands` and `replay`.
 //! This facade never owns a provider, filesystem handle, clock, or UI state.
 
-mod commands;
 mod authority;
+mod commands;
 mod history;
 mod invitations;
 mod membership;
 mod parents;
 mod profile;
 mod protocol;
+mod relay;
 mod replay;
 mod state;
 
-pub use protocol::{Change, Control, ControlApproval, ControlTransfer, ControlTransition, RecoveryAnchor};
+pub use protocol::{
+    Change, Control, ControlApproval, ControlTransfer, ControlTransition, RecoveryAnchor,
+};
 pub use state::{ExcludedEdit, PreparedChange, Replay, SpaceDescriptor, SyncState};
 
 /// Stateless entry point for deterministic replay and encrypted command preparation.

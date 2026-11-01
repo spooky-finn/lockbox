@@ -109,6 +109,9 @@ impl Vault {
         let recovering = sync.intent.is_some();
 
         if recovering {
+            if Machine::pending_control_approval(sync).is_some() {
+                return Ok(());
+            }
             Machine::complete_intent(sync, &device)?;
         }
 

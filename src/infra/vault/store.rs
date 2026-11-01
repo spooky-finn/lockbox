@@ -1,7 +1,7 @@
 //! Explicit witness-store injection for CLI hosts, tests and alternate platforms.
 
 use super::{KdfParams, ProviderConfiguration, Result, Unlock, Vault};
-use crate::core::sync::{Error, Hash, Machine, SpaceDescriptor};
+use crate::core::sync::{Error, Hash, Machine, RecoveryAnchor, SpaceDescriptor};
 use crate::infra::{
     profile::BootstrapProfile,
     witness::{self, WitnessStore},
@@ -26,6 +26,16 @@ pub struct DeviceRecovery<'a> {
     pub configuration: SharedProfile,
 }
 
+/// Recover identity authority and current data separately. Both sources remain
+/// unchanged; the recovered controller receives fresh device keys and a new file.
+pub struct ControllerRecovery<'a> {
+    pub authority: &'a Vault,
+    pub content: &'a Vault,
+    pub recovery_password: &'a SecretString,
+    pub anchor: RecoveryAnchor,
+    pub configuration: SharedProfile,
+}
+
 /// Production defaults use the OS installation store. Test hosts inject their
 /// own store and keep the same instance across profile reopening.
 #[derive(Clone)]
@@ -40,6 +50,65 @@ impl Default for ProfileStore {
 }
 
 impl ProfileStore {
+    pub fn recover_controller(
+        &self,
+        path: impl AsRef<Path>,
+        password: &SecretString,
+        kdf: KdfParams,
+        recovery: ControllerRecovery<'_>,
+    ) -> Result<Vault> {
+        recovery.content.ensure_sync_projection()?;
+        let source = recovery
+            .authority
+            .profile
+            .as_ref()
+            .ok_or(Error::UnauthorizedDevice)?;
+        let content = recovery
+            .content
+            .profile
+            .as_ref()
+            .ok_or(Error::UnauthorizedDevice)?;
+        let state = content.sync.as_ref().ok_or(Error::UnauthorizedDevice)?;
+        let configuration = recovery.configuration;
+        let mut profile = source.recover_identity(
+            recovery.recovery_password,
+            kdf,
+            configuration.username,
+            configuration.space_name,
+            configuration.provider,
+        )?;
+        let prepared = Machine::prepare_control_recovery(
+            state,
+            &content.sync_secret(),
+            profile
+                .certificate
+                .clone()
+                .ok_or(Error::UnauthorizedDevice)?,
+            &recovery.anchor,
+        )?;
+        let projection = Machine::replay(state, &content.sync_secret())?.projection;
+        let mut journal = state.clone();
+        journal.outbox.clear();
+        journal.last_exchange = None;
+        journal.required_control = Some(recovery.anchor.control);
+        journal.intent = Some(prepared);
+        journal.outbox = Machine::control_intent_dependencies(&journal)?;
+        profile.space.space_id = journal.space.0;
+        profile.space.namespace = journal.namespace.0;
+        profile.sync = Some(journal);
+        profile.enable_authority();
+        let mut vault = Vault::create_profile_snapshot(
+            path.as_ref(),
+            password,
+            kdf,
+            profile,
+            self.witnesses.clone(),
+            (projection.entries(), projection.folders()),
+        )?;
+        vault.approve_controller_recovery(recovery.recovery_password)?;
+        Ok(vault)
+    }
+
     pub fn new(witnesses: Arc<dyn WitnessStore>) -> Self {
         Self { witnesses }
     }

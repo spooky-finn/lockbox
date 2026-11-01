@@ -115,6 +115,8 @@ pub fn publication(
     // Decode each eligible object once, then order only the dependency edges.
     // Independent objects may have any order; hashes never choose a data winner.
     let mut pending = BTreeMap::new();
+    let closed = crate::core::sync::Machine::relayable_closed_history(state)
+        .map_err(TransportError::Verification)?;
 
     for hash in &state.outbox {
         let bytes = state
@@ -124,7 +126,7 @@ pub fn publication(
         let object = crate::core::sync::decode::<crate::core::sync::Object>(&bytes.0)
             .map_err(TransportError::Verification)?;
 
-        if matches!(object, crate::core::sync::Object::Control(_))
+        if closed.contains(hash)
             || (replay.accepted.contains(hash) && !replay.excluded.contains(hash))
         {
             pending.insert(*hash, (bytes.clone(), object.dependencies()));
