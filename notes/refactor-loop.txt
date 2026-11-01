@@ -8,15 +8,16 @@ No delegation requested. Keep unrelated work outside refactor commits.
 Last full suite: cycle 12; 382 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 15: Borrow saved clipboard fields
-- Borrow username/password/URL through synchronous clipboard write; remove
-  temporary secret copies. Generated TOTP stays in zeroizing owned buffer.
-- Regression passed before refactor: missing/invalid TOTP keeps clipboard and
-  deadline; valid generated code remains correct and clears on request.
-- Verification: copy-filtered three tests, clipboard-filtered eight tests;
-  full formatting and strict all-target Clippy passed in isolated snapshot.
+Cycle 16: Index control-history successors
+- Bucket borrowed controls by predecessor once; remove whole-map scan per epoch.
+- Keep sibling hash order, signature/authority validation, rejection evidence,
+  fork detection and pinned genesis behavior.
+- Regression passed before refactor: valid three-step chain, invalid sibling,
+  unreachable child, disconnected control and extra root.
+- Verification: all 43 protocol tests, full formatting and strict all-target
+  Clippy passed in isolated snapshot. Workspace whitespace checks passed.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-15.lom12r when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-16.yVSST0 when workspace cannot compile.
 
-Next search: protocol history, worker/mailbox state, export serialization.
+Next search: control extraction duplication, worker/mailbox state, exports.
 Inspect current code and tests before choosing; no quota-driven edits.

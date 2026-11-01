@@ -24,22 +24,24 @@ impl<'a> ControlHistory<'a> {
             chain: vec![(state.genesis, genesis)],
             rejected: BTreeMap::new(),
         };
+        let mut successors = BTreeMap::<_, Vec<_>>::new();
+        for (hash, control) in controls {
+            if let Some(previous) = control.body.epoch.previous {
+                successors.entry(previous).or_default().push((*hash, control));
+            }
+        }
 
         let mut seen = BTreeSet::from([state.genesis]);
         loop {
             let (head, previous) = history.tip();
             let mut next = None;
 
-            for (hash, candidate) in controls {
-                if candidate.body.epoch.previous != Some(head) {
-                    continue;
-                }
-
+            for &(hash, candidate) in successors.get(&head).into_iter().flatten() {
                 match validate_control(candidate, Some(previous), state, &history.chain) {
                     Ok(()) if next.is_some() => return Err(Error::ControlFork),
-                    Ok(()) => next = Some((*hash, candidate)),
+                    Ok(()) => next = Some((hash, candidate)),
                     Err(error) => {
-                        history.rejected.insert(*hash, error);
+                        history.rejected.insert(hash, error);
                     }
                 }
             }

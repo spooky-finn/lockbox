@@ -23,6 +23,7 @@ use support::*;
 
 mod authority;
 mod candidates;
+mod history;
 mod intents;
 mod invitations;
 mod membership;
