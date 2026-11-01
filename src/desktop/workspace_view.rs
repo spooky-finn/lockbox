@@ -97,7 +97,7 @@ fn VaultContent() -> Element {
 
             for record in replay.projection.conflicts() {
                 details { class: "notice",
-                    summary { {language.format(Text::ConflictVersions, &[record.entity.id.to_string(), record.versions.len().to_string()])} }
+                    summary { {language.format(Text::ConflictVersions, &[record.entity.id.as_str(), &record.versions.len().to_string()])} }
                     for version in &record.versions {
                         div {
                             p { {language.format(Text::Device, &[version.author.to_string()])} }
@@ -114,12 +114,12 @@ fn VaultContent() -> Element {
                             if revealed.read().contains(&version.revision) {
                                 match &version.value {
                                     Some(crate::sync::protocol::Value::Entry(entry)) => rsx! {
-                                        p { {language.format(Text::Password2, &[entry.password.to_string()])} }
-                                        p { {language.format(Text::Notes, &[entry.notes.to_string()])} }
-                                        p { {language.format(Text::Folder2, &[entry.folder_id.clone().unwrap_or_default().to_string()])} }
-                                        if let Some(totp) = &entry.totp { p { {language.format(Text::TotpDetails, &[totp.secret.to_string(), format!("{:?}", totp.algorithm), totp.digits.to_string(), totp.period.to_string()])} } }
+                                        p { {language.format(Text::Password2, &[entry.password.as_str()])} }
+                                        p { {language.format(Text::Notes, &[entry.notes.as_str()])} }
+                                        p { {language.format(Text::Folder2, &[entry.folder_id.as_deref().unwrap_or_default()])} }
+                                        if let Some(totp) = &entry.totp { p { {language.format(Text::TotpDetails, &[totp.secret.as_str(), &format!("{:?}", totp.algorithm), &totp.digits.to_string(), &totp.period.to_string()])} } }
                                     },
-                                    Some(crate::sync::protocol::Value::Folder(folder)) => rsx! { p { {language.format(Text::Parent, &[folder.parent_id.clone().unwrap_or_default().to_string()])} } },
+                                    Some(crate::sync::protocol::Value::Folder(folder)) => rsx! { p { {language.format(Text::Parent, &[folder.parent_id.as_deref().unwrap_or_default()])} } },
                                     None => rsx! {},
                                 }
                             }
@@ -152,9 +152,9 @@ fn VaultContent() -> Element {
                             if revealed_drafts.read().contains(&edit.hash) {
                                 for mutation in &edit.transaction.mutations {
                                     match &mutation.value {
-                                        Some(crate::sync::protocol::Value::Entry(entry)) => rsx! { p { "{entry.title} · {entry.username} · {entry.url}" } p { {language.format(Text::Password2, &[entry.password.to_string()])} } p { "{entry.notes}" } },
-                                        Some(crate::sync::protocol::Value::Folder(folder)) => rsx! { p { {language.format(Text::Folder3, &[folder.name.to_string()])} } },
-                                        None => rsx! { p { {language.format(Text::Deletion, &[mutation.entity.id.to_string()])} } },
+                                        Some(crate::sync::protocol::Value::Entry(entry)) => rsx! { p { "{entry.title} · {entry.username} · {entry.url}" } p { {language.format(Text::Password2, &[entry.password.as_str()])} } p { "{entry.notes}" } },
+                                        Some(crate::sync::protocol::Value::Folder(folder)) => rsx! { p { {language.format(Text::Folder3, &[folder.name.as_str()])} } },
+                                        None => rsx! { p { {language.format(Text::Deletion, &[mutation.entity.id.as_str()])} } },
                                     }
                                 }
                                 p { {language.text(Text::RebasingReplacesTheCurrentVersionsWithTheSelectedContentsYouWillBeTheAuthorOfTheNewChange)} }
@@ -175,7 +175,7 @@ fn VaultContent() -> Element {
             if let Some(profile) = unlocked.vault.profile_summary() {
                 div { class: "profile-summary",
                     h2 { "{profile.space_name}" }
-                    p { {language.format(Text::User, &[profile.username.to_string()])} }
+                    p { {language.format(Text::User, &[profile.username])} }
                     if profile.sync_enabled {
                         p { class: "notice", {language.text(Text::ChangesAreSavedOnThisDeviceAndSyncedThroughStorjWithEncryption)} }
                     }

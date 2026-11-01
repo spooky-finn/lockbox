@@ -38,7 +38,7 @@ impl Language {
     }
 
     /// Interpolate only the template; inserted values can contain arbitrary braces.
-    pub(crate) fn format(self, key: Text, values: &[String]) -> String {
+    pub(crate) fn format(self, key: Text, values: &[impl AsRef<str>]) -> String {
         interpolate(self.text(key), values)
     }
 
@@ -75,7 +75,7 @@ impl Language {
     }
 }
 
-fn interpolate(template: &str, values: &[String]) -> String {
+fn interpolate(template: &str, values: &[impl AsRef<str>]) -> String {
     let mut output = String::new();
     let mut rest = template;
 
@@ -88,7 +88,7 @@ fn interpolate(template: &str, values: &[String]) -> String {
             break;
         };
         output.push_str(prefix);
-        output.push_str(value);
+        output.push_str(value.as_ref());
         rest = suffix;
     }
     output.push_str(rest);
@@ -166,12 +166,18 @@ mod tests {
 
     #[test]
     fn interpolation_preserves_user_content_and_braces() {
+        let value = "Работа {secret}".to_owned();
+        let expected = "Delete entry ‘Работа {secret}’? This cannot be undone.";
         assert_eq!(
             Language::English.format(
                 Text::DeleteEntryThisCannotBeUndone,
-                &["Работа {secret}".into()]
+                std::slice::from_ref(&value)
             ),
-            "Delete entry ‘Работа {secret}’? This cannot be undone."
+            expected
+        );
+        assert_eq!(
+            Language::English.format(Text::DeleteEntryThisCannotBeUndone, &[value.as_str()]),
+            expected
         );
         assert_eq!(Language::English.minutes_label(0), "never");
         assert_eq!(Language::English.minutes_label(5), "5 min");
