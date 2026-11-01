@@ -292,14 +292,16 @@ impl EpochContext<'_> {
             }
         }
 
-        let mut ordered = included
-            .iter()
-            .map(|hash| {
-                ancestry(&accepted[hash].header.parents, &accepted).map(|past| (past.len(), hash))
-            })
-            .collect::<Result<Vec<_>>>()?;
-        ordered.sort_by_key(|(depth, hash)| (*depth, **hash));
-        let history = if include_record_history {
+        let mut ordered = include_record_history.then(Vec::new);
+        // Ancestry validation is required even when display revisions are omitted.
+        for hash in &included {
+            let depth = ancestry(&accepted[hash].header.parents, &accepted)?.len();
+            if let Some(ordered) = &mut ordered {
+                ordered.push((depth, hash));
+            }
+        }
+        let history = if let Some(mut ordered) = ordered {
+            ordered.sort_by_key(|(depth, hash)| (*depth, **hash));
             materialize_history(
                 control,
                 baseline,

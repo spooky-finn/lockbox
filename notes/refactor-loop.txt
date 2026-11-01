@@ -5,30 +5,29 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 72; 417 library, four integration, two doctests passed.
+Last full suite: cycle 75; 417 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 74: Reuse history actor identifiers
-- materialize_history caches derived actor String by author Hash within immutable
-  epoch roster. Repeated author changes reuse roster lookup/ID formatting; each
-  returned RecordChange still owns its required actor copy.
-- Preserve first roster match, author-ID fallback, revision order, all before/after
-  values and full/state replay behavior. Empty histories allocate no cache nodes.
-- Deferred checkpoint-version index: one fallback per epoch is possible; building
-  entire index may add work for that case. No measured benefit yet, no parser or
-  lookup semantics change forced. Existing linear fallback remains unchanged.
-- Formatting/strict all-target Clippy passed. 57 protocol, five vault history,
-  eight record rendering, two sync integration tests passed. Source matches verified
+Cycle 75: Collect display order only when requested
+- EpochContext selects Option<Vec> for record-history order. All included hashes
+  still run identical fallible ancestry lookup in BTreeSet order; depth/hash pairs
+  are retained and sorted only when full display history is requested.
+- State-only replay avoids unused order Vec and sort. Preserve first error,
+  ancestry budgets, validation, projection/frontier/diagnostics, complete record
+  history order and before/after payloads. Comment protects mandatory validation.
+- Full suite: 417 library, four integration, two doctests passed; two OS probes
+  ignored. Formatting/strict all-target Clippy passed. Source matches verified
   snapshot; whitespace clean. Unrelated edits untouched.
-- Snapshot: /tmp/lockbox-refactor-74.9cgqmz6z.
+- Snapshot: /tmp/lockbox-refactor-75.0hlmrywh.
 
-Next search: EpochContext.replay still collects/sorts history order metadata when
-include_record_history=false. Preserve EVERY fallible ancestry call in included
-Hash iteration order, but collect depth/hash pairs only for display mode and sort
-only when materializing. Possible Option<Vec> selected by bool.then(Vec::new),
-shared ancestry loop with conditional push, then Some branch sort/materialize.
-Avoid skipping ancestry validation/errors. Existing full/state comparison and
-wide-frontier, pending/fault, history-order tests cover parity. Inspect first.
-Later opportunity: closed-epoch frontier result is discarded by outer replay;
-consider private epoch result type before optimizing unused intermediate fields.
+Next search: EpochContext.replay returns public Replay with placeholder membership,
+role=None, ready=true, history_verified=true even when its pending set is nonempty;
+outer Machine loop consumes only history/projection/frontier/accepted/pending/
+rejected/excluded and computes public readiness/role/metadata itself. Consider
+private EpochReplay result containing only those seven actual fields, leaving
+public Replay unchanged. Type boundary removes misleading unused placeholders;
+no behavior change or validation changes needed. Verify actual field consumers.
+Then inspect frontier derivation: outer loop uses it only for ready final epoch,
+so closed-epoch frontier cloning/removal work is discarded. An explicit private
+optional frontier may clarify when it is available; separate concern/commit.
