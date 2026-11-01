@@ -39,9 +39,9 @@ impl Default for Options {
 
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum GeneratorError {
-    #[error("выберите хотя бы один набор символов")]
+    #[error("select at least one character set")]
     NoCharacters,
-    #[error("длина должна быть от 8 до 128 символов")]
+    #[error("length must be between 8 and 128 characters")]
     InvalidLength,
 }
 

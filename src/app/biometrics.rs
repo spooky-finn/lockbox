@@ -63,7 +63,7 @@ impl TouchId {
             let key = vault.export_key();
             thread::spawn(move || {
                 let result = touchid::enable(&*biometrics, &id, &key, unix_now())
-                    .map_err(|error| format!("Не удалось включить Touch ID: {error}"));
+                    .map_err(|error| format!("Could not enable Touch ID: {error}"));
                 let _ = sender.send(result);
             });
             self.pending = Some(receiver);
@@ -79,7 +79,7 @@ impl TouchId {
         let result = match self.pending.as_ref()?.try_recv() {
             Ok(result) => result,
             Err(TryRecvError::Empty) => return None,
-            Err(TryRecvError::Disconnected) => Err("Включение Touch ID прервалось".into()),
+            Err(TryRecvError::Disconnected) => Err("Enabling Touch ID was interrupted".into()),
         };
         self.pending = None;
         Some(result.and_then(|()| {

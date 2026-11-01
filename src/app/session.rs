@@ -39,7 +39,7 @@ impl Screen {
                 biometrics,
                 false,
             );
-            locked.notice = reason.map(|reason| format!("Хранилище заблокировано: {reason}"));
+            locked.notice = reason.map(|reason| format!("Vault locked: {reason}"));
             *self = Self::Locked(Box::new(locked));
         }
     }

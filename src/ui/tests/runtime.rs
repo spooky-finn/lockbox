@@ -51,7 +51,7 @@ fn worker_results_open_the_vault_and_report_failure_or_disconnect() {
         let Screen::Locked(form) = &*screen else {
             panic!("open after disconnect");
         };
-        assert_eq!(form.error.as_deref(), Some("Разблокировка прервалась"));
+        assert_eq!(form.error.as_deref(), Some("Unlock was interrupted"));
         assert!(form.pending.is_none());
     });
 }

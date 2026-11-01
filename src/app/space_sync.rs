@@ -53,14 +53,14 @@ pub(crate) enum Status {
 impl Status {
     pub fn label(self) -> &'static str {
         match self {
-            Self::Saved => "Сохранено на устройстве",
-            Self::Syncing => "Синхронизация…",
-            Self::Synced => "Обмен со Storj завершён",
-            Self::Offline => "Нет связи · данные сохранены на устройстве",
-            Self::Incomplete => "История неполная · ожидаем данные",
-            Self::Conflict => "Есть конфликтующие версии",
-            Self::Removed => "Доступ к пространству удалён",
-            Self::Failed => "Ошибка проверки истории · отправка остановлена",
+            Self::Saved => "Saved on this device",
+            Self::Syncing => "Syncing…",
+            Self::Synced => "Storj sync complete",
+            Self::Offline => "Offline · data saved on this device",
+            Self::Incomplete => "Incomplete history · waiting for data",
+            Self::Conflict => "Conflicting versions",
+            Self::Removed => "Access to the space was removed",
+            Self::Failed => "History verification failed · uploads paused",
         }
     }
 }

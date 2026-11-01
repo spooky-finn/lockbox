@@ -117,7 +117,7 @@ fn english_translates_existing_errors_and_creation_without_translating_user_data
     update(&mut dom, |state| {
         edit_unlocked(state, |u| {
             u.vault.entries[0].title = "Работа".into();
-            u.error = Some("Не удалось сохранить: неверный мастер-пароль".into());
+            u.error = Some("Could not save: incorrect master password".into());
         });
         runtime::set_language(Language::English);
     });

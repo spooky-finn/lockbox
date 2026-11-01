@@ -125,7 +125,7 @@ impl Unlocked {
             return Ok(());
         };
         if draft.entry.title.trim().is_empty() {
-            return Err("Укажите название записи".into());
+            return Err("Enter an entry name".into());
         }
         if let Some(totp) = &draft.entry.totp {
             totp::validate(totp).map_err(|error| format!("TOTP: {error}"))?;
@@ -142,7 +142,7 @@ impl Unlocked {
         }
         if let Err(error) = self.vault.save_changes() {
             self.vault.entries = previous;
-            return Err(format!("Не удалось сохранить: {error}"));
+            return Err(format!("Could not save: {error}"));
         }
         self.draft = None;
         self.search.clear();
@@ -159,7 +159,7 @@ impl Unlocked {
         self.vault.entries.retain(|entry| entry.id != id);
         if let Err(error) = self.vault.save_changes() {
             self.vault.entries = previous;
-            return Err(format!("Не удалось сохранить: {error}"));
+            return Err(format!("Could not save: {error}"));
         }
         self.selected = None;
         self.confirm_delete = false;

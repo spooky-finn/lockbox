@@ -71,7 +71,7 @@ impl Locked {
         let error = path
             .as_ref()
             .filter(|path| !path.exists())
-            .map(|path| format!("Файл не найден: {}", path.display()));
+            .map(|path| format!("File not found: {}", path.display()));
         Self {
             path,
             mode: Mode::Open,
@@ -162,18 +162,18 @@ impl Locked {
         let error = self.cloud.validate().err().map(str::to_owned).or_else(|| {
             if self.password.chars().count() < MIN_PASSWORD_CHARS {
                 Some(format!(
-                    "Мастер-пароль: не менее {MIN_PASSWORD_CHARS} символов"
+                    "Master password: at least {MIN_PASSWORD_CHARS} characters"
                 ))
             } else if *self.password != *self.repeat {
-                Some("Пароли не совпадают".into())
+                Some("Passwords do not match".into())
             } else if self.recovery_password.chars().count() < MIN_PASSWORD_CHARS {
                 Some(format!(
-                    "Пароль восстановления: не менее {MIN_PASSWORD_CHARS} символов"
+                    "Recovery password: at least {MIN_PASSWORD_CHARS} characters"
                 ))
             } else if *self.recovery_password != *self.recovery_repeat {
-                Some("Пароли восстановления не совпадают".into())
+                Some("Recovery passwords do not match".into())
             } else if *self.password == *self.recovery_password {
-                Some("Пароль восстановления должен отличаться от мастер-пароля".into())
+                Some("Recovery password must differ from the master password".into())
             } else {
                 None
             }
@@ -188,7 +188,7 @@ impl Locked {
         }
         let cloud = self.mode == Mode::Create && self.storage_kind == Some(StorageKind::Cloud);
         if self.mode == Mode::Create && self.storage_kind.is_none() {
-            self.error = Some("Выберите тип хранилища".into());
+            self.error = Some("Choose a vault type".into());
             return;
         }
         if cloud && !self.validate_creation() {
@@ -198,11 +198,11 @@ impl Locked {
             return;
         };
         if self.password.is_empty() {
-            self.error = Some("Введите мастер-пароль".into());
+            self.error = Some("Enter master password".into());
             return;
         }
         if self.mode == Mode::Create && *self.password != *self.repeat {
-            self.error = Some("Пароли не совпадают".into());
+            self.error = Some("Passwords do not match".into());
             return;
         }
         // Move the Rust-side password buffer to the worker, which wipes it on drop.
@@ -273,7 +273,7 @@ impl Locked {
                 }
                 Err(TryRecvError::Empty) => {}
                 Err(TryRecvError::Disconnected) => {
-                    self.error = Some("Разблокировка прервалась".into());
+                    self.error = Some("Unlock was interrupted".into());
                     self.pending = None;
                     self.waiting_touch_id = false;
                 }

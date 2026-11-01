@@ -58,7 +58,7 @@ impl Directories {
         let previous = std::mem::replace(&mut vault.folders, folders);
         if let Err(error) = vault.save_changes() {
             vault.folders = previous;
-            return Err(format!("Не удалось сохранить папку: {error}"));
+            return Err(format!("Could not save folder: {error}"));
         }
         self.draft = None;
         self.selected = Some(id);
@@ -101,7 +101,7 @@ impl Directories {
             for (index, folder) in assignments {
                 vault.entries[index].folder_id = folder;
             }
-            return Err(format!("Не удалось удалить папку: {error}"));
+            return Err(format!("Could not delete folder: {error}"));
         }
         self.selected = parent;
         self.confirm_delete = false;

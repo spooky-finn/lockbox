@@ -29,7 +29,7 @@ fn touch_id_is_offered_only_where_it_was_turned_on() {
 #[test]
 fn remembered_file_that_disappeared_is_reported() {
     let locked = Locked::new(Some("/nonexistent/vault.lbx".into()));
-    assert!(locked.error.unwrap().contains("Файл не найден"));
+    assert!(locked.error.unwrap().contains("File not found"));
 }
 
 #[test]

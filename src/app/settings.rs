@@ -19,7 +19,7 @@ impl Settings {
         self.path.as_deref().map_or(Ok(()), |path| {
             self.config
                 .save(path)
-                .map_err(|error| format!("Не удалось сохранить настройки: {error}"))
+                .map_err(|error| format!("Could not save settings: {error}"))
         })
     }
 

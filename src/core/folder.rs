@@ -33,28 +33,28 @@ pub(crate) fn validate(folders: &[Folder], entries: &[Entry]) -> Result<(), &'st
         .map(|folder| (folder.id.as_str(), folder))
         .collect();
     if by_id.len() != folders.len() || folders.iter().any(|folder| folder.id.is_empty()) {
-        return Err("Повторяющийся или пустой идентификатор папки");
+        return Err("Duplicate or empty folder ID");
     }
     let mut names = BTreeSet::new();
     for folder in folders {
         if folder.name.trim().is_empty() || folder.name.chars().count() > MAX_NAME_CHARS {
-            return Err("Название папки должно содержать от 1 до 128 символов");
+            return Err("Folder name must contain 1–128 characters");
         }
         if !names.insert((
             folder.parent_id.as_deref(),
             folder.name.trim().to_lowercase(),
         )) {
-            return Err("Папка с таким названием уже есть в этом расположении");
+            return Err("A folder with this name already exists here");
         }
         let mut current = Some(folder.id.as_str());
         let mut visited = BTreeSet::new();
         while let Some(id) = current {
             if !visited.insert(id) || visited.len() > MAX_DEPTH {
-                return Err("Нельзя вложить папку в себя или создать больше 64 уровней");
+                return Err("A folder cannot contain itself or exceed 64 levels");
             }
             current = by_id
                 .get(id)
-                .ok_or("Родительская папка не найдена")?
+                .ok_or("Parent folder not found")?
                 .parent_id
                 .as_deref();
         }
@@ -65,7 +65,7 @@ pub(crate) fn validate(folders: &[Folder], entries: &[Entry]) -> Result<(), &'st
             .as_deref()
             .is_some_and(|id| !by_id.contains_key(id))
     }) {
-        return Err("Папка записи не найдена");
+        return Err("Entry folder not found");
     }
     Ok(())
 }

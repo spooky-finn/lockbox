@@ -27,11 +27,12 @@ impl Language {
 
     /// Translate domain diagnostics at the presentation boundary, including nested errors.
     pub(crate) fn message(self, message: &str) -> String {
-        if self == Self::Russian {
-            return message.to_owned();
-        }
         for key in CATALOG {
-            let (source, translated) = key.translations();
+            let (ru, en) = key.translations();
+            let (source, translated) = match self {
+                Self::English => (ru, en),
+                Self::Russian => (en, ru),
+            };
             if source == message {
                 return translated.to_owned();
             }
@@ -127,11 +128,15 @@ mod tests {
             "Touch ID: fingerprint not recognized"
         );
         assert_eq!(
+            Language::Russian.message("Could not save: vault file is unavailable: /tmp/Работа.lbx"),
+            "Не удалось сохранить: файл хранилища недоступен: /tmp/Работа.lbx"
+        );
+        assert_eq!(
             Language::English.message("network timeout: 42"),
             "network timeout: 42"
         );
         assert_eq!(
-            Language::Russian.message("неверный мастер-пароль"),
+            Language::Russian.message("incorrect master password"),
             "неверный мастер-пароль"
         );
     }

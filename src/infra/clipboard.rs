@@ -40,7 +40,7 @@ impl Board for SystemBoard {
         let clipboard = self
             .0
             .as_mut()
-            .ok_or_else(|| "буфер обмена недоступен".to_owned())?;
+            .ok_or_else(|| "clipboard is unavailable".to_owned())?;
         #[cfg(target_os = "macos")]
         let result = {
             use arboard::SetExtApple;

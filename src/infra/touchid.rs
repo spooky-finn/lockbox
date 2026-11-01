@@ -13,21 +13,21 @@ use zeroize::Zeroizing;
 /// The master password is required again this long after it was last typed.
 pub const PASSWORD_EVERY_SECS: u64 = 7 * 24 * 60 * 60;
 
-const REASON: &str = "разблокировать lockbox";
+const REASON: &str = "unlock lockbox";
 
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum TouchIdError {
-    #[error("Touch ID недоступен на этом компьютере")]
+    #[error("Touch ID is unavailable on this computer")]
     Unavailable,
     #[error("Touch ID: {0}")]
     Failed(String),
-    #[error("Touch ID для этого хранилища не включён")]
+    #[error("Touch ID is not enabled for this vault")]
     NoKey,
-    #[error("прошло 7 дней с последнего ввода мастер-пароля — введите его")]
+    #[error("7 days have passed since the last master password entry — enter it again")]
     Expired,
-    #[error("набор отпечатков в системе изменился — введите мастер-пароль")]
+    #[error("system fingerprints have changed — enter the master password")]
     FingersChanged,
-    #[error("связка ключей: {0}")]
+    #[error("keychain: {0}")]
     Keychain(String),
 }
 
@@ -172,13 +172,13 @@ impl Biometrics for Unsupported {
         None
     }
     fn authenticate(&self, _reason: &str) -> Result<Vec<u8>, String> {
-        Err("не поддерживается".into())
+        Err("not supported".into())
     }
     fn load(&self, _account: &str) -> Option<Zeroizing<Vec<u8>>> {
         None
     }
     fn store(&self, _account: &str, _data: &[u8]) -> Result<(), String> {
-        Err("не поддерживается".into())
+        Err("not supported".into())
     }
     fn delete(&self, _account: &str) {}
 }
@@ -211,10 +211,10 @@ mod mac {
     fn describe(error: &NSError) -> String {
         // LAError codes: userCancel, systemCancel, appCancel, biometryLockout.
         match error.code() {
-            -2 | -4 | -9 => "отменено".to_owned(),
-            -1 => "палец не распознан".to_owned(),
+            -2 | -4 | -9 => "cancelled".to_owned(),
+            -1 => "fingerprint not recognized".to_owned(),
             -8 => {
-                "Touch ID заблокирован после неудачных попыток — введите мастер-пароль".to_owned()
+                "Touch ID is locked after failed attempts — enter the master password".to_owned()
             }
             _ => error.localizedDescription().to_string(),
         }
@@ -236,7 +236,7 @@ mod mac {
                 } else {
                     Err(unsafe { error.as_ref() }
                         .map(describe)
-                        .unwrap_or_else(|| "неизвестная ошибка".to_owned()))
+                        .unwrap_or_else(|| "unknown error".to_owned()))
                 };
                 let _ = sender.send(result);
             });
@@ -249,8 +249,8 @@ mod mac {
             };
             receiver
                 .recv()
-                .map_err(|_| "Touch ID не ответил".to_owned())??;
-            current_domain_state(&context).ok_or_else(|| "нет данных об отпечатках".to_owned())
+                .map_err(|_| "Touch ID did not respond".to_owned())??;
+            current_domain_state(&context).ok_or_else(|| "no fingerprint data".to_owned())
         }
 
         fn load(&self, account: &str) -> Option<Zeroizing<Vec<u8>>> {

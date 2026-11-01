@@ -12,23 +12,23 @@ pub const PERIOD: std::ops::RangeInclusive<u32> = 1..=300;
 
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum TotpError {
-    #[error("секрет TOTP пустой")]
+    #[error("TOTP secret is empty")]
     EmptySecret,
-    #[error("секрет TOTP не похож на Base32: проверьте, что он скопирован полностью")]
+    #[error("TOTP secret is not valid Base32: check that you copied it completely")]
     InvalidSecret,
-    #[error("ссылка должна начинаться с otpauth://totp/")]
+    #[error("URL must start with otpauth://totp/")]
     NotTotpLink,
-    #[error("коды по счётчику (otpauth://hotp) не поддерживаются")]
+    #[error("counter-based codes (otpauth://hotp) are not supported")]
     HotpUnsupported,
-    #[error("в ссылке нет секрета (параметр secret)")]
+    #[error("URL has no secret parameter")]
     MissingSecret,
-    #[error("неизвестный алгоритм: {0}")]
+    #[error("unknown algorithm: {0}")]
     UnknownAlgorithm(String),
-    #[error("число цифр должно быть от 6 до 8")]
+    #[error("number of digits must be between 6 and 8")]
     InvalidDigits,
-    #[error("период должен быть от 1 до 300 секунд")]
+    #[error("period must be between 1 and 300 seconds")]
     InvalidPeriod,
-    #[error("ссылка otpauth повреждена")]
+    #[error("otpauth URL is invalid")]
     MalformedLink,
 }
 

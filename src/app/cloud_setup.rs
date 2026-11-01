@@ -18,11 +18,11 @@ impl CloudSetup {
         for (name, error) in [
             (
                 &self.username,
-                "Введите имя пользователя (до 256 байт, без управляющих символов)",
+                "Enter a username (up to 256 bytes, without control characters)",
             ),
             (
                 &self.space_name,
-                "Введите имя хранилища (до 256 байт, без управляющих символов)",
+                "Enter a vault name (up to 256 bytes, without control characters)",
             ),
         ] {
             if name.trim().is_empty() || name.len() > 256 || name.chars().any(char::is_control) {
@@ -30,7 +30,7 @@ impl CloudSetup {
             }
         }
         let endpoint = url::Url::parse(&self.base_url)
-            .map_err(|_| "Введите Base URL в формате https://адрес")?;
+            .map_err(|_| "Enter a Base URL in the form https://address")?;
         if self.base_url.trim() != self.base_url
             || self.base_url.chars().any(char::is_whitespace)
             || endpoint.scheme() != "https"
@@ -42,7 +42,7 @@ impl CloudSetup {
             || endpoint.path() != "/"
         {
             return Err(
-                "Base URL должен содержать HTTPS-адрес gateway без логина, пути, query и fragment",
+                "Base URL must be an HTTPS gateway address without credentials, path, query, or fragment",
             );
         }
         let bucket = self.bucket.as_bytes();
@@ -53,16 +53,16 @@ impl CloudSetup {
                 .iter()
                 .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || *b == b'-')
         {
-            return Err("Bucket: 3–63 символа a–z, 0–9 и дефис; начало и конец — буква или цифра");
+            return Err("Bucket: 3–63 characters using a–z, 0–9, and hyphens; start and end with a letter or digit");
         }
         for (key, error) in [
             (
                 &self.access_key,
-                "Введите Access Key без пробелов и управляющих символов",
+                "Enter an Access Key without spaces or control characters",
             ),
             (
                 &self.secret_key,
-                "Введите Secret Key без пробелов и управляющих символов",
+                "Enter a Secret Key without spaces or control characters",
             ),
         ] {
             if key.is_empty() || key.chars().any(|c| c.is_whitespace() || c.is_control()) {

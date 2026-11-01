@@ -59,33 +59,33 @@ const CHECK_INFO: &[u8] = b"lockbox v1 password check";
 
 #[derive(Debug, thiserror::Error)]
 pub enum VaultError {
-    #[error("файл хранилища недоступен: {0}")]
+    #[error("vault file is unavailable: {0}")]
     Io(#[from] io::Error),
-    #[error("не удалось получить случайные данные операционной системы")]
+    #[error("could not obtain random data from the operating system")]
     Random,
-    #[error("профиль уже открыт другим процессом")]
+    #[error("profile is already open in another process")]
     ProfileInUse,
-    #[error("хранилище уже существует: {0}")]
+    #[error("vault already exists: {0}")]
     AlreadyExists(PathBuf),
-    #[error("это не файл lockbox или он обрезан")]
+    #[error("this is not a lockbox file or it is truncated")]
     NotAVault,
-    #[error("версия формата {0} не поддерживается")]
+    #[error("format version {0} is not supported")]
     UnsupportedVersion(u16),
-    #[error("недопустимые параметры Argon2id в заголовке")]
+    #[error("invalid Argon2id parameters in the header")]
     InvalidKdfParams,
-    #[error("неверный мастер-пароль")]
+    #[error("incorrect master password")]
     WrongPassword,
-    #[error("файл хранилища повреждён")]
+    #[error("vault file is corrupted")]
     Corrupted,
-    #[error("сохранённый ключ не подходит к этому файлу — откройте хранилище мастер-паролем")]
+    #[error("saved key does not match this file — open the vault with the master password")]
     KeyMismatch,
-    #[error("неверная структура папок: {0}")]
+    #[error("invalid folder structure: {0}")]
     InvalidFolders(&'static str),
-    #[error("синхронизация: {0}")]
+    #[error("sync: {0}")]
     Sync(#[from] crate::core::sync::Error),
     #[error("Storj: {0}")]
     Transport(#[from] crate::infra::sync::TransportError),
-    #[error("не удалось открыть корневой ключ: проверьте пароль восстановления")]
+    #[error("could not unlock the root key: check the recovery password")]
     RecoveryFailed,
     #[error("received changes await a durable commit; retry synchronization")]
     PendingSyncCommit,

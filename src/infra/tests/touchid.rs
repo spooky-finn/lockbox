@@ -33,7 +33,7 @@ impl Biometrics for FakeBiometrics {
     fn authenticate(&self, _reason: &str) -> Result<Vec<u8>, String> {
         self.prompts.fetch_add(1, Ordering::SeqCst);
         if !self.finger_matches.load(Ordering::SeqCst) {
-            return Err("палец не распознан".into());
+            return Err("fingerprint not recognized".into());
         }
         self.domain_state().ok_or_else(|| "нет Touch ID".into())
     }

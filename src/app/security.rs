@@ -40,12 +40,12 @@ impl Security {
 
     pub fn lock_reason(&self) -> Option<&'static str> {
         if self.screen_watch.take() {
-            Some("экран мака заблокирован")
+            Some("the Mac screen is locked")
         } else if matches!(
             self.auto_lock.check(Instant::now(), SystemTime::now()),
             autolock::State::Lock
         ) {
-            Some("долго не было действий")
+            Some("no activity for a while")
         } else {
             None
         }
@@ -81,6 +81,6 @@ impl Security {
         };
         self.clipboard
             .copy(&text, Instant::now())
-            .map_err(|error| format!("Не удалось скопировать: {error}"))
+            .map_err(|error| format!("Could not copy: {error}"))
     }
 }
