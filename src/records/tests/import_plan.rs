@@ -73,6 +73,88 @@ fn folders_merge_by_name_and_keep_the_hierarchy() {
 }
 
 #[test]
+fn sibling_merging_keeps_parents_first_matches_and_new_folder_aliases() {
+    let existing = [
+        folder("work", "Work", None),
+        folder("home", "Personal", None),
+        folder("work-first", " Серверы ", Some("work")),
+        folder("work-second", "СЕРВЕРЫ", Some("work")),
+        folder("home-servers", "серверы", Some("home")),
+    ];
+    let source_folders = [
+        folder("s-work-servers", "СЕРВЕРЫ", Some("s-work")),
+        folder("s-work", "work", None),
+        folder("s-home-servers", " Серверы ", Some("s-home")),
+        folder("s-home", "PERSONAL", None),
+        folder("s-db", "Databases", Some("s-work")),
+        folder("s-db-alias", " databases ", Some("s-work")),
+    ];
+    let source_entries = [
+        entry("Work server", Some("s-work-servers")),
+        entry("Home server", Some("s-home-servers")),
+        entry("First database", Some("s-db")),
+        entry("Second database", Some("s-db-alias")),
+    ];
+    let before = existing.clone();
+    let imported = plan(&existing, &[], &source_folders, &source_entries);
+
+    assert_eq!(imported.folders.len(), 1);
+    assert_eq!(imported.folders[0].name, "Databases");
+    assert_eq!(imported.folders[0].parent_id.as_deref(), Some("work"));
+    let locations: Vec<_> = imported
+        .entries
+        .iter()
+        .map(|entry| entry.folder_id.as_deref())
+        .collect();
+    assert_eq!(
+        locations,
+        [
+            Some("work-first"),
+            Some("home-servers"),
+            Some(imported.folders[0].id.as_str()),
+            Some(imported.folders[0].id.as_str()),
+        ]
+    );
+    assert_eq!(existing, before);
+}
+
+#[test]
+fn children_beyond_existing_depth_limit_merge_at_root() {
+    let mut existing: Vec<_> = (0..folder::MAX_DEPTH)
+        .map(|index| Folder {
+            id: format!("f{index}"),
+            name: format!("Level {index}"),
+            parent_id: index.checked_sub(1).map(|parent| format!("f{parent}")),
+        })
+        .collect();
+    existing.push(folder("root-extra", "Extra", None));
+    let mut source_folders: Vec<_> = (0..folder::MAX_DEPTH)
+        .rev()
+        .map(|index| Folder {
+            id: format!("s{index}"),
+            name: format!(" level {index} "),
+            parent_id: index.checked_sub(1).map(|parent| format!("s{parent}")),
+        })
+        .collect();
+    source_folders.push(folder(
+        "s-extra",
+        " extra ",
+        Some(&format!("s{}", folder::MAX_DEPTH - 1)),
+    ));
+    let imported = plan(
+        &existing,
+        &[],
+        &source_folders,
+        &[entry("Beyond limit", Some("s-extra"))],
+    );
+
+    assert!(imported.folders.is_empty());
+    assert_eq!(imported.entries.len(), 1);
+    assert_eq!(imported.entries[0].folder_id.as_deref(), Some("root-extra"));
+    folder::validate(&existing, &imported.entries).unwrap();
+}
+
+#[test]
 fn identical_entries_are_skipped_so_a_repeated_import_adds_nothing() {
     let source_folders = vec![folder("s-work", "Work", None)];
     let source = vec![entry("ssh", Some("s-work")), entry("ssh", Some("s-work"))];

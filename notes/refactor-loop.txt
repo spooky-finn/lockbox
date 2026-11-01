@@ -8,16 +8,17 @@ No delegation requested. Keep unrelated work outside refactor commits.
 Last full suite: cycle 6; 375 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 6: Folder hierarchy traversal
-- Borrowed Hierarchy shares ID index and bounded lineage iterator.
-- Breadcrumbs/options, selectors, counters, import depth and subtree deletion
-  reuse lookups; membership checks stop early without building breadcrumb Vec.
-- Preserve first duplicate ID, cycles, missing parents, MAX_DEPTH and stable order.
-- Four new hierarchy contract tests passed before refactor.
-- Verification: full suite above, full formatting, strict all-target Clippy passed
-  in isolated snapshot. Workspace changes passed whitespace checks.
+Cycle 7: Import folder placement
+- Targets owns planned folders' sibling index and depth state during mapping.
+- Normalize each target name once; merge through parent/name lookup.
+- Preserve first existing match, planned aliases, invalid-name fallback, parent
+  readiness, cycle breaking and root placement beyond existing depth limit.
+- Empty source folders skip placement setup.
+- Two new merge/depth contract tests passed before refactor.
+- Verification: 27 import tests, full formatting and strict all-target Clippy
+  passed in isolated snapshot. Workspace changes passed whitespace checks.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-6.BbPcqM when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-7.QDkHR7 when workspace cannot compile.
 
-Next search: import folder placement, record editor state, vault file helpers.
+Next search: record editor state, vault file helpers, UI workflow duplication.
 Inspect current code and tests before choosing; no quota-driven edits.

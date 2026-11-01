@@ -75,16 +75,13 @@ fn map_folders<'a>(
     source: &'a [Folder],
     created: &mut Vec<Folder>,
 ) -> BTreeMap<&'a str, Option<String>> {
-    let known: BTreeMap<&str, &Folder> = source.iter().map(|f| (f.id.as_str(), f)).collect();
-    let mut mapping: BTreeMap<&str, Option<String>> = BTreeMap::new();
-    let mut depth: BTreeMap<Option<String>, usize> = BTreeMap::from([(None, 0)]);
-
-    let hierarchy = folder::Hierarchy::new(folders);
-    for folder in folders {
-        let path = hierarchy.ancestors(&folder.id);
-        depth.insert(Some(folder.id.clone()), path.len());
+    if source.is_empty() {
+        return BTreeMap::new();
     }
 
+    let known: BTreeMap<&str, &Folder> = source.iter().map(|f| (f.id.as_str(), f)).collect();
+    let mut mapping: BTreeMap<&str, Option<String>> = BTreeMap::new();
+    let mut targets = Targets::new(folders, created);
     let mut pending: Vec<&Folder> = source.iter().collect();
 
     while !pending.is_empty() {
@@ -103,48 +100,72 @@ fn map_folders<'a>(
                 .and_then(|parent| mapping.get(parent).cloned().flatten()),
             None => None,
         };
-        let target = place(folders, created, &mut depth, &folder.name, parent);
+        let target = targets.place(&folder.name, parent);
         mapping.insert(folder.id.as_str(), target);
     }
 
     mapping
 }
 
-fn place(
-    folders: &[Folder],
-    created: &mut Vec<Folder>,
-    depth: &mut BTreeMap<Option<String>, usize>,
-    name: &str,
-    parent: Option<String>,
-) -> Option<String> {
-    let name = name.trim();
+/// Existing and planned siblings share one normalized-name index.
+struct Targets<'a> {
+    created: &'a mut Vec<Folder>,
+    depth: BTreeMap<Option<String>, usize>,
+    by_name: BTreeMap<(Option<String>, String), String>,
+}
 
-    if name.is_empty() || name.chars().count() > folder::MAX_NAME_CHARS {
-        return parent;
+impl<'a> Targets<'a> {
+    fn new(folders: &[Folder], created: &'a mut Vec<Folder>) -> Self {
+        let mut depth = BTreeMap::from([(None, 0)]);
+        let hierarchy = folder::Hierarchy::new(folders);
+        for folder in folders {
+            depth.insert(
+                Some(folder.id.clone()),
+                hierarchy.ancestors(&folder.id).len(),
+            );
+        }
+
+        let mut by_name = BTreeMap::new();
+        for folder in folders.iter().chain(created.iter()) {
+            by_name
+                .entry((folder.parent_id.clone(), folder.name.trim().to_lowercase()))
+                .or_insert_with(|| folder.id.clone());
+        }
+
+        Self {
+            created,
+            depth,
+            by_name,
+        }
     }
 
-    let parent_depth = depth.get(&parent).copied().unwrap_or(0);
-    let parent = if parent_depth >= folder::MAX_DEPTH {
-        None
-    } else {
-        parent
-    };
-    let key = name.to_lowercase();
+    fn place(&mut self, name: &str, parent: Option<String>) -> Option<String> {
+        let name = name.trim();
 
-    if let Some(existing) = folders
-        .iter()
-        .chain(created.iter())
-        .find(|f| f.parent_id == parent && f.name.trim().to_lowercase() == key)
-    {
-        return Some(existing.id.clone());
+        if name.is_empty() || name.chars().count() > folder::MAX_NAME_CHARS {
+            return parent;
+        }
+
+        let parent_depth = self.depth.get(&parent).copied().unwrap_or(0);
+        let parent = if parent_depth >= folder::MAX_DEPTH {
+            None
+        } else {
+            parent
+        };
+        let key = (parent.clone(), name.to_lowercase());
+
+        if let Some(id) = self.by_name.get(&key) {
+            return Some(id.clone());
+        }
+
+        let folder = Folder::new(name.to_owned(), parent.clone());
+        let id = folder.id.clone();
+        let level = self.depth.get(&parent).copied().unwrap_or(0) + 1;
+        self.depth.insert(Some(id.clone()), level);
+        self.by_name.insert(key, id.clone());
+        self.created.push(folder);
+        Some(id)
     }
-
-    let folder = Folder::new(name.to_owned(), parent.clone());
-    let id = folder.id.clone();
-    let level = depth.get(&parent).copied().unwrap_or(0) + 1;
-    depth.insert(Some(id.clone()), level);
-    created.push(folder);
-    Some(id)
 }
 
 /// Compare source content after folder mapping and TOTP normalization; IDs are ignored.
