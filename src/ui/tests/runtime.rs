@@ -210,3 +210,28 @@ fn attachment_dialog_results_recheck_selection_and_vault_before_io() {
         assert!(matches!(&*state.peek(), Screen::Locked(_)));
     });
 }
+
+#[test]
+fn record_fields_copy_actual_values_and_report_success() {
+    use crate::app::security::CopyField;
+    use crate::infra::clipboard::{Guard, tests::FakeBoard};
+    use crate::ui::context::SecurityHandle;
+
+    let mut dom = mounted();
+    update(&mut dom, |state| {
+        let board = FakeBoard::default();
+        consume_context::<SecurityHandle>().borrow_mut().clipboard =
+            Guard::new(Box::new(board.clone()));
+        for (field, expected) in [
+            (CopyField::Username, "alice"),
+            (CopyField::Password, "private-test-password"),
+            (CopyField::Url, "https://gitlab.com"),
+        ] {
+            assert!(runtime::copy(field));
+            assert_eq!(board.0.borrow().as_deref(), Some(expected));
+        }
+        edit_unlocked(state, |u| u.selected = None);
+        assert!(!runtime::copy(CopyField::Password));
+    });
+    assert!(!dioxus_ssr::render(&dom).contains("private-test-password"));
+}

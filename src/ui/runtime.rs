@@ -308,16 +308,19 @@ pub(super) fn set_language(language: crate::core::language::Language) {
     }
 }
 
-pub(super) fn copy(field: CopyField) {
+pub(super) fn copy(field: CopyField) -> bool {
     let mut state = consume_context::<Session>();
     let native = consume_context::<SecurityHandle>();
 
+    let mut copied = false;
     if let Screen::Unlocked(workspace) = &mut *state.write()
         && let Some(entry) = workspace.selected_entry()
     {
         workspace.error = native.borrow_mut().copy(entry, field).err();
+        copied = workspace.error.is_none();
     }
     publish_status();
+    copied
 }
 
 pub(super) fn add_attachment() {

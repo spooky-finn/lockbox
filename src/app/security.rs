@@ -22,10 +22,11 @@ pub(crate) struct Status {
     pub clipboard_seconds: Option<u64>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub(crate) enum CopyField {
     Username,
     Password,
+    Url,
     Totp,
 }
 
@@ -72,6 +73,7 @@ impl Security {
         let text = match field {
             CopyField::Username => Zeroizing::new(entry.username.clone()),
             CopyField::Password => Zeroizing::new(entry.password.clone()),
+            CopyField::Url => Zeroizing::new(entry.url.clone()),
             CopyField::Totp => match &entry.totp {
                 Some(settings) => Zeroizing::new(
                     totp::code(settings, unix_now()).map_err(|error| error.to_string())?,
