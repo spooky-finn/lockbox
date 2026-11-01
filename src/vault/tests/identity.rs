@@ -182,3 +182,29 @@ fn recovering_identity_changes_password_and_keeps_the_private_key() {
         identity.signing_key().to_bytes()
     );
 }
+
+#[test]
+fn adopted_identity_accepts_its_original_words_without_changing_root() {
+    let directory = tempfile::tempdir().unwrap();
+    let password = SecretString::from("master password".to_owned());
+    let phrase = RecoveryPhrase::generate().unwrap();
+    let store = ProfileStore::new(Arc::new(MemoryWitness::default()));
+    let profile = store
+        .create_shared_with_phrase(
+            directory.path().join("original.lbx"),
+            &password,
+            kdf(),
+            configuration("Original"),
+            &phrase,
+        )
+        .unwrap();
+    let identity = Identity::from_vault(&profile, &password).unwrap();
+    let path = directory.path().join("identity.key");
+    identity.save_new(&path, &password, kdf()).unwrap();
+    let recovered = Identity::recover(&path, &phrase, &password).unwrap();
+    assert_eq!(
+        recovered.signing_key().to_bytes(),
+        identity.signing_key().to_bytes()
+    );
+    assert!(recovered.phrase().unwrap().is_some());
+}

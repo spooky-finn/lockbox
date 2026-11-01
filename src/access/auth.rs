@@ -24,6 +24,10 @@ fn secret_buffer() -> Zeroizing<String> {
     Zeroizing::new(String::with_capacity(SECRET_CAPACITY))
 }
 
+fn identity_file_present(path: &std::path::Path) -> bool {
+    !matches!(std::fs::symlink_metadata(path), Err(error) if error.kind() == std::io::ErrorKind::NotFound)
+}
+
 /// A vault unlocked on a worker thread.
 pub(crate) struct Opened {
     pub(crate) vault: Vault,
@@ -146,9 +150,10 @@ impl Locked {
     ) -> Self {
         self.identity_path = path;
         if self.mode == Mode::Create && self.identity_path.is_some() {
-            let saved = self.identity_path.as_ref().is_some_and(|path| {
-                !matches!(std::fs::symlink_metadata(path), Err(error) if error.kind() == std::io::ErrorKind::NotFound)
-            });
+            let saved = self
+                .identity_path
+                .as_deref()
+                .is_some_and(identity_file_present);
             self.identity_source = (!saved).then_some(source).flatten();
             if saved || self.identity_source.is_some() {
                 self.recovery_words.zeroize();
@@ -163,8 +168,9 @@ impl Locked {
             && (self.identity_source.is_some()
                 || self
                     .identity_path
-                    .as_ref()
-                    .is_some_and(|path| path.exists()))
+                    .as_deref()
+                    .is_some_and(identity_file_present)
+                    && (self.recovery_words.is_empty() || self.recovering))
     }
 
     /// Switching between create and join must not replace the selected identity.
@@ -184,8 +190,8 @@ impl Locked {
             self.creation_step = if self.identity_source.is_some()
                 || self
                     .identity_path
-                    .as_ref()
-                    .is_some_and(|path| path.exists())
+                    .as_deref()
+                    .is_some_and(identity_file_present)
             {
                 CreationStep::Identity
             } else {
@@ -323,8 +329,8 @@ impl Locked {
             || self.identity_source.is_some()
             || self
                 .identity_path
-                .as_ref()
-                .is_some_and(|path| path.exists())
+                .as_deref()
+                .is_some_and(identity_file_present)
         {
             return false;
         }
@@ -422,8 +428,10 @@ impl Locked {
             return;
         }
         let identity = self.identity.clone();
-        let phrase = if self.mode == Mode::Create && identity.is_some() {
-            match identity.as_ref().unwrap().phrase() {
+        let phrase = if self.mode == Mode::Create
+            && let Some(identity) = identity.as_ref()
+        {
+            match identity.phrase() {
                 Ok(phrase) => phrase,
                 Err(error) => {
                     self.error = Some(error.to_string());
@@ -450,7 +458,6 @@ impl Locked {
         self.error = None;
         self.waiting_touch_id = false;
         let mode = self.mode;
-        let identity_path = self.identity_path.clone();
         let recovering = self.recovering;
         let cloud_creation = cloud.then(|| {
             (
@@ -504,20 +511,7 @@ impl Locked {
                     }
                 }
             }
-            .map(|vault| {
-                // Adopt an existing space's root on password unlock, before any
-                // future space is created. Never rewrite an existing identity.
-                if mode == Mode::Open && !recovering && let Some(identity_path) = identity_path
-                    && !identity_path.exists() && vault.profile_summary().is_some() {
-                    match Identity::from_vault(&vault, &password).and_then(|identity| {
-                        identity.save_new(&identity_path, &password, KdfParams::default())
-                    }) {
-                        Ok(()) => {}
-                        Err(error) => recovery_notice = Some(format!("Could not save identity: {error}")),
-                    }
-                }
-                Opened { vault, with_password, recovery_notice }
-            })
+            .map(|vault| Opened { vault, with_password, recovery_notice })
             .map_err(|error| error.to_string());
             let _ = sender.send(result);
         });
@@ -567,7 +561,7 @@ impl Locked {
         let (sender, receiver) = mpsc::channel();
         thread::spawn(move || {
             let result = (|| {
-                if path.exists() {
+                if identity_file_present(&path) {
                     if recovering {
                         let phrase = proposed
                             .as_ref()

@@ -17,7 +17,7 @@ use std::{fs, io, path::Path};
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 const MAGIC: &[u8; 6] = b"LBID\x01\x00";
-const HEADER_LEN: usize = 6 + 12 + 16 + 24 + 1;
+const HEADER_LEN: usize = 6 + 12 + 16 + 24;
 
 #[derive(Clone, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 pub(crate) struct Identity {
@@ -72,7 +72,8 @@ impl Identity {
         password: &SecretString,
     ) -> Result<Self> {
         let _lock = file::lock_profile(path)?;
-        let identity = Self::open_using(path, None, Some(phrase))?;
+        let mut identity = Self::open_using(path, None, Some(phrase))?;
+        identity.words = Some(phrase.words().expose_secret().to_owned());
         let (header, ciphertext) = identity.encrypt(password, KdfParams::default())?;
         file::replace(path, &header, &ciphertext)?;
         file::sync_dir(path)?;
@@ -95,32 +96,24 @@ impl Identity {
             lanes: number(14),
         }
         .validate()?;
-        let salt = data[18..34].try_into().unwrap();
-        let (header_len, key) = match data[HEADER_LEN - 1] {
-            0 => (
-                HEADER_LEN,
-                identity_key(password.ok_or(VaultError::RecoveryUnavailable)?, &salt, kdf)?,
-            ),
-            1 => {
-                let header_len = HEADER_LEN + super::recovery::SLOTS_LEN;
-                let slots = data
-                    .get(HEADER_LEN..header_len)
-                    .ok_or(VaultError::NotAVault)?;
-                let slots = RecoverySlots {
-                    password: slots[..super::recovery::SLOT_LEN].try_into().unwrap(),
-                    phrase: slots[super::recovery::SLOT_LEN..].try_into().unwrap(),
-                };
-                let key = if let Some(phrase) = phrase {
-                    slots.phrase_key(phrase, &salt)?
-                } else {
-                    slots.password_key(
-                        &identity_key(password.ok_or(VaultError::WrongPassword)?, &salt, kdf)?,
-                        &salt,
-                    )?
-                };
-                (header_len, key)
-            }
-            _ => return Err(VaultError::Corrupted),
+        let salt: [u8; 16] = data[18..34].try_into().unwrap();
+        let header_len = HEADER_LEN + super::recovery::SLOTS_LEN;
+        let slots = data
+            .get(HEADER_LEN..header_len)
+            .ok_or(VaultError::NotAVault)?;
+        let slots = RecoverySlots {
+            password: slots[..super::recovery::SLOT_LEN].try_into().unwrap(),
+            phrase: slots[super::recovery::SLOT_LEN..].try_into().unwrap(),
+        };
+        let key = if let Some(phrase) = phrase {
+            let root = Zeroizing::new(phrase.signing_key().to_bytes());
+            slots.recovery_key(&root_recovery_key(&root, &salt), &salt)?
+        } else {
+            let password_key =
+                identity_key(password.ok_or(VaultError::WrongPassword)?, &salt, kdf)?;
+            slots
+                .password_key(&password_key, &salt)
+                .map_err(|_| VaultError::WrongPassword)?
         };
         let plaintext = Zeroizing::new(
             format::cipher(&key)
@@ -135,10 +128,14 @@ impl Identity {
         );
         let identity: Self =
             serde_json::from_slice(&plaintext).map_err(|_| VaultError::Corrupted)?;
-        if identity
-            .phrase()?
-            .is_some_and(|phrase| phrase.signing_key().to_bytes() != identity.root)
-        {
+        if phrase.is_some_and(|phrase| {
+            phrase.signing_key().verifying_key() != identity.signing_key().verifying_key()
+        }) {
+            return Err(VaultError::WrongRecoveryPhrase);
+        }
+        if identity.phrase()?.is_some_and(|phrase| {
+            phrase.signing_key().verifying_key() != identity.signing_key().verifying_key()
+        }) {
             return Err(VaultError::Corrupted);
         }
         Ok(identity)
@@ -193,17 +190,17 @@ impl Identity {
         getrandom::fill(&mut nonce).map_err(|_| VaultError::Random)?;
         header.extend_from_slice(&salt);
         header.extend_from_slice(&nonce);
-        let mut key = identity_key(password, &salt, kdf)?;
-        let phrase = self.phrase()?;
-        header.push(u8::from(phrase.is_some()));
-        if let Some(phrase) = phrase {
-            let mut data_key = Zeroizing::new([0; 32]);
-            getrandom::fill(data_key.as_mut()).map_err(|_| VaultError::Random)?;
-            let slots = RecoverySlots::create(&data_key, &key, &phrase, &salt)?;
-            header.extend_from_slice(&slots.password);
-            header.extend_from_slice(&slots.phrase);
-            key = data_key;
-        }
+        let password_key = identity_key(password, &salt, kdf)?;
+        let mut key = Zeroizing::new([0; 32]);
+        getrandom::fill(key.as_mut()).map_err(|_| VaultError::Random)?;
+        let slots = RecoverySlots::create_with_recovery_key(
+            &key,
+            &password_key,
+            &root_recovery_key(&self.root, &salt),
+            &salt,
+        )?;
+        header.extend_from_slice(&slots.password);
+        header.extend_from_slice(&slots.phrase);
         let plaintext =
             Zeroizing::new(serde_json::to_vec(self).expect("identity always serializes"));
         let ciphertext = format::cipher(&key)
@@ -230,6 +227,14 @@ fn identity_key(
         .expand(b"lockbox.identity.v1\0", key.as_mut())
         .expect("fixed HKDF output size");
     Ok(key)
+}
+
+fn root_recovery_key(root: &[u8; 32], salt: &[u8]) -> Zeroizing<[u8; 32]> {
+    let mut key = Zeroizing::new([0; 32]);
+    Hkdf::<Sha256>::new(Some(salt), root)
+        .expand(b"lockbox.identity-recovery.v1\0", key.as_mut())
+        .expect("fixed HKDF output size");
+    key
 }
 
 #[cfg(test)]

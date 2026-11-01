@@ -299,3 +299,68 @@ fn forgot_password_shows_words_and_new_password_confirmation() {
     assert!(html.contains("Forgot master password?"));
     assert!(!html.contains("id=\"recovery-words\""));
 }
+
+#[test]
+fn saved_identity_requires_unlock_and_never_offers_key_generation() {
+    use crate::{
+        access::mnemonic::RecoveryPhrase,
+        desktop::{context::Session, session::Screen},
+        settings::state::Settings,
+        vault::{KdfParams, identity::Identity},
+    };
+    use dioxus::prelude::*;
+    use secrecy::SecretString;
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("identity.key");
+    let identity = Identity::from_phrase(&RecoveryPhrase::generate().unwrap());
+    identity
+        .save_new(
+            &path,
+            &SecretString::from("identity password".to_owned()),
+            KdfParams {
+                memory_kib: 8192,
+                passes: 1,
+                lanes: 1,
+            },
+        )
+        .unwrap();
+    let mut dom = mounted();
+    update(&mut dom, |_| {
+        runtime::set_language(crate::settings::language::Language::English);
+        consume_context::<Signal<Settings>>().write().path =
+            Some(directory.path().join("config.json"));
+        runtime::begin_join();
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("Unlock your identity"));
+    assert!(!html.contains("Set up your encryption key"));
+    assert!(!html.contains("Show recovery words"));
+    assert!(!html.contains("I already have 12 words"));
+    assert!(!html.contains("id=\"repeat-password\""));
+    assert!(!html.contains("id=\"cloud-secret\""));
+    update(&mut dom, |mut state| {
+        let mut screen = state.write();
+        let Screen::Locked(form) = &mut *screen else {
+            panic!("unlocked")
+        };
+        assert!(form.recovery_words.is_empty());
+        form.identity = Some(identity.clone());
+        form.creation_step = crate::access::auth::CreationStep::Sync;
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("Using your existing private identity key"));
+    assert!(!html.contains("Back to encryption key"));
+    update(&mut dom, |_| runtime::begin_create());
+    dom.in_scope(ScopeId::APP, || {
+        let state = consume_context::<Session>();
+        let screen = state.peek();
+        let Screen::Locked(form) = &*screen else {
+            panic!("unlocked")
+        };
+        assert_eq!(
+            form.identity.as_ref().unwrap().signing_key().to_bytes(),
+            identity.signing_key().to_bytes()
+        );
+    });
+    assert!(dioxus_ssr::render(&dom).contains("storage-choices"));
+}

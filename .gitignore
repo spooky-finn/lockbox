@@ -3,4 +3,9 @@
 *.lbx
 *.lbx.bak
 *.lbx.tmp
+# Installation identity and encrypted recovery sidecars stay local.
+identity.key
+identity.key.bak
+identity.key.tmp
+identity.key.lock
 .DS_Store

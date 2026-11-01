@@ -27,9 +27,18 @@ impl RecoverySlots {
         phrase: &RecoveryPhrase,
         salt: &[u8],
     ) -> Result<Self> {
+        Self::create_with_recovery_key(key, password_key, &phrase.wrapping_key(salt), salt)
+    }
+
+    pub(super) fn create_with_recovery_key(
+        key: &Key,
+        password_key: &Key,
+        recovery_key: &Key,
+        salt: &[u8],
+    ) -> Result<Self> {
         Ok(Self {
             password: seal(key, password_key, salt, b"password")?,
-            phrase: seal(key, &phrase.wrapping_key(salt), salt, b"phrase")?,
+            phrase: seal(key, recovery_key, salt, b"phrase")?,
         })
     }
 
@@ -42,8 +51,11 @@ impl RecoverySlots {
         phrase: &RecoveryPhrase,
         salt: &[u8],
     ) -> Result<Zeroizing<Key>> {
-        open(&self.phrase, &phrase.wrapping_key(salt), salt, b"phrase")
-            .ok_or(VaultError::WrongRecoveryPhrase)
+        self.recovery_key(&phrase.wrapping_key(salt), salt)
+    }
+
+    pub(super) fn recovery_key(&self, key: &Key, salt: &[u8]) -> Result<Zeroizing<Key>> {
+        open(&self.phrase, key, salt, b"phrase").ok_or(VaultError::WrongRecoveryPhrase)
     }
 
     pub(super) fn reset_password(

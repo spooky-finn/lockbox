@@ -1,0 +1,6 @@
+One private identity key, all spaces.
+Identity lives apart from space connection. Create/Join reuse saved root.
+Save encrypted identity before space choice. Restart, disconnect, forget path keep key.
+Existing profile: adopt root; never rewrite profile keys. Saved identity cannot be replaced.
+Recovery resets identity password; root stays. Device/space secrets stay independently random.
+Checks: full tests, identity regressions, fmt, clippy pass.

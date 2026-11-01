@@ -461,3 +461,112 @@ fn joining_adopts_the_existing_profile_root_without_creating_another() {
     );
     assert_eq!(std::fs::read(&source).unwrap(), before);
 }
+
+#[test]
+fn identity_recovery_worker_keeps_the_saved_root() {
+    use crate::{
+        access::mnemonic::RecoveryPhrase,
+        vault::{KdfParams, identity::Identity},
+    };
+    use secrecy::{ExposeSecret, SecretString};
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("identity.key");
+    let phrase = RecoveryPhrase::generate().unwrap();
+    let identity = Identity::from_phrase(&phrase);
+    identity
+        .save_new(
+            &path,
+            &SecretString::from("old password".to_owned()),
+            KdfParams {
+                memory_kib: 8192,
+                passes: 1,
+                lanes: 1,
+            },
+        )
+        .unwrap();
+    let mut form = Locked::begin_join().with_identity_path(Some(path.clone()), None);
+    form.toggle_recovery();
+    form.recovery_words.push_str(phrase.words().expose_secret());
+    form.password.push_str("replacement identity password");
+    form.repeat.push_str("replacement identity password");
+    form.submit();
+    wait_for_identity(&mut form);
+    assert!(form.error.is_none(), "{:?}", form.error);
+    assert!(form.creation_step == CreationStep::Sync);
+    assert!(!form.recovering);
+    assert_eq!(
+        form.identity.as_ref().unwrap().signing_key().to_bytes(),
+        identity.signing_key().to_bytes()
+    );
+    assert_eq!(
+        Identity::open(
+            &path,
+            &SecretString::from("replacement identity password".to_owned())
+        )
+        .unwrap()
+        .signing_key()
+        .to_bytes(),
+        identity.signing_key().to_bytes()
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn unavailable_saved_identity_never_falls_back_to_generating_a_key() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("identity.key");
+    std::os::unix::fs::symlink(directory.path().join("unavailable.key"), &path).unwrap();
+    let mut form = Locked::begin_create().with_identity_path(Some(path), None);
+    assert!(form.unlocking_identity());
+    assert!(form.recovery_words.is_empty());
+    assert!(!form.generate_recovery_words());
+}
+
+#[test]
+fn concurrent_identity_setup_cannot_silently_switch_the_confirmed_key() {
+    use crate::{
+        access::mnemonic::RecoveryPhrase,
+        vault::{KdfParams, identity::Identity},
+    };
+    use secrecy::SecretString;
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("identity.key");
+    let mut form = Locked::begin_create().with_identity_path(Some(path.clone()), None);
+    form.words_saved = true;
+    form.continue_key_setup();
+    let saved = Identity::from_phrase(&RecoveryPhrase::generate().unwrap());
+    saved
+        .save_new(
+            &path,
+            &SecretString::from("identity master password".to_owned()),
+            KdfParams {
+                memory_kib: 8192,
+                passes: 1,
+                lanes: 1,
+            },
+        )
+        .unwrap();
+    assert!(!form.unlocking_identity());
+    form.password.push_str("identity master password");
+    form.repeat.push_str("identity master password");
+    form.submit();
+    wait_for_identity(&mut form);
+    assert!(form.identity.is_none());
+    assert!(form.creation_step == CreationStep::Identity);
+    assert!(
+        form.error
+            .as_ref()
+            .unwrap()
+            .contains("different private identity key")
+    );
+    assert_eq!(
+        Identity::open(
+            &path,
+            &SecretString::from("identity master password".to_owned())
+        )
+        .unwrap()
+        .signing_key()
+        .to_bytes(),
+        saved.signing_key().to_bytes()
+    );
+}
