@@ -180,14 +180,6 @@ impl Unlocked {
     }
 }
 
-pub(crate) fn matches(entry: &Entry, query: &str) -> bool {
-    let query = query.trim().to_lowercase();
-    query.is_empty()
-        || [&entry.title, &entry.username, &entry.url]
-            .iter()
-            .any(|field| field.to_lowercase().contains(&query))
-}
-
 #[cfg(test)]
 #[path = "tests/workspace.rs"]
 mod tests;

@@ -1,7 +1,6 @@
 //! A filtered hierarchy for presentation. Nodes borrow titles, never copy secrets.
 
 use crate::{
-    desktop::workspace::matches,
     records::{
         entry::Entry,
         folder::{Folder, MAX_DEPTH},
@@ -52,11 +51,18 @@ pub(crate) fn project<'a>(vault: &'a Vault, query: &str) -> Vec<Node<'a>> {
     }
 
     for entry in vault.entries() {
-        if !entries.contains(entry.id.as_str()) && matches(entry, &query) {
+        if !entries.contains(entry.id.as_str()) && entry_matches(entry, &query) {
             nodes.push(Node::Record(entry));
         }
     }
     nodes
+}
+
+fn entry_matches(entry: &Entry, query: &str) -> bool {
+    query.is_empty()
+        || [&entry.title, &entry.username, &entry.url]
+            .iter()
+            .any(|field| field.to_lowercase().contains(query))
 }
 
 struct Hierarchy<'a> {
@@ -118,7 +124,7 @@ impl<'a> Hierarchy<'a> {
                 .into_iter()
                 .flatten()
                 .copied()
-                .filter(|entry| inherited || matches(entry, query))
+                .filter(|entry| inherited || entry_matches(entry, query))
                 .map(Node::Record),
         );
         nodes

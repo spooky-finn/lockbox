@@ -234,3 +234,51 @@ fn normalized_sort_ties_keep_input_order_for_siblings_and_folder_options() {
         expected
     );
 }
+
+#[test]
+fn search_normalizes_unicode_queries_without_matching_secret_fields() {
+    use crate::records::entry::{Entry, Totp, TotpAlgorithm};
+    let dir = tempfile::tempdir().unwrap();
+    let mut workspace = unlocked(&dir);
+    let mut entry = Entry::new();
+    entry.title = "İstanbul".into();
+    entry.username = "Пользователь".into();
+    entry.url = "https://example.org/login".into();
+    entry.password = "password-only-marker".into();
+    entry.notes = "notes-only-marker".into();
+    entry.totp = Some(Totp {
+        secret: "JBSWY3DPEHPK3PXP".into(),
+        algorithm: TotpAlgorithm::Sha1,
+        digits: 6,
+        period: 30,
+    });
+    entry
+        .add_attachment(
+            "attachment-only-marker.bin".into(),
+            b"file-only-marker".to_vec(),
+        )
+        .unwrap();
+    workspace.vault.test_entries_mut().push(entry);
+
+    for query in [
+        "\u{2003}İSTANBUL\u{2003}",
+        "\tПОЛЬЗОВАТЕЛЬ\n",
+        " EXAMPLE.ORG ",
+        " \t\u{2003}",
+    ] {
+        assert_eq!(
+            outline(&project(&workspace.vault, query)),
+            ["0:entry:İstanbul"],
+            "{query:?}"
+        );
+    }
+    for query in [
+        "password-only-marker",
+        "notes-only-marker",
+        "JBSWY3DPEHPK3PXP",
+        "attachment-only-marker",
+        "file-only-marker",
+    ] {
+        assert!(project(&workspace.vault, query).is_empty(), "{query}");
+    }
+}

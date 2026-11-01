@@ -8,16 +8,16 @@ No delegation requested. Keep unrelated work outside refactor commits.
 Last full suite: cycle 27; 395 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 29: Cache normalized sort keys
-- Use cached lowercase keys for folder siblings, entry siblings and selector
-  paths. Avoid allocating normalized strings for each sort comparison.
-- Keep stable input order for equal keys; cheap scalar-key sorts unchanged.
-- Regression passed before refactor: case/Cyrillic/Unicode expansion ties keep
-  order across tree and folder options. All 75 record tests passed afterward.
-- Formatting and strict all-target Clippy passed. Source byte-matches verified
-  snapshot; workspace whitespace checks passed.
+Cycle 30: Normalize tree query once
+- Move entry matcher from desktop workspace into tree module, its only caller.
+  Reuse query normalized by project; remove per-entry query trim/lowercase copy.
+- Preserve title/username/URL matching, inherited folders and orphan fallback.
+- Regression passed before refactor: Unicode whitespace/case/dotted-I queries;
+  passwords, notes, TOTP, attachment names/data remain outside search fields.
+- All 76 record and 45 desktop tests passed. Formatting and strict all-target
+  Clippy passed. Source byte-matches snapshot; whitespace checks passed.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-29.U74KhD when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-30.DNbPaJ when workspace cannot compile.
 
-Next search: search normalization, excluded-edit replay, settings updates.
+Next search: excluded-edit replay, settings updates, identity formatting.
 Inspect current code and tests before choosing; no quota-driven edits.
