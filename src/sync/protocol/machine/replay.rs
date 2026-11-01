@@ -100,12 +100,12 @@ impl Machine {
             history_verified: true,
         };
 
-        let mut previous_projection: Option<Projection> = None;
+        let mut previous_epoch_verified = false;
 
         for (index, (membership, signed)) in chain.iter().enumerate() {
             let control = &signed.body;
             let Some(grant) = control.grants.iter().find(|g| g.device == device.id()) else {
-                previous_projection = None;
+                previous_epoch_verified = false;
                 result.history_verified = false;
                 continue;
             };
@@ -136,9 +136,7 @@ impl Machine {
                 return Err(Error::CheckpointMismatch);
             }
 
-            if let Some(previous) = &previous_projection
-                && previous != &baseline
-            {
+            if previous_epoch_verified && result.projection != baseline {
                 return Err(Error::CheckpointMismatch);
             }
 
@@ -175,7 +173,7 @@ impl Machine {
                 // history is incomplete. Retain the last readable projection.
                 return Ok(result);
             }
-            previous_projection = Some(result.projection.clone());
+            previous_epoch_verified = true;
 
             if index + 1 == chain.len() {
                 result.frontier = replayed.frontier;

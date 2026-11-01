@@ -208,9 +208,21 @@ fn a_closed_epoch_ignores_unincluded_orphans_and_late_signer_forks() {
 }
 
 #[test]
-fn malicious_checkpoint_cannot_replace_independently_replayed_history() {
+fn malicious_checkpoint_cannot_replace_history_after_keyless_epochs() {
     let (mut state, alice) = owner();
     edit(&mut state, &alice, vec![entry(1, "preserve")]);
+    for _ in 0..2 {
+        let members = Machine::members(&state, &alice).unwrap();
+        state.intent = Some(Machine::prepare_membership(&state, &alice, members).unwrap());
+        Machine::complete_intent(&mut state, &alice).unwrap();
+    }
+    let (bob, certificate) = identity(2);
+    admit(&mut state, &alice, &bob, certificate, Role::Editor);
+    let replay = Machine::replay(&state, &bob).unwrap();
+    assert!(replay.ready);
+    assert!(!replay.history_verified);
+    assert_eq!(replay.projection.entries()[0].password, "preserve");
+
     let members = Machine::members(&state, &alice).unwrap();
     let PreparedChange::Control(mut control) =
         Machine::prepare_membership(&state, &alice, members).unwrap()
@@ -228,10 +240,12 @@ fn malicious_checkpoint_cannot_replace_independently_replayed_history() {
     .unwrap();
     let object = Object::Control(crypto::sign(control, &alice.signer(), CONTROL_DOMAIN).unwrap());
     Machine::receive(&mut state, object.hash().unwrap(), object.bytes().unwrap()).unwrap();
-    assert!(matches!(
-        Machine::replay(&state, &alice),
-        Err(Error::CheckpointMismatch)
-    ));
+    for device in [&alice, &bob] {
+        assert!(matches!(
+            Machine::replay(&state, device),
+            Err(Error::CheckpointMismatch)
+        ));
+    }
 }
 
 #[test]

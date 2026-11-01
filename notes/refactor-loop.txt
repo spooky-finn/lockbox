@@ -5,19 +5,20 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 17; 386 library, four integration, two doctests passed.
+Last full suite: cycle 21; 389 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 20: Borrow icon URL site suffixes
-- Find registered-site suffix with reverse dot positions. Icon URL lookup
-  borrows substring; public registrable API still returns owned String.
-- Remove www prefix inside lowercase host buffer; avoid second host copy.
-- Regression passed before refactor: short/case-sensitive/Unicode domains,
-  repeated separators, trailing dots, embedded credentials and repeated www.
-- All 12 icon tests, formatting and strict all-target Clippy passed. Changed
-  source byte-matches verified snapshot; workspace whitespace checks passed.
+Cycle 21: Reuse replay checkpoint projection
+- Compare next baseline against retained result projection; bool tracks whether
+  adjacent prior epoch was independently verified. Remove full secret clone.
+- Missing grant resets comparison eligibility; readable snapshot retained.
+- Expanded regression passed before refactor: bootstrap after three keyless
+  epochs, then reject forged checkpoint for original owner and new editor.
+- Full suite passed: 389 library, four integration, two doctests; two OS probes
+  ignored. Formatting and strict all-target Clippy passed. Changed source
+  byte-matches verified snapshot; workspace whitespace checks passed.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-20.XhnWk4 when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-21.sAWtkE when workspace cannot compile.
 
-Next search: attachment validation, settings updates, replay snapshots.
+Next search: replay control-key collection, attachment validation, settings.
 Inspect current code and tests before choosing; no quota-driven edits.
