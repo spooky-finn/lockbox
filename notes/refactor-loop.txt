@@ -9,21 +9,21 @@ Last full suite: cycle 65; 415 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 67: Count generator alphabets lazily
-- Options.sets returns iterators of filtered character iterators. alphabet_size
-  flattens/counts without allocating set vectors; entropy UI uses same count.
-- generate collects exactly same Vec<Vec<char>> once for indexed random choices.
-  Preserve selected set/character order, ambiguity filter, length/error order,
-  OS random calls, unbiased rejection sampling and Fisher–Yates shuffle.
-- Formatting/strict all-target Clippy passed. 76 records, nine browser unit,
-  two browser-host integration tests passed. Existing generator coverage checks
-  lengths/sets/ambiguity/entropy/distribution. Source matches verified snapshot;
+Cycle 68: Share local folder name policy
+- New crate-private folder.valid_name names the existing nonblank/128 Unicode
+  character rule. Local hierarchy validation and import Targets.place delegate.
+- Saved-name validation counts original raw name; import still trims source name
+  first, then validates and stores it. Preserve errors, invalid-folder fallback,
+  normalized sibling matching and all hierarchy checks. Protocol frozen whitespace
+  and literal name limit remain independent; no count algorithm change.
+- Formatting/strict all-target Clippy passed. 76 records, nine vault edit,
+  22 vault persistence tests passed. Both sources match verified snapshot;
   whitespace clean. Unrelated edits untouched.
-- Snapshot: /tmp/lockbox-refactor-67._cntk5lb.
+- Snapshot: /tmp/lockbox-refactor-68.kbila24v.
 
-Next search: local folder.validate and import_plan.Targets.place repeat folder
-name emptiness/128-character policy. Consider named private folder::valid_name
-predicate shared by these local callers. Keep raw-name count in validation and
-trim-before-validation in import. Protocol model has frozen whitespace helper
-and literal 128; inspect before touching and preserve that distinct contract.
-Avoid forced cross-protocol unification or unrelated early-count changes.
+Next search: Hierarchy.lineage already provides bounded leaf-to-root iterator.
+Directory reveal removes ancestor IDs from set (order irrelevant), import Targets
+only needs ancestor count, yet both allocate/reverse ancestors Vec. Consider making
+lineage crate-visible with direction/limit doc and consume directly in these two
+callers. Keep root-to-leaf ancestors API for breadcrumbs, same cycle/depth/duplicate
+handling and first-ID match. Existing folder/directory/import tests cover them.

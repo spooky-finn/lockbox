@@ -142,7 +142,7 @@ impl<'a> Targets<'a> {
     fn place(&mut self, name: &str, parent: Option<String>) -> Option<String> {
         let name = name.trim();
 
-        if name.is_empty() || name.chars().count() > folder::MAX_NAME_CHARS {
+        if !folder::valid_name(name) {
             return parent;
         }
 

@@ -26,6 +26,10 @@ impl Folder {
     }
 }
 
+pub(crate) fn valid_name(name: &str) -> bool {
+    !name.trim().is_empty() && name.chars().count() <= MAX_NAME_CHARS
+}
+
 /// Reject dangling references, cycles, excessive nesting and ambiguous siblings.
 pub(crate) fn validate(folders: &[Folder], entries: &[Entry]) -> Result<(), &'static str> {
     let by_id: BTreeMap<_, _> = folders
@@ -40,7 +44,7 @@ pub(crate) fn validate(folders: &[Folder], entries: &[Entry]) -> Result<(), &'st
     let mut names = BTreeSet::new();
 
     for folder in folders {
-        if folder.name.trim().is_empty() || folder.name.chars().count() > MAX_NAME_CHARS {
+        if !valid_name(&folder.name) {
             return Err("Folder name must contain 1–128 characters");
         }
 
