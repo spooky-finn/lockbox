@@ -33,6 +33,7 @@ thiserror = "2"
 # hpke disables dalek defaults; explicitly retain private-key wiping.
 x25519-dalek = { version = "=2.0.1", default-features = false, features = ["static_secrets", "zeroize"] }
 url = "2"
+kuchikiki = "=0.8.8-speedreader"
 zeroize = { version = "1.8", features = ["derive", "serde"] }
 rmcp = { version = "3.8.0", features = ["server"] }
 rand_core = { version = "0.9", features = ["os_rng"] }

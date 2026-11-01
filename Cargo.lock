@@ -3346,6 +3346,7 @@ dependencies = [
  "hkdf",
  "hmac 0.12.1",
  "hpke",
+ "kuchikiki",
  "objc2",
  "objc2-foundation",
  "objc2-local-authentication",

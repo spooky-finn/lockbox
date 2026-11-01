@@ -13,7 +13,24 @@ pub(super) fn EntryIcon(
     #[props(default = false)] large: bool,
 ) -> Element {
     let mut failed_favicon = use_signal(|| None::<String>);
-    let favicon = slug.is_none().then(|| icons::favicon_url(&url)).flatten();
+    let website = slug.is_none().then(|| icons::favicon_url(&url)).flatten();
+    let fetched = use_resource(use_reactive((&website,), |(website,)| async move {
+        let website = website?;
+        let origin = website.clone();
+        let image = tokio::runtime::Handle::try_current()
+            .ok()?
+            .spawn_blocking(move || crate::ui::favicon::fetch(&website))
+            .await
+            .ok()
+            .flatten()?;
+        Some((origin, image))
+    }));
+    let favicon = fetched.read().as_ref().and_then(|result| {
+        result
+            .as_ref()
+            .filter(|(origin, _)| website.as_ref() == Some(origin))
+            .map(|(_, image)| image.clone())
+    });
     let favicon = favicon.filter(|url| failed_favicon.read().as_ref() != Some(url));
     let icon = slug
         .as_deref()
