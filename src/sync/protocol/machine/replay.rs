@@ -15,7 +15,6 @@ use crate::sync::{
             state::{Replay, SyncState},
         },
         model::project,
-        wire::sorted_unique,
     },
 };
 use std::collections::{BTreeMap, BTreeSet};
@@ -366,14 +365,7 @@ fn authenticate_changes<'a>(
         }
 
         let check = || -> Result<Transaction> {
-            if header.space != control.epoch.space
-                || header.epoch != control.epoch.number
-                || header.sequence.0 == 0
-                || header.parents.len() > crate::sync::protocol::MAX_PARENTS
-                || !sorted_unique(&header.parents)
-            {
-                return Err(Error::InvalidTransaction);
-            }
+            header.validate(control.epoch.space, control.epoch.number)?;
 
             let member = control
                 .members

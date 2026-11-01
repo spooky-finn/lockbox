@@ -1,6 +1,112 @@
 use super::*;
 
 #[test]
+fn malformed_changes_keep_rejection_precedence_across_verification_paths() {
+    let (state, device) = owner();
+    let template = encrypted_change(
+        &state,
+        state.genesis,
+        &device,
+        1,
+        None,
+        vec![],
+        &empty_transaction(),
+    );
+    let members = Machine::members(&state, &device).unwrap();
+    let PreparedChange::Control(control) =
+        Machine::prepare_membership(&state, &device, members).unwrap()
+    else {
+        panic!("membership prepares a control")
+    };
+    type Case = (&'static str, fn(&mut Change), Error);
+    let cases: [Case; 8] = [
+        (
+            "space",
+            |c| c.header.space = Hash([99; 32]),
+            Error::InvalidTransaction,
+        ),
+        (
+            "epoch",
+            |c| c.header.epoch = Counter(99),
+            Error::InvalidTransaction,
+        ),
+        (
+            "sequence",
+            |c| c.header.sequence = Counter(0),
+            Error::InvalidTransaction,
+        ),
+        (
+            "parent count",
+            |c| {
+                c.header.parents = (0..=crate::sync::protocol::MAX_PARENTS)
+                    .map(|index| Hash([index as u8; 32]))
+                    .collect()
+            },
+            Error::InvalidTransaction,
+        ),
+        (
+            "duplicate parents",
+            |c| c.header.parents = vec![Hash([1; 32]), Hash([1; 32])],
+            Error::InvalidTransaction,
+        ),
+        (
+            "parent order",
+            |c| c.header.parents = vec![Hash([2; 32]), Hash([1; 32])],
+            Error::InvalidTransaction,
+        ),
+        (
+            "nonce",
+            |c| c.header.nonce.0.truncate(23),
+            Error::InvalidSignature,
+        ),
+        (
+            "ciphertext",
+            |c| c.ciphertext.0.clear(),
+            Error::InvalidSignature,
+        ),
+    ];
+
+    for (label, damage, replay_error) in cases {
+        let mut object = template.clone();
+        let Object::Change(change) = &mut object else {
+            unreachable!()
+        };
+        // Leave the old signature: shared shape checks must still run first,
+        // while replay must retain its later nonce/ciphertext validation.
+        damage(&mut change.body);
+        let hash = object.hash().unwrap();
+        let bytes = object.bytes().unwrap();
+        let mut candidate = state.clone();
+        Machine::receive(&mut candidate, hash, bytes.clone()).unwrap();
+        assert_eq!(
+            candidate.rejected_candidates[&hash],
+            Error::InvalidTransaction,
+            "{label}"
+        );
+        assert!(!candidate.objects.contains_key(&hash), "{label}");
+
+        let mut legacy = state.clone();
+        legacy.objects.insert(hash, Blob(bytes));
+        let replay = Machine::replay(&legacy, &device).unwrap();
+        assert_eq!(replay.rejected[&hash], replay_error, "{label}");
+        assert!(replay.accepted.is_empty(), "{label}");
+
+        let mut closing = control.clone();
+        closing.closed_frontier = vec![hash];
+        let closing =
+            Object::Control(crypto::sign(closing, &device.signer(), CONTROL_DOMAIN).unwrap());
+        legacy
+            .objects
+            .insert(closing.hash().unwrap(), Blob(closing.bytes().unwrap()));
+        assert_eq!(
+            Machine::relayable_closed_history(&legacy),
+            Err(Error::InvalidTransaction),
+            "{label}"
+        );
+    }
+}
+
+#[test]
 fn discarded_invalid_parent_is_not_mistaken_for_missing_history() {
     let (mut state, device) = owner();
     let membership = state.genesis;

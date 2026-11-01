@@ -11,7 +11,7 @@ use super::{
 };
 use crate::sync::protocol::{
     Blob, Error, Hash, MAX_CANDIDATE_BYTES, MAX_CANDIDATES, Object, Result, Role, Signed, crypto,
-    decode, wire::sorted_unique,
+    decode,
 };
 
 pub(super) fn insert(state: &mut SyncState, hash: Hash, bytes: Blob) {
@@ -91,14 +91,8 @@ pub(super) fn reject(state: &mut SyncState, hash: Hash, error: Error) {
 
 pub(super) fn authenticate_change(change: &Signed<Change>, control: &Control) -> Result<()> {
     let header = &change.body.header;
-    if header.space != control.epoch.space
-        || header.epoch != control.epoch.number
-        || header.sequence.0 == 0
-        || header.parents.len() > crate::sync::protocol::MAX_PARENTS
-        || !sorted_unique(&header.parents)
-        || header.nonce.0.len() != 24
-        || change.body.ciphertext.0.len() < 16
-    {
+    header.validate(control.epoch.space, control.epoch.number)?;
+    if header.nonce.0.len() != 24 || change.body.ciphertext.0.len() < 16 {
         return Err(Error::InvalidTransaction);
     }
     let member = control

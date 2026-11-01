@@ -10,7 +10,6 @@ use crate::sync::protocol::{
         protocol::{ChangeHeader, Control},
         state::SyncState,
     },
-    wire::sorted_unique,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -75,16 +74,12 @@ fn closed_nodes(
         };
         let h = &change.body.header;
         if h.membership != membership
-            || h.space != state.space
-            || h.epoch != control.epoch.number
-            || h.sequence.0 == 0
             || h.nonce.0.len() != 24
-            || h.parents.len() > crate::sync::protocol::MAX_PARENTS
-            || !sorted_unique(&h.parents)
             || change.body.ciphertext.0.len() < 16
         {
             return Err(Error::InvalidTransaction);
         }
+        h.validate(state.space, control.epoch.number)?;
         let member = control
             .members
             .iter()

@@ -1,8 +1,8 @@
-//! Wire schemas and immutable object dependencies. No authorization or I/O.
+//! Wire schemas, shape checks and immutable dependencies. No authorization or I/O.
 
 use crate::sync::protocol::{
-    Admission, Blob, Certificate, Counter, Hash, Object, Role, Signed,
-    machine::state::SpaceDescriptor,
+    Admission, Blob, Certificate, Counter, Error, Hash, MAX_PARENTS, Object, Result, Role, Signed,
+    machine::state::SpaceDescriptor, wire::sorted_unique,
 };
 use serde::{Deserialize, Serialize};
 
@@ -111,6 +111,20 @@ pub struct ChangeHeader {
     pub(super) previous: Option<Hash>,
     pub(super) parents: Vec<Hash>,
     pub(super) nonce: Blob,
+}
+
+impl ChangeHeader {
+    pub(super) fn validate(&self, space: Hash, epoch: Counter) -> Result<()> {
+        if self.space != space
+            || self.epoch != epoch
+            || self.sequence.0 == 0
+            || self.parents.len() > MAX_PARENTS
+            || !sorted_unique(&self.parents)
+        {
+            return Err(Error::InvalidTransaction);
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
