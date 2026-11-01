@@ -381,10 +381,59 @@ fn publication_orders_epoch_and_causal_dependencies_before_references() {
         .unwrap(),
     );
     let last = Machine::complete_intent(&mut state, &device).unwrap();
-    let hashes: Vec<_> = publication(&state, &Machine::replay(&state, &device).unwrap())
-        .unwrap()
-        .into_iter()
-        .map(|(hash, _)| hash)
-        .collect();
+    let mut replay = Machine::replay(&state, &device).unwrap();
+    let plan = publication(&state, &replay).unwrap();
+    let hashes: Vec<_> = plan.iter().map(|(hash, _)| *hash).collect();
     assert_eq!(hashes, vec![genesis, first, control, last]);
+    for (hash, bytes) in &plan {
+        assert_eq!(bytes, &state.objects[hash]);
+    }
+
+    // Acknowledged dependencies stay in the journal but leave this upload plan.
+    state.outbox.remove(&genesis);
+    state.outbox.remove(&first);
+    assert_eq!(publication(&state, &replay).unwrap(), plan[2..]);
+
+    replay.excluded.insert(last);
+    assert_eq!(publication(&state, &replay).unwrap(), plan[2..3]);
+}
+
+#[test]
+fn publication_counts_repeated_causal_dependencies_without_stalling() {
+    let (_, state, device, last) = history();
+    let replay = Machine::replay(&state, &device).unwrap();
+    let plan = publication(&state, &replay).unwrap();
+    assert_eq!(plan.len(), 4);
+    assert_eq!(plan[0].0, state.genesis);
+    assert_eq!(plan[3].0, last);
+    for index in 2..4 {
+        let object: crate::sync::protocol::Object =
+            crate::sync::protocol::decode(&plan[index].1.0).unwrap();
+        assert_eq!(
+            object.dependencies().collect::<Vec<_>>(),
+            vec![state.genesis, plan[index - 1].0, plan[index - 1].0]
+        );
+    }
+}
+
+#[test]
+fn publication_checks_unselected_outbox_items_after_readiness_guards() {
+    let (mut state, device) = fixture();
+    let mut replay = Machine::replay(&state, &device).unwrap();
+    let missing = Hash([255; 32]);
+    assert!(!replay.accepted.contains(&missing));
+    state.outbox.insert(missing);
+    assert_eq!(
+        publication(&state, &replay),
+        Err(TransportError::InvalidResponse)
+    );
+
+    state.fault = Some(crate::sync::protocol::Error::InvalidTransaction);
+    assert!(publication(&state, &replay).unwrap().is_empty());
+    state.fault = None;
+    replay.ready = false;
+    assert!(publication(&state, &replay).unwrap().is_empty());
+    replay.ready = true;
+    replay.role = None;
+    assert!(publication(&state, &replay).unwrap().is_empty());
 }

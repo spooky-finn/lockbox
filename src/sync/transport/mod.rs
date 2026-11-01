@@ -111,11 +111,16 @@ pub fn publication(
     if state.fault.is_some() || !replay.ready || replay.role.is_none() {
         return Ok(vec![]);
     }
-    // Decode each eligible object once, then order only the dependency edges.
+    // Decode each outbox object once and retain only eligible bytes and counts.
     // Independent objects may have any order; hashes never choose a data winner.
-    let mut pending = BTreeMap::new();
     let closed = crate::sync::protocol::Machine::relayable_closed_history(state)
         .map_err(TransportError::Verification)?;
+    let eligible = |hash: &Hash| {
+        closed.contains(hash) || (replay.accepted.contains(hash) && !replay.excluded.contains(hash))
+    };
+    let mut pending = BTreeMap::new();
+    let mut children: BTreeMap<Hash, Vec<Hash>> = BTreeMap::new();
+    let mut ready = BTreeSet::new();
 
     for hash in &state.outbox {
         let bytes = state
@@ -125,31 +130,18 @@ pub fn publication(
         let object = crate::sync::protocol::decode::<crate::sync::protocol::Object>(&bytes.0)
             .map_err(TransportError::Verification)?;
 
-        if closed.contains(hash)
-            || (replay.accepted.contains(hash) && !replay.excluded.contains(hash))
-        {
-            pending.insert(
-                *hash,
-                (bytes.clone(), object.dependencies().collect::<Vec<_>>()),
-            );
+        if !eligible(hash) {
+            continue;
         }
-    }
-
-    let mut incoming = BTreeMap::new();
-    let mut children: BTreeMap<Hash, Vec<Hash>> = BTreeMap::new();
-    let mut ready = BTreeSet::new();
-
-    for (hash, (_, dependencies)) in &pending {
         let mut count = 0;
-
-        for dependency in dependencies
-            .iter()
-            .filter(|dependency| pending.contains_key(dependency))
+        for dependency in object
+            .dependencies()
+            .filter(|dependency| state.outbox.contains(dependency) && eligible(dependency))
         {
             count += 1;
-            children.entry(*dependency).or_default().push(*hash);
+            children.entry(dependency).or_default().push(*hash);
         }
-        incoming.insert(*hash, count);
+        pending.insert(*hash, (bytes, count));
 
         if count == 0 {
             ready.insert(*hash);
@@ -159,10 +151,11 @@ pub fn publication(
     let mut ordered = Vec::new();
 
     while let Some(hash) = ready.pop_first() {
-        ordered.push((hash, pending.remove(&hash).unwrap().0));
+        let (bytes, _) = pending.remove(&hash).unwrap();
+        ordered.push((hash, bytes.clone()));
 
         for child in children.remove(&hash).unwrap_or_default() {
-            let count = incoming.get_mut(&child).unwrap();
+            let (_, count) = pending.get_mut(&child).unwrap();
             *count -= 1;
 
             if *count == 0 {
