@@ -203,6 +203,48 @@ fn discovering_a_head_fetches_its_unlisted_ancestry_in_the_same_pass() {
 }
 
 #[test]
+fn downloads_preserve_encoding_hash_and_transport_budget_errors() {
+    use crate::sync::protocol::{Error, MAX_OBJECT_BYTES};
+    let (state, _) = fixture();
+    let bytes = &state.objects[&state.genesis].0;
+    let noncanonical = [b" ".as_slice(), bytes.as_slice()].concat();
+    let oversized = vec![b' '; MAX_OBJECT_BYTES + 1];
+    for (hash, bytes, expected) in [
+        (
+            Hash::default(),
+            bytes.as_slice(),
+            TransportError::Verification(Error::HashMismatch),
+        ),
+        (
+            Hash::digest(b"lockbox.sync.object\0", &noncanonical),
+            noncanonical.as_slice(),
+            TransportError::Verification(Error::InvalidEncoding),
+        ),
+        (
+            Hash::default(),
+            oversized.as_slice(),
+            TransportError::Budget,
+        ),
+    ] {
+        let mut provider = Memory {
+            objects: BTreeMap::from([(hash, bytes.to_vec())]),
+            ..Memory::default()
+        };
+        assert_eq!(
+            download(
+                &mut provider,
+                state.namespace,
+                &BTreeSet::new(),
+                &Cancellation::default(),
+            )
+            .err(),
+            Some(expected)
+        );
+        assert_eq!(provider.gets, 1);
+    }
+}
+
+#[test]
 fn omitted_unavailable_anchor_is_incomplete_and_missing_gets_are_bounded() {
     let (state, _) = fixture();
     let join = Machine::join(

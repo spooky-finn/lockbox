@@ -8,20 +8,20 @@ No delegation requested. Keep unrelated work outside refactor commits.
 Last full suite: cycle 44; 406 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 
-Cycle 44: Share checked object decoding
-- Private Object::decode validates bounded canonical bytes before checking their
-  hash. Hash original bytes after canonicality proof; skip second serialization.
-- Reuse in replay, receive, control collection and candidate promotion. Preserve
-  exact object domain, validation order and journal mutation boundaries.
-- New receive regression passed before refactor: canonical wrong hash, matching
-  hash for noncanonical bytes, malformed/oversized input; no journal mutation.
-  Fixed golden fixture also checks valid associated decoder output.
-- Full suite passed above: 406 library, four integration, two doctests; two OS
-  probes ignored. Formatting and strict all-target Clippy passed. All six sources
-  match tested snapshot; workspace whitespace checks passed.
+Cycle 45: Reuse checked decoding in transport
+- Discovery fetch and Storj put delegate canonical/hash checks to Object::decode.
+  Remove duplicate hash serialization and transport error boilerplate.
+- Keep transport byte/batch guards before decoding, verification error mapping,
+  discovery dependency checks and upload request construction unchanged.
+- Regression passed before refactor: wrong canonical hash, matching noncanonical
+  hash and oversized input keep exact transport errors. Local S3 fixture confirms
+  rejected puts issue no HTTP request before valid list/put/get exchange.
+- All sixteen transport tests and both sync integration tests passed. Formatting
+  and strict all-target Clippy passed. All four sources match tested snapshot;
+  workspace whitespace checks passed.
 - Concurrent favicon/runtime/translation edits left untouched. Validate isolated
-  snapshot at /tmp/lockbox-refactor-44.i1yq2evv when workspace cannot compile.
+  snapshot at /tmp/lockbox-refactor-45.8pz5awo_ when workspace cannot compile.
 
-Next search: reuse Object::decode in discovery and Storj uploads, preserving each
-transport's budget/error mapping. Also inspect non-protocol modules.
+Next search: broaden to browser, access, settings and vault persistence; inspect
+repeated state setup, validation and unnecessary payload copies before choosing.
 Inspect current code and tests before choosing; no quota-driven edits.

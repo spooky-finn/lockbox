@@ -2,7 +2,7 @@
 //! References are availability hints only; authorization remains in core replay.
 
 use crate::sync::{
-    protocol::{Error, Hash, MAX_OBJECT_BYTES, MAX_OBJECTS, Object, SyncState, decode},
+    protocol::{Hash, MAX_OBJECT_BYTES, MAX_OBJECTS, Object, SyncState, decode},
     transport::{Cancellation, Download, MAX_BATCH_BYTES, Result, Storage, TransportError},
 };
 use std::collections::{BTreeSet, VecDeque};
@@ -145,11 +145,7 @@ impl Batch<'_> {
                 return Ok(false);
             }
 
-            let object: Object = decode(&bytes).map_err(TransportError::Verification)?;
-
-            if object.hash().map_err(TransportError::Verification)? != hash {
-                return Err(TransportError::Verification(Error::HashMismatch));
-            }
+            let object = Object::decode(&bytes, hash).map_err(TransportError::Verification)?;
 
             if self.request.known.len() + self.objects.len()
                 >= MAX_OBJECTS + 2 * crate::sync::protocol::MAX_CANDIDATES

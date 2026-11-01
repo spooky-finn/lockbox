@@ -172,6 +172,27 @@ fn named_space_round_trip(space_name: &str, segment: &'static str, encoded: &str
         false,
     )
     .unwrap();
+    let noncanonical = [b" ".as_slice(), bytes.as_slice()].concat();
+    let oversized = vec![b' '; MAX_OBJECT_BYTES + 1];
+    for (hash, bytes, expected) in [
+        (
+            Hash::default(),
+            bytes.as_slice(),
+            TransportError::Verification(crate::sync::protocol::Error::HashMismatch),
+        ),
+        (
+            Hash::digest(b"lockbox.sync.object\0", &noncanonical),
+            noncanonical.as_slice(),
+            TransportError::Verification(crate::sync::protocol::Error::InvalidEncoding),
+        ),
+        (
+            Hash::default(),
+            oversized.as_slice(),
+            TransportError::Budget,
+        ),
+    ] {
+        assert_eq!(storage.put(namespace, hash, bytes), Err(expected));
+    }
     assert_eq!(
         storage.list(namespace, Some("a+/=&x")).unwrap().objects,
         vec![hash]

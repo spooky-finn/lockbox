@@ -235,14 +235,7 @@ impl Storage for Storj {
             return Err(TransportError::Budget);
         }
 
-        let object: crate::sync::protocol::Object =
-            crate::sync::protocol::decode(bytes).map_err(TransportError::Verification)?;
-
-        if object.hash().map_err(TransportError::Verification)? != hash {
-            return Err(TransportError::Verification(
-                crate::sync::protocol::Error::HashMismatch,
-            ));
-        }
+        crate::sync::protocol::Object::decode(bytes, hash).map_err(TransportError::Verification)?;
 
         let key = format!("{}{hash}.json", self.prefix);
         // Equal content always has equal key. Correctness does not depend on
