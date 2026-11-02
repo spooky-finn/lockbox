@@ -190,6 +190,116 @@ fn scalar_string_encodings_preserve_all_hex_bytes_precision_and_map_keys() {
 }
 
 #[test]
+fn wire_text_deserialization_preserves_input_modes_and_diagnostics() {
+    use serde::{
+        Deserialize, Deserializer,
+        de::{Error as _, Visitor},
+    };
+    type TextError = serde::de::value::Error;
+    #[derive(Clone)]
+    enum Input<'a> {
+        Str(&'a str),
+        BorrowedStr(&'a str),
+        String(String),
+        Bytes(&'a [u8]),
+        BorrowedBytes(&'a [u8]),
+        ByteBuf(Vec<u8>),
+    }
+    impl<'de> Deserializer<'de> for Input<'de> {
+        type Error = TextError;
+        fn deserialize_any<V: Visitor<'de>>(
+            self,
+            _: V,
+        ) -> std::result::Result<V::Value, TextError> {
+            Err(TextError::custom("must request the String hint"))
+        }
+        fn deserialize_string<V: Visitor<'de>>(
+            self,
+            visitor: V,
+        ) -> std::result::Result<V::Value, TextError> {
+            match self {
+                Self::Str(value) => visitor.visit_str(value),
+                Self::BorrowedStr(value) => visitor.visit_borrowed_str(value),
+                Self::String(value) => visitor.visit_string(value),
+                Self::Bytes(value) => visitor.visit_bytes(value),
+                Self::BorrowedBytes(value) => visitor.visit_borrowed_bytes(value),
+                Self::ByteBuf(value) => visitor.visit_byte_buf(value),
+            }
+        }
+        serde::forward_to_deserialize_any! {
+            bool i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 char str bytes byte_buf
+            option unit unit_struct newtype_struct seq tuple tuple_struct map
+            struct enum identifier ignored_any
+        }
+    }
+    fn check<T: serde::de::DeserializeOwned + Eq + std::fmt::Debug>(text: &str, expected: T) {
+        for input in [
+            Input::Str(text),
+            Input::BorrowedStr(text),
+            Input::String(text.to_owned()),
+            Input::Bytes(text.as_bytes()),
+            Input::BorrowedBytes(text.as_bytes()),
+            Input::ByteBuf(text.as_bytes().to_vec()),
+        ] {
+            assert_eq!(T::deserialize(input).unwrap(), expected);
+        }
+        if let Some(first) = text.chars().next() {
+            let escaped = format!(
+                "\"\\u{:04x}{}\"",
+                u32::from(first),
+                &text[first.len_utf8()..]
+            );
+            assert_eq!(serde_json::from_str::<T>(&escaped).unwrap(), expected);
+        }
+        for value in [
+            serde_json::Value::Null,
+            serde_json::json!(true),
+            serde_json::json!(7),
+            serde_json::json!([]),
+            serde_json::json!({}),
+        ] {
+            let expected = String::deserialize(value.clone()).unwrap_err().to_string();
+            assert_eq!(
+                T::deserialize(value.clone()).unwrap_err().to_string(),
+                expected
+            );
+        }
+        for input in [
+            Input::Bytes(&[255, 254]),
+            Input::BorrowedBytes(&[255, 254]),
+            Input::ByteBuf(vec![255, 254]),
+        ] {
+            let expected = String::deserialize(input.clone()).unwrap_err().to_string();
+            assert_eq!(T::deserialize(input).unwrap_err().to_string(), expected);
+        }
+    }
+    check(&Hash([0xab; 32]).to_string(), Hash([0xab; 32]));
+    check("18446744073709551615", Counter(u64::MAX));
+    check("AAH_Kg", Blob(vec![0, 1, 255, 42]));
+    check("", Blob::default());
+    for text in ["01", "+1"] {
+        assert_eq!(
+            Counter::deserialize(Input::Str(text))
+                .unwrap_err()
+                .to_string(),
+            "noncanonical counter"
+        );
+    }
+    assert_eq!(
+        Hash::deserialize(Input::Str("bad"))
+            .unwrap_err()
+            .to_string(),
+        Error::InvalidEncoding.to_string()
+    );
+    assert_eq!(
+        Counter::deserialize(Input::Str("bad"))
+            .unwrap_err()
+            .to_string(),
+        "bad".parse::<u64>().unwrap_err().to_string()
+    );
+}
+
+#[test]
 fn receive_checks_canonical_encoding_before_object_hash() {
     let bytes = include_bytes!("../fixtures/change.json");
     let noncanonical = [b" ".as_slice(), bytes.as_slice()].concat();

@@ -65,9 +65,12 @@ impl Serialize for Hash {
 }
 impl<'de> Deserialize<'de> for Hash {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
-        String::deserialize(deserializer)?
-            .parse()
-            .map_err(serde::de::Error::custom)
+        deserialize_text(deserializer)
+    }
+}
+impl WireText for Hash {
+    fn from_text<E: serde::de::Error>(text: &str) -> std::result::Result<Self, E> {
+        text.parse().map_err(E::custom)
     }
 }
 
@@ -81,11 +84,15 @@ impl Serialize for Counter {
 }
 impl<'de> Deserialize<'de> for Counter {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
-        let s = String::deserialize(deserializer)?;
-        let value = s.parse::<u64>().map_err(serde::de::Error::custom)?;
+        deserialize_text(deserializer)
+    }
+}
+impl WireText for Counter {
+    fn from_text<E: serde::de::Error>(s: &str) -> std::result::Result<Self, E> {
+        let value = s.parse::<u64>().map_err(E::custom)?;
 
         if value.to_string() != s {
-            return Err(serde::de::Error::custom("noncanonical counter"));
+            return Err(E::custom("noncanonical counter"));
         }
 
         Ok(Self(value))
@@ -102,17 +109,50 @@ impl Serialize for Blob {
 }
 impl<'de> Deserialize<'de> for Blob {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
-        let s = String::deserialize(deserializer)?;
-        let bytes = URL_SAFE_NO_PAD
-            .decode(&s)
-            .map_err(serde::de::Error::custom)?;
+        deserialize_text(deserializer)
+    }
+}
+impl WireText for Blob {
+    fn from_text<E: serde::de::Error>(s: &str) -> std::result::Result<Self, E> {
+        let bytes = URL_SAFE_NO_PAD.decode(s).map_err(E::custom)?;
 
         if URL_SAFE_NO_PAD.encode(&bytes) != s {
-            return Err(serde::de::Error::custom("noncanonical bytes"));
+            return Err(E::custom("noncanonical bytes"));
         }
 
         Ok(Self(bytes))
     }
+}
+
+trait WireText: Sized {
+    fn from_text<E: serde::de::Error>(text: &str) -> std::result::Result<Self, E>;
+}
+
+struct TextVisitor<T>(std::marker::PhantomData<T>);
+
+impl<'de, T: WireText> serde::de::Visitor<'de> for TextVisitor<T> {
+    type Value = T;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("a string")
+    }
+
+    fn visit_str<E: serde::de::Error>(self, text: &str) -> std::result::Result<T, E> {
+        T::from_text(text)
+    }
+
+    fn visit_bytes<E: serde::de::Error>(self, bytes: &[u8]) -> std::result::Result<T, E> {
+        match std::str::from_utf8(bytes) {
+            Ok(text) => T::from_text(text),
+            Err(_) => Err(E::invalid_value(serde::de::Unexpected::Bytes(bytes), &self)),
+        }
+    }
+}
+
+fn deserialize_text<'de, D: Deserializer<'de>, T: WireText>(
+    deserializer: D,
+) -> std::result::Result<T, D::Error> {
+    deserializer.deserialize_string(TextVisitor::<T>(std::marker::PhantomData))
 }
 
 #[derive(Clone, Serialize, Deserialize)]
