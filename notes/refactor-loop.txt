@@ -9,25 +9,23 @@ Last full suite: cycle 81; 421 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 82: Scope identity cloning to cloud worker setup
-- Derive owned recovery phrase through borrowed form identity. Local creation,
-  ordinary open and recovery no longer clone unused root/word payloads.
-- Cloud setup captures SharedProfile and cloned optional identity together;
-  worker consumes profile directly. Same trimming, provider fields, imported
-  roots without words, lazy phrase fallback and secret/password lifetimes.
-- Extended local-worker baseline passed before refactor: create from loaded
-  identity with empty form recovery words, recover using expected phrase, keep
-  original form identity root. Existing plain-phrase creation check retained.
-- Formatting/strict all-target Clippy, 42 access and six identity tests passed.
-  Both sources match verified snapshot; whitespace clean. Unrelated edits
-  untouched. Last full suite remains cycle 81.
-- Snapshot: /tmp/lockbox-refactor-82.0q79ygzy.
+Cycle 83: Isolate identity worker workflow
+- Private auth/identity.rs child holds submit_identity and poll_identity. Parent
+  submit dispatches same method; poll calls identity completion at original point
+  before vault completion and automatic Touch ID. Form owns unchanged fields.
+- Only moved methods gain pub(super) visibility within auth parent; struct field
+  visibility and public APIs unchanged. Validation, recovery/import, password
+  transfer, interrupted-worker error and creation transitions unchanged.
+- Byte proof: submitted method (visibility normalized) and completion block match
+  original exactly after formatting. Poll call remains directly before vault
+  completion. No new tests needed for mechanical move.
+- Formatting/strict all-target Clippy and 42 access tests passed. Both sources
+  match verified snapshot; whitespace clean. Unrelated edits untouched.
+- Snapshot: /tmp/lockbox-refactor-83.5kx00_dz.
 
-Next search: auth.rs mixes identity worker submission/completion with vault unlock
-workflow. Consider private auth/identity.rs child module containing unchanged
-submit_identity and extracted poll_identity completion block. Parent poll invokes
-identity completion at same point before vault completion/auto Touch ID. Child
-accesses parent-private fields without widening struct visibility; methods need
-pub(super) only. Preserve worker errors, interrupted panic handling, recovery and
-creation transitions, secret buffers. Prove moved bodies unchanged; access tests
-cover setup, join/import, recovery, concurrent identity replacement, stale paths.
+Next search: Vault issued_invitations/accepted_invitations eagerly build vectors.
+Session.open and sharing flow only need any; sharing view iterates vectors once.
+Consider private iterator accessors shared with unchanged public Vec wrappers.
+Consumers can short-circuit/iterate directly, preserving BTreeMap order, all info
+fields, status(now), and behavior for profiles without invitation ledgers. Existing
+sharing wizard/admission and session tests cover consumers. Inspect first.
