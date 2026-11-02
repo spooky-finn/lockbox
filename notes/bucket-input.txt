@@ -1,0 +1,2 @@
+Bucket input: disable autocapitalization, autocorrection, spellcheck.
+Keep typed name unchanged. Shared cloud setup covers create, join, recovery.

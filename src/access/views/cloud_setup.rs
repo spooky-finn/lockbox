@@ -58,6 +58,7 @@ pub(crate) fn CloudSetupView() -> Element {
                 oninput: move |event| edit_locked(state, |locked| locked.cloud.base_url = event.value()), }
             label { r#for: "cloud-bucket", "Bucket" }
             input { id: "cloud-bucket", value: "{locked.cloud.bucket}", autocomplete: "off", placeholder: "lockbox-team",
+                autocapitalize: "none", spellcheck: "false", "autocorrect": "off",
                 oninput: move |event| edit_locked(state, |locked| locked.cloud.bucket = event.value()), }
             label { r#for: "cloud-access", "Access Key" }
             input { id: "cloud-access", r#type: "password", value: locked.cloud.access_key.as_str(), autocomplete: "off",
