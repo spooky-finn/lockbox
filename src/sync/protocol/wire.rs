@@ -91,7 +91,7 @@ impl WireText for Counter {
     fn from_text<E: serde::de::Error>(s: &str) -> std::result::Result<Self, E> {
         let value = s.parse::<u64>().map_err(E::custom)?;
 
-        if value.to_string() != s {
+        if s.starts_with('+') || (s.len() > 1 && s.starts_with('0')) {
             return Err(E::custom("noncanonical counter"));
         }
 

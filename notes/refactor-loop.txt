@@ -5,40 +5,35 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 96; 431 library, four integration, two doctests passed.
+Last full suite: cycle 97; 432 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 96: Preserve scalar parse diagnostic boundary
-- Same-binary legacy reference exposed cycle95 regression: parsing errors inside
-  visitor gained JSON locations and custom deserializer decoration. Earlier
-  cross-snapshot normal-library probe reused cached artifact, falsely showed
-  parity. Main unit tests compile current source; new same-binary oracle avoids
-  this baseline hazard. Do not trust reverse-version probes sharing target cache.
-- TextVisitor carries Result<T,D::Error> as value. Text parse failures returned
-  AFTER deserialize_string completes; string/type/UTF8 errors still propagate
-  inside visitor. Same string hint and borrowed parsing, original diagnostics.
-- New JSON parity test failed before fix, now passes: direct and convenience
-  APIs vs original String+parse oracle for Hash/Counter/Blob, checking message,
-  line/column/category, malformed text, overflow, wrong type and syntax. Existing
-  six-mode fixture now decorates deserializer errors, ensuring parse errors stay
-  outside decoration while UTF8 errors retain it. One new test.
-- Allocation probe unchanged: Hash 0, Counter 1, Blob 2 per raw JSON decode;
-  1000 iterations. Full suite: 431 library, four integration, two doctests passed;
-  two OS probes ignored. Formatting/strict all-target Clippy passed. Both sources
-  match verified snapshot; whitespace clean. Unrelated work untouched.
-- Snapshot: /tmp/lockbox-refactor-96.11szd2ki.
+Cycle 97: Validate canonical counter prefixes directly
+- Keep u64 parse first. Successful unsigned decimal text is canonical unless
+  prefixed '+' or redundant leading zeroes; single '0' remains valid. Replace
+  value.to_string()!=s with prefix checks, preserving numeric/overflow failure
+  precedence, canonical message, diagnostic boundary and u64 precision.
+- Installed core/src/num/mod.rs:1546/1723 confirms grammar. Eleven baseline wire
+  tests passed first. Restored 37,999-case same-binary old parse+format oracle:
+  all short eight-symbol strings through length five, numeric boundaries,
+  plus/zero/sign/whitespace/suffix variations, overflow and Unicode. One new test.
+- Allocation probe confirms raw JSON Counter 1->0; Hash stays0, Blob stays2 per
+  decode, zero reallocations, 1000 iterations. Full suite: 432 library, four
+  integration, two doctests passed; two OS probes ignored. Formatting/strict
+  all-target Clippy passed. Both sources match verified snapshot; whitespace
+  clean. Unrelated work untouched. Snapshot src/lib.rs touched for fresh build.
+- Snapshot: /tmp/lockbox-refactor-97.swd4b4_o.
 
-Next search: resume deferred Counter canonical spelling optimization. Baseline
-original parse+format oracle ALREADY passed 37,999 short/edge/Unicode/overflow
-cases. Test saved /tmp/lockbox-refactor-counter-oracle.rs; removed from fix commit
-for focus. Restore before receive_checks_canonical_encoding_before_object_hash
-in tests/wire.rs. Current source still value.to_string()!=s. Installed Rust source
-core/src/num/mod.rs:1546/1723 confirms unsigned optional '+' then decimal digits.
-AFTER unchanged parse reject starts_with('+') || (len>1 && starts_with('0')). Keep
-numeric errors/overflow before canonical error. Rerun oracle and JSON boundary
-regression, measure counter allocation 1->0, then full checks. Probe workspace
-/tmp/lockbox-refactor-95-probe.77e87b5l mutable; snapshot96 contains no examples.
-For future snapshots touch src/lib.rs before validation to force current library
-build; prefer same-binary legacy references for baseline comparisons. No
-subagents. Window ends 2026-11-02 03:13:13 UTC.
+Next search: Blob.from_text re-encodes decoded bytes only to check canonical
+base64. Direct dependency base640.22.1 URL_SAFE_NO_PAD uses NO_PAD with RequireNone
+padding and decode_allow_trailing_bits=false. Inspect actual decoder tail/error
+logic to prove accepted strings already canonical; guard may be redundant.
+Primary general_purpose/mod.rs:252/341/350 confirms config. Baseline old decode+
+reencode oracle across all alphabet tails length1/2/3 (266k), padding/whitespace/
+standard alphabet/Unicode negatives, all-byte roundtrips and larger payloads.
+Preserve engine error text/order and cycle96 diagnostic boundary. If proven,
+remove redundant guard only, measure Blob2->1 allocations. Do not weaken config
+or touch private attachment base64. Same-binary oracles; touch snapshot src/lib.rs
+before checks. Mutable probe /tmp/lockbox-refactor-95-probe.77e87b5l.
+No delegation. Window ends 2026-11-02 03:13:13 UTC.

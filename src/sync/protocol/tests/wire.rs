@@ -379,6 +379,73 @@ fn wire_text_parse_errors_keep_the_original_json_context_boundary() {
 }
 
 #[test]
+fn counter_text_validation_matches_decimal_formatting_and_error_order() {
+    use serde::{
+        Deserialize,
+        de::value::{Error as TextError, StrDeserializer},
+    };
+    fn check(text: &str) {
+        let expected = text
+            .parse::<u64>()
+            .map_err(|error| error.to_string())
+            .and_then(|value| {
+                if value.to_string() == text {
+                    Ok(Counter(value))
+                } else {
+                    Err("noncanonical counter".to_owned())
+                }
+            });
+        let actual = Counter::deserialize(StrDeserializer::<TextError>::new(text))
+            .map_err(|error| error.to_string());
+        assert_eq!(actual, expected, "{text:?}");
+    }
+    fn short_inputs(text: &mut String, remaining: usize) {
+        check(text);
+        if remaining == 0 {
+            return;
+        }
+        for character in ['0', '1', '9', '+', '-', '_', ' ', '\n'] {
+            text.push(character);
+            short_inputs(text, remaining - 1);
+            text.pop();
+        }
+    }
+    short_inputs(&mut String::new(), 5);
+    for value in [
+        0,
+        1,
+        9,
+        10,
+        99,
+        100,
+        (1u64 << 53) - 1,
+        (1u64 << 53) + 1,
+        u64::MAX - 1,
+        u64::MAX,
+    ] {
+        for prefix in ["", "+", "-", "0", "00", "+0", "-0", " ", "\t"] {
+            for suffix in ["", " ", "\n", "_", "x", "\0"] {
+                check(&format!("{prefix}{value}{suffix}"));
+            }
+        }
+    }
+    for text in [
+        "١",
+        "１２",
+        "＋1",
+        "−1",
+        "1\u{2003}",
+        "\u{feff}1",
+        "18446744073709551616",
+        "184467440737095516150",
+        "000018446744073709551615",
+        "000018446744073709551616",
+    ] {
+        check(text);
+    }
+}
+
+#[test]
 fn receive_checks_canonical_encoding_before_object_hash() {
     let bytes = include_bytes!("../fixtures/change.json");
     let noncanonical = [b" ".as_slice(), bytes.as_slice()].concat();
