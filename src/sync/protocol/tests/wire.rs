@@ -90,6 +90,70 @@ fn canonical_decoder_rejects_alternate_json_spellings() {
 }
 
 #[test]
+fn canonical_equality_preserves_values_and_serialization_error_order() {
+    use crate::sync::protocol::canonical_eq;
+    use std::cell::RefCell;
+    for (left, right) in [
+        (serde_json::json!(null), serde_json::json!(null)),
+        (serde_json::json!(1.0), serde_json::json!(1)),
+        (
+            serde_json::json!(["雪", 0.000001]),
+            serde_json::json!(["雪", 0.000001]),
+        ),
+        (serde_json::json!({"a": "x"}), serde_json::json!({"a": "y"})),
+    ] {
+        assert_eq!(
+            canonical_eq(&left, &right).unwrap(),
+            canonical(&left).unwrap() == canonical(&right).unwrap()
+        );
+    }
+    struct Logged<'a> {
+        id: u8,
+        fail: bool,
+        visits: &'a RefCell<Vec<u8>>,
+    }
+    impl serde::Serialize for Logged<'_> {
+        fn serialize<S: serde::Serializer>(
+            &self,
+            serializer: S,
+        ) -> std::result::Result<S::Ok, S::Error> {
+            use serde::ser::{Error as _, SerializeSeq};
+            self.visits.borrow_mut().push(self.id);
+            let mut sequence = serializer.serialize_seq(Some(1))?;
+            sequence.serialize_element(&self.id)?;
+            if self.fail {
+                Err(S::Error::custom("late serializer error"))
+            } else {
+                sequence.end()
+            }
+        }
+    }
+    for (left_fail, right_fail, expected) in [
+        (false, false, Ok(false)),
+        (true, false, Err(Error::InvalidEncoding)),
+        (false, true, Err(Error::InvalidEncoding)),
+        (true, true, Err(Error::InvalidEncoding)),
+    ] {
+        let visits = RefCell::new(Vec::new());
+        let left = Logged {
+            id: 1,
+            fail: left_fail,
+            visits: &visits,
+        };
+        let right = Logged {
+            id: 2,
+            fail: right_fail,
+            visits: &visits,
+        };
+        assert_eq!(canonical_eq(&left, &right), expected);
+        assert_eq!(
+            visits.into_inner(),
+            if left_fail { vec![1] } else { vec![1, 2] }
+        );
+    }
+}
+
+#[test]
 fn receive_checks_canonical_encoding_before_object_hash() {
     let bytes = include_bytes!("../fixtures/change.json");
     let noncanonical = [b" ".as_slice(), bytes.as_slice()].concat();

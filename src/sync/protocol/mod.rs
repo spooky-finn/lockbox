@@ -53,6 +53,7 @@ pub use model::{
     Action, Entity, EntityKind, Mutation, Projection, Record, Revision, Role, Transaction, Value,
     Version,
 };
+pub(crate) use wire::canonical_eq;
 pub use wire::{Blob, Counter, Hash, Object, canonical, decode};
 
 pub const MAX_OBJECT_BYTES: usize = 4 * 1024 * 1024;

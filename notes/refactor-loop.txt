@@ -5,35 +5,34 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 92; 427 library, four integration, two doctests passed.
+Last full suite: cycle 93; 428 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 92: Compare canonical wire bytes without output buffer
-- serialization.canonical_matches streams JCS into ByteMatch, retaining only
-  Option<&[u8]> remaining input. strip_prefix handles arbitrary chunks; None marks
-  mismatch. Always consume writes, even mismatch, so serializer finishes and late
-  errors/side effects remain. Exact Some(empty) required; no index overflow.
-- decode_bounded keeps budget/typed-deserialize order, maps serialization error
-  and mismatch to existing InvalidEncoding. Public canonical Vec API unchanged.
-  Remove final re-encoded output Vec; JCS internal sorting buffers still exist.
-- Baseline public decoder test passed before refactor: key order/duplicates,
-  escapes, exponent/integral/negative-zero spellings, whitespace and omitted
-  default fields. Three helper tests cover buffered oracle, all truncation and
-  changed-byte positions, leading/trailing bytes, UTF8 split into one-byte chunks,
-  mismatch consumption, late serializer error and NaN. Four new tests total.
-- Full suite: 427 library, four integration, two doctests passed; two OS probes
-  ignored. Formatting/strict all-target Clippy passed. All three sources match
+Cycle 93: Share canonical value equality with one buffer
+- Crate-private protocol canonical_eq buffers LEFT through existing canonical,
+  streams RIGHT through canonical_matches. Same left-first order, full traversal,
+  InvalidEncoding errors and equality bytes; public API unchanged.
+- Seven comparisons use helper: three vault invitation checks, three protocol
+  admission/retry checks, one controller-transfer approval check. Domain failures,
+  short-circuit order and exact retry rules unchanged. Cached recipient lookup
+  streams against existing recipient_bytes; errors still mean no match.
+- New equality/error-order test passed with original buffered implementation
+  before refactor. Buffered oracle covers equal/different values and 1.0 vs 1;
+  custom logged serializers verify both-side failures, left-first visitation and
+  late right error despite byte mismatch. One new test.
+- Full suite: 428 library, four integration, two doctests passed; two OS probes
+  ignored. Formatting/strict all-target Clippy passed. All six sources match
   verified snapshot; whitespace clean. Unrelated work untouched.
-- Snapshot: /tmp/lockbox-refactor-92.li5an0cv.
+- Snapshot: /tmp/lockbox-refactor-93.ubvtngx5.
 
-Next search: seven canonical(left)? != canonical(right)? comparisons allocate two
-Vecs: vault/sharing.rs three, machine/invitations.rs three, machine/authority.rs
-one. Consider crate-private protocol.wire canonical_eq(left,right)->Result<bool>:
-serialize LEFT with existing canonical first, then canonical_matches RIGHT against
-left bytes, mapping same InvalidEncoding. Preserve left-to-right serialization,
-complete traversal even mismatch, error precedence and existing callers' domain
-errors. Reexport pub(crate) only; public canonical API unchanged. Replace seven
-comparisons/imports. Add equality/error-order oracle tests (baseline buffered path
-first) and run invitation/authority/sharing checks or full suite. Inspect types
-before choosing same-T generic signature. No delegation; end 03:13:13 UTC.
+Next search: Hash/Counter Serialize builds to_string then serialize_str. Existing
+Hash Display writes hex directly. Consider Serializer.collect_str(self) for Hash
+and collect_str(&self.0) for Counter. Inspect installed serde_json/serde_jcs
+collect_str implementation first: default trait path may still allocate; streaming
+JSON may produce more tiny writes. Measure allocation benefit in isolated scratch
+if needed; preserve exact quoted strings, map-key encoding, counters precision,
+Hash casing, custom serialization compatibility and wire fixtures. Blob base64
+Display also possible but preserve Zeroizing guards for attachment/private data;
+wire Blob explicitly public/ciphertext only. Avoid speculative cleanup without
+benefit. No delegation. Window ends 2026-11-02 03:13:13 UTC.

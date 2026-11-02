@@ -151,6 +151,11 @@ pub fn canonical<T: Serialize>(value: &T) -> Result<Vec<u8>> {
     serde_jcs::to_vec(value).map_err(|_| Error::InvalidEncoding)
 }
 
+pub(crate) fn canonical_eq<T: Serialize>(left: &T, right: &T) -> Result<bool> {
+    let bytes = canonical(left)?;
+    crate::serialization::canonical_matches(right, &bytes).map_err(|_| Error::InvalidEncoding)
+}
+
 /// This profile requires canonical bytes on the wire. Re-encoding the typed
 /// value rejects duplicate keys, unknown nested fields, omitted fields and all
 /// alternate spellings before any verification or state mutation can occur.

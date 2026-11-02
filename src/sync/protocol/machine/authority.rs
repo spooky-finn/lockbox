@@ -3,8 +3,8 @@
 //! approval too. No root or incoming-controller approval authorizes itself.
 
 use crate::sync::protocol::{
-    Blob, Counter, DeviceSecret, Error, Hash, Projection, Result, Role, Signed, canonical, crypto,
-    decode,
+    Blob, Counter, DeviceSecret, Error, Hash, Projection, Result, Role, Signed, canonical,
+    canonical_eq, crypto, decode,
     machine::{
         history::with_history,
         membership::{build_control, epoch_key, validate_control_body},
@@ -206,7 +206,7 @@ impl crate::sync::protocol::machine::Machine {
                     && let Some(saved) = &control.body.approval
                     && saved.id() == approval.id()
                 {
-                    if canonical(saved.as_ref())? != canonical(approval)? {
+                    if !canonical_eq(saved.as_ref(), approval)? {
                         return Err(Error::UnauthorizedDevice);
                     }
                     return Ok(true);

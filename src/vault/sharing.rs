@@ -4,7 +4,7 @@
 use crate::{
     sync::protocol::{
         Admission, AdmissionReceipt, Certificate, Error, Hash, Invitation, Machine, Role, Signed,
-        SpaceDescriptor, canonical,
+        SpaceDescriptor, canonical, canonical_eq,
     },
     vault::{
         InvitationStatus, Result, Vault,
@@ -21,7 +21,7 @@ impl Vault {
             .as_ref()
             .and_then(|p| p.sharing.issued.get(&response.id()))
             .ok_or(Error::InvalidInvitation)?;
-        if canonical(&record.invitation.offer)? != canonical(&response.offer)? {
+        if !canonical_eq(&record.invitation.offer, &response.offer)? {
             return Err(Error::InvalidInvitation.into());
         }
         match record.status(now) {
@@ -155,8 +155,11 @@ impl Vault {
             !record.cancelled
                 && record.admission.is_none()
                 && record.invitation.descriptor() == &state.descriptor()
-                && canonical(record.invitation.recipient())
-                    .is_ok_and(|bytes| bytes == recipient_bytes)
+                && crate::serialization::canonical_matches(
+                    record.invitation.recipient(),
+                    &recipient_bytes,
+                )
+                .unwrap_or(false)
                 && record.invitation.role() == role
                 && record.invitation.expires_at() == expires_at
         });
@@ -250,7 +253,7 @@ impl Vault {
         Machine::verify_invitation(&invitation, expected)?;
         let profile = self.profile.as_ref().ok_or(Error::UnauthorizedDevice)?;
         let admission = if let Some(record) = profile.sharing.accepted.get(&invitation.id()) {
-            if canonical(&record.invitation)? != canonical(&invitation)? {
+            if !canonical_eq(&record.invitation, &invitation)? {
                 return Err(Error::InvalidInvitation.into());
             }
             record.admission.clone()
@@ -293,7 +296,7 @@ impl Vault {
             .issued
             .get(&admission.id())
             .ok_or(Error::InvalidInvitation)?;
-        if canonical(&record.invitation.offer)? != canonical(&admission.offer)? {
+        if !canonical_eq(&record.invitation.offer, &admission.offer)? {
             return Err(Error::InvalidInvitation.into());
         }
         match record.status(now) {

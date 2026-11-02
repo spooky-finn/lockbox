@@ -3,7 +3,7 @@
 
 use crate::sync::protocol::{
     Admission, AdmissionConfirmation, AdmissionReceipt, Blob, Certificate, Counter, DeviceSecret,
-    Error, Hash, Invitation, InviteOffer, JoinRequest, Object, Result, Role, Signed, canonical,
+    Error, Hash, Invitation, InviteOffer, JoinRequest, Object, Result, Role, Signed, canonical_eq,
     crypto, decode,
     invitation::{JOIN_DOMAIN, OFFER_DOMAIN, RECEIPT_DOMAIN, certificate_hash, offer_hash},
     machine::{
@@ -214,7 +214,7 @@ impl Machine {
 
         if receipt.id() != invitation.id()
             || admission.id() != invitation.id()
-            || canonical(&admission.offer)? != canonical(&invitation.offer)?
+            || !canonical_eq(&admission.offer, &invitation.offer)?
             || !device.matches_certificate(&admission.recipient().body)
         {
             return Err(Error::InvalidInvitation);
@@ -253,7 +253,7 @@ impl Machine {
                 .find(|proof| proof.id() == admission.id())
                 .ok_or(Error::InvalidInvitation)?;
 
-            if canonical(found)? != canonical(admission)? {
+            if !canonical_eq(found, admission)? {
                 return Err(Error::InvalidInvitation);
             }
             let device_id = device.id();
@@ -435,7 +435,7 @@ fn find_admission(history: &ControlHistory<'_>, admission: &Admission) -> Result
             .iter()
             .find(|proof| proof.id() == admission.id())
         {
-            if canonical(found)? != canonical(admission)? {
+            if !canonical_eq(found, admission)? {
                 return Err(Error::InvitationUsed);
             }
             return Ok(Some(*hash));
