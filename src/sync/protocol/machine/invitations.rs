@@ -5,7 +5,7 @@ use crate::sync::protocol::{
     Admission, AdmissionConfirmation, AdmissionReceipt, Blob, Certificate, Counter, DeviceSecret,
     Error, Hash, Invitation, InviteOffer, JoinRequest, Object, Result, Role, Signed, canonical_eq,
     crypto, decode,
-    invitation::{JOIN_DOMAIN, OFFER_DOMAIN, RECEIPT_DOMAIN, certificate_hash, offer_hash},
+    invitation::{JOIN_DOMAIN, OFFER_DOMAIN, RECEIPT_DOMAIN, offer_hash},
     machine::{
         Machine,
         history::{ControlHistory, with_history},
@@ -110,7 +110,7 @@ impl Machine {
     ) -> Result<Admission> {
         Self::verify_invitation(invitation, expected)?;
 
-        if certificate_hash(certificate)? != certificate_hash(invitation.recipient())?
+        if certificate.hash()? != invitation.recipient().hash()?
             || !device.matches_certificate(&certificate.body)
         {
             return Err(Error::UnauthorizedDevice);
@@ -264,7 +264,7 @@ impl Machine {
                 .find(|m| m.certificate.body.device == device_id)
                 .ok_or(Error::RetiredDevice)?;
 
-            if certificate_hash(&member.certificate)? != certificate_hash(admission.recipient())? {
+            if member.certificate.hash()? != admission.recipient().hash()? {
                 return Err(Error::RetiredDevice);
             }
             Ok((tip, member.role))
@@ -303,7 +303,7 @@ pub(super) fn verify_admissions(
             .find(|m| m.certificate.body.device == member.certificate.body.device);
 
         if let Some(old) = previous_member
-            && certificate_hash(&old.certificate)? == certificate_hash(&member.certificate)?
+            && old.certificate.hash()? == member.certificate.hash()?
         {
             continue;
         }
@@ -343,9 +343,7 @@ pub(super) fn verify_admissions(
             .get(&proof.recipient().body.device)
             .ok_or(Error::InvalidInvitation)?;
 
-        if member.role != proof.role()
-            || certificate_hash(&member.certificate)? != certificate_hash(proof.recipient())?
-        {
+        if member.role != proof.role() || member.certificate.hash()? != proof.recipient().hash()? {
             return Err(Error::InvalidInvitation);
         }
         verify_offer(&proof.offer, state, ancestors)?;

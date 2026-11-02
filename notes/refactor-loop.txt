@@ -9,22 +9,24 @@ Last full suite: cycle 109; 439 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 110: Reuse public-artifact byte budgeting
-- ControlTransfer::bytes uses existing invitation::artifact_bytes instead of
-  duplicating canonical encode/96MiB limit/error. Helper now protocol-scoped only;
-  remove unused canonical import. One serialization and original check order kept.
-- Formatting/strict all-target Clippy passed; six authority, six invitation,
-  eleven wire, fourteen sharing tests passed (37). No new mirrored tests for
-  helper reuse. Both sources match verified snapshot; whitespace clean. Unrelated
-  work untouched. src/lib.rs touched. Last full suite remains cycle109.
-- Snapshot: /tmp/lockbox-refactor-110.r8jd0yui.
+Cycle 111: Remove certificate-hash forwarding wrapper
+- Four invitation/admission comparisons call existing Signed<Certificate>::hash
+  directly. Remove protocol-private certificate_hash wrapper/import. Same eight
+  method calls, borrowed inputs, left/right error order and short-circuit guards;
+  public API and hashes unchanged.
+- Formatting/strict all-target Clippy passed; six invitation, eight membership,
+  six authority, eleven wire, fourteen sharing tests passed (45). No new mirrored
+  tests. Both sources match verified snapshot; whitespace clean. Unrelated work
+  untouched. src/lib.rs touched. Last full suite remains cycle109.
+- Snapshot: /tmp/lockbox-refactor-111.6i4qsd87.
 
-Next search: invitation::certificate_hash only forwards certificate.hash, yet
-machine/invitations.rs imports it for four comparisons (eight calls). Replace
-with inherent .hash on same references, preserving left/right error order and
-short-circuit guards; remove wrapper/import. No public API change. Relevant
-invitations/membership/authority/wire/sharing cases plus strict checks suffice.
-Later cache device.id at first controller comparison in offer_named_invitation,
-admission_receipt and prepare_membership_with_admissions, reuse author/controller
-field to avoid repeated SigningKey/public-key derivation. Keep evaluation order.
-No delegation. Ends 2026-11-02 03:13:13 UTC.
+Next search: cache device.id at first controller comparison in offer_named_invitation,
+admission_receipt and prepare_membership_with_admissions; reuse author/controller
+field. Getter reconstructs SigningKey/public key each call; three second derivations
+avoidable. Keep first evaluation at original comparison, after preceding checks.
+Existing membership/invitation/authority tests; no new mechanical tests. Full suite
+reasonable after consecutive focused checks.
+Later Directories.delete collapsed.retain scans all folders per ID. Consider borrowed
+BTreeSet of remaining IDs, then membership lookup. Baseline deletion test should
+cover stale/deleted IDs, unrelated collapsed survivors, revealed ancestors and
+failed-save preservation before changing filter. No delegation. End03:13:13 UTC.

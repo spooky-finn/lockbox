@@ -176,10 +176,6 @@ pub(super) fn offer_hash(offer: &Signed<InviteOffer>) -> Result<Hash> {
     Hash::digest_canonical(b"lockbox.sync.invite-object\0", offer)
 }
 
-pub(super) fn certificate_hash(certificate: &Signed<Certificate>) -> Result<Hash> {
-    certificate.hash()
-}
-
 pub(super) fn artifact_bytes(value: &impl Serialize) -> Result<Vec<u8>> {
     let bytes = canonical(value)?;
 
