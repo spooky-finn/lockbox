@@ -5,36 +5,36 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 98; 433 library, four integration, two doctests passed.
+Last full suite: cycle 99; 434 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 98: Remove redundant blob canonical re-encoding
-- URL_SAFE_NO_PAD directly decodes into Blob; remove encoded String comparison
-  and unreachable noncanonical-bytes branch. Same engine/config/errors; string
-  visitor and diagnostic boundary unchanged. Private attachment code untouched.
-- Primary base640.22.1 config fixes URL alphabet, RequireNone padding, trailing
-  bits false. decode_suffix.rs:102/134 rejects padding and unused bits; accepted
-  complete groups/tails uniquely re-encode to original text.
-- New baseline old decode+reencode oracle passed before refactor: >528k short
-  tails plus complete-prefix variants, explicit accepted-input canonicality,
-  padding/whitespace/standard alphabet/Unicode negatives, byte-pattern roundtrips
-  across size boundaries through8192. One new test; all fixed wire fixtures kept.
-- Allocator probe: 8192-byte raw JSON Blob2->1 allocations, zero reallocs, 1000
-  iterations; Hash/Counter remain0. Full suite: 433 library, four integration,
-  two doctests passed; two OS probes ignored. Formatting/strict all-target Clippy
-  passed. Both sources match verified snapshot; whitespace clean. Unrelated work
-  untouched. Snapshot src/lib.rs touched. Disk check:66GiB free.
-- Snapshot: /tmp/lockbox-refactor-98.iwov7p4f.
+Cycle 99: Serialize small public blobs through stack buffer
+- Blob Serialize tries encode_slice into128-byte stack buffer. Encoder determines
+  fit; no duplicated raw-size formula or bounded-output panic. Values through96
+  raw bytes fit; larger values fall back to existing encode String. Both branches
+  serialize_str once, retaining single-fragment JCS behavior and all public bytes.
+- Same-binary legacy/proposed allocator probe asserted JSON/JCS bytes at0/1/24/
+  32/64/80/95/96/97/256/8192 bytes. Nonempty small values save one allocation under
+  both encoders; empty/large allocation and reallocation counts unchanged. No
+  timing claim. Probe: /tmp/lockbox-refactor-99-probe.cfqau8gi/examples/refactor_99_alloc.rs.
+- Baseline byte fixture passed first: every size0..128 plus larger boundaries
+  through8192, byte patterns spanning alphabet, root/nested JSON/JCS, typed decode
+  roundtrip. One new test; private attachment Zeroizing serialization untouched.
+- Full suite: 434 library, four integration, two doctests passed; two OS probes
+  ignored. Formatting/strict all-target Clippy passed. Both sources match verified
+  snapshot; whitespace clean. Unrelated work untouched. src/lib.rs touched.
+- Snapshot: /tmp/lockbox-refactor-99.kt3rd1z9.
 
-Next search: Blob Serialize still allocates base64 String for every nonce/key/
-signature. Consider small-value stack path: <=96 raw bytes fit128 base64 bytes;
-URL_SAFE_NO_PAD.encode_slice into [u8;128], serialize_str one ASCII fragment;
-larger values keep existing owned-string path. Public Blob only; private
-attachment Zeroizing path untouched. Hash experience warns against fragmenting
-Display because JCS allocates per fragment. Read engine/mod.rs:171/194 contract.
-Measure same-binary legacy/proposed serializers for JSON/JCS at0/1/24/32/64/80/
-95/96/97/256/8192 bytes before editing. Preserve single-fragment semantics and
-exact URL-safe/no-pad bytes; baseline all-byte and threshold fixtures, then full
-checks. No manual codec/unsafe changes. Touch snapshot src/lib.rs; no subagents.
-Window ends 2026-11-02 03:13:13 UTC.
+Next search: wire.rs now mixes scalar text codecs (~170lines) with object envelopes,
+canonical validation and budget rules. Consider private wire/scalars.rs holding
+unchanged Hash/Counter/Blob defs/impls plus WireText visitor/helpers. Parent reexports
+pub use scalars::{Blob,Counter,Hash}, preserving protocol/public source paths.
+Move six contiguous scalar tests (scalar_string_encodings... through
+blob_string_encoding...) from tests/wire.rs into wire/scalars/tests.rs, imports
+super::* and crate protocol canonical/decode. Keep parent object/canonical tests.
+Parent imports serde Deserialize/Serialize/de::DeserializeOwned; child needs
+base64, serde Deserialize/Deserializer/Serialize/Serializer, sha2 Digest/Sha256,
+zeroize Zeroize, protocol Error/Result. No behavior edits. Save/match moved bodies
+byte-for-byte after formatting; full suite count stays434. New files need exact
+staging. Touch snapshot lib; no delegation. Ends 2026-11-02 03:13:13 UTC.

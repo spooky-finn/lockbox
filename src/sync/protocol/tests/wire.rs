@@ -511,6 +511,33 @@ fn blob_text_matches_strict_decoder_and_reencode_oracle() {
 }
 
 #[test]
+fn blob_string_encoding_preserves_empty_small_and_large_payloads() {
+    use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+    #[derive(serde::Serialize)]
+    struct Envelope<'a> {
+        value: &'a Blob,
+    }
+    for size in (0..=128).chain([255, 256, 257, 1023, 1024, 1025, 8192]) {
+        let bytes: Vec<_> = (0..size).map(|index| (index * 73 + 41) as u8).collect();
+        let text = URL_SAFE_NO_PAD.encode(&bytes);
+        let blob = Blob(bytes);
+        assert_eq!(
+            serde_json::to_vec(&blob).unwrap(),
+            serde_json::to_vec(&text).unwrap()
+        );
+        assert_eq!(canonical(&blob).unwrap(), canonical(&text).unwrap());
+        let envelope = Envelope { value: &blob };
+        let expected = serde_json::json!({"value": &text});
+        assert_eq!(
+            serde_json::to_vec(&envelope).unwrap(),
+            serde_json::to_vec(&expected).unwrap()
+        );
+        assert_eq!(canonical(&envelope).unwrap(), canonical(&expected).unwrap());
+        assert_eq!(decode::<Blob>(&canonical(&blob).unwrap()).unwrap(), blob);
+    }
+}
+
+#[test]
 fn receive_checks_canonical_encoding_before_object_hash() {
     let bytes = include_bytes!("../fixtures/change.json");
     let noncanonical = [b" ".as_slice(), bytes.as_slice()].concat();

@@ -104,7 +104,12 @@ impl WireText for Counter {
 pub struct Blob(pub Vec<u8>);
 impl Serialize for Blob {
     fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
-        serializer.serialize_str(&URL_SAFE_NO_PAD.encode(&self.0))
+        let mut encoded = [0; 128];
+        match URL_SAFE_NO_PAD.encode_slice(&self.0, &mut encoded) {
+            Ok(len) => serializer
+                .serialize_str(std::str::from_utf8(&encoded[..len]).expect("base64 is ASCII")),
+            Err(_) => serializer.serialize_str(&URL_SAFE_NO_PAD.encode(&self.0)),
+        }
     }
 }
 impl<'de> Deserialize<'de> for Blob {
