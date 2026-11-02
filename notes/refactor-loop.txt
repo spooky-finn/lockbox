@@ -5,40 +5,41 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 115; 442 library, four integration, two doctests passed.
+Last full suite: cycle 116; 443 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 115: Queue source folders by original readiness priority
-- Ordered pending/ready indices replace repeated pending Vec scans/removal. Source
-  ID set and parent->children map seed known dependencies; missing/no parent ready
-  immediately. Earliest ready source wins, first remaining source breaks cycles.
-  Unblock once per mapped ID, including targetNone; filter processed/self nodes.
-  Duplicate-ID mapping overwrites and Targets placement remain unchanged.
-- One new folder oracle passed baseline first, then queued mapper:456 combinations
-  of source reorderings/layouts, cycles/self-links, missing/empty/duplicate IDs,
-  folded siblings, invalid/Unicode/long names, deep reverse chains. Normalize only
-  fresh folder IDs by creation position; compare whole ordered folders and final
-  mappings, inputs unchanged. Original mapper in separate folder test module;
-  legacy planner uses it so dedup oracle remains independent. Preserved mapper and
-  Targets/content comparisons match original source after formatting.
-- Off-worktree real counter:reverse4096 chain8390656 readiness predicates vs4096
-  queued selections, equal normalized outputs. No timing claim. Probe:
-  /tmp/lockbox-refactor-115-probe.wyaf7l_m; /tmp/lockbox-refactor-115-work.log.
-- Full suite:442 library,four integration,two doctests passed;two OS probes ignored.
-  Formatting/strict all-target Clippy passed. Three sources match verified snapshot;
-  whitespace clean. Unrelated work untouched. lib touched. Disk61GiB free.
-- Snapshot: /tmp/lockbox-refactor-115.6fi050m6.
+Cycle 116: Resolve local restorations in one history pass
+- Track borrowed IDs absent from saved snapshot when first current value appears.
+  Remove prior RecordChange.id values once; stop when set empty. Remaining IDs are
+  new Put records, others Restore. No full history index/content copies. Updates/
+  deletes perform no history-ID work; first duplicate-value semantics unchanged.
+- One new same-binary original-method oracle passed baseline then refactor:24
+  combinations of saved/current/history presence and rotations, updates/deletes,
+  puts/restores, duplicate IDs, empty ID and mismatched history payload IDs. Compare
+  whole canonical revisions after clearing only fresh revision IDs/timestamps;
+  inputs unchanged. Event construction and preserved legacy method unchanged.
+- Real counter probe256 new IDs/4096 prior events:1048576 old predicates vs4096
+  removals; normalized outputs equal. Update-only path both counters0. No timing
+  claim. /tmp/lockbox-refactor-116-probe.689qi0dm and /tmp/lockbox-refactor-116-work.log.
+- Full suite:443 library,four integration,two doctests passed;two OS probes ignored.
+  Formatting/strict all-target Clippy passed. Both sources match verified snapshot;
+  whitespace clean. Unrelated work untouched. lib touched. Final comment-only wording
+  adjusted after checks; no executable change.
+- Snapshot: /tmp/lockbox-refactor-116.nyq5aq6e.
 
-Next search: vault/history.rs local_history_changes scans entire prior history per
-beforeNone changed ID to decide Restore vs Put. Build borrowed new_ids set while
-current-entry loop adds first after value (only beforeNone); remove history IDs in
-one pass, stop if set empty. Remaining IDs are genuine Put. restored becomes
-before.is_none && !new_ids.contains(id). Updates/deletes keep history fast path;
-no full history index or cloned contents. Preserve first duplicate IDs and h.id
-semantics. Add same-binary original method oracle in existing history tests,
-normalize only fresh revision/at; compare full canonical changes and inputs across
-updates/deletes/new/restores/duplicates/mismatched legacy payload IDs. Baseline
-then refactor/full suite. Optional real-counter probe256 new IDs,4096 unrelated
-history IDs:1048576 old any predicates vs4096 removals; no timing claim.
+Next search: browser/mod.rs immediate reply clones id/title/username per suggestion
+and username/password for credentials. Borrow from Vault entries via Suggestion<'a>
+(&str fields), Data<'a>, Outcome<'a>, Reply<'a>; handle returns Data<'_>, write_reply
+accepts Reply<'_>. Credential fields borrow owner Entry (Zeroize on drop), encoded
+frame remains Zeroizing. Saved ID remains String. All origin/size/lock checks stay.
+Private helper preview(&str)->&str uses char_indices().nth(64) boundary to preserve
+old .chars().take(64).collect without allocations; use for both suggestion labels.
+First add helper + Unicode prefix oracle and response JSON contract test (long
+Unicode/control labels, full credentials) against old owned replies. Baseline then
+borrow types/fields, full suite; fix tests only if borrow lifetimes require explicit
+drop after serialization. npm run check in isolated browser-extension (no deps),
+19 tests/two builds expected; optional CHROME_BIN/FIREFOX_BIN probes remain unset.
+Off-worktree allocator probe:50 suggestion mappings old owned vs borrowed (JSON
+bytes equal), credential2 Strings vs borrowed; measure allocations only, no timing.
 No delegation. Ends 2026-11-02 03:13:13 UTC.

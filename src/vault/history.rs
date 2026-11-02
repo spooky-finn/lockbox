@@ -14,6 +14,7 @@ impl Vault {
         let history = self.history.borrow();
         let saved = self.saved_entries.borrow();
         let mut changes = BTreeMap::new();
+        let mut new_ids = BTreeSet::new();
         // Legacy local files may repeat IDs; history uses the first value.
         for entry in saved.iter() {
             changes
@@ -21,15 +22,25 @@ impl Vault {
                 .or_insert((Some(entry), None));
         }
         for entry in &self.entries {
-            let (_, after) = changes.entry(entry.id.as_str()).or_insert((None, None));
+            let (before, after) = changes.entry(entry.id.as_str()).or_insert((None, None));
+            if before.is_none() && after.is_none() {
+                new_ids.insert(entry.id.as_str());
+            }
             after.get_or_insert(entry);
+        }
+        // Remove restorations so the set contains only new records.
+        for change in history.iter() {
+            if new_ids.is_empty() {
+                break;
+            }
+            new_ids.remove(change.id.as_str());
         }
         let mut revisions = Vec::new();
         for (id, (before, after)) in changes {
             if before == after {
                 continue;
             }
-            let restored = before.is_none() && history.iter().any(|h| h.id == id);
+            let restored = before.is_none() && !new_ids.contains(id);
             revisions.push(RecordChange {
                 id: id.to_owned(),
                 revision: crate::records::id::new(),

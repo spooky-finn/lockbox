@@ -1,5 +1,5 @@
 use crate::{
-    records::{entry::Entry, folder::Folder},
+    records::{entry::Entry, folder::Folder, history::RecordChange},
     sync::{
         protocol::{Role, canonical},
         transport::Download,
@@ -7,7 +7,7 @@ use crate::{
     vault::{KdfParams, ProfileStore, Vault, sharing_tests, witness::MemoryWitness},
 };
 use secrecy::SecretString;
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 fn entry(id: &str, title: &str) -> Entry {
     let mut entry = Entry::new();
@@ -344,4 +344,144 @@ fn legacy_duplicate_ids_keep_first_occurrence_history_semantics() {
     assert_eq!(history.len(), 2);
     assert_eq!(history[1].before, [first]);
     assert_eq!(history[1].after.as_ref(), Some(&second));
+}
+
+#[test]
+fn local_history_classification_matches_legacy_with_duplicates_and_payload_id_mismatches() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut vault = Vault::create(
+        directory.path().join("oracle.lbx"),
+        &SecretString::from("test master".to_owned()),
+        KdfParams {
+            memory_kib: 8192,
+            passes: 1,
+            lanes: 1,
+        },
+    )
+    .unwrap();
+    let mut saved: Vec<_> = (0..6)
+        .map(|i| entry(&i.to_string(), &format!("Saved {i}")))
+        .collect();
+    saved.push(entry("2", "Later saved duplicate"));
+    let mut updated = saved[1].clone();
+    updated.password = "new fictional password".into();
+    updated
+        .add_attachment("file.bin".into(), vec![0, 255, 42])
+        .unwrap();
+    let current = vec![
+        saved[3].clone(),
+        updated,
+        entry("1", "Later current duplicate"),
+        entry("8", "Restored"),
+        entry("9", "New record"),
+        entry("8", "Later restore duplicate"),
+        entry("", "Empty legacy ID"),
+    ];
+    let mut history = Vec::new();
+    for (id, payload_id) in [("8", "f"), ("0", "0"), ("8", "8"), ("", "e"), ("a", "9")] {
+        let mut change = RecordChange::default();
+        change.id = id.repeat(32);
+        change.revision = format!("old-{id}");
+        change.at = Some(1);
+        change.action = "Delete".into();
+        change.before = vec![entry(payload_id, "Earlier value")];
+        change.after = Some(entry(payload_id, "Mismatched payload is advisory here"));
+        history.push(change);
+    }
+    for rotation in [0, 1, 3] {
+        let mut saved = saved.clone();
+        saved.rotate_left(rotation);
+        let mut current = current.clone();
+        current.rotate_left(rotation);
+        for saved_present in [false, true] {
+            for history_present in [false, true] {
+                for current_present in [false, true] {
+                    *vault.saved_entries.borrow_mut() = if saved_present {
+                        saved.clone()
+                    } else {
+                        Vec::new()
+                    };
+                    *vault.history.borrow_mut() = if history_present {
+                        history.clone()
+                    } else {
+                        Vec::new()
+                    };
+                    *vault.test_entries_mut() = if current_present {
+                        current.clone()
+                    } else {
+                        Vec::new()
+                    };
+                    let saved_before = canonical(&*vault.saved_entries.borrow()).unwrap();
+                    let history_before = canonical(&*vault.history.borrow()).unwrap();
+                    let entries_before = canonical(&vault.entries()).unwrap();
+                    let mut expected = vault.legacy_local_history_changes();
+                    let mut actual = vault.local_history_changes();
+                    for events in [&mut expected, &mut actual] {
+                        for event in events {
+                            event.revision.clear();
+                            event.at = None;
+                        }
+                    }
+                    assert_eq!(canonical(&actual).unwrap(), canonical(&expected).unwrap());
+                    assert_eq!(
+                        canonical(&*vault.saved_entries.borrow()).unwrap(),
+                        saved_before
+                    );
+                    assert_eq!(canonical(&*vault.history.borrow()).unwrap(), history_before);
+                    assert_eq!(canonical(&vault.entries()).unwrap(), entries_before);
+                }
+            }
+        }
+    }
+}
+
+impl Vault {
+    fn legacy_local_history_changes(&self) -> Vec<RecordChange> {
+        if self.sync_state().is_some() {
+            return Vec::new();
+        }
+        let history = self.history.borrow();
+        let saved = self.saved_entries.borrow();
+        let mut changes = BTreeMap::new();
+        // Legacy local files may repeat IDs; history uses the first value.
+        for entry in saved.iter() {
+            changes
+                .entry(entry.id.as_str())
+                .or_insert((Some(entry), None));
+        }
+        for entry in &self.entries {
+            let (_, after) = changes.entry(entry.id.as_str()).or_insert((None, None));
+            after.get_or_insert(entry);
+        }
+        let mut revisions = Vec::new();
+        for (id, (before, after)) in changes {
+            if before == after {
+                continue;
+            }
+            let restored = before.is_none() && history.iter().any(|h| h.id == id);
+            revisions.push(RecordChange {
+                id: id.to_owned(),
+                revision: crate::records::id::new(),
+                actor: "Local user".into(),
+                device: "Local vault".into(),
+                at: Some(
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs(),
+                ),
+                action: if after.is_none() {
+                    "Delete"
+                } else if restored {
+                    "Restore"
+                } else {
+                    "Put"
+                }
+                .into(),
+                before: before.cloned().into_iter().collect(),
+                after: after.cloned(),
+            });
+        }
+        revisions
+    }
 }
