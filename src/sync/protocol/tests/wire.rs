@@ -1,6 +1,128 @@
 use crate::sync::protocol::machine::tests::*;
 
 #[test]
+fn canonical_digests_match_buffered_bytes_for_shapes_and_domains() {
+    for value in [
+        serde_json::json!(null),
+        serde_json::json!(true),
+        serde_json::json!([]),
+        serde_json::json!({}),
+        serde_json::json!({"\u{e000}": 1, "🗝": ["雪\n\"\\", 0.000001, -0.0]}),
+        serde_json::json!(["x".repeat(8192), u64::MAX, -9007199254740991i64]),
+    ] {
+        let bytes = canonical(&value).unwrap();
+        for domain in [b"".as_slice(), b"domain", b"domain\0", &[0, 255, 128]] {
+            assert_eq!(
+                Hash::digest_canonical(domain, &value).unwrap(),
+                Hash::digest(domain, &bytes)
+            );
+        }
+    }
+
+    let value = (Hash([255; 32]), Counter(u64::MAX), Blob(vec![73; 8192]));
+    assert_eq!(
+        Hash::digest_canonical(b"typed\0", &value).unwrap(),
+        Hash::digest(b"typed\0", &canonical(&value).unwrap())
+    );
+}
+
+#[test]
+fn canonical_digest_preserves_errors_and_serializes_once() {
+    use std::cell::Cell;
+
+    struct Failing<'a> {
+        calls: &'a Cell<usize>,
+        after_element: bool,
+    }
+    impl serde::Serialize for Failing<'_> {
+        fn serialize<S: serde::Serializer>(
+            &self,
+            serializer: S,
+        ) -> std::result::Result<S::Ok, S::Error> {
+            use serde::ser::{Error as _, SerializeSeq};
+            self.calls.set(self.calls.get() + 1);
+            if self.after_element {
+                let mut sequence = serializer.serialize_seq(Some(1))?;
+                sequence.serialize_element("already written")?;
+            }
+            Err(S::Error::custom("serialization failed"))
+        }
+    }
+
+    for after_element in [false, true] {
+        let calls = Cell::new(0);
+        let value = Failing {
+            calls: &calls,
+            after_element,
+        };
+        assert_eq!(canonical(&value), Err(Error::InvalidEncoding));
+        calls.set(0);
+        assert_eq!(
+            Hash::digest_canonical(b"domain\0", &value),
+            Err(Error::InvalidEncoding)
+        );
+        assert_eq!(calls.get(), 1);
+    }
+}
+
+#[test]
+fn public_hashes_preserve_canonical_bytes_and_domain_separation() {
+    let (mut state, owner) = owner();
+    let object: Object = decode(&state.objects[&state.genesis].0).unwrap();
+    assert_eq!(
+        object.hash().unwrap(),
+        Hash::digest(b"lockbox.sync.object\0", &canonical(&object).unwrap())
+    );
+    edit(&mut state, &owner, vec![entry(1, "雪🗝\n\"\\")]);
+    let projection = Machine::replay_state(&state, &owner).unwrap().projection;
+    assert_eq!(
+        projection.digest().unwrap(),
+        Hash::digest(
+            b"lockbox.sync.projection\0",
+            &canonical(&projection).unwrap()
+        )
+    );
+
+    let (guest, certificate) = identity(2);
+    assert_eq!(
+        certificate.hash().unwrap(),
+        Hash::digest(
+            b"lockbox.sync.certificate-object\0",
+            &canonical(&certificate).unwrap()
+        )
+    );
+    let mut invitation =
+        Machine::offer_invitation(&state, &owner, certificate.clone(), Role::Editor, None).unwrap();
+    let admission =
+        Machine::accept_invitation(&invitation, &state.descriptor(), &guest, &certificate).unwrap();
+    assert_eq!(
+        admission.hash().unwrap(),
+        Hash::digest(
+            b"lockbox.sync.acceptance-object\0",
+            &canonical(&admission).unwrap()
+        )
+    );
+    assert_eq!(
+        admission.offer_hash().unwrap(),
+        Hash::digest(
+            b"lockbox.sync.invite-object\0",
+            &canonical(&admission.offer).unwrap()
+        )
+    );
+    for name in [None, Some("雪🗝"), Some("")] {
+        invitation.offer.body.space_name = name.map(str::to_owned);
+        let metadata = match name {
+            Some(name) => canonical(&(invitation.descriptor(), invitation.anchor(), name)).unwrap(),
+            None => canonical(&(invitation.descriptor(), invitation.anchor())).unwrap(),
+        };
+        assert_eq!(
+            invitation.verification_code().unwrap(),
+            Hash::digest(b"lockbox.sync.invitation-verification\0", &metadata)
+        );
+    }
+}
+
+#[test]
 fn change_wire_contract_survives_internal_refactors() {
     let signing = SigningKey::from_bytes(&[11; 32]);
     let body = Change {

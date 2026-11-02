@@ -1,4 +1,5 @@
 use super::*;
+use crate::sync::protocol::canonical;
 
 fn entity(kind: EntityKind, id: u8) -> Entity {
     Entity {

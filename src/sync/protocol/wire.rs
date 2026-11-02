@@ -9,6 +9,7 @@ use crate::sync::protocol::{
     machine::{Change, Control},
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use sha2::{Digest, Sha256};
 
 const OBJECT_DOMAIN: &[u8] = b"lockbox.sync.object\0";
 
@@ -29,7 +30,7 @@ impl Object {
         canonical(self)
     }
     pub fn hash(&self) -> Result<Hash> {
-        self.encode().map(|(hash, _)| hash)
+        Hash::digest_canonical(OBJECT_DOMAIN, self)
     }
     /// Serialize once when both the object hash and canonical bytes are needed.
     pub(super) fn encode(&self) -> Result<(Hash, Vec<u8>)> {
@@ -50,6 +51,16 @@ impl Object {
 
 pub fn canonical<T: Serialize>(value: &T) -> Result<Vec<u8>> {
     serde_jcs::to_vec(value).map_err(|_| Error::InvalidEncoding)
+}
+
+impl Hash {
+    /// Hash canonical bytes without retaining their final serialized buffer.
+    pub(crate) fn digest_canonical(domain: &[u8], value: &impl Serialize) -> Result<Self> {
+        let mut hash = Sha256::new();
+        hash.update(domain);
+        serde_jcs::to_writer(&mut hash, value).map_err(|_| Error::InvalidEncoding)?;
+        Ok(Self(hash.finalize().into()))
+    }
 }
 
 pub(crate) fn canonical_eq<T: Serialize>(left: &T, right: &T) -> Result<bool> {

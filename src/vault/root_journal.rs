@@ -4,7 +4,7 @@
 //! profile-generation reconciliation and contains no signing secret.
 
 use crate::{
-    sync::protocol::{Error, Hash, Machine, canonical},
+    sync::protocol::{Error, Hash, Machine},
     vault::{
         Result, Vault,
         anchor::{self, Witness},
@@ -15,10 +15,7 @@ use crate::{
 pub(super) fn reserve(vault: &Vault) -> Result<Box<dyn WitnessLease>> {
     let state = vault.sync_state().ok_or(Error::UnauthorizedDevice)?;
     let (claim, epoch) = Machine::root_recovery_claim(state)?;
-    let scope = Hash::digest(
-        b"lockbox.root-recovery-journal.v1\0",
-        &canonical(&state.descriptor())?,
-    );
+    let scope = Hash::digest_canonical(b"lockbox.root-recovery-journal.v1\0", &state.descriptor())?;
     let expected = Witness {
         profile: Hash::digest(b"lockbox.profile-id.v1\0", &vault.salt),
         binding: claim,

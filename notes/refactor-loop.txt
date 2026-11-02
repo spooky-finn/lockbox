@@ -5,28 +5,33 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 101; 435 library, four integration, two doctests passed.
+Last full suite: cycle 102; 438 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 101: Feed HKDF domain/context without concatenation
-- crypto::content_key uses hkdf0.12.4 expand_multi_info with domain and context
-  slices. Removes temporary Vec and growth; salt, key, domains, output length,
-  Zeroizing output and error handling unchanged. Installed source documents and
-  implements exact equivalence to concatenating all info components.
-- New same-binary compatibility oracle passed before/after: six patterned key/
-  space/context tuples, checkpoint/change domains, original concatenated input,
-  explicit domain separation. One new library test.
-- Full suite: 435 library, four integration, two doctests passed; two OS probes
-  ignored. Formatting/strict all-target Clippy passed. Both sources match verified
+Cycle 102: Share direct canonical hashing
+- Crate-private Hash::digest_canonical feeds unchanged domain then JCS output
+  directly into Sha256's installed infallible Write implementation. Removes final
+  output Vec from Object::hash, certificate/projection, invitation metadata/offer/
+  acceptance, control statement and root-journal scope hashing. Object::encode
+  still returns bytes and hash from one encoding. Existing error mapping retained.
+- Three baseline tests passed with buffered helper first, then direct hashing:
+  canonical scalar/nested/large shapes, Unicode key ordering, binary domains,
+  early/late errors and one serialization; public consumer byte/hash oracles,
+  absent/nonempty/empty optional invitation names. Model tests import canonical
+  explicitly after production no longer needs it.
+- Same-binary allocation probe, projection0/1/32 records (14/8609/275085 bytes):
+  one fewer allocation per hash; populated projections two fewer reallocations.
+  JCS sorting buffers remain. No timing claim. Probe source/log:
+  /tmp/lockbox-refactor-102-probe.fle2dpw6/examples/refactor_102_alloc.rs
+  /tmp/lockbox-refactor-102-alloc.log.
+- Full suite: 438 library, four integration, two doctests passed; two OS probes
+  ignored. Formatting/strict all-target Clippy passed. Eight sources match verified
   snapshot; whitespace clean. Unrelated work untouched. src/lib.rs touched.
-- Snapshot: /tmp/lockbox-refactor-101._ra9lmy0.
+- Snapshot: /tmp/lockbox-refactor-102.c8k9kzxn.
 
-Next search: Hash digest callers build canonical Vec only to hash it. Sha256
-implements infallible std::io::Write (installed digest0.10.7 source verified).
-Consider crate-private Hash::digest_canonical in wire.rs, streaming serde_jcs into
-hash after domain. Consolidate repeated buffer/hash sequences across Object::hash,
-certificate, projection, invitation/acceptance, control statement, root journal.
-Retain Object::encode for bytes consumers. Add buffered oracle for canonical
-shapes/domains, late serialization failures, and public consumer baseline hashes;
-verify old behavior before change. Full suite. End03:13:13 UTC.
+Next search: sharing/actions.rs sharing_action borrows result only to clone owned
+error String, then checks is_ok. Consume .err into self.error and check is_none,
+matching neighboring methods. One source, existing sharing/desktop tests sufficient;
+no new mechanical test. Preserve apply_sharing ordering and sync.saved onlysuccess.
+Later inspect substantive duplication outside protocol. No delegation. End03:13:13 UTC.

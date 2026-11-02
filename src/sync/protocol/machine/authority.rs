@@ -33,10 +33,7 @@ impl Control {
     fn statement_hash(&self) -> Result<Hash> {
         let mut unsigned = self.clone();
         unsigned.approval = None;
-        Ok(Hash::digest(
-            b"lockbox.sync.control-statement\0",
-            &canonical(&unsigned)?,
-        ))
+        Hash::digest_canonical(b"lockbox.sync.control-statement\0", &unsigned)
     }
 
     pub(super) fn pending_approval(&self) -> Option<ControlTransition> {

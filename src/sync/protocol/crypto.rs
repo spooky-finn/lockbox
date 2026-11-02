@@ -1,6 +1,6 @@
 use crate::sync::{
     identity::Key,
-    protocol::{Blob, Error, Hash, Result, canonical},
+    protocol::{Blob, Error, Hash, Result},
 };
 use chacha20poly1305::{
     XChaCha20Poly1305, XNonce,
@@ -75,10 +75,7 @@ fn device_id(signing_key: &Key) -> Hash {
 
 impl Signed<Certificate> {
     pub fn hash(&self) -> Result<Hash> {
-        Ok(Hash::digest(
-            b"lockbox.sync.certificate-object\0",
-            &canonical(self)?,
-        ))
+        Hash::digest_canonical(b"lockbox.sync.certificate-object\0", self)
     }
 
     pub fn verify(&self) -> Result<()> {

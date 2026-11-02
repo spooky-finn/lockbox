@@ -92,14 +92,11 @@ impl Invitation {
     /// Compare through an independent channel. Includes the entire descriptor
     /// and signed control anchor, not only a displayed owner name or root key.
     pub fn verification_code(&self) -> Result<Hash> {
-        let metadata = match self.space_name() {
-            Some(name) => canonical(&(self.descriptor(), self.anchor(), name))?,
-            None => canonical(&(self.descriptor(), self.anchor()))?,
-        };
-        Ok(Hash::digest(
-            b"lockbox.sync.invitation-verification\0",
-            &metadata,
-        ))
+        let domain = b"lockbox.sync.invitation-verification\0";
+        match self.space_name() {
+            Some(name) => Hash::digest_canonical(domain, &(self.descriptor(), self.anchor(), name)),
+            None => Hash::digest_canonical(domain, &(self.descriptor(), self.anchor())),
+        }
     }
 
     pub fn id(&self) -> Hash {
@@ -165,10 +162,7 @@ impl Admission {
         offer_hash(&self.offer)
     }
     pub fn hash(&self) -> Result<Hash> {
-        Ok(Hash::digest(
-            b"lockbox.sync.acceptance-object\0",
-            &canonical(self)?,
-        ))
+        Hash::digest_canonical(b"lockbox.sync.acceptance-object\0", self)
     }
     pub fn bytes(&self) -> Result<Vec<u8>> {
         artifact_bytes(self)
@@ -179,10 +173,7 @@ impl Admission {
 }
 
 pub(super) fn offer_hash(offer: &Signed<InviteOffer>) -> Result<Hash> {
-    Ok(Hash::digest(
-        b"lockbox.sync.invite-object\0",
-        &canonical(offer)?,
-    ))
+    Hash::digest_canonical(b"lockbox.sync.invite-object\0", offer)
 }
 
 pub(super) fn certificate_hash(certificate: &Signed<Certificate>) -> Result<Hash> {

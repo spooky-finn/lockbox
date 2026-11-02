@@ -1,6 +1,6 @@
 use crate::{
     records::{entry::Entry, folder::Folder, totp},
-    sync::protocol::{Error, Hash, MAX_MUTATIONS, Result, canonical, wire::sorted_unique},
+    sync::protocol::{Error, Hash, MAX_MUTATIONS, Result, wire::sorted_unique},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -322,10 +322,7 @@ impl Projection {
     }
 
     pub fn digest(&self) -> Result<Hash> {
-        Ok(Hash::digest(
-            b"lockbox.sync.projection\0",
-            &canonical(self)?,
-        ))
+        Hash::digest_canonical(b"lockbox.sync.projection\0", self)
     }
 }
 
