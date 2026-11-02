@@ -69,7 +69,7 @@ impl ControlTransfer {
             .ok_or(Error::UnauthorizedDevice)?;
         crypto::verify(
             &Signed {
-                body: (self.descriptor.clone(), self.control.clone()),
+                body: (&self.descriptor, &self.control),
                 signature: self.signature.clone(),
             },
             &author.certificate.body.signing_key,
@@ -151,8 +151,8 @@ impl Machine {
         )?;
         let closure = control.dependency_closure(state)?;
         let offer = ControlTransfer {
-            descriptor: state.descriptor(),
-            control: control.clone(),
+            descriptor: signed.body.0,
+            control: signed.body.1,
             signature: signed.signature,
             objects: closure
                 .into_iter()

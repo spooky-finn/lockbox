@@ -5,30 +5,34 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 107; 438 library, four integration, two doctests passed.
+Last full suite: cycle 108; 438 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 107: Encapsulate root-capsule state
-- Capsule owns unchanged version/KDF/ciphertext predicates; profile delegates
-  validation in same position/order. All capsule fields now private. Original
-  password/identity/tamper test moved beside capsule unchanged, sharing existing
-  profile test fixture; other profile tests retain open/reopen coverage.
-- Three profile recovery call sites use existing unlock_root bridge rather than
-  repeating capsule.open plus bound identity key. RecoveryFailed mappings unchanged.
+Cycle 108: Reuse transfer payload ownership
+- verify_signature serializes borrowed descriptor/control tuple instead of cloning
+  entire control; signature64-byte clone retained. Offer creation moves signed.body
+  tuple fields into artifact instead of cloning them again after signing. Two full
+  control copies removed across send/verify, including checkpoints/rosters/grants.
+- No helpers or new tests needed: existing owned signing producer and borrowed
+  verifier exercise identical bytes, plus six authority roundtrip/tamper/frontier/
+  pending-intent cases. Domains, signatures, closure and artifact budgets unchanged.
 - Full suite: 438 library, four integration, two doctests passed; two OS probes
-  ignored. Formatting/strict all-target Clippy passed. Four sources match verified
-  snapshot; moved test body exact, whitespace clean. Unrelated work untouched.
-- Snapshot: /tmp/lockbox-refactor-107.49uqaa2p. src/lib.rs touched.
+  ignored. Formatting/strict all-target Clippy passed. Source matches verified
+  snapshot; whitespace clean. Unrelated work untouched. src/lib.rs touched.
+- Snapshot: /tmp/lockbox-refactor-108.h4yn9cc4. Disk63GiB free.
 
-Next search: transfer.rs verify_signature clones descriptor/control solely for
-Signed tuple serialization; borrow tuple fields, retain signature64-byte clone.
-control_transfer_offer signs owned tuple then clones descriptor/control again for
-returned artifact. Move signed.body.0/.1 into offer instead. Eliminates two full
-control copies incl checkpoint/grants/members across send/verify; no new helper.
-Existing six protocol authority tests include owned producer vs borrowed verifier,
-serialization roundtrips, tamper and pending-intent behavior; full suite appropriate.
-Potential later: transfer.receive_objects decodes/hash-serializes objects before
-Machine.receive validates same bytes again. Inspect safe shared ingress boundary;
-retain all canonical checks, budget/error precedence, candidate/quarantine logic.
-No delegation. Ends 2026-11-02 03:13:13 UTC.
+Next search: transfer.receive_objects currently decode + object.hash + Machine.receive
+(redecode/canonical check/raw hash). Consider Object::decode_with_hash returning
+computed (Hash,Object) after existing budget/canonical checks, reused by decode
+(expected hash comparison unchanged). Split Machine.receive after decode into
+private commands-only receive_decoded with exact unchanged mutation body. Add
+machine-scoped import_object(&[u8]) calling decode_with_hash then clone valid bytes
+and same mutator; transfer calls import_object. No expected hash supplied for
+artifact input anyway. Canonical/budget gates BEFORE hashing/copying; no raw hash
+of over-limit input. Keep metadata_state Control-only guard unchanged.
+First add import_object with legacy implementation plus same-binary state/error
+oracle vs old decode/hash/receive pipeline; baseline then refactor, full suite.
+Cover duplicate, foreign genesis, pending candidates, invalid signature, malformed,
+unknown/duplicate keys, alternate JSON and oversized bytes. Preserve mutator body
+exactly. No delegation. Ends 2026-11-02 03:13:13 UTC.
