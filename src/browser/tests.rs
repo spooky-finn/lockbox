@@ -93,7 +93,9 @@ fn suggestion_and_credential_replies_preserve_json_and_preview_boundaries() {
 #[test]
 fn origins_require_https_and_match_effective_port_exactly() {
     assert_eq!(
-        origin("https://ACCOUNTS.example:443/path?q=1#fragment").unwrap(),
+        origin("https://ACCOUNTS.example:443/path?q=1#fragment")
+            .unwrap()
+            .ascii_serialization(),
         "https://accounts.example"
     );
     for invalid in [
@@ -114,9 +116,12 @@ fn origins_require_https_and_match_effective_port_exactly() {
         "https://accounts.example:444",
         "https://аccounts.example",
     ] {
-        assert!(!matches(&entry, other), "{other}");
+        assert!(!matches(&entry, &origin(other).unwrap()), "{other}");
     }
-    assert!(matches(&entry, "https://accounts.example"));
+    assert!(matches(
+        &entry,
+        &origin("https://accounts.example").unwrap()
+    ));
 }
 
 #[test]
@@ -367,4 +372,104 @@ fn unknown_fields_and_actions_are_rejected() {
     ] {
         assert!(serde_json::from_str::<Message>(text).is_err());
     }
+}
+
+#[test]
+fn origin_equality_and_account_matching_preserve_ascii_origin_semantics() {
+    let mut inputs: Vec<String> = [
+        "https://accounts.example",
+        "https://ACCOUNTS.example:443/path?q=1#fragment",
+        "https://accounts.example:444",
+        "https://accounts.example:0",
+        "https://accounts.example.",
+        "https://sub.accounts.example",
+        "https://evilaccounts.example",
+        "https://bücher.example",
+        "https://xn--bcher-kva.example:443/other",
+        "https://[::1]",
+        "https://[0:0:0:0:0:0:0:1]:443/path",
+        "https://[::1]:444",
+        "https://127.0.0.1",
+        "https://127.000.000.001",
+        "http://accounts.example",
+        "https://user:pass@accounts.example",
+        "https://user@accounts.example",
+        "https://:@accounts.example",
+        "file:///secret",
+        "javascript:alert(1)",
+        "",
+        "bad",
+        "https://",
+        "https://accounts.example:65536",
+    ]
+    .into_iter()
+    .map(str::to_owned)
+    .collect();
+    inputs.push("x".repeat(4097));
+    for left in &inputs {
+        for right in &inputs {
+            let expected = legacy_origin(left)
+                .and_then(|left| legacy_origin(right).map(|right| left == right));
+            let actual = origin(left).and_then(|left| origin(right).map(|right| left == right));
+            assert_eq!(actual, expected, "{left} / {right}");
+            if let Ok(website) = origin(right) {
+                let mut entry = Entry::default();
+                entry.url = left.clone();
+                let expected =
+                    legacy_origin(left).is_ok_and(|left| left == legacy_origin(right).unwrap());
+                assert_eq!(matches(&entry, &website), expected, "{left} / {right}");
+            }
+        }
+    }
+}
+
+#[test]
+fn new_generated_record_keeps_ascii_origin_as_url_and_default_title() {
+    let (_directory, mut session, _) = fixture();
+    let website = "https://BÜCHER.example:443/path?x=1#fragment";
+    let expected = legacy_origin(website).unwrap();
+    session
+        .handle(Request::Generate {
+            origin: website.into(),
+            length: 24,
+            symbols: false,
+        })
+        .unwrap();
+    let Data::Saved { entry_id } = session
+        .handle(Request::SaveGenerated {
+            origin: format!("{expected}/other"),
+            title: " ".into(),
+            username: Zeroizing::new("user".into()),
+            entry_id: None,
+        })
+        .unwrap()
+    else {
+        panic!()
+    };
+    let saved = session
+        .vault
+        .as_ref()
+        .unwrap()
+        .entries()
+        .iter()
+        .find(|entry| entry.id == entry_id)
+        .unwrap();
+    assert_eq!(saved.url, expected);
+    assert_eq!(saved.title, expected);
+    assert_eq!(saved.username, "user");
+}
+
+fn legacy_origin(value: &str) -> Result<String, &'static str> {
+    if value.len() > 4096 {
+        return Err("Use an HTTPS website.");
+    }
+    let url = Url::parse(value).map_err(|_| "Use an HTTPS website.")?;
+    if url.scheme() != "https"
+        || url.host_str().is_none()
+        || !url.username().is_empty()
+        || url.password().is_some()
+    {
+        return Err("Use an HTTPS website without embedded credentials.");
+    }
+    Ok(url.origin().ascii_serialization())
 }

@@ -12,7 +12,7 @@ use std::{
     sync::mpsc,
     time::{Duration, Instant, SystemTime},
 };
-use url::Url;
+use url::{Origin, Url};
 use zeroize::Zeroizing;
 
 const MAX_MESSAGE: usize = 64 * 1024;
@@ -105,7 +105,7 @@ fn preview(value: &str) -> &str {
 }
 
 struct Generated {
-    origin: String,
+    origin: Origin,
     password: Zeroizing<String>,
 }
 
@@ -118,7 +118,7 @@ struct Session {
 }
 
 /// Exact scheme/host/effective-port matching, with no suffix or subdomain fallback.
-fn origin(value: &str) -> Result<String, &'static str> {
+fn origin(value: &str) -> Result<Origin, &'static str> {
     if value.len() > 4096 {
         return Err("Use an HTTPS website.");
     }
@@ -130,15 +130,19 @@ fn origin(value: &str) -> Result<String, &'static str> {
     {
         return Err("Use an HTTPS website without embedded credentials.");
     }
-    Ok(url.origin().ascii_serialization())
+    Ok(url.origin())
 }
 
-fn matches(entry: &Entry, expected: &str) -> bool {
-    origin(&entry.url).is_ok_and(|actual| actual == expected)
+fn matches(entry: &Entry, expected: &Origin) -> bool {
+    origin(&entry.url).is_ok_and(|actual| actual == *expected)
 }
 
 /// Credential reads and password updates must enforce the same account-origin check.
-fn account<'a>(entries: &'a [Entry], id: &str, website: &str) -> Result<&'a Entry, &'static str> {
+fn account<'a>(
+    entries: &'a [Entry],
+    id: &str,
+    website: &Origin,
+) -> Result<&'a Entry, &'static str> {
     entries
         .iter()
         .find(|entry| entry.id == id && matches(entry, website))
@@ -271,6 +275,7 @@ impl Session {
                 let mut entry = match entry_id {
                     Some(id) => account(vault.entries(), &id, &website)?.clone(),
                     None => {
+                        let website = website.ascii_serialization();
                         let mut entry = Entry::new();
                         entry.title = if title.trim().is_empty() {
                             website.clone()
