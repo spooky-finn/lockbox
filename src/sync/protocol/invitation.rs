@@ -180,7 +180,7 @@ pub(super) fn certificate_hash(certificate: &Signed<Certificate>) -> Result<Hash
     certificate.hash()
 }
 
-fn artifact_bytes(value: &impl Serialize) -> Result<Vec<u8>> {
+pub(super) fn artifact_bytes(value: &impl Serialize) -> Result<Vec<u8>> {
     let bytes = canonical(value)?;
 
     if bytes.len() > MAX_INVITATION_BYTES {

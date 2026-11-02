@@ -10,7 +10,7 @@ use crate::sync::protocol::machine::{
 
 use crate::sync::protocol::{
     DeviceSecret, Error, Hash, MAX_CACHE_BYTES, MAX_INVITATION_BYTES, MAX_OBJECTS, MAX_PARENTS,
-    Object, Result, Signed, canonical, crypto, decode, wire,
+    Object, Result, Signed, crypto, decode, invitation::artifact_bytes, wire,
 };
 use std::collections::BTreeSet;
 
@@ -18,11 +18,7 @@ const OFFER_DOMAIN: &[u8] = b"lockbox.sync.control-transfer-offer\0";
 
 impl ControlTransfer {
     pub fn bytes(&self) -> Result<Vec<u8>> {
-        let bytes = canonical(self)?;
-        if bytes.len() > MAX_INVITATION_BYTES {
-            return Err(Error::ResourceBudgetExceeded);
-        }
-        Ok(bytes)
+        artifact_bytes(self)
     }
 
     pub fn decode(bytes: &[u8]) -> Result<Self> {

@@ -9,27 +9,22 @@ Last full suite: cycle 109; 439 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 109: Decode transfer-history imports once
-- Object::decode_with_hash returns parsed object/address after original size and
-  canonical checks. Expected-hash decode reuses it, comparison/error order unchanged.
-- Machine::import_object shares private receive_decoded with public receive;
-  transfer uses new machine-scoped entry. Removes redundant preliminary parse and
-  typed hash serialization from artifact import; candidate promotion/authentication
-  remains unchanged. Valid bytes copied only after decoding/hash. Metadata Control-
-  only guard unchanged. Existing receive mutation body exact after formatting.
-- New same-binary legacy oracle passed before refactor and full suite after:
-  11 payload forms across four initial journals, repeated imports, complete state
-  and Result parity. Includes foreign genesis, signature rejection, missing control,
-  collisions/rejected hashes, duplicate/unknown keys, alternate/malformed/oversized
-  JSON. Existing canonical-before-hash precedence test still passes. One new test.
-- Full suite: 439 library, four integration, two doctests passed; two OS probes
-  ignored. Formatting/strict all-target Clippy passed. Four sources match verified
-  snapshot; whitespace clean. Unrelated work untouched. src/lib.rs touched.
-- Snapshot: /tmp/lockbox-refactor-109.xrypzh6q.
+Cycle 110: Reuse public-artifact byte budgeting
+- ControlTransfer::bytes uses existing invitation::artifact_bytes instead of
+  duplicating canonical encode/96MiB limit/error. Helper now protocol-scoped only;
+  remove unused canonical import. One serialization and original check order kept.
+- Formatting/strict all-target Clippy passed; six authority, six invitation,
+  eleven wire, fourteen sharing tests passed (37). No new mirrored tests for
+  helper reuse. Both sources match verified snapshot; whitespace clean. Unrelated
+  work untouched. src/lib.rs touched. Last full suite remains cycle109.
+- Snapshot: /tmp/lockbox-refactor-110.r8jd0yui.
 
-Next search: transfer.ControlTransfer::bytes duplicates invitation::artifact_bytes
-canonical encoding then MAX_INVITATION_BYTES guard. Make existing artifact_bytes
-pub(super) and reuse it from transfer, removing canonical import there. Same
-96MiB budget/order/error; no generic wrapper or extra serialization. Existing
-protocol authority/invitations/wire and sharing tests sufficient for reuse; strict
-all-target checks. No new mechanical tests. No delegation. End03:13:13 UTC.
+Next search: invitation::certificate_hash only forwards certificate.hash, yet
+machine/invitations.rs imports it for four comparisons (eight calls). Replace
+with inherent .hash on same references, preserving left/right error order and
+short-circuit guards; remove wrapper/import. No public API change. Relevant
+invitations/membership/authority/wire/sharing cases plus strict checks suffice.
+Later cache device.id at first controller comparison in offer_named_invitation,
+admission_receipt and prepare_membership_with_admissions, reuse author/controller
+field to avoid repeated SigningKey/public-key derivation. Keep evaluation order.
+No delegation. Ends 2026-11-02 03:13:13 UTC.
