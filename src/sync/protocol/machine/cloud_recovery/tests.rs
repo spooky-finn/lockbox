@@ -62,6 +62,66 @@ fn recovered_read_keys_and_archives_never_grant_device_write_authority() {
 }
 
 #[test]
+fn capsule_addressing_checks_budget_encoding_and_shape_before_hash_or_decryption() {
+    let root = SigningKey::from_bytes(&[7; 32]);
+    let wrong_hash = Hash([0; 32]);
+    let invalid_encoding = |bytes: &[u8]| {
+        assert!(matches!(object_hash(bytes), Err(Error::InvalidEncoding)));
+        assert!(matches!(
+            open(&root, wrong_hash, bytes),
+            Err(Error::InvalidEncoding)
+        ));
+    };
+    for (version, encapsulated_len, ciphertext_len) in [
+        (0, 32, 16),
+        (2, 32, 16),
+        (1, 31, 16),
+        (1, 33, 16),
+        (1, 32, 0),
+        (1, 32, 15),
+    ] {
+        invalid_encoding(
+            &canonical(&Envelope {
+                version,
+                encapsulated: Blob(vec![0; encapsulated_len]),
+                ciphertext: Blob(vec![0; ciphertext_len]),
+            })
+            .unwrap(),
+        );
+    }
+    let bytes = canonical(&Envelope {
+        version: 1,
+        encapsulated: Blob(vec![0; 32]),
+        ciphertext: Blob(vec![0; 16]),
+    })
+    .unwrap();
+    assert_eq!(
+        object_hash(&bytes).unwrap(),
+        Hash::digest(OBJECT_DOMAIN, &bytes)
+    );
+    assert!(matches!(
+        open(&root, wrong_hash, &bytes),
+        Err(Error::HashMismatch)
+    ));
+    let mut trailing_space = bytes.clone();
+    trailing_space.push(b' ');
+    invalid_encoding(&trailing_space);
+    let mut extra_field: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    extra_field["extra"] = serde_json::json!(0);
+    invalid_encoding(&canonical(&extra_field).unwrap());
+    invalid_encoding(b"{}");
+    let oversized = vec![b' '; crate::sync::protocol::MAX_OBJECT_BYTES + 1];
+    assert!(matches!(
+        object_hash(&oversized),
+        Err(Error::ResourceBudgetExceeded)
+    ));
+    assert!(matches!(
+        open(&root, wrong_hash, &oversized),
+        Err(Error::ResourceBudgetExceeded)
+    ));
+}
+
+#[test]
 fn encryption_to_public_recipient_without_controller_signature_is_rejected() {
     let (root, device, state, backup) = fixture();
     let snapshot = snapshot(&state, &device, &backup, "Owner", "Space").unwrap();

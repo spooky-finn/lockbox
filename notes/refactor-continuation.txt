@@ -10,3 +10,12 @@ One concern per commit; public behavior and encoded formats retained.
 - Checks: 37 recovery tests; strict all-target Clippy; formatting; diff check.
 - Localhost fixture required socket access. No live cloud used.
 - Log: /tmp/lockbox-refactor-120-check.log.
+
+121. Decode recovery envelopes once.
+- Private Envelope decoder returns validated envelope and exact-byte hash.
+- Address validation and opening share canonical, size and shape checks.
+- Opening reuses decoded ciphertext; no second parse/base64 decode.
+- Regression covers unsupported versions, key/tag lengths, unknown fields,
+  whitespace, missing fields, byte budget and hash/decryption error order.
+- Checks: 13 cloud recovery tests; strict all-target Clippy; format/diff checks.
+- Log: /tmp/lockbox-refactor-121-check.log.

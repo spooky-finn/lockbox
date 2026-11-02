@@ -72,6 +72,19 @@ struct Envelope {
     ciphertext: Blob,
 }
 
+impl Envelope {
+    fn decode_with_hash(bytes: &[u8]) -> Result<(Hash, Self)> {
+        let envelope: Self = decode(bytes)?;
+        if envelope.version != 1
+            || envelope.encapsulated.0.len() != 32
+            || envelope.ciphertext.0.len() < 16
+        {
+            return Err(Error::InvalidEncoding);
+        }
+        Ok((Hash::digest(OBJECT_DOMAIN, bytes), envelope))
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Snapshot {
@@ -301,21 +314,14 @@ pub(crate) fn is_current(
 }
 
 pub(crate) fn object_hash(bytes: &[u8]) -> Result<Hash> {
-    let envelope: Envelope = decode(bytes)?;
-    if envelope.version != 1
-        || envelope.encapsulated.0.len() != 32
-        || envelope.ciphertext.0.len() < 16
-    {
-        return Err(Error::InvalidEncoding);
-    }
-    Ok(Hash::digest(OBJECT_DOMAIN, bytes))
+    Envelope::decode_with_hash(bytes).map(|(hash, _)| hash)
 }
 
 pub(crate) fn open(root: &SigningKey, hash: Hash, bytes: &[u8]) -> Result<CloudSpace> {
-    if object_hash(bytes)? != hash {
+    let (actual, envelope) = Envelope::decode_with_hash(bytes)?;
+    if actual != hash {
         return Err(Error::HashMismatch);
     }
-    let envelope: Envelope = decode(bytes)?;
     let (private, public) = keypair(root);
     let enc = <X25519HkdfSha256 as Kem>::EncappedKey::from_bytes(&envelope.encapsulated.0)
         .map_err(|_| Error::InvalidEncoding)?;
