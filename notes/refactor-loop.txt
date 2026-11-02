@@ -9,21 +9,23 @@ Last full suite: cycle 81; 421 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 84: Iterate invitation summaries directly
-- Private issued/accepted info iterators flatten optional profile and map same
-  BTreeMap values/fields. Public Vec APIs collect these iterators, unchanged.
-- Session joining detection and wizard resume use any directly; no full vectors,
-  stop at first match. Sharing invitation sections iterate directly. Same order,
-  joined filtering, status(now), keys, buttons and fallback for absent profiles.
-- Formatting/strict all-target Clippy, 14 sharing, 45 desktop and five durable
-  vault-sharing tests passed. Four sources match verified snapshot; whitespace
-  clean. Unrelated edits untouched. Last full suite remains cycle 81.
-- Snapshot: /tmp/lockbox-refactor-84.rx_ssubt.
+Cycle 85: Interpolate translated captures directly
+- Private interpolate accepts IntoIterator<Item=impl AsRef<str>>. Existing
+  Language.format slice API unchanged; borrowed String/str callers still work.
+- Nested message translation feeds mapped captures directly. Remove temporary
+  Vec<String>; each translated value appended and dropped while walking template.
+  Matching capture Vec<&str> stays to verify complete match before recursion.
+- Same template traversal, nested diagnostics, unknown fallback and inserted
+  braces. Formatting/strict all-target Clippy, 45 desktop, 19 settings, nine
+  record-view and 14 sharing tests passed (87 total). No new tests for mechanical
+  change. Source matches verified snapshot; whitespace clean. Unrelated catalog
+  edit untouched; snapshot uses committed catalog.
+- Snapshot: /tmp/lockbox-refactor-85.90ix33qb.
 
-Next search: Language.message collects recursively translated captures into
-Vec<String> just to pass once to private interpolate. Consider interpolate taking
-IntoIterator<Item=impl AsRef<str>>, keeping Language.format slice API unchanged,
-passing translated capture map directly. Same inserted-brace handling, template
-matching and fallback text; retain Strings only while appending. Inspect existing
-interpolation/nested-message tests and generic inference before changing. Catalog
-has unrelated dirty work; preserve it and validate committed snapshot catalog.
+Next search: import.entry_batches builds Vec<&[Entry]> after sizing every record
+before first save. Consider lazy iterator with enumerated sizes + Peekable cache:
+consume first record, peek size until count/byte boundary, yield original slice.
+One JSON size calculation per record; oversize singleton, exact-byte/count edges,
+empty input and original order must match. Failure in early save should avoid
+sizing later batches. Existing import boundary tests currently expect Vec; collect
+only in tests needing random access. Inspect and baseline before changing.

@@ -56,11 +56,10 @@ impl Language {
             }
 
             if let Some(values) = captures(source, message) {
-                let values = values
-                    .into_iter()
-                    .map(|value| self.message(value))
-                    .collect::<Vec<_>>();
-                return interpolate(translated, &values);
+                return interpolate(
+                    translated,
+                    values.into_iter().map(|value| self.message(value)),
+                );
             }
         }
         message.to_owned()
@@ -75,7 +74,7 @@ impl Language {
     }
 }
 
-fn interpolate(template: &str, values: &[impl AsRef<str>]) -> String {
+fn interpolate(template: &str, values: impl IntoIterator<Item = impl AsRef<str>>) -> String {
     let mut output = String::new();
     let mut rest = template;
 
