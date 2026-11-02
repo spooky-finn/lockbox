@@ -5,27 +5,30 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 105; 438 library, four integration, two doctests passed.
+Last full suite: cycle 107; 438 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 106: Borrow selected ID during record deletion
-- delete_selected uses selected.as_deref and passes borrowed ID to disjoint vault
-  field. Removes one String allocation/copy; selection/confirmation clear only on
-  success, failure retains prior state. No temporary owned ID required.
-- Formatting/strict all-target Clippy passed; 45 desktop, 79 records, 12 scheduler
-  tests passed (136). Existing failure rollback/confirmation and successful disk
-  deletion tests cover change. No new mirrored test. Source matches verified
-  snapshot; whitespace clean. Unrelated work untouched. src/lib.rs touched.
-- Snapshot: /tmp/lockbox-refactor-106.b4r7ei3x.
+Cycle 107: Encapsulate root-capsule state
+- Capsule owns unchanged version/KDF/ciphertext predicates; profile delegates
+  validation in same position/order. All capsule fields now private. Original
+  password/identity/tamper test moved beside capsule unchanged, sharing existing
+  profile test fixture; other profile tests retain open/reopen coverage.
+- Three profile recovery call sites use existing unlock_root bridge rather than
+  repeating capsule.open plus bound identity key. RecoveryFailed mappings unchanged.
+- Full suite: 438 library, four integration, two doctests passed; two OS probes
+  ignored. Formatting/strict all-target Clippy passed. Four sources match verified
+  snapshot; moved test body exact, whitespace clean. Unrelated work untouched.
+- Snapshot: /tmp/lockbox-refactor-107.49uqaa2p. src/lib.rs touched.
 
-Next search: encapsulate root-capsule metadata now module exists. Move original
-version/KDF/ciphertext predicates from profile.validate to capsule.validate; fields
-private. Move unchanged root_capsule_requires... test from tests/profile.rs beside
-capsule implementation, importing existing pub(crate) profile test fixture. Other
-profile tests only call open. Reuse existing profile.unlock_root bridge in three
-recovery-password call sites, retaining RecoveryFailed mappings. Full suite.
-Later transfer.rs verify_signature clones whole descriptor/control solely for
-Signed tuple serialization. Borrow tuple fields; signature remains owned64-byte
-clone unless a broader API is justified. Public wire bytes must stay identical.
+Next search: transfer.rs verify_signature clones descriptor/control solely for
+Signed tuple serialization; borrow tuple fields, retain signature64-byte clone.
+control_transfer_offer signs owned tuple then clones descriptor/control again for
+returned artifact. Move signed.body.0/.1 into offer instead. Eliminates two full
+control copies incl checkpoint/grants/members across send/verify; no new helper.
+Existing six protocol authority tests include owned producer vs borrowed verifier,
+serialization roundtrips, tamper and pending-intent behavior; full suite appropriate.
+Potential later: transfer.receive_objects decodes/hash-serializes objects before
+Machine.receive validates same bytes again. Inspect safe shared ingress boundary;
+retain all canonical checks, budget/error precedence, candidate/quarantine logic.
 No delegation. Ends 2026-11-02 03:13:13 UTC.

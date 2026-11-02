@@ -18,15 +18,19 @@ use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 #[derive(Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 pub(super) struct RootCapsule {
     #[zeroize(skip)]
-    pub(super) version: u16,
+    version: u16,
     #[zeroize(skip)]
-    pub(super) kdf: KdfParams,
+    kdf: KdfParams,
     salt: [u8; 16],
     nonce: [u8; 24],
-    pub(super) ciphertext: Vec<u8>,
+    ciphertext: Vec<u8>,
 }
 
 impl RootCapsule {
+    pub(super) fn validate(&self) -> bool {
+        self.version == 1 && self.kdf.validate().is_ok() && self.ciphertext.len() == 48
+    }
+
     fn key(&self, password: &SecretString) -> Result<Zeroizing<Key>> {
         let stretched = crate::vault::format::stretch(password, &self.salt, self.kdf)?;
         let mut key = Zeroizing::new([0u8; 32]);
@@ -103,3 +107,6 @@ impl RootCapsule {
         Ok(root)
     }
 }
+
+#[cfg(test)]
+mod tests;

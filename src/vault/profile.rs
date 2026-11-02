@@ -160,9 +160,7 @@ impl BootstrapProfile {
                 .all(|(id, approval)| *id == approval.id() && approval.signature.0.len() == 64)
             && self.sharing.validate()
             && self.device.matches(&self.identity)
-            && self.root_capsule.version == 1
-            && self.root_capsule.kdf.validate().is_ok()
-            && self.root_capsule.ciphertext.len() == 48
+            && self.root_capsule.validate()
             && !self.username.trim().is_empty()
             && !self.space_name.trim().is_empty()
             && self.sync.as_ref().is_none_or(|sync| {
@@ -203,8 +201,7 @@ impl BootstrapProfile {
         recovery_password: &SecretString,
     ) -> Result<()> {
         let root = self
-            .root_capsule
-            .open(recovery_password, &self.identity.root_key)
+            .unlock_root(recovery_password)
             .map_err(|_| VaultError::RecoveryFailed)?;
         let device = self.sync_secret();
         crate::sync::protocol::Machine::approve_control_recovery(
@@ -226,8 +223,7 @@ impl BootstrapProfile {
         provider: ProviderConfiguration,
     ) -> Result<Self> {
         let root = self
-            .root_capsule
-            .open(recovery_password, &self.identity.root_key)
+            .unlock_root(recovery_password)
             .map_err(|_| VaultError::RecoveryFailed)?;
         Self::generate_for_root(
             &root,
@@ -245,8 +241,7 @@ impl BootstrapProfile {
         }
 
         let root = self
-            .root_capsule
-            .open(recovery_password, &self.identity.root_key)
+            .unlock_root(recovery_password)
             .map_err(|_| VaultError::RecoveryFailed)?;
         // Activation of a copied bootstrap must never resurrect its old signer.
         let (keys, identity) = DeviceKeys::generate(&root).map_err(|_| VaultError::Random)?;
