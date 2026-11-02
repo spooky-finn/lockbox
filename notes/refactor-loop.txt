@@ -5,36 +5,25 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 99; 434 library, four integration, two doctests passed.
+Last full suite: cycle 100; 434 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 99: Serialize small public blobs through stack buffer
-- Blob Serialize tries encode_slice into128-byte stack buffer. Encoder determines
-  fit; no duplicated raw-size formula or bounded-output panic. Values through96
-  raw bytes fit; larger values fall back to existing encode String. Both branches
-  serialize_str once, retaining single-fragment JCS behavior and all public bytes.
-- Same-binary legacy/proposed allocator probe asserted JSON/JCS bytes at0/1/24/
-  32/64/80/95/96/97/256/8192 bytes. Nonempty small values save one allocation under
-  both encoders; empty/large allocation and reallocation counts unchanged. No
-  timing claim. Probe: /tmp/lockbox-refactor-99-probe.cfqau8gi/examples/refactor_99_alloc.rs.
-- Baseline byte fixture passed first: every size0..128 plus larger boundaries
-  through8192, byte patterns spanning alphabet, root/nested JSON/JCS, typed decode
-  roundtrip. One new test; private attachment Zeroizing serialization untouched.
+Cycle 100: Isolate scalar wire codecs and their tests
+- Private wire/scalars module owns Hash, Counter, Blob and borrowed text visitor.
+  Parent reexports preserve all public protocol paths. Object envelopes, canonical
+  checking and budgets remain together in wire.rs.
+- Six contiguous scalar tests moved beside implementation. Source and test bodies
+  match saved originals byte-for-byte after formatting; behavior unchanged.
 - Full suite: 434 library, four integration, two doctests passed; two OS probes
-  ignored. Formatting/strict all-target Clippy passed. Both sources match verified
+  ignored. Formatting/strict all-target Clippy passed. Four sources match verified
   snapshot; whitespace clean. Unrelated work untouched. src/lib.rs touched.
-- Snapshot: /tmp/lockbox-refactor-99.kt3rd1z9.
+- Snapshot: /tmp/lockbox-refactor-100.uyt7nbi3.
 
-Next search: wire.rs now mixes scalar text codecs (~170lines) with object envelopes,
-canonical validation and budget rules. Consider private wire/scalars.rs holding
-unchanged Hash/Counter/Blob defs/impls plus WireText visitor/helpers. Parent reexports
-pub use scalars::{Blob,Counter,Hash}, preserving protocol/public source paths.
-Move six contiguous scalar tests (scalar_string_encodings... through
-blob_string_encoding...) from tests/wire.rs into wire/scalars/tests.rs, imports
-super::* and crate protocol canonical/decode. Keep parent object/canonical tests.
-Parent imports serde Deserialize/Serialize/de::DeserializeOwned; child needs
-base64, serde Deserialize/Deserializer/Serialize/Serializer, sha2 Digest/Sha256,
-zeroize Zeroize, protocol Error/Result. No behavior edits. Save/match moved bodies
-byte-for-byte after formatting; full suite count stays434. New files need exact
-staging. Touch snapshot lib; no delegation. Ends 2026-11-02 03:13:13 UTC.
+Next search: crypto::content_key allocates domain Vec then appends context only to
+feed HKDF. Installed hkdf0.12.4 expand_multi_info documents exact concatenation
+semantics. Add same-binary baseline oracle across both domains and patterned keys,
+spaces, contexts; verify baseline first, replace Vec with slice pair, full suite.
+Potential later: Sha256 implements std::io::Write. Digest canonical bytes directly
+where callers only need hash; retain buffered Object::encode for bytes consumers.
+Inspect errors/order and serializer failure tests before changing. End03:13:13 UTC.
