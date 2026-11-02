@@ -166,11 +166,11 @@ impl Unlocked {
     }
 
     pub(crate) fn delete_selected(&mut self) -> Result<(), String> {
-        let Some(id) = self.selected.clone() else {
+        let Some(id) = self.selected.as_deref() else {
             return Ok(());
         };
         self.vault
-            .delete_entry(&id)
+            .delete_entry(id)
             .map_err(|error| format!("Could not save: {error}"))?;
 
         self.selected = None;
