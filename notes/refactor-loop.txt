@@ -9,28 +9,34 @@ Last full suite: cycle 112; 439 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 112: Reuse controller device IDs
-- offer_named_invitation, admission_receipt and prepare_membership_with_admissions
-  derive device.id at original first controller comparison, then reuse copied Hash
-  for author/controller fields. Removes three second SigningKey/public-key
-  derivations across operations. Prior guards/error order unchanged. No timing claim.
-- Full suite: 439 library, four integration, two doctests passed; two OS probes
-  ignored. Formatting/strict all-target Clippy passed. Existing role/signature/
-  membership tests cover pure getter reuse; no mirrored tests. Both sources match
-  verified snapshot; whitespace clean. Unrelated work untouched. lib touched.
-- Snapshot: /tmp/lockbox-refactor-112.mtzkac8r.
+Cycle 113: Reuse collapsed-ID index during folder cleanup
+- After durable deletion, take old collapsed BTreeSet and walk surviving folders.
+  Set.take moves matching owned IDs into result; stale/deleted IDs drop. Stops once
+  old set empty, retaining empty/early-match fast paths. No ID copies or full extra
+  folder index. Original reveal afterward expands selected surviving ancestors.
+- New baseline test passed first: blocked save preserves selected child, confirmation,
+  collapsed IDs and folders; successful retry drops stale/deleted IDs, reveals
+  parent, retains unrelated collapsed branch. One new library test.
+- Standalone old/indexed set oracle passed40 cases, including empty/duplicates/stale/
+  Unicode. For1024 matching IDs:524800 linear equalities vs1024 B-tree lookups (each
+  logarithmic); no timing claim. /tmp/lockbox-refactor-113-intersection.rs and .log.
+- Formatting/strict all-target Clippy passed;80 records,45 desktop,12 scheduler
+  tests passed (137). Both sources match verified snapshot; whitespace clean.
+  Unrelated work untouched. lib touched. Last full remains112 (439 library).
+- Snapshot: /tmp/lockbox-refactor-113.9m2dy7c0.
 
-Next search: Directories.delete collapsed.retain scans all folders per ID. Build
-borrowed BTreeSet of remaining folder.id.as_str once after successful deletion,
-then retain by set.contains(id.as_str); keep reveal(vault) afterward. Baseline
-new directories test: parent/child/grandchild plus unrelated branch; collapsed
-all IDs + stale ID; blocked tmp save retains selection/confirmation/collapsed,
-then successful retry drops deleted/stale IDs, expands selected ancestors, keeps
-unrelated branch collapsed. Existing helper creates local FAST vault. Baseline
-before filter, then strict checks/records/desktop/scheduler; one meaningful test.
-Later import_plan::plan dedup scans entries.chain(planned) per source. Title is
-necessary equality criterion; borrowed title index with Existing(&Entry)/Planned
-(usize) candidates can avoid scanning unrelated titles without copying secret
-fields or borrowing growing Vec. Preserve same_entry final comparison and exact
-source/output order. Need same-binary legacy oracle, ignoring only fresh IDs, and
-large varied-title candidate-work probe. No delegation. End03:13:13 UTC.
+Next search: import_plan::plan dedup scans existing.chain(planned) per source.
+Index exact unchanged titles with BTreeMap<&str,Vec<KnownEntry>>. Enum Existing
+(&Entry)/Planned(usize); resolver borrows same existing/planned entry for final
+unchanged same_entry predicate. Only candidate subset changes; preserve source
+order, mapped folder/TOTP normalization and cloned output. Save imported index
+before push and add to bucket after push. Keys borrow stable inputs, never growing
+planned Vec. No copied secret fields or persistent plaintext fingerprints.
+First save original plan function as legacy_plan in test module. Same-binary oracle
+with varied titles (case/Unicode/empty), mapped existing folders only (avoid random
+new folder IDs), TOTP/attachment/metadata differences, repeated sources/planned
+matches; clear only fresh output entry IDs before comparing whole entries/skipped/
+folders, assert inputs unchanged. Baseline first, then index, full suite. Instrument
+same_entry only in off-worktree probe snapshot;4096 unique titles matching existing
+expected8390656 old predicate calls vs4096 indexed, assert same outputs. No timing
+claim. No delegation. Ends 2026-11-02 03:13:13 UTC.

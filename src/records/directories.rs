@@ -79,8 +79,15 @@ impl Directories {
 
         self.selected = parent;
         self.confirm_delete = false;
-        self.collapsed
-            .retain(|id| vault.folders().iter().any(|folder| &folder.id == id));
+        let mut collapsed = std::mem::take(&mut self.collapsed);
+        for folder in vault.folders() {
+            if collapsed.is_empty() {
+                break;
+            }
+            if let Some(id) = collapsed.take(&folder.id) {
+                self.collapsed.insert(id);
+            }
+        }
         self.reveal(vault);
         Ok(())
     }

@@ -99,6 +99,52 @@ fn deleting_a_subtree_moves_every_record_to_the_parent_without_losing_secrets() 
 }
 
 #[test]
+fn deletion_prunes_collapsed_ids_only_after_save_and_reveals_surviving_ancestors() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut workspace = unlocked(&dir);
+    let parent = add_folder(&mut workspace, "Parent", None);
+    let child = add_folder(&mut workspace, "Child", Some(parent.clone()));
+    let grandchild = add_folder(&mut workspace, "Grandchild", Some(child.clone()));
+    let other = add_folder(&mut workspace, "Other", None);
+    let other_child = add_folder(&mut workspace, "Other child", Some(other.clone()));
+    workspace.select_directory(Some(child.clone()));
+    let collapsed = BTreeSet::from([
+        parent.clone(),
+        child.clone(),
+        grandchild,
+        other.clone(),
+        other_child.clone(),
+        "stale-folder-id".into(),
+    ]);
+    workspace.directories.collapsed = collapsed.clone();
+    workspace.directories.confirm_delete = true;
+    let folders = workspace.vault.folders().to_vec();
+    let tmp = workspace.vault.path().with_extension("lbx.tmp");
+    std::fs::create_dir(&tmp).unwrap();
+
+    assert!(workspace.directories.delete(&mut workspace.vault).is_err());
+    assert_eq!(
+        workspace.directories.selected.as_deref(),
+        Some(child.as_str())
+    );
+    assert!(workspace.directories.confirm_delete);
+    assert_eq!(workspace.directories.collapsed, collapsed);
+    assert_eq!(workspace.vault.folders(), folders);
+
+    std::fs::remove_dir(tmp).unwrap();
+    workspace.directories.delete(&mut workspace.vault).unwrap();
+    assert_eq!(
+        workspace.directories.selected.as_deref(),
+        Some(parent.as_str())
+    );
+    assert!(!workspace.directories.confirm_delete);
+    assert_eq!(
+        workspace.directories.collapsed,
+        BTreeSet::from([other, other_child])
+    );
+}
+
+#[test]
 fn failed_folder_save_keeps_the_draft_and_original_hierarchy() {
     let dir = tempfile::tempdir().unwrap();
     let mut workspace = unlocked(&dir);
