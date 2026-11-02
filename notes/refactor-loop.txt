@@ -9,26 +9,25 @@ Last full suite: cycle 86; 422 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 86: Yield import batches lazily
-- Private entry_batches returns iterator over original contiguous slices. Sizes
-  mapped through enumerate/Peekable; cached next size reused across boundaries,
-  one JSON size calculation per entry. No prebuilt batch Vec; stop sizing when
-  caller stops after failed save. At most one lookahead record sized.
-- Same count/byte comparisons, fallback size, oversized singleton and source
-  order. Tests collect only where repeated inspection/concat needs Vec.
-- New baseline boundary test passed before change: empty, oversized middle item,
-  exact mutation count, full source equality after flatten. Existing escaping,
-  Unicode, attachment, exact byte and failed-save/retry checks retained.
-- Full suite: 422 library, four integration, two doctests passed; two OS probes
-  ignored. Formatting/strict all-target Clippy passed. Both sources match verified
-  snapshot; whitespace clean. Unrelated edits untouched.
-- Snapshot: /tmp/lockbox-refactor-86.sau8x5u_.
+Cycle 87: Reuse parsed vault header metadata
+- Header.parse constructs decoded header after existing base/version/KDF/slot
+  checks, then uses header.len()+16 for ciphertext minimum. Remove duplicate
+  recovery-slot length rule. Salt/check slices already bounded by base check;
+  only infallible field copies move before final length check. Error order same.
+- Decryption uses parsed.version instead of decoding same bytes again. Public
+  APIs, supported versions, header authentication and profile/generation checks
+  unchanged. No extra parsed-file abstraction or new tests for mechanical change.
+- Formatting/strict all-target Clippy, 22 vault, 18 protection, six recovery and
+  three profile tests passed (49 total). Source matches verified snapshot;
+  whitespace clean. Unrelated edits untouched. Last full suite cycle 86.
+- Snapshot: /tmp/lockbox-refactor-87.6zk0qc2t.
 
-Next search: vault/format.rs Header::parse duplicates header-length rule already
-in Header::len; decrypt re-decodes version bytes despite parsed.version available.
-Consider construct Header after existing base/version/KDF/slot checks, then
-validate header.len()+16 and return it. Salt/check slices already bounded by
-base-header check; only infallible construction moves before ciphertext-length
-check. Use parsed.version during decrypt. Preserve all error order/format rules.
-Avoid broader parsed-file API solely to skip cheap repeated header parse; adds
-coupling without evidence. Existing vault/protection/recovery tests cover formats.
+Next search: records/tree.project builds hierarchy then recursively walks Nodes
+again solely to collect placed folder/entry IDs before unreachable fallback.
+Consider Placed sets passed into branch; insert only when node emitted, so child
+placements always belong to emitted parent (nonempty children force inclusion).
+Remove second traversal. Keep fallback insert behavior unchanged: sets describe
+original rooted tree only, never add orphan fallback IDs. Preserve duplicate-ID,
+cycle/depth, search ancestor inclusion and ordering. Inspect existing tree tests;
+baseline malformed/filtered hierarchy coverage before changing. Avoid unrelated
+favicon/runtime/catalog edits. No delegation authorized.

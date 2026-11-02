@@ -111,22 +111,17 @@ impl Header {
         } else {
             None
         };
-        let len = HEADER_LEN
-            + if recovery.is_some() {
-                crate::vault::recovery::SLOTS_LEN
-            } else {
-                0
-            };
-        if data.len() < len + 16 {
-            return Err(VaultError::NotAVault);
-        }
-        Ok(Self {
+        let header = Self {
             recovery,
             version,
             kdf,
             salt: data[18..34].try_into().unwrap(),
             check: data[34..66].try_into().unwrap(),
-        })
+        };
+        if data.len() < header.len() + 16 {
+            return Err(VaultError::NotAVault);
+        }
+        Ok(header)
     }
 }
 
@@ -156,7 +151,7 @@ pub(super) fn decrypt(data: &[u8], key: &Key) -> Option<Contents> {
         folder::validate(&contents.folders, &contents.entries).ok()?;
     }
 
-    let version = u16::from_le_bytes([header[4], header[5]]);
+    let version = parsed.version;
 
     // Recovery key slots work with either local records or a shared profile.
     if (version != RECOVERY_VERSION
