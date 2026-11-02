@@ -122,6 +122,57 @@ fn capsule_addressing_checks_budget_encoding_and_shape_before_hash_or_decryption
 }
 
 #[test]
+fn recovery_proof_preserves_control_addresses_and_rejects_duplicate_or_noncontrol_bytes() {
+    let (_, device, mut state, backup) = fixture();
+    let mut snapshot = snapshot(&state, &device, &backup, "Owner", "Space").unwrap();
+    let proof = proof_state(&snapshot).unwrap();
+    assert!(proof.descriptor() == state.descriptor());
+    assert_eq!(proof.objects.len(), 1);
+    assert_eq!(
+        proof.objects[&state.genesis].0,
+        state.objects[&state.genesis].0
+    );
+
+    let mut noncanonical = snapshot.controls[0].clone();
+    noncanonical.0.push(b' ');
+    snapshot.controls.push(snapshot.controls[0].clone());
+    assert!(matches!(
+        proof_state(&snapshot),
+        Err(Error::InvalidEncoding)
+    ));
+    snapshot.controls = vec![noncanonical];
+    assert!(matches!(
+        proof_state(&snapshot),
+        Err(Error::InvalidEncoding)
+    ));
+
+    state.intent = Some(
+        Machine::prepare(
+            &state,
+            &device,
+            crate::sync::protocol::Transaction {
+                mutations: vec![],
+                rebased_from: None,
+            },
+        )
+        .unwrap(),
+    );
+    Machine::complete_intent(&mut state, &device).unwrap();
+    snapshot.controls = vec![
+        state
+            .objects
+            .values()
+            .find(|bytes| matches!(decode::<Object>(&bytes.0), Ok(Object::Change(_))))
+            .unwrap()
+            .clone(),
+    ];
+    assert!(matches!(
+        proof_state(&snapshot),
+        Err(Error::InvalidEncoding)
+    ));
+}
+
+#[test]
 fn encryption_to_public_recipient_without_controller_signature_is_rejected() {
     let (root, device, state, backup) = fixture();
     let snapshot = snapshot(&state, &device, &backup, "Owner", "Space").unwrap();

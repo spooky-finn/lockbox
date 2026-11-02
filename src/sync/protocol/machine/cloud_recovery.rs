@@ -398,11 +398,10 @@ fn proof_state(snapshot: &Snapshot) -> Result<SyncState> {
     }
     let mut state = Machine::join_at(descriptor.clone(), snapshot.anchor.control);
     for bytes in &snapshot.controls {
-        let object: Object = decode(&bytes.0)?;
+        let (hash, object) = Object::decode_with_hash(&bytes.0)?;
         if !matches!(object, Object::Control(_)) {
             return Err(Error::InvalidEncoding);
         }
-        let hash = object.hash()?;
         if state.objects.insert(hash, bytes.clone()).is_some() {
             return Err(Error::InvalidEncoding);
         }

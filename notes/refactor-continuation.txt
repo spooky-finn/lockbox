@@ -19,3 +19,17 @@ One concern per commit; public behavior and encoded formats retained.
   whitespace, missing fields, byte budget and hash/decryption error order.
 - Checks: 13 cloud recovery tests; strict all-target Clippy; format/diff checks.
 - Log: /tmp/lockbox-refactor-121-check.log.
+
+122. Reuse canonical control byte addresses.
+- Recovery proof import uses Object::decode_with_hash; no second serialization.
+- Canonical decoding, control-only requirement and duplicate rejection retained.
+- Regression checks exact control address/bytes, duplicate controls, trailing
+  whitespace and a valid change object supplied as a control proof.
+- Full checks: 469 library tests; 4 integration; 2 doctests passed.
+  Two explicit OS probes ignored. Localhost fixtures; no live cloud used.
+- Strict all-target Clippy, formatting and diff checks passed.
+- Log: /tmp/lockbox-refactor-122-check.log.
+
+Handoff: three focused refactors committed; no own code/staged work pending.
+Existing merchant-webhook note preserved. No push. Compact handoff saved per
+cycle; manual context compaction API unavailable.
