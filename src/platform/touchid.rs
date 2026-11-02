@@ -1,8 +1,8 @@
-//! Touch ID unlock with Keychain-enforced biometric access control.
+//! Touch ID unlock with Secure Enclave-enforced biometric access control.
 //!
-//! macOS stores the key in the data protection keychain, bound to the currently
-//! enrolled fingerprints. Unsupported signing configurations fail closed;
-//! there is no fallback to an unprotected login-keychain item.
+//! macOS encrypts the key with a Secure Enclave key bound to the currently
+//! enrolled fingerprints. Keychain stores only the encrypted envelope; neither
+//! signing entitlements nor an unprotected vault-key fallback are needed.
 
 use crate::sync::identity::Key;
 use std::sync::Arc;

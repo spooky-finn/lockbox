@@ -1,31 +1,26 @@
-//! Data protection Keychain adapter; never reads legacy unlock secrets.
+//! Secure Enclave biometric encryption; Keychain stores only sealed envelopes.
 
 use std::sync::mpsc;
 
 use block2::RcBlock;
-use core_foundation::{
-    base::{CFType, TCFType},
-    string::CFString,
-};
+use core_foundation::{base::TCFType, string::CFString};
 use objc2::runtime::Bool;
 use objc2_foundation::{NSError, NSString};
 use objc2_local_authentication::{LAContext, LAPolicy};
-use security_framework::{
-    access_control::{ProtectionMode, SecAccessControl},
-    passwords::{
-        AccessControlOptions, PasswordOptions, delete_generic_password_options, generic_password,
-        set_generic_password_options,
-    },
+use security_framework::passwords::{
+    PasswordOptions, delete_generic_password_options, generic_password,
+    set_generic_password_options,
 };
-use security_framework_sys::{
-    base::errSecItemNotFound,
-    item::{kSecAttrAccount, kSecUseAuthenticationContext},
-};
+use security_framework_sys::{base::errSecItemNotFound, item::kSecAttrAccount};
 use zeroize::Zeroizing;
 
 use crate::platform::touchid::Biometrics;
 
-const SERVICE: &str = "lockbox.touch-id.v2";
+#[path = "secure_enclave.rs"]
+mod secure_enclave;
+
+const SERVICE: &str = "lockbox.touch-id.v3";
+const RETIRED_SERVICE: &str = "lockbox.touch-id.v2";
 const LEGACY_SERVICE: &str = "lockbox";
 const POLICY: LAPolicy = LAPolicy::DeviceOwnerAuthenticationWithBiometrics;
 
@@ -48,6 +43,9 @@ fn describe(error: &NSError) -> String {
 
 impl Biometrics for MacBiometrics {
     fn domain_state(&self) -> Option<Vec<u8>> {
+        if !secure_enclave::available() {
+            return None;
+        }
         let context = unsafe { LAContext::new() };
         unsafe { context.canEvaluatePolicy_error(POLICY) }.ok()?;
         current_domain_state(&context)
@@ -82,28 +80,30 @@ impl Biometrics for MacBiometrics {
 
     fn load(&self, account: &str, reason: &str) -> Result<Option<Zeroizing<Vec<u8>>>, String> {
         purge_legacy()?;
-        // SecItemCopyMatching displays its own authentication prompt. A separate
-        // evaluatePolicy success must never authorize an unprotected key read.
+        let envelope = match generic_password(envelope_options(account)) {
+            Ok(bytes) => bytes,
+            Err(error) if error.code() == errSecItemNotFound => return Ok(None),
+            Err(error) => return Err(keychain_error(error)),
+        };
+        // Keychain returns only ciphertext. The enclave itself must authorize
+        // decryption with a fresh context, independent of evaluatePolicy.
         let context = unsafe { LAContext::new() };
         unsafe { context.setLocalizedReason(&NSString::from_str(reason)) };
-        match generic_password(read_options(account, &context)) {
-            Ok(bytes) => Ok(Some(Zeroizing::new(bytes))),
-            Err(error) if error.code() == errSecItemNotFound => Ok(None),
-            Err(error) => Err(keychain_error(error)),
-        }
+        secure_enclave::open(&envelope, account, &context)
+            .map(Some)
+            .map_err(|error| error.to_string())
     }
 
     fn store(&self, account: &str, data: &[u8]) -> Result<(), String> {
         purge_legacy()?;
-        let options = storage_options(account)?;
-        // Recreate rather than update: every saved item must receive the ACL.
-        delete_protected(account)?;
-        set_generic_password_options(data, options).map_err(keychain_error)
+        let envelope = secure_enclave::seal(data, account).map_err(|error| error.to_string())?;
+        // Never pass the plaintext record to Keychain, even in unsigned builds.
+        set_generic_password_options(&envelope, envelope_options(account)).map_err(keychain_error)
     }
 
     fn delete(&self, account: &str) {
         let _ = purge_legacy();
-        let _ = delete_protected(account);
+        let _ = delete_if_present(envelope_options(account));
     }
 }
 
@@ -116,41 +116,21 @@ impl MacBiometrics {
     }
 }
 
-#[allow(deprecated)] // PasswordOptions has no authentication-context setter.
-fn read_options(account: &str, context: &LAContext) -> PasswordOptions {
-    let mut options = protected_options(account);
-    // Security accepts an LAContext object for this key. Retain it in the query
-    // through SecItemCopyMatching; each read uses a fresh, unevaluated context.
-    unsafe {
-        options.query.push((
-            CFString::wrap_under_get_rule(kSecUseAuthenticationContext),
-            CFType::wrap_under_get_rule((context as *const LAContext).cast()),
-        ));
-    }
-    options
-}
-
-fn protected_options(account: &str) -> PasswordOptions {
+fn envelope_options(account: &str) -> PasswordOptions {
     let mut options = PasswordOptions::new_generic_password(SERVICE, account);
-    options.use_protected_keychain();
+    // File-based Keychain works without provisioned entitlements. Biometric
+    // protection belongs to the enclave key, not this ciphertext container.
     options.set_access_synchronized(Some(false));
     options
 }
 
-fn storage_options(account: &str) -> Result<PasswordOptions, String> {
-    let access = SecAccessControl::create_with_protection(
-        Some(ProtectionMode::AccessibleWhenUnlockedThisDeviceOnly),
-        AccessControlOptions::BIOMETRY_CURRENT_SET.bits(),
-    )
-    .map_err(keychain_error)?;
-    let mut options = protected_options(account);
-    options.set_access_control(access);
-    Ok(options)
+fn legacy_options() -> PasswordOptions {
+    service_options(LEGACY_SERVICE)
 }
 
 #[allow(deprecated)] // PasswordOptions has no service-only deletion builder.
-fn legacy_options() -> PasswordOptions {
-    let mut options = PasswordOptions::new_generic_password(LEGACY_SERVICE, "");
+fn service_options(service: &str) -> PasswordOptions {
+    let mut options = PasswordOptions::new_generic_password(service, "");
     let account = unsafe { CFString::wrap_under_get_rule(kSecAttrAccount) };
     options.query.retain(|(key, _)| key != &account);
     options
@@ -158,11 +138,16 @@ fn legacy_options() -> PasswordOptions {
 
 fn purge_legacy() -> Result<(), String> {
     delete_if_present(legacy_options())
-        .map_err(|error| format!("Could not remove legacy Touch ID keys: {error}"))
-}
-
-fn delete_protected(account: &str) -> Result<(), String> {
-    delete_if_present(protected_options(account))
+        .map_err(|error| format!("Could not remove legacy Touch ID keys: {error}"))?;
+    // Remove obsolete protected items when the running build can access them.
+    // Unsigned builds cannot address this access group, so -34018 is expected.
+    let mut retired = service_options(RETIRED_SERVICE);
+    retired.use_protected_keychain();
+    match delete_generic_password_options(retired) {
+        Ok(()) => Ok(()),
+        Err(error) if error.code() == errSecItemNotFound || error.code() == -34018 => Ok(()),
+        Err(error) => Err(keychain_error(error)),
+    }
 }
 
 fn delete_if_present(options: PasswordOptions) -> Result<(), String> {
@@ -174,11 +159,7 @@ fn delete_if_present(options: PasswordOptions) -> Result<(), String> {
 }
 
 fn keychain_error(error: security_framework::base::Error) -> String {
-    if error.code() == -34018 {
-        "Secure Touch ID storage requires a signed app with Keychain access entitlements; use the master password".into()
-    } else {
-        error.to_string()
-    }
+    error.to_string()
 }
 
 #[cfg(test)]
@@ -187,8 +168,7 @@ mod tests {
     use super::*;
     use core_foundation::boolean::CFBoolean;
     use security_framework_sys::item::{
-        kSecAttrAccessControl, kSecAttrService, kSecAttrSynchronizable,
-        kSecUseDataProtectionKeychain,
+        kSecAttrService, kSecAttrSynchronizable, kSecUseDataProtectionKeychain,
     };
 
     #[test]
@@ -204,23 +184,31 @@ mod tests {
     }
 
     #[test]
-    fn protected_storage_uses_local_data_protection_and_access_control() {
-        let options = storage_options("test-account").unwrap();
-        for (key, expected) in [
-            (unsafe { kSecUseDataProtectionKeychain }, true),
-            (unsafe { kSecAttrSynchronizable }, false),
-        ] {
-            let key = unsafe { CFString::wrap_under_get_rule(key) };
-            assert!(options.query.iter().any(|(actual, value)| {
-                actual == &key && value == &CFBoolean::from(expected).into_CFType()
-            }));
-        }
-        let access = unsafe { CFString::wrap_under_get_rule(kSecAttrAccessControl) };
-        assert!(options.query.iter().any(|(key, _)| key == &access));
+    fn encrypted_envelopes_use_local_keychain_without_restricted_entitlements() {
+        let options = envelope_options("test-account");
+        let protected = unsafe { CFString::wrap_under_get_rule(kSecUseDataProtectionKeychain) };
+        assert!(!options.query.iter().any(|(key, _)| key == &protected));
+        let sync = unsafe { CFString::wrap_under_get_rule(kSecAttrSynchronizable) };
+        assert!(options.query.iter().any(|(key, value)| {
+            key == &sync && value == &CFBoolean::false_value().into_CFType()
+        }));
     }
 
     #[test]
-    #[ignore = "OS probe: requires signed Keychain entitlements and enrolled Touch ID; creates one random item"]
+    fn malformed_and_unsupported_envelopes_release_no_data() {
+        for envelope in [
+            b"not an envelope".as_slice(),
+            br#"{"version":2,"enclaveKey":"","ephemeralPublicKey":"","ciphertext":""}"#,
+            &[0; 65537],
+        ] {
+            let context = unsafe { LAContext::new() };
+            unsafe { context.setInteractionNotAllowed(true) };
+            assert!(secure_enclave::open(envelope, "test-account", &context).is_err());
+        }
+    }
+
+    #[test]
+    #[ignore = "OS probe: requires Secure Enclave and enrolled Touch ID; creates one random encrypted Keychain item"]
     fn keychain_refuses_to_release_key_without_biometric_interaction() {
         let mut random = [0; 16];
         getrandom::fill(&mut random).unwrap();
@@ -228,16 +216,21 @@ mod tests {
         struct Cleanup(String);
         impl Drop for Cleanup {
             fn drop(&mut self) {
-                let _ = delete_protected(&self.0);
+                let _ = delete_if_present(envelope_options(&self.0));
             }
         }
         let _cleanup = Cleanup(account.clone());
-        set_generic_password_options(&[7; 32], storage_options(&account).unwrap()).unwrap();
+        let envelope = secure_enclave::seal(&[7; 32], &account).unwrap();
+        set_generic_password_options(&envelope, envelope_options(&account)).unwrap();
+        let stored = generic_password(envelope_options(&account)).unwrap();
+        assert_eq!(stored, envelope);
+        assert!(!stored.windows(32).any(|bytes| bytes == [7; 32]));
         let context = unsafe { LAContext::new() };
         unsafe { context.setInteractionNotAllowed(true) };
-        // This is an actual SecItemCopyMatching read, with no prior evaluatePolicy.
-        // An entitlement error or a missing item must not count as proof of gating.
-        let error = generic_password(read_options(&account, &context)).unwrap_err();
-        assert!(matches!(error.code(), -25308 | -25293), "{error}");
+        // A real enclave operation must fail authentication after reading the
+        // ciphertext. Missing entitlements or malformed data do not prove gating.
+        let error = secure_enclave::open(&stored, &account, &context).unwrap_err();
+        assert_eq!(error.domain().to_string(), "com.apple.LocalAuthentication");
+        assert_eq!(error.code(), -1004, "{error}"); // LAErrorNotInteractive
     }
 }

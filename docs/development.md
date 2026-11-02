@@ -3,8 +3,9 @@
 Run commands from the repository root with a Rust toolchain supporting edition 2024.
 The primary desktop platform is macOS. The UI uses the system WebView;
 Touch ID and Keychain integration live in platform adapters.
-See [Touch ID security and signing](touch-id.md) for biometric storage requirements
-and migration from older builds.
+See [Touch ID storage](touch-id.md) for biometric protection and migration from
+older builds. macOS builds require Xcode Command Line Tools, including Swift;
+Touch ID development builds need no Apple signing credentials.
 
 ```sh
 cargo run --locked
