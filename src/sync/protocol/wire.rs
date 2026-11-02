@@ -35,8 +35,13 @@ impl Object {
     /// Serialize once when both the object hash and canonical bytes are needed.
     pub(super) fn encode(&self) -> Result<(Hash, Vec<u8>)> {
         let bytes = self.bytes()?;
-        let hash = Hash::digest(OBJECT_DOMAIN, &bytes);
+        let hash = Self::hash_bytes(&bytes);
         Ok((hash, bytes))
+    }
+
+    /// Return the complete-object address of these exact bytes.
+    pub(super) fn hash_bytes(bytes: &[u8]) -> Hash {
+        Hash::digest(OBJECT_DOMAIN, bytes)
     }
 
     /// Check canonical encoding before comparing the complete-object hash.
@@ -51,7 +56,7 @@ impl Object {
     /// Decode canonical bytes before computing their complete-object address.
     pub(super) fn decode_with_hash(bytes: &[u8]) -> Result<(Hash, Self)> {
         let object = decode(bytes)?;
-        Ok((Hash::digest(OBJECT_DOMAIN, bytes), object))
+        Ok((Self::hash_bytes(bytes), object))
     }
 }
 

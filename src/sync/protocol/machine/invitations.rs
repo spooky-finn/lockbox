@@ -467,12 +467,10 @@ fn metadata_state(descriptor: &SpaceDescriptor, bytes: &[Blob]) -> Result<SyncSt
     );
 
     for blob in bytes {
-        let object: Object = decode(&blob.0)?;
-
-        if !matches!(object, Object::Control(_)) {
+        if !matches!(decode::<Object>(&blob.0)?, Object::Control(_)) {
             return Err(Error::InvalidInvitation);
         }
-        let hash = object.hash()?;
+        let hash = Object::hash_bytes(&blob.0);
 
         if !Machine::receive(&mut state, hash, blob.0.clone())? {
             return Err(Error::InvalidInvitation);

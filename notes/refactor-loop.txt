@@ -5,38 +5,29 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 118; 447 library, four integration, two doctests passed.
+Last full suite: cycle 119; 447 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
-Last extension check: cycle 118; 19 tests and both builds passed; two browser probes skipped.
+Last extension check: cycle 119; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 118: Compare browser origins as library values
-- origin returns url::Origin; Generated and exact matches/account use typed scheme/
-  host/effective-port equality. Parse/HTTPS/credentials/length guards unchanged.
-  New-record SaveGenerated alone renders ASCII string, preserving title/URL values.
-  Installed url2.5.8 source verified: allowed HTTPS host produces Tuple, derives Eq.
-- Two tests passed old baseline first:625 input-pair result/error/matching comparisons
-  against original ASCII helper, covering ports/case/paths/query/IDNA/IP/credentials/
-  malformed/oversized strings; generated new-record normalized URL/default title.
-  Existing private-type tests parse expected origins and keep literal ASCII check.
-- Same-binary allocator probe asserted ASCII output:both ASCII/IDNA parses save one
-  allocation and one reallocation each. No timing claim. Probe:
-  /tmp/lockbox-refactor-118-probe.74_cpw3p; /tmp/lockbox-refactor-118-alloc.log.
+Cycle 119: Share exact-byte object addressing
+- Protocol-private Object::hash_bytes owns complete-object domain hashing; encode
+  and decode_with_hash reuse it. Metadata import uses exact bytes after original
+  bounded canonical decode and Control-only guard, removing typed reserialization.
+  Inline decoded temporary releases it before receive; authentication remains in
+  original receive path. Public typed hash still streams JCS unchanged.
+- Existing golden/public hash, canonical-before-hash, invitation, authority and
+  transport tests cover helper reuse. No new mirrored test or API/schema change.
 - Full suite:447 library,four integration,two doctests passed;two OS probes ignored.
   Formatting/strict all-target Clippy passed. npm check:19 tests/two builds passed;
-  optional browser probes skipped. Both sources match verified snapshot; whitespace
-  clean. Unrelated work untouched. lib touched.
-- Snapshot: /tmp/lockbox-refactor-118.3xd74tkg.
+  optional Chrome/Firefox probes skipped. Both sources match verified snapshot;
+  whitespace clean. Unrelated work untouched. lib touched. Disk59GiB free.
+- Snapshot: /tmp/lockbox-refactor-119.6zfh3xmt.
 
-Next search: metadata_state validates Control bytes, then object.hash reserializes
-just to derive address before receive validates again. Add protocol-private
-Object::hash_bytes for exact-byte address, reuse in encode/decode_with_hash and
-metadata after original typed canonical/Control-only gate. Inline decoded temporary
-in matches! so parsed control can drop before receive. Keep public Object::hash
-streaming path, all size/kind guards before hashing and copying. Existing golden
-wire/public hash, invitation/authority/transport tests; full suite. No mirrored test.
-Then completion audit:all numbered commits/handoffs, protected paths excluded,
-committed sources match fresh verified snapshot, no own pending work/processes,
-full checks/extension evidence current. Preliminary audit117 cycles contiguous,
-no protected path in any commit; /tmp/lockbox-refactor-audit.json. Continue useful
-search/review until 2026-11-02 03:13:13 UTC; never mark complete before window ends.
-No delegation. End03:13:13 UTC.
+Next: completion audit plus final opportunity review through03:13:13 UTC. Rebuild
+numbered commit ledger (118 committed before this cycle); verify contiguous one
+commit/cycle and note, no protected paths in commits, committed tracked blobs match
+verified snapshot except rolling notes, no own dirty/staged/pending work. Review
+encoding/metadata guard order and borrowed browser owner lifetimes. Final ledger
+and compact notes after actual end; goal complete only at/after03:13:13 UTC.
+Preliminary ledger /tmp/lockbox-refactor-audit.json showed117 contiguous cycles and
+zero protected-path overlap. No push/delegation. Preserve all existing dirty files.
