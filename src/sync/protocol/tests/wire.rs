@@ -154,6 +154,42 @@ fn canonical_equality_preserves_values_and_serialization_error_order() {
 }
 
 #[test]
+fn scalar_string_encodings_preserve_all_hex_bytes_precision_and_map_keys() {
+    use std::collections::BTreeMap;
+    for start in [0u8, 32, 64, 96, 128, 160, 192, 224] {
+        let hash = Hash(std::array::from_fn(|index| start + index as u8));
+        let expected: String = hash.0.iter().map(|byte| format!("{byte:02x}")).collect();
+        assert_eq!(hash.to_string(), expected);
+        assert_eq!(
+            serde_json::to_vec(&hash).unwrap(),
+            serde_json::to_vec(&expected).unwrap()
+        );
+        assert_eq!(canonical(&hash).unwrap(), canonical(&expected).unwrap());
+        assert_eq!(decode::<Hash>(&canonical(&hash).unwrap()).unwrap(), hash);
+        let map = BTreeMap::from([(hash, Counter(u64::MAX))]);
+        let expected = BTreeMap::from([(expected, u64::MAX.to_string())]);
+        assert_eq!(
+            serde_json::to_vec(&map).unwrap(),
+            serde_json::to_vec(&expected).unwrap()
+        );
+        assert_eq!(canonical(&map).unwrap(), canonical(&expected).unwrap());
+    }
+    for value in [0, 9, 10, 99, 100, (1u64 << 53) + 1, u64::MAX] {
+        let counter = Counter(value);
+        let expected = value.to_string();
+        assert_eq!(
+            serde_json::to_vec(&counter).unwrap(),
+            serde_json::to_vec(&expected).unwrap()
+        );
+        assert_eq!(canonical(&counter).unwrap(), canonical(&expected).unwrap());
+        assert_eq!(
+            decode::<Counter>(&canonical(&counter).unwrap()).unwrap(),
+            counter
+        );
+    }
+}
+
+#[test]
 fn receive_checks_canonical_encoding_before_object_hash() {
     let bytes = include_bytes!("../fixtures/change.json");
     let noncanonical = [b" ".as_slice(), bytes.as_slice()].concat();

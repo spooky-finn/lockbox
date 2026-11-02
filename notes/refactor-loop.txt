@@ -5,34 +5,38 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 93; 428 library, four integration, two doctests passed.
+Last full suite: cycle 94; 429 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 93: Share canonical value equality with one buffer
-- Crate-private protocol canonical_eq buffers LEFT through existing canonical,
-  streams RIGHT through canonical_matches. Same left-first order, full traversal,
-  InvalidEncoding errors and equality bytes; public API unchanged.
-- Seven comparisons use helper: three vault invitation checks, three protocol
-  admission/retry checks, one controller-transfer approval check. Domain failures,
-  short-circuit order and exact retry rules unchanged. Cached recipient lookup
-  streams against existing recipient_bytes; errors still mean no match.
-- New equality/error-order test passed with original buffered implementation
-  before refactor. Buffered oracle covers equal/different values and 1.0 vs 1;
-  custom logged serializers verify both-side failures, left-first visitation and
-  late right error despite byte mismatch. One new test.
-- Full suite: 428 library, four integration, two doctests passed; two OS probes
-  ignored. Formatting/strict all-target Clippy passed. All six sources match
-  verified snapshot; whitespace clean. Unrelated work untouched.
-- Snapshot: /tmp/lockbox-refactor-93.ubvtngx5.
+Cycle 94: Serialize scalar text without temporary heap strings
+- Hash Serialize formats existing Display into fixed 64-byte stack buffer, emits
+  one serialize_str fragment. Public Display/parser unchanged; no new hex codec.
+  Counter uses collect_str(&u64), same quoted decimal precision.
+- Installed serde_json streams collect_str; nested JCS forwards it. Scratch
+  allocator probe caught naive Hash collect_str regression: JCS 15->45 allocs
+  per nested hash due fragments. Stack single-fragment path confirmed JCS
+  15->14 allocs, 6->3 reallocs; JSON 2->1 allocs, 3->0 reallocs. Counter saves
+  one alloc under both encoders. Counts per operation, 1000 iterations; byte
+  equality asserted. No wall-time speed claim. Probe stays outside worktree:
+  /tmp/lockbox-refactor-93.ubvtngx5/examples/refactor_94_alloc.rs.
+- Baseline scalar test passed first: every hex byte, JSON/JCS strings and map
+  keys, typed roundtrip, zero/decimal boundaries/above-2^53/u64::MAX counters.
+  Full suite: 429 library, four integration, two doctests passed; two OS probes
+  ignored. Formatting/strict all-target Clippy passed. Both sources match verified
+  snapshot; whitespace clean. Unrelated work untouched.
+- Snapshot: /tmp/lockbox-refactor-94.1de9izm4.
 
-Next search: Hash/Counter Serialize builds to_string then serialize_str. Existing
-Hash Display writes hex directly. Consider Serializer.collect_str(self) for Hash
-and collect_str(&self.0) for Counter. Inspect installed serde_json/serde_jcs
-collect_str implementation first: default trait path may still allocate; streaming
-JSON may produce more tiny writes. Measure allocation benefit in isolated scratch
-if needed; preserve exact quoted strings, map-key encoding, counters precision,
-Hash casing, custom serialization compatibility and wire fixtures. Blob base64
-Display also possible but preserve Zeroizing guards for attachment/private data;
-wire Blob explicitly public/ciphertext only. Avoid speculative cleanup without
-benefit. No delegation. Window ends 2026-11-02 03:13:13 UTC.
+Next search: Hash/Counter/Blob Deserialize currently allocate String before
+parsing. Consider one private WireText trait with generic from_text<E:de::Error>,
+shared generic Visitor<T>, deserialize_text helper. Keep deserialize_STRING hint
+exactly: serde_json forwards it to borrowed string parser. Visitor accepts str
+without owning; default visit_string/borrowed_str delegates. Mirror StringVisitor
+expecting 'a string' and visit_bytes UTF8 validation/default byte_buf delegation,
+so wrong-type/invalid-UTF8 errors stay same. Move current scalar parsing bodies
+unchanged into trait impls; do not yet remove canonical checks. No Box/error-string
+allocations needed if trait parse generic over de::Error. Primary StringVisitor:
+serde_core-1.0.229/src/de/impls.rs:585; confirms these methods only. Baseline borrowed,
+owned, bytes, escaped JSON, malformed values and error-text cases; measure scalar
+allocation benefit and run full suite. Avoid copying private attachment strings;
+wire Blob explicitly public/ciphertext. Inspect before choosing abstraction.

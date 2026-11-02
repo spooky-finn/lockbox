@@ -56,7 +56,11 @@ impl std::str::FromStr for Hash {
 
 impl Serialize for Hash {
     fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.to_string())
+        // Emit one string fragment; JCS allocates for each formatted fragment.
+        let mut encoded = [0; 64];
+        std::io::Write::write_fmt(&mut encoded.as_mut_slice(), format_args!("{self}"))
+            .expect("64-byte hexadecimal hash");
+        serializer.serialize_str(std::str::from_utf8(&encoded).expect("hexadecimal is ASCII"))
     }
 }
 impl<'de> Deserialize<'de> for Hash {
@@ -72,7 +76,7 @@ impl<'de> Deserialize<'de> for Hash {
 pub struct Counter(pub u64);
 impl Serialize for Counter {
     fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.0.to_string())
+        serializer.collect_str(&self.0)
     }
 }
 impl<'de> Deserialize<'de> for Counter {
