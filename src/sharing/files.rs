@@ -1,8 +1,11 @@
 //! Bounded public artifact files. Never overwrites a profile or existing path.
 
-use crate::sync::{protocol::MAX_INVITATION_BYTES, transport::Cancellation};
+use crate::{
+    platform::files::create_new_private,
+    sync::{protocol::MAX_INVITATION_BYTES, transport::Cancellation},
+};
 use std::{
-    fs::{File, OpenOptions},
+    fs::File,
     io::{Read, Write},
     path::Path,
 };
@@ -37,16 +40,7 @@ pub(crate) fn read(path: &Path, cancel: &Cancellation) -> Result<Vec<u8>, String
 
 pub(crate) fn write(path: &Path, bytes: &[u8], cancel: &Cancellation) -> Result<(), String> {
     cancel.check().map_err(|_| "File operation cancelled")?;
-    let mut options = OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    let mut file = options
-        .open(path)
-        .map_err(|_| "Choose a new file name for sharing")?;
+    let mut file = create_new_private(path).map_err(|_| "Choose a new file name for sharing")?;
     let result = (|| {
         for chunk in bytes.chunks(64 * 1024) {
             cancel.check().map_err(|_| "File operation cancelled")?;

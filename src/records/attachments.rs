@@ -1,7 +1,7 @@
 //! Explicit file import/export; vault persistence never writes plaintext attachments.
-use crate::records::entry::MAX_ATTACHMENT_BYTES;
+use crate::{platform::files::create_new_private, records::entry::MAX_ATTACHMENT_BYTES};
 use std::{
-    fs::{File, OpenOptions},
+    fs::File,
     io::{Read, Write},
     path::Path,
 };
@@ -32,15 +32,8 @@ pub(crate) fn read(path: &Path) -> Result<(String, Zeroizing<Vec<u8>>), String> 
 }
 
 pub(crate) fn export(path: &Path, data: &[u8]) -> Result<(), String> {
-    let mut options = OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
     // Never follow a symlink or silently overwrite an existing file.
-    let mut file = options.open(path).map_err(|e| e.to_string())?;
+    let mut file = create_new_private(path).map_err(|e| e.to_string())?;
 
     if let Err(error) = file.write_all(data).and_then(|_| file.sync_all()) {
         let _ = std::fs::remove_file(path);

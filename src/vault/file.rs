@@ -1,10 +1,13 @@
 //! Private files, exclusive process locks and durable encrypted-file replacement.
 //! Directory synchronization remains explicit in the Vault witness orchestration.
 
-use crate::vault::{
-    Result, VaultError,
-    format::{Header, PROFILE_VERSION, RECOVERY_VERSION},
-    lease::ExclusiveFile,
+use crate::{
+    platform::files::create_new_private,
+    vault::{
+        Result, VaultError,
+        format::{Header, PROFILE_VERSION, RECOVERY_VERSION},
+        lease::ExclusiveFile,
+    },
 };
 use std::{
     fs::{self, File, OpenOptions},
@@ -126,14 +129,7 @@ fn private_file(path: &Path) -> io::Result<File> {
         Err(error) => return Err(error),
     }
 
-    let mut options = OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    options.open(path)
+    create_new_private(path)
 }
 
 /// Makes the rename itself durable, not only the file contents.
@@ -149,15 +145,7 @@ pub(super) fn sync_dir(path: &Path) -> io::Result<()> {
 
 pub(super) fn create(path: &Path, header: &[u8], ciphertext: &[u8]) -> Result<()> {
     check_size(header, ciphertext)?;
-    let mut options = OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-
-    let mut file = options.open(path).map_err(|error| {
+    let mut file = create_new_private(path).map_err(|error| {
         if error.kind() == io::ErrorKind::AlreadyExists {
             VaultError::AlreadyExists(path.to_path_buf())
         } else {

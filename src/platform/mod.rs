@@ -2,5 +2,6 @@
 
 pub mod autolock;
 pub mod clipboard;
+pub(crate) mod files;
 pub(crate) mod jobs;
 pub mod touchid;
