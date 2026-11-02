@@ -5,41 +5,38 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 116; 443 library, four integration, two doctests passed.
+Last full suite: cycle 117; 445 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
-Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
+Last extension check: cycle 117; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 116: Resolve local restorations in one history pass
-- Track borrowed IDs absent from saved snapshot when first current value appears.
-  Remove prior RecordChange.id values once; stop when set empty. Remaining IDs are
-  new Put records, others Restore. No full history index/content copies. Updates/
-  deletes perform no history-ID work; first duplicate-value semantics unchanged.
-- One new same-binary original-method oracle passed baseline then refactor:24
-  combinations of saved/current/history presence and rotations, updates/deletes,
-  puts/restores, duplicate IDs, empty ID and mismatched history payload IDs. Compare
-  whole canonical revisions after clearing only fresh revision IDs/timestamps;
-  inputs unchanged. Event construction and preserved legacy method unchanged.
-- Real counter probe256 new IDs/4096 prior events:1048576 old predicates vs4096
-  removals; normalized outputs equal. Update-only path both counters0. No timing
-  claim. /tmp/lockbox-refactor-116-probe.689qi0dm and /tmp/lockbox-refactor-116-work.log.
-- Full suite:443 library,four integration,two doctests passed;two OS probes ignored.
-  Formatting/strict all-target Clippy passed. Both sources match verified snapshot;
-  whitespace clean. Unrelated work untouched. lib touched. Final comment-only wording
-  adjusted after checks; no executable change.
-- Snapshot: /tmp/lockbox-refactor-116.nyq5aq6e.
+Cycle 117: Borrow immediate browser reply text
+- Suggestion, Data, Outcome, Reply carry borrowed entry text through serialization;
+  credential strings borrow Vault/Entry Zeroize owner. Saved IDs stay owned. Encoded
+  frames remain Zeroizing; request/secret/generated handling unchanged. preview
+  slices first64 Unicode scalars using char_indices boundary, replacing allocated
+  label strings. All origin/size/expiry checks unchanged.
+- Two new tests passed owned baseline first, then borrowing: Unicode/control/quote/
+  combining preview boundaries; full JSON suggestion/credential replies including
+  untruncated credentials. Existing callers compiled without test-only lifetime fixes.
+- Same-binary allocator probe asserted JSON bytes:50 rows151->1 allocations and
+  200->0 reallocations; credentials2->0 allocations per construction. No timing
+  claim. /tmp/lockbox-refactor-117-probe.s1hu9nvh; /tmp/lockbox-refactor-117-alloc.log.
+- Full suite:445 library,four integration,two doctests passed;two OS probes ignored.
+  Formatting/strict all-target Clippy passed. npm check:19 tests,two builds passed;
+  optional real Chrome/Firefox probes skipped (env unset). Both sources match
+  verified snapshot; whitespace clean. Unrelated work untouched. lib touched.
+- Snapshot: /tmp/lockbox-refactor-117.zi1dv87o.
 
-Next search: browser/mod.rs immediate reply clones id/title/username per suggestion
-and username/password for credentials. Borrow from Vault entries via Suggestion<'a>
-(&str fields), Data<'a>, Outcome<'a>, Reply<'a>; handle returns Data<'_>, write_reply
-accepts Reply<'_>. Credential fields borrow owner Entry (Zeroize on drop), encoded
-frame remains Zeroizing. Saved ID remains String. All origin/size/lock checks stay.
-Private helper preview(&str)->&str uses char_indices().nth(64) boundary to preserve
-old .chars().take(64).collect without allocations; use for both suggestion labels.
-First add helper + Unicode prefix oracle and response JSON contract test (long
-Unicode/control labels, full credentials) against old owned replies. Baseline then
-borrow types/fields, full suite; fix tests only if borrow lifetimes require explicit
-drop after serialization. npm run check in isolated browser-extension (no deps),
-19 tests/two builds expected; optional CHROME_BIN/FIREFOX_BIN probes remain unset.
-Off-worktree allocator probe:50 suggestion mappings old owned vs borrowed (JSON
-bytes equal), credential2 Strings vs borrowed; measure allocations only, no timing.
-No delegation. Ends 2026-11-02 03:13:13 UTC.
+Next search: browser origin currently renders normalized String for every entry
+comparison. Installed url2.5.8 source origin.rs verified: allowed HTTPS+host always
+Tuple(scheme,host,effective port), derives Eq; ascii_serialization adds allocation.
+Consider typed Origin for Generated.origin and origin helper result; matches/account
+take &Origin; compare tuple Eq. Only new-record SaveGenerated needs ascii string,
+shadow website with .ascii_serialization inside None branch so title/URL stay exact.
+Preserve parse/HTTPS/credentials/length guards unchanged. Save original origin as
+legacy_origin in tests. Baseline pairwise equality/error + matches oracle across
+ports/path/query/IDNA/IP/credentials/invalid/oversized inputs; add new saved-record
+URL/title normalized-string contract. Then change types and update existing test
+normalization assertion to .ascii_serialization, matches test args parsed origins.
+Full Rust suite + npm check; optional allocator compare old/String vs typed origin
+on same URL, verify ascii bytes equal. No delegation. End03:13:13 UTC.

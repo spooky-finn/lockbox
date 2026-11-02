@@ -55,31 +55,32 @@ enum Request {
 }
 
 #[derive(Serialize)]
-struct Reply {
+struct Reply<'a> {
     id: u32,
     #[serde(flatten)]
-    result: Outcome,
+    result: Outcome<'a>,
 }
 
 #[derive(Serialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
-enum Outcome {
-    Ok { data: Data },
+enum Outcome<'a> {
+    Ok { data: Data<'a> },
     Error { error: &'static str },
 }
 
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
-enum Data {
+enum Data<'a> {
     State {
         unlocked: bool,
     },
     Suggestions {
-        items: Vec<Suggestion>,
+        items: Vec<Suggestion<'a>>,
     },
     Credential {
-        username: Zeroizing<String>,
-        password: Zeroizing<String>,
+        // The vault owns and wipes this text; replies borrow it through serialization.
+        username: &'a str,
+        password: &'a str,
     },
     Generated {
         length: usize,
@@ -90,10 +91,17 @@ enum Data {
 }
 
 #[derive(Serialize)]
-struct Suggestion {
-    id: String,
-    title: Zeroizing<String>,
-    username: Zeroizing<String>,
+struct Suggestion<'a> {
+    id: &'a str,
+    title: &'a str,
+    username: &'a str,
+}
+
+fn preview(value: &str) -> &str {
+    value
+        .char_indices()
+        .nth(64)
+        .map_or(value, |(end, _)| &value[..end])
 }
 
 struct Generated {
@@ -158,7 +166,7 @@ impl Session {
         }
     }
 
-    fn handle(&mut self, request: Request) -> Result<Data, &'static str> {
+    fn handle(&mut self, request: Request) -> Result<Data<'_>, &'static str> {
         let now = Instant::now();
         let wall = SystemTime::now();
         self.expire(now, wall);
@@ -203,9 +211,9 @@ impl Session {
                     .filter(|entry| entry.id.len() <= 64 && matches(entry, &website))
                     .take(50)
                     .map(|entry| Suggestion {
-                        id: entry.id.clone(),
-                        title: Zeroizing::new(entry.title.chars().take(64).collect()),
-                        username: Zeroizing::new(entry.username.chars().take(64).collect()),
+                        id: &entry.id,
+                        title: preview(&entry.title),
+                        username: preview(&entry.username),
                     })
                     .collect();
                 Data::Suggestions { items }
@@ -220,8 +228,8 @@ impl Session {
                     return Err("This account is too large for browser autofill.");
                 }
                 Data::Credential {
-                    username: Zeroizing::new(entry.username.clone()),
-                    password: Zeroizing::new(entry.password.clone()),
+                    username: &entry.username,
+                    password: &entry.password,
                 }
             }
             Request::Generate {
@@ -309,7 +317,7 @@ fn read_message(reader: &mut impl Read) -> io::Result<Option<Zeroizing<Vec<u8>>>
     Ok(Some(bytes))
 }
 
-fn write_reply(writer: &mut impl Write, reply: &Reply) -> io::Result<()> {
+fn write_reply(writer: &mut impl Write, reply: &Reply<'_>) -> io::Result<()> {
     let bytes = Zeroizing::new(serde_json::to_vec(reply)?);
     if bytes.len() > MAX_MESSAGE {
         return Err(io::Error::new(

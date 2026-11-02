@@ -35,6 +35,62 @@ fn fixture() -> (tempfile::TempDir, Session, String) {
 }
 
 #[test]
+fn suggestion_previews_preserve_the_first_64_unicode_scalars() {
+    for value in [
+        String::new(),
+        "a".repeat(63),
+        "a".repeat(64),
+        "a".repeat(65),
+        "雪🗝e\u{301}\n\"\\".repeat(40),
+        "🗝".repeat(100),
+    ] {
+        assert_eq!(preview(&value), value.chars().take(64).collect::<String>());
+    }
+}
+
+#[test]
+fn suggestion_and_credential_replies_preserve_json_and_preview_boundaries() {
+    let (_directory, mut session, id) = fixture();
+    let title = "雪🗝e\u{301}\n".repeat(20);
+    let username = "u\"\\雪".repeat(24);
+    let mut value = session.vault.as_ref().unwrap().entries()[0].clone();
+    value.title = title.clone();
+    value.username = username.clone();
+    session.vault.as_mut().unwrap().upsert_entry(value).unwrap();
+    let cases = [
+        (
+            Request::Suggestions {
+                origin: "https://accounts.example".into(),
+            },
+            serde_json::json!({"kind": "suggestions", "items": [{
+                "id": id,
+                "title": title.chars().take(64).collect::<String>(),
+                "username": username.chars().take(64).collect::<String>(),
+            }]}),
+        ),
+        (
+            Request::Credential {
+                origin: "https://accounts.example".into(),
+                entry_id: id,
+            },
+            serde_json::json!({"kind": "credential", "username": username, "password": "fictional-password"}),
+        ),
+    ];
+    for (request, expected) in cases {
+        let data = session.handle(request).unwrap();
+        let actual = serde_json::to_value(Reply {
+            id: 73,
+            result: Outcome::Ok { data },
+        })
+        .unwrap();
+        assert_eq!(
+            actual,
+            serde_json::json!({"id": 73, "status": "ok", "data": expected})
+        );
+    }
+}
+
+#[test]
 fn origins_require_https_and_match_effective_port_exactly() {
     assert_eq!(
         origin("https://ACCOUNTS.example:443/path?q=1#fragment").unwrap(),
