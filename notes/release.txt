@@ -1,0 +1,14 @@
+- Release build: 2026-11-02; version 0.1.0; macOS arm64.
+- Source: f3d00a2303b3decf57e59fcadfd9e9efd59b452c. Local artifacts; no tag/publication.
+- Build: cargo build --locked --release --bin lockbox --bin lockbox-browser-host. Rust/Cargo 1.95.0.
+- Desktop: target/release/lockbox. Native host: target/release/lockbox-browser-host.
+- Companions: browser-extension/dist/lockbox-chrome-0.1.0.zip; browser-extension/dist/lockbox-firefox-0.1.0.zip.
+- Validation: 452 Rust unit + 4 integration + 2 doctests pass; 2 explicit OS probes ignored. Formatting, strict all-target Clippy pass.
+- Browser: 19 checks pass; 2 optional real-browser probes skipped. npm check/package and ZIP integrity pass.
+- Optimized host smoke: status/lock framed replies pass; malformed JSON exits without output. Mach-O arm64 confirmed; linked libraries use system paths.
+- Manual Touch ID/UI checks not run. Existing experimental sync release gates remain in docs/sync-production-plan.md.
+- SHA-256:
+  f9bf25492f5bbaaeebc4ae1504f81f523decf8eadc78d76bf36fd2be7833a1fb  target/release/lockbox
+  ce76ac13345abfbd7c6f6b2ae9950729973fdca01172e9b42f841f0d4b4aef14  target/release/lockbox-browser-host
+  066048473c235e93c0fc441aa8ba122f821e1178c3105091bbdc2a6b1c5afb47  browser-extension/dist/lockbox-chrome-0.1.0.zip
+  1b6f29fe1ee78c85a8cf329b52401d9fdad51a93f859dc3906f36f02c6aeea62  browser-extension/dist/lockbox-firefox-0.1.0.zip
