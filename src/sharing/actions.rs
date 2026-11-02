@@ -367,9 +367,8 @@ impl Unlocked {
     }
 
     pub fn sharing_action(&mut self, action: Action, now: u64) {
-        let result = self.apply_sharing(action, now);
-        self.error = result.as_ref().err().cloned();
-        if result.is_ok() {
+        self.error = self.apply_sharing(action, now).err();
+        if self.error.is_none() {
             self.sync.saved();
         }
     }

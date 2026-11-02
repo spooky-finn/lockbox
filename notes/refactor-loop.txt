@@ -9,29 +9,19 @@ Last full suite: cycle 102; 438 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 102: Share direct canonical hashing
-- Crate-private Hash::digest_canonical feeds unchanged domain then JCS output
-  directly into Sha256's installed infallible Write implementation. Removes final
-  output Vec from Object::hash, certificate/projection, invitation metadata/offer/
-  acceptance, control statement and root-journal scope hashing. Object::encode
-  still returns bytes and hash from one encoding. Existing error mapping retained.
-- Three baseline tests passed with buffered helper first, then direct hashing:
-  canonical scalar/nested/large shapes, Unicode key ordering, binary domains,
-  early/late errors and one serialization; public consumer byte/hash oracles,
-  absent/nonempty/empty optional invitation names. Model tests import canonical
-  explicitly after production no longer needs it.
-- Same-binary allocation probe, projection0/1/32 records (14/8609/275085 bytes):
-  one fewer allocation per hash; populated projections two fewer reallocations.
-  JCS sorting buffers remain. No timing claim. Probe source/log:
-  /tmp/lockbox-refactor-102-probe.fle2dpw6/examples/refactor_102_alloc.rs
-  /tmp/lockbox-refactor-102-alloc.log.
-- Full suite: 438 library, four integration, two doctests passed; two OS probes
-  ignored. Formatting/strict all-target Clippy passed. Eight sources match verified
-  snapshot; whitespace clean. Unrelated work untouched. src/lib.rs touched.
-- Snapshot: /tmp/lockbox-refactor-102.c8k9kzxn.
+Cycle 103: Move sharing errors into UI state
+- sharing_action consumes apply_sharing result via .err instead of borrowing and
+  cloning its owned String. Existing error Option determines success, matching
+  neighboring actions. sync.saved still runs only after successful operation.
+- Formatting/strict all-target Clippy passed; 14 sharing, 45 desktop, 12 scheduler
+  tests passed (71 total). Existing success/error workflows cover mechanical
+  ownership change; no new mirrored test. Source matches verified snapshot;
+  whitespace clean. Unrelated work untouched. src/lib.rs touched.
+- Snapshot: /tmp/lockbox-refactor-103.cwd7uhdg.
 
-Next search: sharing/actions.rs sharing_action borrows result only to clone owned
-error String, then checks is_ok. Consume .err into self.error and check is_none,
-matching neighboring methods. One source, existing sharing/desktop tests sufficient;
-no new mechanical test. Preserve apply_sharing ordering and sync.saved onlysuccess.
-Later inspect substantive duplication outside protocol. No delegation. End03:13:13 UTC.
+Next search: inspect sharing/files.rs, records/attachments.rs, vault/file.rs for
+repeated private create-new/write/sync cleanup; distinguish cancellation, overwrite,
+atomic replacement and error semantics before extracting anything. Browser Session
+and AutoLock also duplicate longer-of-wall/monotonic elapsed calculation; consider
+small shared time helper only if semantics/test boundaries agree. No delegation.
+Ends 2026-11-02 03:13:13 UTC.
