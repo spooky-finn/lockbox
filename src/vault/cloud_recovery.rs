@@ -244,14 +244,14 @@ impl ProfileStore {
         cancel.check()?;
         let prepared = Machine::prepare_recovery_from_replay(
             &state,
-            replay,
+            &replay,
             profile
                 .certificate
                 .clone()
                 .ok_or(Error::UnauthorizedDevice)?,
             &anchor,
         )?;
-        let projection = Machine::replay_recovery(&state, space.keys())?.projection;
+        let projection = replay.projection;
         state.outbox.clear();
         state.last_exchange = None;
         state.required_control = Some(anchor.control);

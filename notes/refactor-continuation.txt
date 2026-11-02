@@ -1,0 +1,12 @@
+Refactor continuation; 2026-11-02.
+
+Start: c9046c7. Existing merchant-webhook investigation note excluded.
+One concern per commit; public behavior and encoded formats retained.
+
+120. Reuse verified recovery replay.
+- Recovery preparation borrows Replay; caller moves its projection afterward.
+- Cloud restore verifies/decrypts source journal once instead of twice.
+- Readiness, frontier, certificate and owner-root checks retained.
+- Checks: 37 recovery tests; strict all-target Clippy; formatting; diff check.
+- Localhost fixture required socket access. No live cloud used.
+- Log: /tmp/lockbox-refactor-120-check.log.

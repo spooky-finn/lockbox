@@ -77,18 +77,18 @@ impl Machine {
         source.require_idle()?;
         certificate.verify()?;
         let replay = Self::replay_state(source, source_device)?;
-        Self::prepare_recovery_from_replay(source, replay, certificate, anchor)
+        Self::prepare_recovery_from_replay(source, &replay, certificate, anchor)
     }
 
     pub(crate) fn prepare_recovery_from_replay(
         source: &SyncState,
-        replay: Replay,
+        replay: &Replay,
         certificate: Signed<Certificate>,
         anchor: &RecoveryAnchor,
     ) -> Result<PreparedChange> {
         source.require_idle()?;
         certificate.verify()?;
-        anchor.verify_replay(source, &replay)?;
+        anchor.verify_replay(source, replay)?;
         let previous = control_at(source, replay.membership)?;
         if certificate.body.root_key != source.owner_root {
             return Err(Error::UnauthorizedDevice);
@@ -110,13 +110,7 @@ impl Machine {
         });
         members.sort_by_key(|m| m.certificate.body.device);
         previous
-            .prepare_successor(
-                source,
-                &replay,
-                target,
-                members,
-                ControlTransition::Recovery,
-            )
+            .prepare_successor(source, replay, target, members, ControlTransition::Recovery)
             .map(PreparedChange::Control)
     }
 
