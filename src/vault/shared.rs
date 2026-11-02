@@ -5,7 +5,9 @@
 //! `sync::protocol::Machine`.
 
 use crate::{
-    sync::protocol::{DeviceSecret, PreparedChange, Replay, Result as ProtocolResult, SyncState},
+    sync::protocol::{
+        DeviceSecret, Machine, PreparedChange, Replay, Result as ProtocolResult, SyncState,
+    },
     vault::{
         KdfParams, ProviderConfiguration, Result, Vault, VaultError, profile::BootstrapProfile,
     },
@@ -169,6 +171,20 @@ impl Vault {
     /// Rebuild a verified view without changing the journal or writing files.
     /// Inspect `Replay::ready` before using it to replace a readable snapshot.
     pub fn sync_replay(&self) -> Result<Option<Replay>> {
+        if let Some(profile) = &self.profile
+            && let Some(backup) = &profile.cloud_backup
+            && !backup.archive.is_empty()
+        {
+            self.ensure_exchange_committed()?;
+            return profile
+                .sync
+                .as_ref()
+                .map(|state| {
+                    Machine::replay_archived(state, &profile.sync_secret(), &backup.archive)
+                        .map_err(VaultError::from)
+                })
+                .transpose();
+        }
         self.replay_using(crate::sync::protocol::Machine::replay)
     }
 
@@ -178,6 +194,25 @@ impl Vault {
     }
 
     pub(super) fn sync_replay_record(&self, record: Option<&str>) -> Result<Option<Replay>> {
+        if let Some(profile) = &self.profile
+            && let Some(backup) = &profile.cloud_backup
+            && !backup.archive.is_empty()
+        {
+            self.ensure_exchange_committed()?;
+            return profile
+                .sync
+                .as_ref()
+                .map(|state| {
+                    Machine::replay_archived_record(
+                        state,
+                        &profile.sync_secret(),
+                        &backup.archive,
+                        record,
+                    )
+                    .map_err(VaultError::from)
+                })
+                .transpose();
+        }
         self.replay_using(|state, device| {
             crate::sync::protocol::Machine::replay_record_history(state, device, record)
         })

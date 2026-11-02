@@ -166,9 +166,8 @@ impl Storj {
     }
 }
 
-impl Storage for Storj {
-    fn list(&mut self, _namespace: Hash, cursor: Option<&str>) -> Result<Page> {
-        let prefix = &self.prefix;
+impl Storj {
+    fn list_prefix(&mut self, prefix: &str, cursor: Option<&str>) -> Result<Page> {
         let listing = self
             .runtime
             .block_on(
@@ -209,8 +208,7 @@ impl Storage for Storj {
         Ok(Page { objects, next })
     }
 
-    fn get(&mut self, _namespace: Hash, hash: Hash) -> Result<Vec<u8>> {
-        let key = format!("{}{hash}.json", self.prefix);
+    fn get_key(&mut self, key: String) -> Result<Vec<u8>> {
         self.runtime.block_on(async {
             let response = self
                 .client
@@ -230,14 +228,11 @@ impl Storage for Storj {
         })
     }
 
-    fn put(&mut self, _namespace: Hash, hash: Hash, bytes: &[u8]) -> Result<()> {
+    fn put_key(&mut self, key: String, bytes: &[u8]) -> Result<()> {
         if bytes.len() > MAX_OBJECT_BYTES {
             return Err(TransportError::Budget);
         }
 
-        crate::sync::protocol::Object::decode(bytes, hash).map_err(TransportError::Verification)?;
-
-        let key = format!("{}{hash}.json", self.prefix);
         // Equal content always has equal key. Correctness does not depend on
         // gateway conditional-write support; hostile replacement is hash-checked.
         self.runtime
@@ -252,6 +247,41 @@ impl Storage for Storj {
             )
             .map_err(sdk_error)?;
         Ok(())
+    }
+}
+
+impl Storage for Storj {
+    fn list(&mut self, _namespace: Hash, cursor: Option<&str>) -> Result<Page> {
+        self.list_prefix(&self.prefix.clone(), cursor)
+    }
+    fn get(&mut self, _namespace: Hash, hash: Hash) -> Result<Vec<u8>> {
+        self.get_key(format!("{}{hash}.json", self.prefix))
+    }
+    fn put(&mut self, _namespace: Hash, hash: Hash, bytes: &[u8]) -> Result<()> {
+        if bytes.len() > MAX_OBJECT_BYTES {
+            return Err(TransportError::Budget);
+        }
+        crate::sync::protocol::Object::decode(bytes, hash).map_err(TransportError::Verification)?;
+        self.put_key(format!("{}{hash}.json", self.prefix), bytes)
+    }
+    fn list_recovery(&mut self, directory: Hash, cursor: Option<&str>) -> Result<Page> {
+        self.list_prefix(&format!("recovery/v1/{directory}/"), cursor)
+    }
+    fn get_recovery(&mut self, directory: Hash, hash: Hash) -> Result<Vec<u8>> {
+        self.get_key(format!("recovery/v1/{directory}/{hash}.json"))
+    }
+    fn put_recovery(&mut self, directory: Hash, hash: Hash, bytes: &[u8]) -> Result<()> {
+        if bytes.len() > MAX_OBJECT_BYTES {
+            return Err(TransportError::Budget);
+        }
+        let actual = crate::sync::protocol::cloud_recovery::object_hash(bytes)
+            .map_err(TransportError::Verification)?;
+        if actual != hash {
+            return Err(TransportError::Verification(
+                crate::sync::protocol::Error::HashMismatch,
+            ));
+        }
+        self.put_key(format!("recovery/v1/{directory}/{hash}.json"), bytes)
     }
 }
 

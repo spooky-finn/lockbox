@@ -77,6 +77,17 @@ impl Machine {
         source.require_idle()?;
         certificate.verify()?;
         let replay = Self::replay_state(source, source_device)?;
+        Self::prepare_recovery_from_replay(source, replay, certificate, anchor)
+    }
+
+    pub(crate) fn prepare_recovery_from_replay(
+        source: &SyncState,
+        replay: Replay,
+        certificate: Signed<Certificate>,
+        anchor: &RecoveryAnchor,
+    ) -> Result<PreparedChange> {
+        source.require_idle()?;
+        certificate.verify()?;
         anchor.verify_replay(source, &replay)?;
         let previous = control_at(source, replay.membership)?;
         if certificate.body.root_key != source.owner_root {

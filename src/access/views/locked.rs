@@ -39,6 +39,7 @@ pub(crate) fn LockedView() -> Element {
     let create_password = create && locked.creation_step == CreationStep::Password;
     let cloud_password = create_password && locked.storage_kind == Some(StorageKind::Cloud);
     let recovering = locked.recovering;
+    let cloud_restore = locked.cloud_recovery.restoring;
     let ready = identity_setup
         || create_password
         || !create && locked.path.as_ref().is_some_and(|path| path.exists());
@@ -94,7 +95,8 @@ pub(crate) fn LockedView() -> Element {
                     }
                 }
                 h1 { class: "unlock-title",
-                    if recovering { {language.text(Text::RecoverVault)} }
+                    if cloud_restore { {language.text(Text::CloudRestore)} }
+                    else if recovering { {language.text(Text::RecoverVault)} }
                     else if key_setup { {language.text(Text::EncryptionKeySetup)} }
                     else if identity_unlock { {language.text(Text::UnlockIdentity)} }
                     else if identity_setup { {language.text(Text::ProtectIdentity)} }
@@ -104,7 +106,9 @@ pub(crate) fn LockedView() -> Element {
                     else { {language.text(Text::YourPasswordsLockedAway)} }
                 }
                 p { class: "unlock-description", title: "{path}",
-                    if recovering { {language.text(Text::RecoveryUnlockHint)} }
+                    if cloud_restore && key_setup { {language.text(Text::CloudRestoreWordsHint)} }
+                    else if cloud_restore && sync_setup { {language.text(Text::CloudRestoreHint)} }
+                    else if recovering { {language.text(Text::RecoveryUnlockHint)} }
                     else if key_setup { {language.text(Text::EncryptionKeySetupHint)} }
                     else if identity_unlock { {language.text(Text::UnlockIdentityHint)} }
                     else if identity_setup { {language.text(Text::ProtectIdentityHint)} }
@@ -130,7 +134,7 @@ pub(crate) fn LockedView() -> Element {
                             {language.text(Text::BackToEncryptionKey)}
                         }
                     }
-                    if !locked.joining {
+                    if !locked.joining && !cloud_restore {
                         div { class: "storage-choices",
                             button { r#type: "button", class: "storage-choice", onclick: move |_| runtime::pick_vault(true),
                                 strong { {language.text(Text::SingleUser)} }
@@ -153,7 +157,7 @@ pub(crate) fn LockedView() -> Element {
                 }
 
                 if create_password {
-                    if cloud_password {
+                    if cloud_password && !cloud_restore {
                         p { class: "notice", {language.text(Text::YourProfileAndKeysWillBeSavedOnThisDeviceStorjHasNotBeenContactedYet)} }
                     }
                     button { r#type: "button", class: "setup-button", disabled: busy,
@@ -206,7 +210,18 @@ pub(crate) fn LockedView() -> Element {
                             button { id: "recovery-submit", r#type: "submit", class: "setup-button", disabled: busy, {language.text(Text::ResetPasswordAndUnlock)} }
                         }
                         if cloud_password {
-                            button { id: "recovery-submit", r#type: "submit", class: "setup-button", disabled: busy, {language.text(Text::CreateProfileAndKeys)} }
+                            if cloud_restore {
+                                if let Some(space) = locked.cloud_recovery.selected.and_then(|i| locked.cloud_recovery.spaces.get(i)) {
+                                    p { strong { {space.name()} } }
+                                }
+                                label { class: "recovery-saved",
+                                    input { id: "cloud-recovery-confirm", r#type: "checkbox", disabled: busy, checked: locked.cloud_recovery.trust_snapshot,
+                                        onchange: move |event| edit_locked(state, |locked| locked.cloud_recovery.trust_snapshot = event.checked()),
+                                    }
+                                    {language.text(Text::CloudRestoreConfirm)}
+                                }
+                            }
+                            button { id: "recovery-submit", r#type: "submit", class: "setup-button", disabled: busy || (cloud_restore && !locked.cloud_recovery.trust_snapshot), {language.text(if cloud_restore { Text::CloudRestoreAction } else { Text::CreateProfileAndKeys })} }
                         }
                         if identity_setup && !recovering {
                             button { r#type: "submit", class: "setup-button", disabled: busy, {language.text(Text::Continue)} }
@@ -229,6 +244,7 @@ pub(crate) fn LockedView() -> Element {
                         if busy {
                             p { role: "status", class: "muted",
                                 if locked.waiting_touch_id { {language.text(Text::WaitingForTouchID)} }
+                                else if cloud_restore && !identity_setup { {language.text(Text::CloudRestoreProgress)} }
                                 else if create && !identity_setup { {language.text(Text::CreatingVault)} }
                                 else { {language.text(Text::CheckingPassword)} }
                             }
@@ -248,6 +264,9 @@ pub(crate) fn LockedView() -> Element {
 
                 button { class: "quiet", disabled: busy, onclick: move |_| runtime::begin_join(),
                     {language.text(Text::SharingConnect)}
+                }
+                button { class: "quiet", disabled: busy, onclick: move |_| runtime::begin_cloud_restore(),
+                    {language.text(Text::CloudRestore)}
                 }
 
                 if settings.read().config.last_vault.is_some() {

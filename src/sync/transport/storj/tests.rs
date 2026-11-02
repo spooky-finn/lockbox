@@ -51,11 +51,16 @@ fn signed_path_style_requests_round_trip_through_a_local_s3_server() {
         ("..", "%2E%2E", "%252E%252E"),
         ("%2E%2E", "%252E%252E", "%25252E%25252E"),
     ] {
-        named_space_round_trip(name, segment, encoded);
+        named_space_round_trip(name, segment, encoded, false);
     }
 }
 
-fn named_space_round_trip(space_name: &str, segment: &'static str, encoded: &str) {
+#[test]
+fn encrypted_recovery_objects_round_trip_in_a_separate_root_directory() {
+    named_space_round_trip("Recovery", "Recovery", "Recovery", true);
+}
+
+fn named_space_round_trip(space_name: &str, segment: &'static str, encoded: &str, recovery: bool) {
     use std::{
         io::{BufRead, BufReader, Write},
         net::TcpListener,
@@ -64,7 +69,7 @@ fn named_space_round_trip(space_name: &str, segment: &'static str, encoded: &str
 
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
-    let namespace = Hash([2; 32]);
+    let mut namespace = Hash([2; 32]);
     let (device, certificate) = crate::sync::protocol::DeviceSecret::generate(
         &ed25519_dalek::SigningKey::from_bytes(&[1; 32]),
     )
@@ -78,10 +83,33 @@ fn named_space_round_trip(space_name: &str, segment: &'static str, encoded: &str
         Hash([4; 32]),
     )
     .unwrap();
-    let hash = state.genesis;
-    let bytes = state.objects[&hash].0.clone();
+    let (hash, bytes) = if recovery {
+        use crate::sync::protocol::cloud_recovery::{self, CloudBackup};
+        let root = ed25519_dalek::SigningKey::from_bytes(&[1; 32]);
+        let backup = CloudBackup {
+            target: cloud_recovery::target(&root, state.descriptor()).unwrap(),
+            archive: vec![],
+            upload: None,
+        };
+        let upload = cloud_recovery::prepare(&state, &device, &backup, "Owner", space_name)
+            .unwrap()
+            .unwrap();
+        namespace = cloud_recovery::directory(&root);
+        (upload.hash, upload.bytes.0)
+    } else {
+        (state.genesis, state.objects[&state.genesis].0.clone())
+    };
     let expected_bytes = bytes.clone();
-    let object_key = format!("/bucket/spaces/{encoded}/objects/{hash}.json");
+    let prefix = if recovery {
+        format!("recovery/v1/{namespace}/")
+    } else {
+        format!("spaces/{segment}/objects/")
+    };
+    let object_key = if recovery {
+        format!("/bucket/{prefix}{hash}.json")
+    } else {
+        format!("/bucket/spaces/{encoded}/objects/{hash}.json")
+    };
     let expected_key = object_key.clone();
     let (sender, receiver) = mpsc::channel();
     let server = std::thread::spawn(move || {
@@ -123,10 +151,10 @@ fn named_space_round_trip(space_name: &str, segment: &'static str, encoded: &str
                 assert_eq!(query["continuation-token"], "a+/=&x");
                 assert_eq!(query["list-type"], "2");
                 assert_eq!(query["max-keys"], "1000");
-                assert_eq!(query["prefix"], format!("spaces/{segment}/objects/"));
-                let xml_segment = segment.replace('&', "&amp;");
+                assert_eq!(query["prefix"], prefix);
+                let xml_prefix = prefix.replace('&', "&amp;");
                 format!(
-                    "<ListBucketResult><IsTruncated>false</IsTruncated><Contents><Key>spaces/{xml_segment}/objects/{hash}.json</Key></Contents></ListBucketResult>"
+                    "<ListBucketResult><IsTruncated>false</IsTruncated><Contents><Key>{xml_prefix}{hash}.json</Key></Contents></ListBucketResult>"
                 )
             } else if request_index == 1 {
                 assert!(
@@ -191,14 +219,31 @@ fn named_space_round_trip(space_name: &str, segment: &'static str, encoded: &str
             TransportError::Budget,
         ),
     ] {
-        assert_eq!(storage.put(namespace, hash, bytes), Err(expected));
+        let result = if recovery {
+            storage.put_recovery(namespace, hash, bytes)
+        } else {
+            storage.put(namespace, hash, bytes)
+        };
+        assert_eq!(result, Err(expected));
     }
-    assert_eq!(
-        storage.list(namespace, Some("a+/=&x")).unwrap().objects,
-        vec![hash]
-    );
-    storage.put(namespace, hash, &bytes).unwrap();
-    assert_eq!(storage.get(namespace, hash).unwrap(), bytes);
+    if recovery {
+        assert_eq!(
+            storage
+                .list_recovery(namespace, Some("a+/=&x"))
+                .unwrap()
+                .objects,
+            vec![hash]
+        );
+        storage.put_recovery(namespace, hash, &bytes).unwrap();
+        assert_eq!(storage.get_recovery(namespace, hash).unwrap(), bytes);
+    } else {
+        assert_eq!(
+            storage.list(namespace, Some("a+/=&x")).unwrap().objects,
+            vec![hash]
+        );
+        storage.put(namespace, hash, &bytes).unwrap();
+        assert_eq!(storage.get(namespace, hash).unwrap(), bytes);
+    }
     server.join().unwrap();
 
     for request in receiver.try_iter() {

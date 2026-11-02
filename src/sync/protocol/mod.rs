@@ -35,6 +35,7 @@
 //! never construct verified transactions or choose conflict winners.
 
 mod crypto;
+pub use machine::cloud_recovery;
 mod invitation;
 mod machine;
 mod model;

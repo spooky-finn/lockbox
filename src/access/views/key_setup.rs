@@ -30,6 +30,7 @@ pub(crate) fn KeySetupView() -> Element {
                     readonly: !locked.importing_words, disabled: busy,
                 }
             }
+            if !locked.cloud_recovery.restoring {
             div { class: "recovery-actions",
                 if !locked.importing_words {
                     button { r#type: "button", class: "setup-button", disabled: busy,
@@ -51,6 +52,7 @@ pub(crate) fn KeySetupView() -> Element {
                     if locked.importing_words { {language.text(Text::GenerateRecoveryWords)} }
                     else { {language.text(Text::UseRecoveryWords)} }
                 }
+            }
             }
             label { class: "recovery-saved",
                 input { id: "recovery-saved", r#type: "checkbox", disabled: busy || (!locked.show_recovery_words && !locked.importing_words), checked: locked.words_saved,

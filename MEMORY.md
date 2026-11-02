@@ -1,5 +1,7 @@
 # Project feedback
 
+- Cloud recovery: user wants access after total local loss using same root/12 words + Storj credentials/bucket. Derive recovery capability; keep device/epoch keys random. Encrypted controller-signed capsules, fresh recovered device, explicit cloud freshness trust, independent-anchor API. No silent empty recreation. See docs/cloud-recovery.txt.
+
 - Record history: local encrypted revisions; cloud verified signer fingerprints, causal order, no wall-clock times. Secrets hidden by default.
 - Trash: deletion retains values; restore same ID/files; missing folder restores root. No purge. Shared conflicts excluded from Trash.
 - File formats v6/v7; reads v1–v5. Old clients reject new files. Local history starts after upgrade; cloud history requires epoch keys.

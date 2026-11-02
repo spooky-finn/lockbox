@@ -199,6 +199,14 @@ pub(crate) fn begin_join() {
     begin_creation(true);
 }
 
+pub(crate) fn begin_cloud_restore() {
+    let mut state = consume_context::<Session>();
+    let settings = consume_context::<Signal<Settings>>();
+    *state.write() = Screen::Locked(Box::new(
+        Locked::begin_cloud_restore().with_identity_path(settings.peek().identity_path(), None),
+    ));
+}
+
 fn begin_creation(joining: bool) {
     let mut state = consume_context::<Session>();
     let settings = consume_context::<Signal<Settings>>();
@@ -239,6 +247,12 @@ pub(crate) fn create_cloud_profile() {
         };
 
         if form.busy() || !form.validate_creation() {
+            return;
+        }
+        // A failed recovery may already have durably reserved root authority
+        // for this exact target. Resume it rather than allocating a competitor.
+        if form.cloud_recovery.restoring && form.path.as_ref().is_some_and(|path| path.exists()) {
+            form.submit();
             return;
         }
     }

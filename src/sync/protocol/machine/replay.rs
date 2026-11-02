@@ -1,6 +1,7 @@
 //! Verify control history and causal changes, then derive the reference projection.
 
 use crate::records::history::RecordChange;
+use crate::sync::protocol::cloud_recovery::EpochKey;
 use crate::sync::{
     identity::Key,
     protocol::{
@@ -19,6 +20,7 @@ use crate::sync::{
     },
 };
 use std::collections::{BTreeMap, BTreeSet};
+use zeroize::Zeroizing;
 
 #[derive(Clone, Copy)]
 enum RecordHistory<'a> {
@@ -50,12 +52,12 @@ impl Machine {
     /// persists integrity faults and retains its previous readable snapshot while
     /// dependencies are incomplete; inspect [`Replay::ready`] before installing it.
     pub fn replay(state: &SyncState, device: &DeviceSecret) -> Result<Replay> {
-        Self::replay_inner(state, device, RecordHistory::All)
+        Self::replay_inner(state, Some(device), &[], RecordHistory::All)
     }
 
     /// Verify the complete history without allocating display-only record revisions.
     pub(crate) fn replay_state(state: &SyncState, device: &DeviceSecret) -> Result<Replay> {
-        Self::replay_inner(state, device, RecordHistory::Omit)
+        Self::replay_inner(state, Some(device), &[], RecordHistory::Omit)
     }
 
     /// Verify the complete history, materializing only the selected record's revisions.
@@ -66,14 +68,68 @@ impl Machine {
     ) -> Result<Replay> {
         Self::replay_inner(
             state,
-            device,
+            Some(device),
+            &[],
             record.map_or(RecordHistory::Omit, RecordHistory::Record),
         )
     }
 
-    fn replay_inner(
+    /// Read signed history using recovered epoch keys, without a device signer.
+    /// The resulting view never grants publication or membership authority.
+    pub(crate) fn replay_recovery(state: &SyncState, keys: &[EpochKey]) -> Result<Replay> {
+        Self::replay_inner(state, None, keys, RecordHistory::All)
+    }
+
+    pub(crate) fn replay_archived(
         state: &SyncState,
         device: &DeviceSecret,
+        keys: &[EpochKey],
+    ) -> Result<Replay> {
+        Self::replay_inner(state, Some(device), keys, RecordHistory::All)
+    }
+
+    pub(crate) fn replay_archived_record(
+        state: &SyncState,
+        device: &DeviceSecret,
+        keys: &[EpochKey],
+        record: Option<&str>,
+    ) -> Result<Replay> {
+        Self::replay_inner(
+            state,
+            Some(device),
+            keys,
+            record.map_or(RecordHistory::Omit, RecordHistory::Record),
+        )
+    }
+
+    pub(crate) fn recovery_epoch_keys(
+        state: &SyncState,
+        device: &DeviceSecret,
+        archive: &[EpochKey],
+    ) -> Result<Vec<EpochKey>> {
+        let replay = Self::replay_inner(state, Some(device), archive, RecordHistory::Omit)?;
+        replay.require_ready()?;
+        super::history::with_history(state, |history| {
+            let mut keys: Vec<_> = history
+                .chain
+                .iter()
+                .filter_map(|(hash, signed)| {
+                    match epoch_access(&signed.body, *hash, Some(device), archive) {
+                        Ok(Some(key)) => Some(Ok(EpochKey::new(*hash, *key))),
+                        Ok(None) => None,
+                        Err(error) => Some(Err(error)),
+                    }
+                })
+                .collect::<Result<_>>()?;
+            keys.sort_by_key(|key| key.membership);
+            Ok(keys)
+        })
+    }
+
+    fn replay_inner(
+        state: &SyncState,
+        device: Option<&DeviceSecret>,
+        keys: &[EpochKey],
         record_history: RecordHistory<'_>,
     ) -> Result<Replay> {
         if let Some(fault) = state.fault {
@@ -114,12 +170,12 @@ impl Machine {
         let history = ControlHistory::verify(&controls, state)?;
         let chain = &history.chain;
         let (tip, current) = history.tip();
-        let device_id = device.id();
+        let device_id = device.map(DeviceSecret::id);
         let role = current
             .body
             .members
             .iter()
-            .find(|m| m.certificate.body.device == device_id)
+            .find(|m| Some(m.certificate.body.device) == device_id)
             .map(|m| m.role);
         let mut result = Replay {
             history: Vec::new(),
@@ -149,22 +205,18 @@ impl Machine {
 
         for (index, (membership, signed)) in chain.iter().enumerate() {
             let control = &signed.body;
-            let Some(grant) = control.grants.iter().find(|g| g.device == device_id) else {
+            // Archive keys improve historical readability, never current device authority.
+            let access = if device.is_some() && index + 1 == chain.len() {
+                &[][..]
+            } else {
+                keys
+            };
+            let Some(key) = epoch_access(control, *membership, device, access)? else {
                 previous_epoch_verified = false;
                 result.history_verified = false;
                 continue;
             };
 
-            let member = control
-                .members
-                .iter()
-                .find(|m| m.certificate.body.device == device_id)
-                .ok_or(Error::UnauthorizedDevice)?;
-            let key = device.open_grant(
-                &grant.enc,
-                &grant.ciphertext,
-                &grant_aad(&control.epoch, &member.certificate)?,
-            )?;
             let checkpoint_key =
                 crypto::content_key(&key, state.space, control.epoch.context, true);
             let nonce = nonce(&control.checkpoint_nonce)?;
@@ -226,6 +278,34 @@ impl Machine {
 
         Ok(result)
     }
+}
+
+fn epoch_access(
+    control: &Control,
+    membership: Hash,
+    device: Option<&DeviceSecret>,
+    keys: &[EpochKey],
+) -> Result<Option<Zeroizing<Key>>> {
+    if let Some(device) = device
+        && let Some(grant) = control.grants.iter().find(|g| g.device == device.id())
+    {
+        let member = control
+            .members
+            .iter()
+            .find(|m| m.certificate.body.device == device.id())
+            .ok_or(Error::UnauthorizedDevice)?;
+        return device
+            .open_grant(
+                &grant.enc,
+                &grant.ciphertext,
+                &grant_aad(&control.epoch, &member.certificate)?,
+            )
+            .map(Some);
+    }
+    Ok(keys
+        .iter()
+        .find(|key| key.membership == membership)
+        .map(|key| Zeroizing::new(key.key)))
 }
 
 struct VerifiedChange<'a> {

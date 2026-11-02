@@ -1,6 +1,8 @@
 //! Unlock/create form and its background worker; no UI or system-service ownership.
 
+mod cloud_recovery;
 mod identity;
+pub(crate) use cloud_recovery::CloudRecoverySetup;
 
 use crate::{
     access::mnemonic::RecoveryPhrase,
@@ -63,6 +65,7 @@ pub(crate) struct Locked {
     pub(crate) cloud: CloudSetup,
     pub(crate) creation_step: CreationStep,
     pub(crate) joining: bool,
+    pub(crate) cloud_recovery: CloudRecoverySetup,
     pub(crate) password: Zeroizing<String>,
     pub(crate) repeat: Zeroizing<String>,
     pub(crate) recovery_words: Zeroizing<String>,
@@ -100,6 +103,7 @@ impl Locked {
             cloud: CloudSetup::default(),
             creation_step: CreationStep::EncryptionKey,
             joining: false,
+            cloud_recovery: CloudRecoverySetup::default(),
             password: secret_buffer(),
             repeat: secret_buffer(),
             recovery_words: secret_buffer(),
@@ -137,7 +141,9 @@ impl Locked {
     }
 
     pub(crate) fn busy(&self) -> bool {
-        self.pending.is_some() || self.pending_identity.is_some()
+        self.pending.is_some()
+            || self.pending_identity.is_some()
+            || self.cloud_recovery.pending.is_some()
     }
 
     /// A missing identity may be set up once; unreadable files still require unlock.
@@ -178,6 +184,7 @@ impl Locked {
         }
         self.edit_sync_setup();
         self.joining = joining;
+        self.cloud_recovery = CloudRecoverySetup::default();
         self.recovering = false;
         self.storage_kind = joining.then_some(StorageKind::Cloud);
         self.cloud = CloudSetup::default();
@@ -254,7 +261,11 @@ impl Locked {
         match self.cloud.validate() {
             Ok(()) => {
                 self.error = None;
-                self.creation_step = CreationStep::Password;
+                if self.cloud_recovery.restoring {
+                    self.discover_cloud();
+                } else {
+                    self.creation_step = CreationStep::Password;
+                }
             }
             Err(error) => self.error = Some(error.into()),
         }
@@ -393,6 +404,10 @@ impl Locked {
             self.submit_identity();
             return;
         }
+        if self.cloud_recovery.restoring {
+            self.submit_cloud_restore();
+            return;
+        }
 
         let cloud = self.mode == Mode::Create && self.storage_kind == Some(StorageKind::Cloud);
 
@@ -505,7 +520,13 @@ impl Locked {
                     }
                 }
             }
-            .map(|vault| Opened { vault, with_password, recovery_notice })
+            .map(|mut vault| {
+                if with_password && vault.signing_error().is_none()
+                    && let Err(error) = vault.enable_cloud_recovery(&password) {
+                        recovery_notice = Some(format!("Cloud recovery setup: {error}"));
+                }
+                Opened { vault, with_password, recovery_notice }
+            })
             .map_err(|error| error.to_string())
         }));
     }
@@ -514,6 +535,7 @@ impl Locked {
 impl Locked {
     pub(crate) fn poll(&mut self, biometrics: Arc<dyn Biometrics>) -> Option<Opened> {
         self.poll_identity();
+        self.poll_cloud_recovery();
         if let Some(result) = self.pending.as_mut().and_then(Worker::take) {
             match result.unwrap_or_else(|_| Err("Unlock was interrupted".into())) {
                 Ok(opened) => return Some(opened),

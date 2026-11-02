@@ -51,6 +51,17 @@ pub trait Storage {
     /// Idempotently publish the exact bytes under their complete-object hash.
     /// A successful acknowledgement does not imply receipt by other members.
     fn put(&mut self, namespace: Hash, hash: Hash, bytes: &[u8]) -> Result<()>;
+    /// Separate immutable recovery collection. Legacy adapters explicitly lack
+    /// this capability; they cannot report a recoverable cloud backup.
+    fn list_recovery(&mut self, _directory: Hash, _cursor: Option<&str>) -> Result<Page> {
+        Err(TransportError::NotFound)
+    }
+    fn get_recovery(&mut self, _directory: Hash, _hash: Hash) -> Result<Vec<u8>> {
+        Err(TransportError::NotFound)
+    }
+    fn put_recovery(&mut self, _directory: Hash, _hash: Hash, _bytes: &[u8]) -> Result<()> {
+        Err(TransportError::Unavailable)
+    }
 }
 
 /// Creates a transport on the calling worker thread.

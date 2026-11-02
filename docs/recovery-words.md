@@ -38,8 +38,13 @@ Recovery preserves the user identity, device, records, and Touch ID data key.
 For cloud profiles, the new password also protects the root capsule. Previous
 backup files retain the password they had when saved.
 
-The vault file or a backup is still required: words recover keys, not records,
-attachments, storage credentials, or discovery of a storage bucket. Words are
+Local password recovery requires the vault file or a backup. Enrolled owner cloud
+profiles also support [cloud-only recovery](cloud-recovery.txt): original words,
+endpoint, bucket and independently retained credentials recover published data
+without that file. This creates a fresh controller rather than copying old device
+keys. Provider-only recovery requires explicit trust in the available snapshot;
+an independent current anchor is needed for stronger freshness guarantees. Words
+cannot recover deleted cloud objects or unsynced edits. Words are
 shown during creation, so keep a separate copy before continuing. Existing
 profiles without recovery key slots retain their existing unlock credentials;
 words cannot be retroactively generated for their random root keys.

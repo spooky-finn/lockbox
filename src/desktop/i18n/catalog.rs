@@ -2,6 +2,18 @@
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Text {
+    CloudRestore,
+    CloudRestoreHint,
+    CloudRestoreWordsHint,
+    CloudRestoreConfirm,
+    CloudRestoreSelect,
+    CloudRestoreAction,
+    CloudRestoreProgress,
+    CloudRecoveryMissing,
+    CloudRecoveryConflict,
+    CloudRecoveryInterrupted,
+    CloudRecoverySelectRequired,
+    CloudRecoveryConfirmRequired,
     WebsiteIcons,
     WebsiteIconsDescription,
     EncryptionKeySetup,
@@ -473,6 +485,18 @@ pub(crate) enum Text {
 impl Text {
     pub(super) fn translations(self) -> (&'static str, &'static str) {
         match self {
+            Self::CloudRestore => ("Восстановить из Storj", "Recover from Storj"),
+            Self::CloudRestoreHint => ("Укажите доступ к прежнему bucket. Найдём пространства вашего корневого ключа без старого файла .lbx.", "Enter access to your existing bucket. Find spaces belonging to your root key without the old .lbx file."),
+            Self::CloudRestoreWordsHint => ("Введите прежние 12 слов владельца. Новый ключ не откроет существующее пространство.", "Enter the owner's original 12 words. A new key cannot open an existing space."),
+            Self::CloudRestoreConfirm => ("Я доверяю доступной версии Storj и хочу заменить потерянное устройство владельца. После потери всех локальных копий невозможно проверить, что облачная версия самая свежая. Несинхронизированные изменения не восстановятся.", "I trust the available Storj snapshot and want to replace the lost owner device. After losing all local copies, the cloud snapshot cannot be proven to be the latest. Unsynced changes cannot be recovered."),
+            Self::CloudRestoreSelect => ("Выберите пространство для восстановления", "Select a space to recover"),
+            Self::CloudRestoreAction => ("Восстановить пространство", "Recover space"),
+            Self::CloudRestoreProgress => ("Проверяем данные восстановления в Storj…", "Checking recovery data in Storj…"),
+            Self::CloudRecoveryMissing => ("Для этого корневого ключа и bucket резервная копия восстановления не найдена", "No cloud recovery backup was found for this private key and bucket"),
+            Self::CloudRecoveryConflict => ("В резервных копиях восстановления есть конкурирующие подписанные версии; восстановление остановлено", "Cloud recovery backups have conflicting signed heads; recovery stopped"),
+            Self::CloudRecoveryInterrupted => ("Восстановление из облака прервано", "Cloud recovery was interrupted"),
+            Self::CloudRecoverySelectRequired => ("Выберите облачное пространство для восстановления", "Select a cloud space to recover"),
+            Self::CloudRecoveryConfirmRequired => ("Подтвердите доверие к доступной облачной версии перед заменой потерянного контроллера", "Confirm that you trust the available cloud snapshot before replacing the lost controller"),
             Self::EncryptionKeySetup => ("Настройте ключ шифрования", "Set up your encryption key"),
             Self::EncryptionKeySetupHint => ("Создайте или введите 12 слов один раз. Один личный ключ используется во всех пространствах.", "Generate or enter 12 recovery words once. One private identity key is used across all spaces."),
             Self::UnlockIdentity => ("Откройте личный ключ", "Unlock your identity"),
@@ -944,6 +968,18 @@ impl Text {
 }
 
 pub(super) const CATALOG: &[Text] = &[
+    Text::CloudRestore,
+    Text::CloudRestoreHint,
+    Text::CloudRestoreWordsHint,
+    Text::CloudRestoreConfirm,
+    Text::CloudRestoreSelect,
+    Text::CloudRestoreAction,
+    Text::CloudRestoreProgress,
+    Text::CloudRecoveryMissing,
+    Text::CloudRecoveryConflict,
+    Text::CloudRecoveryInterrupted,
+    Text::CloudRecoverySelectRequired,
+    Text::CloudRecoveryConfirmRequired,
     Text::EncryptionKeySetup,
     Text::EncryptionKeySetupHint,
     Text::UnlockIdentity,

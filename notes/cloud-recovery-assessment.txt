@@ -1,0 +1,106 @@
+Cloud recovery assessment. 2026-11-02. Design proposal only.
+Follow-up implemented: see notes/cloud-recovery.txt and docs/cloud-recovery.txt.
+Assessment below records original design evaluation, not current feature status.
+Goal: fresh installation, same root/12 words + Storj endpoint/bucket/credentials;
+recover synced records without original .lbx or surviving personal device.
+No app/protocol changes. No tests needed for assessment text.
+
+Decision
+Recovery useful. Derive recovery capability; retain random device/epoch secrets.
+Full deterministic state reconstruction unnecessary, risky for existing signer rules.
+Deterministic derivation itself safe with high-entropy root and separated HKDF domains.
+No seed can regenerate user edits, random old keys, deleted cloud objects or unsynced edits.
+
+Current evidence
+src/access/mnemonic.rs: 12 BIP39 words, 128 random bits; deterministic Ed25519 root.
+src/vault/identity.rs: root recovery domain already independent of space files.
+src/sync/identity.rs: device signing/HPKE, space ID/namespace/epoch independently random.
+src/sync/protocol/machine/commands.rs: roster transitions inject random epoch key/context.
+src/sync/protocol/machine/state.rs: device-local intent/outbox; independently pinned head.
+src/vault/store.rs: fresh-device/controller APIs require retained source and trusted anchor.
+docs/sync-control-recovery.md: competing root recoveries freeze; journal only local.
+docs/recovery-words.md: words currently recover keys using retained local file, not cloud discovery.
+
+Recommended shape
+Derive versioned recovery encryption keys and private catalog locator from root.
+Separate signature, discovery, encryption domains; canonical binary inputs; stable vectors.
+Use reviewed HKDF + HPKE; never reuse raw Ed25519 bytes as an encryption primitive.
+Certified recovery public key lets active controller publish capsules without unlocking root.
+Cloud encrypted catalog retains random space IDs/namespaces and signed trust descriptors.
+Per-space capsule wraps authorized epoch keys/checkpoint references and exact control/frontier.
+Bind owner/space/namespace/recipient/algorithm/version/control in authentication context.
+Authenticate publisher authority; encryption to public recovery key alone proves no author.
+Use fresh encryption randomness. Keep request bytes stable across retries.
+Fresh install validates catalog, control ancestry and dependencies before importing content.
+Create fresh device keys, counters and installation witness; never restore old signer state.
+Personal owner uses explicit root-authorized controller recovery with freshness policy.
+Shared non-owner still needs controller admission unless protocol explicitly changes policy.
+Never upload plaintext root, device secrets or local writable profile as a recovery object.
+
+Security tradeoffs
+Root compromise plus accessible capsules exposes recoverable data across enabled spaces.
+Envelope wrapping does not eliminate this risk. Compromised root needs actual rotation.
+Password change, credential rotation or deleting latest capsule cannot revoke copied old secrets.
+Full historical recovery under permanent secret sacrifices secrecy of that recoverable history
+against later secret compromise. Current app makes no blanket MLS-style secrecy guarantee.
+Devices must remain distinct. Restoring one signer on two hosts reuses sequence slots and forks.
+Do not deterministically predict all future epochs from a secret retained by removed members.
+Revocation must stop future grants; old records/keys already received remain accessible.
+Root-authorized automatic device admission broadens policy; separate owner and member rules.
+Encrypt catalog names; secret-derived locators reduce simple identity enumeration, not access metadata.
+Cloud observes object sizes/access timing. A locator is no authorization boundary.
+High-entropy generated words required. HKDF does not strengthen a guessed phrase/password.
+
+Freshness and availability
+Valid signature authenticates origin, not latest state or complete history.
+After total local loss, one untrusted bucket can replay a valid old prefix undetectably.
+Trusted peer/independent head witness needed for strong freshness before signing recovery.
+Storage versioning/CAS improve accidents/concurrency; same provider cannot prove adversarial freshness.
+Without independent evidence, show recovered readable snapshot and state explicit write policy.
+Never silently create empty replacement space when recovery object missing or access denied.
+Concurrent recoveries need conflict handling; deterministic key material supplies no consensus.
+Keep budgets for catalog/capsules/history and treat decoded objects as hostile input.
+Only acknowledged remote data recoverable. Keep local-first saves and surface backup lag.
+Publish immutable dependencies before capsule/index references; interruption must retain old usable set.
+Keep multiple recovery generations plus independent encrypted backup; bucket deletion remains fatal otherwise.
+
+Lifecycle and compatibility
+Existing random keys require migration from an unlocked, authorized surviving profile.
+Cannot retrofit recovery after all old keys/files disappear.
+Update capsule on key/roster transitions; checkpoint references/history policy must stay consistent.
+Choose explicit recovery scope: current snapshot, conflicts/tombstones/attachments, full authorized history.
+Current checkpoint alone may omit old revisions. Historical recovery needs retained authorized old keys/data.
+Per-space isolation; multiple spaces per bucket and bucket/provider migration supported by catalog.
+Do not derive content keys from mutable access credentials, endpoint spelling or display name.
+Credential changes affect transport only. Master-password changes protect local files only.
+Recovery root rotation requires authenticated successor policy and rewrapping current keys.
+Specify versioned new recovery format and pinned algorithm suite; reject downgrade/unknown fields.
+Existing signed history need not change if recovery only imports readable content.
+Writable recovery/admission can require protocol changes; do not bypass existing controller checks.
+
+Cost and rollout
+Key derivation/wrapping small versus network; no performance claim without measurements.
+Full snapshots cost more bandwidth; immutable events + periodic checkpoint/capsule reduce repeat uploads.
+Main complexity: crash ordering, freshness, revocation, controller recovery, migration and UI.
+Start personal-owner cloud recovery; shared recovery separate policy/review stage.
+First specify trust policy/format, then migration/publish, fresh-install read recovery,
+fresh-device write recovery, rotation and adversarial validation. Independent security review before reliance.
+
+Required validation before release
+Fresh isolated installation with no profile, witness or cached identity; restore from supplied root only.
+Wrong root/bucket, denied permissions, missing capsule/dependency, modified metadata and old valid prefix.
+Crash at each upload/local commit boundary; delayed index, concurrent updates/recoveries, offline edits.
+Key rotation and removed member/device; stolen root demonstrates documented recovery exposure.
+Multiple spaces, changed credentials, bucket migration, legacy adoption and exact derivation vectors.
+Record history, conflicts, deleted records and attachment bytes preserved for promised recovery scope.
+Real isolated Storj run remains needed; existing suite used fixtures, not production credentials.
+
+Primary sources checked
+https://www.rfc-editor.org/rfc/rfc5869.html#section-3.2
+https://www.rfc-editor.org/rfc/rfc5869.html#section-4
+https://www.rfc-editor.org/rfc/rfc9180.html#section-9.7.3
+https://www.rfc-editor.org/rfc/rfc9180.html#section-9.7.4
+https://www.rfc-editor.org/rfc/rfc9420.html#section-3.1
+https://www.rfc-editor.org/rfc/rfc9420.html#section-16.9
+https://bitwarden.com/help/bitwarden-security-white-paper/
+Bitwarden example: random vault key wrapped for storage/retrieval; pattern reference, not proof of this design.

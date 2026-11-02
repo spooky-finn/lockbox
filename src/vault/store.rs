@@ -145,7 +145,7 @@ impl ProfileStore {
         configuration: SharedProfile,
         phrase: &crate::access::mnemonic::RecoveryPhrase,
     ) -> Result<Vault> {
-        let profile = BootstrapProfile::from_recovery_phrase(
+        let mut profile = BootstrapProfile::from_recovery_phrase(
             configuration.username,
             configuration.space_name,
             configuration.provider,
@@ -153,6 +153,7 @@ impl ProfileStore {
             kdf,
             phrase,
         )?;
+        profile.enable_cloud_backup(&phrase.signing_key())?;
         Vault::create_profile_snapshot(
             path.as_ref(),
             password,
@@ -171,7 +172,7 @@ impl ProfileStore {
         configuration: SharedProfile,
         identity: &crate::vault::identity::Identity,
     ) -> Result<Vault> {
-        let profile = BootstrapProfile::generate_for_root(
+        let mut profile = BootstrapProfile::generate_for_root(
             &identity.signing_key(),
             configuration.username,
             configuration.space_name,
@@ -179,6 +180,7 @@ impl ProfileStore {
             password,
             kdf,
         )?;
+        profile.enable_cloud_backup(&identity.signing_key())?;
         let phrase = identity.phrase()?;
         Vault::create_profile_snapshot(
             path,

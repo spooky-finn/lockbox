@@ -10,6 +10,7 @@ or the [developer guide](development.md) for build commands and layer boundaries
 | How does sync work today? | [Sync engine](sync-engine.md) | Implemented experimental unversioned sync behavior, API and limits |
 | Where should a sync change live? | [Sync architecture](sync-architecture.md) | Module ownership, extension points and durability contracts |
 | How do rollback protection and recovery work? | [Profile protection](profile-protection.md) | Local witness, installation binding and recovery boundaries |
+| Can I recover without the original vault file? | [Cloud recovery](cloud-recovery.txt) | Owner root, encrypted recovery capsules, fresh device and explicit cloud freshness trust |
 | How can I verify a real provider? | [Live Storj test](sync-live-test.md) | Opt-in acceptance probe with fictional data |
 | What remains before release? | [Production delivery plan](sync-production-plan.md) | Release gates and dated validation evidence |
 | What is the broader design? | [Protocol proposal](lockbox-protocol.md) | Proposed v1 design; not a claim of implemented interoperability |

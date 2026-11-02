@@ -40,8 +40,10 @@ pub(crate) fn CloudSetupView() -> Element {
                 event.prevent_default();
                 edit_locked(state, |locked| locked.continue_cloud());
             },
+            fieldset { disabled: locked.busy(), style: "border:0;padding:0;margin:0;min-width:0;display:contents",
             p { class: "muted", {language.text(Text::ConnectYourStorjStorage)} }
             button { r#type: "button", class: "setup-button", onclick: move |_| show_help.set(true), {language.text(Text::HowToSetUpStorj)} }
+            if !locked.cloud_recovery.restoring {
             label { r#for: "cloud-username", {language.text(Text::Username)} }
             input { id: "cloud-username", value: "{locked.cloud.username}", autocomplete: "off",
                 oninput: move |event| edit_locked(state, |locked| locked.cloud.username = event.value()), }
@@ -49,6 +51,7 @@ pub(crate) fn CloudSetupView() -> Element {
                 label { r#for: "cloud-space", {language.text(Text::VaultName)} }
                 input { id: "cloud-space", value: "{locked.cloud.space_name}", autocomplete: "off",
                     oninput: move |event| edit_locked(state, |locked| locked.cloud.space_name = event.value()), }
+            }
             }
             label { r#for: "cloud-url", "Base URL" }
             input { id: "cloud-url", r#type: "url", value: "{locked.cloud.base_url}", placeholder: "https://…", autocomplete: "off",
@@ -68,8 +71,21 @@ pub(crate) fn CloudSetupView() -> Element {
                     let value = Zeroizing::new(event.value());
                     edit_locked(state, |locked| replace_secret(&mut locked.cloud.secret_key, &value));
                 }, }
-            p { class: "muted", {language.text(Text::FieldValidationDoesNotConnectToStorj)} }
+            if !locked.cloud_recovery.restoring {
+                p { class: "muted", {language.text(Text::FieldValidationDoesNotConnectToStorj)} }
+            }
             button { r#type: "submit", class: "setup-button", {language.text(Text::Continue)} }
+            }
+            if locked.cloud_recovery.restoring && !locked.cloud_recovery.spaces.is_empty() {
+                p { {language.text(Text::CloudRestoreSelect)} }
+                for (index, space) in locked.cloud_recovery.spaces.iter().enumerate() {
+                    button { r#type: "button", class: "setup-button", disabled: locked.busy(),
+                        onclick: move |_| edit_locked(state, |locked| locked.choose_cloud_recovery(index)),
+                        {space.name()}
+                        span { class: "muted", " · {space.id()}" }
+                    }
+                }
+            }
         }
     }
 }

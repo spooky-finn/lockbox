@@ -54,6 +54,9 @@ pub(crate) struct BootstrapProfile {
         crate::sync::protocol::Signed<crate::sync::protocol::ControlApproval>,
     >,
     root_capsule: RootCapsule,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[zeroize(skip)]
+    pub(crate) cloud_backup: Option<crate::sync::protocol::cloud_recovery::CloudBackup>,
 }
 
 impl BootstrapProfile {
@@ -143,12 +146,13 @@ impl BootstrapProfile {
             sharing: SharingState::default(),
             control_approvals: std::collections::BTreeMap::new(),
             root_capsule,
+            cloud_backup: None,
         })
     }
 
     pub(crate) fn validate(&self) -> bool {
         ((self.schema_version == 1 && self.sync.is_none())
-            || ((2..=5).contains(&self.schema_version)
+            || ((2..=6).contains(&self.schema_version)
                 && self.sync.is_some()
                 && self.certificate.is_some()))
             && (self.schema_version >= 4 || self.sharing.is_empty())
@@ -185,7 +189,7 @@ impl BootstrapProfile {
     }
 
     pub(crate) fn requires_witness(&self) -> bool {
-        (3..=5).contains(&self.schema_version)
+        (3..=6).contains(&self.schema_version)
     }
 
     pub(crate) fn enable_sharing(&mut self) {
@@ -193,7 +197,22 @@ impl BootstrapProfile {
     }
 
     pub(crate) fn enable_authority(&mut self) {
-        self.schema_version = 5;
+        self.schema_version = self.schema_version.max(5);
+    }
+
+    pub(crate) fn enable_cloud_backup(&mut self, root: &SigningKey) -> Result<()> {
+        let state = self
+            .sync
+            .as_ref()
+            .ok_or(crate::sync::protocol::Error::UnauthorizedDevice)?;
+        let target = crate::sync::protocol::cloud_recovery::target(root, state.descriptor())?;
+        self.cloud_backup = Some(crate::sync::protocol::cloud_recovery::CloudBackup {
+            target,
+            archive: Vec::new(),
+            upload: None,
+        });
+        self.schema_version = 6;
+        Ok(())
     }
 
     pub(crate) fn approve_control_recovery(

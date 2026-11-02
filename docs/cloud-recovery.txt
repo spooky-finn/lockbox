@@ -1,0 +1,104 @@
+Cloud recovery
+
+Recover from Storj on the welcome screen restores an owned cloud space without
+the original .lbx, saved identity file, installation witness or surviving device.
+Supply the original 12 words (or unlock the same saved identity), Storj endpoint,
+bucket and credentials. Choose the discovered space and a new local password.
+The API also accepts the original Ed25519 root private key directly.
+
+Before relying on recovery, open each existing controller profile with its master
+password and let synchronization finish. That unlock enables recovery when the
+same password opens its root capsule. New desktop cloud profiles enable it at
+creation. Legacy API profiles with a separate root password can call
+Vault::enable_cloud_recovery(root_password) explicitly. Touch ID alone cannot
+enroll a legacy profile. A profile already lost before enrollment cannot be
+retrofitted from ciphertext and a root key.
+
+Only the current controller publishes backups. The desktop reports complete sync
+after eligible events and the current recovery capsule are acknowledged. Offline
+local edits remain usable but are not recoverable until successfully published.
+Adapters lacking the recovery transport methods fail backup publication rather
+than acknowledging a backup they did not store.
+
+The restore screen explicitly asks whether to trust the available cloud snapshot
+and replace the lost owner controller. Provider-only recovery cannot prove that
+the signed state is the latest after all independent evidence is lost. A provider
+can withhold a newer valid history. The public API alternatively requires an
+independently authenticated RecoveryAnchor via CloudRecoveryTrust::Independent;
+both its exact control and data frontier must match before a new file is created.
+This trust choice never resets an existing profile witness or reuses its signer.
+Keep an independent encrypted backup and recover only when the previous controller
+is actually lost. Concurrent recoveries can create a signed control fork; existing
+fork detection stops publication rather than choosing a winner.
+
+Restoration creates fresh random signing/HPKE keys and a new installation binding.
+The owner root approves a normal controller-recovery transition, removing the old
+controller, rotating the epoch key and preserving remaining members and roles.
+Prior epoch keys remain encrypted in the recovered local profile for verified
+record history, Trash, conflicts and attachments. They never grant current-device
+write authority. Members of another owner's space still require owner admission;
+restoring an identity does not bypass that owner's policy.
+
+Recovery cryptography and storage
+
+HKDF-SHA256 derives separate private directory and X25519 KEM input domains from
+the original Ed25519 root seed. Recovery does not derive space/device keys from
+credentials, display names or the bucket. A root-signed target binds the random
+space descriptor, directory and recovery encryption public key. The controller
+can update a backup using this public key without unlocking root authority.
+
+Each version-1 capsule contains a controller-signed encrypted snapshot: target,
+space/user names, authenticated control proof, control/data frontier, authorized
+epoch keys and previous capsule hash. HPKE uses X25519/HKDF-SHA256/ChaCha20Poly1305
+with separate application info and directory binding. Root/device private keys,
+credentials, signing counters and writable local profiles are never uploaded.
+Ciphertexts have independent randomness and content-addressed domain-separated
+hashes. Canonical encodings, signatures, control ancestry and resource budgets
+are checked before restoration. Encryption to the public key alone authenticates
+no publisher; the current controller's signature is required.
+
+Storj stores immutable capsules at recovery/v1/<private-directory>/<hash>.json,
+separately from spaces/<escaped-name>/objects/. Credentials need LIST/GET/PUT
+for this additional prefix. The private locator reduces simple enumeration; it
+is not authorization. Storage still sees access patterns and object sizes.
+
+The exact pending capsule is committed inside the protected local profile before
+upload. Failed acknowledgements retry the same bytes. New snapshots link only to
+acknowledged predecessors. Discovery scans bounded pages, directly fetches omitted
+predecessors, groups spaces by their random IDs, and requires one authenticated
+head per space. A new controller's authenticated control ancestry can supersede
+an earlier controller's capsule chain after a legitimate handoff. Earlier valid
+capsules supply historical epoch keys where their control heads are ancestors.
+LIST order and timestamps never select a winner. Known control
+and causal dependencies are fetched directly even when ordinary LIST omits them.
+Missing data, denial and invalid histories never create an empty replacement.
+
+Budgets: 4 MiB per capsule/object, 4096 capsule fetches, 64 MiB total capsule bytes,
+64 listing pages with bounded nonrepeating cursors. Normal event journal limits
+remain 4096 objects/64 MiB. Capsules retain predecessors; automatic compaction and
+large-history recovery beyond these budgets are not implemented. Preserve old
+capsules or discovery will report incomplete ancestry. Old clients reject local
+bootstrap schema 6 instead of silently discarding recovery configuration/keys.
+Existing signed event/control formats are unchanged.
+
+Possession of the root secret plus accessible capsules grants recoverable content.
+Master-password/Storj-credential changes do not revoke a copied root secret.
+Independent recovery-key rotation and root ownership succession are not implemented;
+a compromised root requires migration to a fresh identity/space for future data.
+Recovery is not protection against bucket deletion or loss of unsynced edits.
+No live Storj bucket or personal credentials were used during development tests.
+
+API entry points
+
+ProfileStore::discover_cloud_spaces(root, storage, cancellation)
+ProfileStore::restore_cloud_space(path, password, kdf, CloudRestore { ... }, storage)
+Vault::enable_cloud_recovery(root_password)
+
+Use one storage adapter for root-directory discovery and a provider adapter bound
+to the selected CloudSpace::name() for its normal signed events. Credentials stay
+local. CloudRestore supplies explicit trust, optional original recovery phrase
+for local password recovery slots, and cancellation. Keep a fresh ProfileStore
+installation witness; never reenroll a lost signer's old identity.
+If the desktop reports an error after creating the target profile, retry the same
+recovery without returning to connection setup. It resumes the retained target
+and root reservation. Creating a competing target does not override that claim.

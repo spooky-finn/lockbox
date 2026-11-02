@@ -202,7 +202,13 @@ impl Vault {
 
         let plan = sync::publication(state, &replay)?;
         let receipts = sync::upload(storage, namespace, &plan, &cancel)?;
-        self.acknowledge_sync(&receipts, true)
+        self.acknowledge_sync(&receipts, true)?;
+        while let Some((directory, upload)) = self.prepare_cloud_backup()? {
+            cancel.check()?;
+            storage.put_recovery(directory, upload.hash, &upload.bytes.0)?;
+            self.acknowledge_cloud_backup(upload.hash)?;
+        }
+        Ok(())
     }
 
     /// Provider composition stays in infrastructure. The returned factory has

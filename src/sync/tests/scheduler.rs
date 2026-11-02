@@ -21,6 +21,8 @@ use std::{
 #[derive(Default)]
 struct MemoryFactory {
     objects: Arc<Mutex<BTreeMap<Hash, Vec<u8>>>>,
+    recovery: Arc<Mutex<BTreeMap<Hash, Vec<u8>>>>,
+    fail_backup: Arc<AtomicBool>,
     connections: AtomicUsize,
     connection_threads: Mutex<Vec<std::thread::ThreadId>>,
     fail_once: AtomicBool,
@@ -36,11 +38,19 @@ impl StorageFactory for MemoryFactory {
         if self.fail_once.swap(false, Ordering::Relaxed) {
             return Err(TransportError::AccessDenied);
         }
-        Ok(Box::new(MemoryStorage(self.objects.clone())))
+        Ok(Box::new(MemoryStorage(
+            self.objects.clone(),
+            self.recovery.clone(),
+            self.fail_backup.clone(),
+        )))
     }
 }
 
-struct MemoryStorage(Arc<Mutex<BTreeMap<Hash, Vec<u8>>>>);
+struct MemoryStorage(
+    Arc<Mutex<BTreeMap<Hash, Vec<u8>>>>,
+    Arc<Mutex<BTreeMap<Hash, Vec<u8>>>>,
+    Arc<AtomicBool>,
+);
 
 impl sync::Storage for MemoryStorage {
     fn list(&mut self, _: Hash, _: Option<&str>) -> sync::Result<sync::Page> {
@@ -63,6 +73,50 @@ impl sync::Storage for MemoryStorage {
         self.0.lock().unwrap().insert(hash, bytes.to_vec());
         Ok(())
     }
+    fn list_recovery(&mut self, _: Hash, _: Option<&str>) -> sync::Result<sync::Page> {
+        Ok(sync::Page {
+            objects: self.1.lock().unwrap().keys().copied().collect(),
+            next: None,
+        })
+    }
+    fn get_recovery(&mut self, _: Hash, hash: Hash) -> sync::Result<Vec<u8>> {
+        self.1
+            .lock()
+            .unwrap()
+            .get(&hash)
+            .cloned()
+            .ok_or(TransportError::NotFound)
+    }
+    fn put_recovery(&mut self, _: Hash, hash: Hash, bytes: &[u8]) -> sync::Result<()> {
+        if self.2.load(Ordering::Relaxed) {
+            return Err(TransportError::AccessDenied);
+        }
+        self.1.lock().unwrap().insert(hash, bytes.to_vec());
+        Ok(())
+    }
+}
+
+#[test]
+fn cloud_backup_failure_is_visible_and_retry_publishes_before_synced_status() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut vault = vault(&directory);
+    assert!(
+        vault
+            .enable_cloud_recovery(&SecretString::from("recovery".to_owned()))
+            .unwrap()
+    );
+    let factory = Arc::new(MemoryFactory::default());
+    factory.fail_backup.store(true, Ordering::Relaxed);
+    let mut session = SpaceSync::new(Some(factory.clone()));
+    assert!(drive(&mut session, &mut vault).is_some());
+    assert_eq!(session.status, Status::Offline);
+    assert!(!factory.objects.lock().unwrap().is_empty());
+    assert!(factory.recovery.lock().unwrap().is_empty());
+    factory.fail_backup.store(false, Ordering::Relaxed);
+    session.retry();
+    assert!(drive(&mut session, &mut vault).is_none());
+    assert_eq!(session.status, Status::Synced);
+    assert_eq!(factory.recovery.lock().unwrap().len(), 1);
 }
 
 fn drive(session: &mut SpaceSync, vault: &mut Vault) -> Option<String> {

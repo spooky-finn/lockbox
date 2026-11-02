@@ -86,6 +86,10 @@ pub enum VaultError {
     RecoveryUnavailable,
     #[error("A different private identity key is already saved on this device")]
     IdentityMismatch,
+    #[error("No cloud recovery backup was found for this private key and bucket")]
+    CloudRecoveryMissing,
+    #[error("Cloud recovery backups have conflicting signed heads; recovery stopped")]
+    CloudRecoveryConflict,
     #[error("{0}")]
     Mnemonic(#[from] crate::access::mnemonic::Error),
     #[error("received changes await a durable commit; retry synchronization")]
@@ -169,11 +173,14 @@ mod authority;
 mod edits;
 mod metadata;
 pub use metadata::ProfileSummary;
+mod cloud_recovery;
 mod history;
 pub(crate) mod identity;
 mod protection;
 mod records;
 mod recovery;
+pub use crate::sync::protocol::cloud_recovery::CloudSpace;
+pub use cloud_recovery::{CloudRecoveryTrust, CloudRestore};
 mod root_journal;
 mod shared;
 mod sharing;

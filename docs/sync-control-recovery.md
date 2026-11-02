@@ -1,5 +1,10 @@
 # Controller transfer and recovery
 
+The desktop now offers [cloud-only owner recovery](cloud-recovery.txt) for
+enrolled profiles. It uses this controller transition with fresh device keys;
+provider-only recovery exposes an explicit snapshot-trust choice rather than
+claiming independent freshness. The independent-anchor API remains available.
+
 Shared spaces use one experimental, unversioned protocol with explicit controller
 transitions and separate approval domains. It remains distinct from [the proposal](lockbox-protocol.md); independent
 review and a stable interoperability release remain open gates.

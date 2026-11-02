@@ -258,7 +258,7 @@ and can be activated through the inline recovery-password form or
 `Vault::activate_sync`. Activation certifies a fresh device and journals
 its existing entries/folders; it preserves data on failed writes. It requires
 the separate recovery password and never silently unlocks root authority.
-New shared profiles use bootstrap schema 5 and authenticated file generations so
+Cloud-recoverable profiles use bootstrap schema 6 and authenticated file generations so
 older applications reject them instead of dropping their protection metadata.
 
 Root ownership transfer, fork repair, desktop control/recovery wizards,

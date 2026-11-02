@@ -5,6 +5,7 @@
 
 mod authority;
 mod candidates;
+pub mod cloud_recovery;
 mod commands;
 mod history;
 mod invitations;

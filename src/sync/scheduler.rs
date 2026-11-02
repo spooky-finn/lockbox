@@ -19,6 +19,7 @@ use schedule::{INCOMPLETE_INTERVAL, RECOVERY_INTERVAL, Schedule};
 enum Reply {
     Downloaded(Download),
     Uploaded(Vec<Hash>),
+    BackedUp(Hash),
 }
 
 /// A reply can only be consumed by the space and trust anchor that started it.
@@ -175,6 +176,10 @@ impl SpaceSync {
             return match reply {
                 Reply::Downloaded(batch) => self.downloaded(vault, batch),
                 Reply::Uploaded(receipts) => self.uploaded(vault, receipts),
+                Reply::BackedUp(hash) => {
+                    vault.acknowledge_cloud_backup(hash)?;
+                    self.finish_upload(vault)
+                }
             };
         }
 
@@ -249,6 +254,25 @@ impl SpaceSync {
         // Acknowledgements and exchange time are saved only after fresh replay and
         // publication validation. A validation failure cannot become "Synced".
         vault.acknowledge_sync(&receipts, true)?;
+        if !pending && let Some((directory, upload)) = vault.prepare_cloud_backup()? {
+            return self.start_exchange(vault, move |storage, cancel| {
+                cancel.check()?;
+                storage.put_recovery(directory, upload.hash, &upload.bytes.0)?;
+                Ok(Reply::BackedUp(upload.hash))
+            });
+        }
+        self.finish_upload(vault)
+    }
+
+    fn finish_upload(&mut self, vault: &Vault) -> VaultResult<()> {
+        let replay = vault
+            .sync_replay_state()?
+            .ok_or(crate::sync::protocol::Error::UnauthorizedDevice)?;
+        let state = vault
+            .sync_state()
+            .ok_or(crate::sync::protocol::Error::UnauthorizedDevice)?;
+        let pending =
+            !sync::publication(state, &replay)?.is_empty() || !vault.cloud_backup_current()?;
         self.schedule.succeeded(Instant::now());
         self.status = if pending {
             self.retry();

@@ -4,6 +4,38 @@ use crate::desktop::{
 };
 
 #[test]
+fn cloud_restore_requires_original_words_and_has_no_create_or_join_storage_choice() {
+    use crate::{
+        access::auth::{CreationStep, StorageKind},
+        desktop::context::edit_locked,
+    };
+    let mut dom = mounted();
+    update(&mut dom, |_| runtime::begin_cloud_restore());
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("Восстановить из Storj"));
+    assert!(html.contains("прежние 12 слов"));
+    assert!(html.contains("id=\"recovery-words\"") || html.contains("recovery-word"));
+    assert!(!html.contains("Сгенерировать"));
+    update(&mut dom, |state| {
+        edit_locked(state, |form| {
+            form.creation_step = CreationStep::Sync;
+            form.storage_kind = Some(StorageKind::Cloud);
+        })
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("id=\"cloud-bucket\""));
+    assert!(!html.contains("id=\"cloud-space\""));
+    assert!(!html.contains("id=\"cloud-username\""));
+    assert!(!html.contains("storage-choices"));
+    update(&mut dom, |state| {
+        edit_locked(state, |form| form.creation_step = CreationStep::Password)
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("id=\"cloud-recovery-confirm\""));
+    assert!(html.contains("невозможно проверить"));
+}
+
+#[test]
 fn creation_requires_key_setup_before_storage_choice_and_cloud_fields() {
     use crate::desktop::context::{Session, edit_locked};
     use dioxus::{

@@ -1,0 +1,20 @@
+Owner cloud recovery implemented. Random device/epoch keys retained.
+Root-derived recovery HPKE key + private directory. Root-signed destination.
+Controller-signed immutable capsules; separate Storj recovery/v1 prefix.
+No root/device private keys, credentials or writable profiles uploaded.
+Persist ciphertext before upload. Exact retry. Link acknowledged predecessors only.
+Publish events first. Sync complete requires current capsule acknowledgement.
+Fresh install finds owned spaces, verifies control chain/data, creates fresh controller.
+Explicit provider-snapshot trust checkbox; API supports independent control/data anchor.
+Preserve attachments, folders, Trash and verified history through archived epoch keys.
+Archive keys never authorize current device. Shared member admission unchanged.
+Legacy controller enrolls on password unlock; separate-root-password API supported.
+Schema 6 protects new local metadata from old readers; signed event format unchanged.
+Bounds and cancellation on discovery/restore. Missing/corrupt/forked data cannot create empty space.
+Controller handoff: signed successor ancestry orders separate capsule chains; inherit old readable keys.
+Retry failed recovery against retained target/root reservation; never silently allocate competitor.
+Root compromise exposes recoverable history. Root rotation needs fresh identity/space migration.
+Compaction, independent freshness service, live Storj run remain outside this change.
+Validation: full Rust suite and loopback S3 fixture pass; independent HKDF vectors,
+wrong key, forgery, stale anchor, missing data, forks, cancellation, failed commits,
+restart/exact retry, controller handoff and history preservation covered.
