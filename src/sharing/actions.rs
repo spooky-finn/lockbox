@@ -126,6 +126,7 @@ pub(crate) struct Sharing {
     pub saved_output: Option<Output>,
     pub joining: bool,
     pub recipient_verified: bool,
+    pub invitation_role: Role,
     pub code: String,
     pub expiry_days: u64,
     pub confirm_remove: Option<Hash>,
@@ -143,6 +144,7 @@ impl Default for Sharing {
             saved_output: None,
             joining: false,
             recipient_verified: false,
+            invitation_role: Role::Reader,
             code: String::new(),
             expiry_days: 7,
             confirm_remove: None,
@@ -163,6 +165,7 @@ impl Sharing {
     pub fn cancel_review(&mut self) {
         self.review = None;
         self.recipient_verified = false;
+        self.invitation_role = Role::Reader;
         self.code.clear();
     }
 

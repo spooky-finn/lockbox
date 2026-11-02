@@ -229,6 +229,7 @@ fn new_recipient_review_invalidates_previous_verification_and_export_dialogs() {
     );
     owner.sharing.recipient_verified = true;
     owner.sharing.code = "previous verification code".into();
+    owner.sharing.invitation_role = Role::Editor;
     let certificate = second.vault.device_certificate().unwrap();
     review(
         &mut owner,
@@ -240,6 +241,7 @@ fn new_recipient_review_invalidates_previous_verification_and_export_dialogs() {
         Some(Artifact::Certificate(reviewed)) if reviewed.body.device == certificate.body.device
     ));
     assert!(!owner.sharing.recipient_verified);
+    assert_eq!(owner.sharing.invitation_role, Role::Reader);
     assert!(owner.sharing.code.is_empty());
     assert!(owner.sharing.output.is_none());
     assert!(owner.sharing.saved_output.is_none());

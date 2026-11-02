@@ -20,32 +20,47 @@ Provider credentials remain required and are never included in sharing files.
 Existing records or signing history cannot be discarded to join another space.
 
 1. Recipient selects **Create and save join request** and sends the saved device
-   file to the owner. Compare user/device fingerprints through a trusted channel.
-2. Owner selects **Open sharing file**, reviews the detected device request,
-   confirms fingerprints, chooses the deadline and selects **Save read-only
-   invitation** or **Save editor invitation**. An additional device of the
-   owner's own identity uses **Save invitation for my device**.
+   file to the administrator. **Copy message for administrator** copies a ready-made
+   message containing the profile username and complete User ID / Device ID.
+   Send this message through a second trusted channel, separately from the file;
+   the administrator compares both complete IDs with the imported request.
+   **Preview the message** shows exactly what will be copied. The name is a
+   display label; the verified IDs establish identity. After sending, select
+   **Request sent — continue**.
+2. Owner selects **Open recipient device file**, reviews the detected request,
+   confirms fingerprints and chooses the role under **Access level**, then
+   selects **Create invitation**. The deadline can be adjusted under
+   **Invitation validity**. Read only is
+   the default and resets for each newly imported request. An additional device
+   of the owner's own identity retains the owner-device admission rules.
 3. Owner sends the saved invitation file and shares its 64-character verification
    code through a separate trusted channel. The code remains visible after
    saving and binds the full space descriptor and signed control anchor.
    The recipient screen does not display the expected code for copying into its
-   own verification field.
-4. Recipient selects **Open sharing file**, enters the independently received
+   own verification field. **Copy verification code** copies the complete code.
+   After sending, select **Invitation sent — continue**.
+4. Recipient selects **Open invitation**, enters the independently received
    code and selects **Sign and save consent**. Send the saved response to the owner.
-5. Owner opens that response using **Open sharing file**, reviews the verified
+   Select **Consent sent — continue** after sending.
+5. Owner opens that response using **Open signed response**, reviews the verified
    device/role and selects **Approve and save confirmation**. Send the saved
    confirmation to the recipient.
-6. Recipient opens the confirmation using **Open sharing file** and selects
+6. Recipient opens the confirmation using **Open admission confirmation** and selects
    **Complete connection**. The app installs the verified checkpoint and begins
    normal synchronization.
 
-A single opener detects all four artifact types by content and retains strict
-parsing and signature checks. Artifact creation opens the save dialog directly;
+A shared opener, labelled for the current step, detects all four artifact types
+by content and retains strict parsing and signature checks. Artifact creation opens the save dialog directly;
 it does not send files to another person. Cancelling that dialog leaves the
 artifact available under **Save sharing file**, and failed writes can be retried.
-Successful saves advance the wizard to the next handoff, show waiting instructions
-and offer **Save another copy**. Pending invitations/consents remain resumable
-from the encrypted ledger after restart. A session lock preserves the joining
+Successful saves keep the current handoff visible until the user confirms sending.
+The progress indicator cannot skip steps; only the current step's action is
+prominent. Retry exports, invitation history and deadline settings are collapsed
+until needed. Public identity details remain available under **This device** at
+later steps. Copying uses the existing guarded clipboard and reports success or
+failure; credentials, recovery words, vault records and private keys are excluded.
+Pending invitations/consents remain resumable from the encrypted ledger after
+restart. A session lock preserves the joining
 path, and reopening a profile with pending consent returns to sharing.
 
 The page lists devices and pending invitations after restart. The controller can

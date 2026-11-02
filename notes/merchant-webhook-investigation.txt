@@ -1,0 +1,90 @@
+Invoice: 9238365f-4f16-4c06-b726-3b55ecaa9540
+Event: 1396948. Screenshot: in_progress -> success, 10:53; provider webhook 11:02.
+User supplied payout creation payload: client.registeredAt 2026-11-02T10:32:22.392Z.
+Prod foundry logs checked. PD [test], provider UltimaX.
+Callback supplied: https://dev-payments.bteam.dev/payments/pgt/callback
+Merchant transaction: a4552495-ead8-41a1-82d8-767d0066299d
+Request ID: 8194e6e7-0102-4e66-92e9-2c0d2718b6a0
+
+Source found: /Users/fin/dev/work/agg/{ui,operation,mops}.
+Lockbox unrelated. Application code unchanged.
+
+Verified code
+- UI: admin/src/lib/api/repository.ts. Manual status uses PATCH status;
+  resend uses POST operation/h2h/handwh/{id}.
+- operation/src/bb_operation.API/Services/OperationStatusService.cs:974-979:
+  persist status, then SendWebhook. SendWebhook:1138 publishes DHOperation
+  to business-webhook-listener. No durable pending notification in this path.
+  Failure between DB commit and publish can leave success without notification.
+- Consumers/ConsumerBusinessWebhook.cs:105-115: missing URL silently returns;
+  invalid URL logs warning, returns. Operation URL overrides business default.
+- Ext/ExtBusinessWebHookService.cs:52-55: webhook.site suffix skipped;
+  returns Success("skipped"), no HTTP, no event, no retry.
+- Same service:84-99: event recorded only after HTTP response/body.
+  DNS/TLS/timeout failures leave no Merchant webhook event.
+- Ext/ExtMopsOperationEventService.cs: event write failures only log warnings;
+  delivered callback can also be missing from event list.
+- Program.cs:219-232: consumer exceptions retry immediately twice, then delayed
+  10s/30s/1m/5m. Normal return means acknowledged, no retry.
+- mops/engine/outbound/operation_status_event_repo.rs: status journal independent
+  of merchant delivery. Transition event proves DB change, not queue publication.
+- OperationStatusService.cs:208-239: provider callback after existing success
+  returns without merchant notification. Exception: payout with pending success
+  webhook marker; manual ChangeStatusOperation does not set that marker.
+  Thus callback at 11:02 cannot normally repair missing manual notification.
+
+Incident conclusion
+Confirmed delivery failure through SOCKS5 proxy, before HTTP response.
+Queue publication succeeded. Earlier lost-publication hypothesis excluded for
+this invoice; local recovery-gap reproduction is separate from incident cause.
+Exact exception:
+System.Net.Http.HttpRequestException: SOCKS5 proxy connect failed with code: 6 (dev-payments.bteam.dev:443)
+Stack: Socks5ProxyConnector.SendConnectCommandAsync, ConnectAsync,
+ExtBusinessWebHookService.SendBusinessWebHook, ConsumerBusinessWebhook.Consume.
+Why event list empty: Merchant webhook event written only after HTTP response;
+SOCKS5 connection failure throws before that write. Observability gap confirmed.
+Logs establish proxy CONNECT failure; underlying proxy-to-target network cause
+not established. No evidence of HTTP rejection from merchant application.
+
+Prod checks
+User explicitly authorized MOPS/core log reads in subsequent message.
+Read-only SSH foundry; core docker logs, both mops_server replica service logs.
+Core window 2026-11-02 10:25-11:30 UTC; error details 10:53-11:10 UTC.
+MOPS:
+- 10:32:23.825 UltimaX create returns HTTP 202, accepted/in_progress.
+- 10:53:10.172 status lookup starts.
+- 10:53:13.587 UltimaX returns HTTP 200, status in_progress.
+- 11:02:22.945 provider callback mapped to Expired.
+Core:
+- 10:53:13.750 first ConsumerBusinessWebhook send, supplied operation URL.
+- 10:53:13.764 HTTP POST starts.
+- 10:53:45.355 SOCKS5 connect failure; immediate retry.
+- 15 send attempts total through 11:07:16.604.
+- Each observed failure: same SOCKS5 code 6; about 31.5 seconds per attempt.
+- Final observed R-FAULT 11:07:48.339, same exception.
+- Message ID: 01000000-0a00-0242-0f9c-08df38cf7e3e.
+- 11:02:22.938 provider status expired received; operation already success,
+  update ignored. Callback was expired, not success.
+No queue contents inspected; final error-queue placement not independently checked.
+
+Local reproduction
+- Harness: /private/tmp/merchant-webhook-investigation/Program.cs.
+- Uses existing compiled operation API + PayoutCascade fixtures; in-memory DB,
+  mocked provider/accounts/RabbitMQ. No requests to actual callback or prod.
+- Run: dotnet run --project /private/tmp/merchant-webhook-investigation/Investigation.csproj --ignore-failed-sources -v quiet
+- Control: manual in_progress -> success, queue healthy: success persisted,
+  exactly one webhook queued. Later provider success adds no notification.
+- Fault injection: same manual transition, queue send throws: success persisted,
+  zero webhooks queued, no pending marker. Later provider success still queues
+  zero webhooks. Both assertions pass. Confirms recoverability bug; does not
+  establish whether queue failure happened for original invoice.
+
+Fix direction after evidence
+- Diagnose proxy connectivity to dev-payments.bteam.dev:443; verify affected
+  egress route, endpoint reachability/filtering. No config changes performed.
+- Observability: record failed attempts even without HTTP response, including
+  transport exception and retry outcome.
+- Recovery: resend only webhook after connectivity repair and delivery check;
+  avoid repeating status change, which cancels/posts balances again.
+- Separate robustness task: durable notification outbox for manual transitions.
+No prod writes, resends, or application changes performed.

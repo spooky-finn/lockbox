@@ -21,20 +21,20 @@ Commands below start at the repository root:
 
 ```sh
 cargo build --locked --release --bin lockbox-browser-host
-npm --prefix browser-extension run check
+npm --prefix ext run check
 # Optional distribution archives (requires the zip command):
-npm --prefix browser-extension run package
+npm --prefix ext run package
 ```
 
 Chrome:
 
 1. Open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**,
-   and select `browser-extension/dist/chrome`.
+   and select `ext/dist/chrome`.
 2. Copy the extension's ID from that page (also shown in the popup's setup section).
 3. Register the native companion, replacing both placeholders:
 
    ```sh
-   node browser-extension/scripts/register-host.mjs \
+   node ext/scripts/register-host.mjs \
      --browser chrome --extension-id YOUR_CHROME_EXTENSION_ID \
      --host /ABSOLUTE/PATH/TO/lockbox/target/release/lockbox-browser-host
    ```
@@ -42,11 +42,11 @@ Chrome:
 Firefox:
 
 1. Open `about:debugging#/runtime/this-firefox`, choose **Load Temporary Add-on**,
-   and select `browser-extension/dist/firefox/manifest.json`.
+   and select `ext/dist/firefox/manifest.json`.
 2. Register the companion:
 
    ```sh
-   node browser-extension/scripts/register-host.mjs \
+   node ext/scripts/register-host.mjs \
      --browser firefox \
      --host /ABSOLUTE/PATH/TO/lockbox/target/release/lockbox-browser-host
    ```
@@ -144,14 +144,14 @@ Browser API references: [Chrome native messaging](https://developer.chrome.com/d
 ```sh
 cargo test --locked browser::
 cargo test --locked --test browser_host
-npm --prefix browser-extension run check
+npm --prefix ext run check
 ```
 
 Optional real Chromium form tests (uses a temporary profile, no real credentials):
 
 ```sh
-CHROME_BIN="/path/to/chrome" npm --prefix browser-extension test
-FIREFOX_BIN="/path/to/firefox" npm --prefix browser-extension test
+CHROME_BIN="/path/to/chrome" npm --prefix ext test
+FIREFOX_BIN="/path/to/firefox" npm --prefix ext test
 ```
 
 The Chromium checks use a temporary loopback HTTPS fixture and require `openssl`.

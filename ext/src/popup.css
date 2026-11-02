@@ -6,6 +6,9 @@ header { display: flex; align-items: center; gap: 10px; padding: 20px 22px; bord
 .brand { font-size: 19px; font-weight: 650; letter-spacing: -.5px; }
 .brand span { display: block; font-size: 10px; font-weight: 400; letter-spacing: .15px; color: #959c98; }
 main { padding: 22px; }
+.extension-status { padding: 11px 12px; margin-bottom: 18px; border: 1px solid #4e6645; border-radius: 7px; background: #253323; color: #d2e8be; }
+.extension-status strong, .extension-status span { display: block; }
+.extension-status span { margin-top: 3px; font-size: 11px; }
 h1 { font-size: 23px; line-height: 1.25; margin: 9px 0 12px; font-weight: 600; letter-spacing: -.65px; }
 p { margin: 10px 0; }
 .eyebrow { font-size: 9px; color: #a5ada7; letter-spacing: 1.6px; font-weight: 600; }

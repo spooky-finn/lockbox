@@ -129,6 +129,7 @@ $("save-form").addEventListener("submit", (event) => {
 });
 
 async function init() {
+  $("extension-status").textContent = "Extension is running. Connecting to the local vault companion…";
   $("extension-id").textContent = api.runtime.id;
   const [tab] = await api.tabs.query({ active: true, currentWindow: true });
   try {
@@ -144,6 +145,7 @@ async function init() {
     state((await send("status")).unlocked);
     if (unlocked) await accounts();
   });
+  $("extension-status").textContent = "Extension is running. Vault connection status is shown below.";
 }
 
 // Only status is polled. Account labels and generated-password UI vanish on expiry.
@@ -153,4 +155,7 @@ setInterval(async () => {
   catch { state(false); notice("Native companion disconnected."); }
 }, 5000);
 window.addEventListener("pagehide", () => { $("master").value = ""; $("username").value = ""; });
-void init().catch(() => notice("Could not open Lockbox. Reload the extension and try again."));
+void init().catch(() => {
+  $("extension-status").textContent = "Popup opened, but extension startup failed.";
+  notice("Could not open Lockbox. Reload the extension and try again.");
+});

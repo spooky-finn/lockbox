@@ -292,7 +292,7 @@ button.sidebar-settings[aria-current="page"]:focus-visible { outline-color: var(
 .sharing-path.selected { border-color: var(--accent); background: var(--selected); }
 .sharing-steps { display: flex; gap: 8px; list-style: none; padding: 0; margin: 0; flex-wrap: wrap; }
 .sharing-steps li { flex: 1 1 130px; }
-.sharing-step { display: flex; align-items: center; gap: 8px; width: 100%; height: 100%; text-align: left; white-space: normal; padding: 10px; border-radius: var(--button-radius); box-shadow: none; font-size: 12px; }
+.sharing-step { display: flex; align-items: center; gap: 8px; box-sizing: border-box; height: 100%; text-align: left; padding: 10px; border: 1px solid var(--border); border-radius: var(--button-radius); font-size: 12px; color: var(--muted); }
 .sharing-step:disabled, .sharing-path.selected:disabled { opacity: 1; }
 .sharing-step.current { color: var(--accent-ink); border-color: var(--accent); background: var(--selected); }
 .sharing-step-number { display: grid; place-items: center; flex: 0 0 24px; height: 24px; border: 1px solid currentColor; border-radius: 50%; }
@@ -304,6 +304,12 @@ button.sidebar-settings[aria-current="page"]:focus-visible { outline-color: var(
 .sharing-navigation { display: flex; justify-content: space-between; gap: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
 .sharing-identity summary { cursor: pointer; font-size: 13px; font-weight: 600; }
 .sharing-identity[open] summary { margin-bottom: 16px; }
+.sharing-verification { border-top: 1px solid var(--border); padding-top: 16px; }
+.sharing-verification p { font-size: 12px; line-height: 1.7; }
+.sharing-message { white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; font-size: 12px; line-height: 1.7; margin: 12px 0 0; padding: 14px; border-radius: 10px; background: var(--subtle); }
+.sharing-message-preview summary, .sharing-file-options summary, .sharing-history > summary { cursor: pointer; font-size: 12px; font-weight: 600; }
+.sharing-file-options[open] > summary, .sharing-history[open] > summary { margin-bottom: 12px; }
+.sharing-navigation > .primary { margin-left: auto; }
 
 .sharing-check { display: flex; align-items: flex-start; gap: 10px; font-size: 12px; line-height: 1.6; }
 .settings-back { align-self: flex-start; }

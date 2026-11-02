@@ -13,6 +13,7 @@ pub(super) struct Workflow {
     complete: bool,
     navigation_locked: bool,
     show_step_action: bool,
+    next_action: Option<(Step, Text)>,
 }
 
 impl Workflow {
@@ -35,19 +36,28 @@ impl Workflow {
                 sharing
                     .saved_output
                     .as_ref()
-                    .map(|output| match output.kind {
-                        Kind::Certificate => Step::AcceptInvitation,
-                        Kind::Invitation | Kind::Receipt => Step::ApproveAccess,
-                        Kind::Response => Step::Connect,
-                    })
+                    .map(|output| Step::output(output.kind))
             })
             .or(selection)
             .unwrap_or_else(|| Step::resume(unlocked, now));
+        let next_action = sharing
+            .saved_output
+            .as_ref()
+            .filter(|_| !sharing.has_artifact() && !sharing.busy())
+            .map(|output| match output.kind {
+                Kind::Certificate => (Step::AcceptInvitation, Text::SharingRequestSent),
+                Kind::Invitation => (Step::ApproveAccess, Text::SharingInvitationSent),
+                Kind::Response => (Step::Connect, Text::SharingConsentSent),
+                Kind::Receipt => (Step::GetDevice, Text::SharingInviteAnother),
+            });
         Self {
             step,
             complete,
             navigation_locked: sharing.has_artifact() || sharing.busy(),
-            show_step_action: !complete && !sharing.has_artifact(),
+            show_step_action: !complete
+                && !sharing.has_artifact()
+                && sharing.saved_output.is_none(),
+            next_action,
         }
     }
 
@@ -80,11 +90,15 @@ impl Workflow {
     }
 
     pub fn can_go_back(self) -> bool {
-        !self.navigation_locked && self.step.previous().is_some()
+        !self.navigation_locked && self.next_action.is_none() && self.step.previous().is_some()
     }
 
     pub fn show_step_action(self) -> bool {
         self.show_step_action
+    }
+
+    pub fn next_action(self) -> Option<(Step, Text)> {
+        self.next_action
     }
 }
 
@@ -194,16 +208,6 @@ impl Step {
             Self::ApproveAccess => Some(Self::SendInvitation),
             Self::AcceptInvitation => Some(Self::PrepareDevice),
             Self::Connect => Some(Self::AcceptInvitation),
-        }
-    }
-
-    pub fn next(self) -> Option<Self> {
-        match self {
-            Self::GetDevice => Some(Self::SendInvitation),
-            Self::SendInvitation => Some(Self::ApproveAccess),
-            Self::PrepareDevice => Some(Self::AcceptInvitation),
-            Self::AcceptInvitation => Some(Self::Connect),
-            Self::ApproveAccess | Self::Connect => None,
         }
     }
 }

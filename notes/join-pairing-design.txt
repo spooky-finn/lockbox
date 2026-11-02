@@ -1,0 +1,131 @@
+Join pairing: fewer handoffs, same admission checks
+2026-11-02. Design proposal; no runtime changes.
+Review status: see notes/join-pairing-review.txt. User selected owner-first request/approval flow below; bootstrap encryption and actual capability retirement still need specification.
+
+Decision
+- Recommend one pairing link / QR, automatic artifact delivery, explicit peer verification and approval.
+- Keep addressed Invitation, signed Admission, signed AdmissionReceipt and epoch rotation unchanged.
+- Link starts contact only. Possessing link never grants space membership or content keys.
+- Preserve full-strength independent trust checks. Shorten workflow, not cryptographic entropy.
+
+User-selected flow and request identity
+- Owner creates single-use invite link. Opening link creates pending request only; no membership or epoch grant before controller approval and existing signed consent.
+- Recipient submits display name, User ID, Device ID and complete signed device certificate. Administrator sees these together with intended role; explicit Approve / Reject per request.
+- Existing Certificate has no username. Add name to separate signed contact-request envelope, leaving certificate and membership wire formats unchanged. Device signature covers name, exact certificate hash, contact session and request nonce; verify certificate and matching signing key before display as signed request.
+- Treat name as self-declared display metadata. Anyone can choose same name; User ID / Device ID and independently checked certificate remain identity authority.
+- Approval captures immutable request hash, profile/space/session, exact certificate and selected role. Click never approves current row by position or latest incoming request. New name/certificate/session produces separate request and cannot inherit verification/approval.
+- One administrator approval authorizes only that exact addressed offer. When matching signed recipient consent arrives, controller may complete admission under persisted authorization after rechecking current policy; no repeated approve for unchanged request. Changed peer/offer/role requires fresh approval.
+- After admission, retain supplied name against User ID in administrator's encrypted participant metadata; preserve existing explicit local aliases. Name remains visible beside IDs in participant list. Global name replication is separate scope.
+- Mirror existing username validation: trimmed, nonempty, at most 256 UTF-8 bytes, no control characters. Render as text; never HTML. Duplicate names allowed; no merge by name.
+- Opening/previewing link does not consume it. Once selected-device admission reserved, pin it to that device; same-device retries reuse exact artifacts. After successful connection retire link and underlying temporary transport rights; no second admission. Expiry/cancel remain available for unused requests.
+- Admin approval retains independent recipient verification; recipient still independently authenticates owner/space before signing consent. Displaying name and IDs alone does not establish real-world identity.
+
+Current evidence
+- docs/sync-invitations.md: four manual files, plus independent recipient fingerprints and owner verification code.
+- src/sharing/actions.rs: Kind has Certificate, Invitation, Response, Receipt. File dialogs implement delivery.
+- Owner checks recipient_verified before issue_invitation; recipient supplies independent code before accept_invitation.
+- src/sync/protocol/invitation.rs: verification_code binds full descriptor, control anchor and optional signed space name. It does not bind recipient/role; exact signed offer and consent provide those bindings separately.
+- src/sync/protocol/machine/invitations.rs: exact device certificate, controller authority, consent, single consumption, signed receipt/head and retired-device rules already enforced.
+- src/vault/sharing.rs: artifacts persisted before export; exact retries, cancellation/expiry, minimum-head protection survive restart.
+- Credentials provisioned independently before joining. Sharing artifacts contain no provider credentials or private keys.
+- Existing proposal already permits temporary provider inbox: docs/lockbox-protocol.md, Join sequence. Proposal differs from implemented wire protocol.
+
+Candidate comparison
+- Paste / QR existing artifacts: small UI change; still four handoffs. Full proofs can reach 96 MiB, unsuitable for QR or URL payloads. Useful fallback for small certificate only.
+- Recipient contact link, owner invitation link, automatic consent/receipt: two exchanged links; preserves current recipient-first flow. Good intermediate delivery milestone, still needs transport.
+- Owner pairing link, automatic certificate/offer/consent/receipt: one exchanged link plus independent verification. Recommended product flow; adds pre-invitation contact session.
+- Short spoken code with PAKE: possible later, requires reviewed implementation, rendezvous, explicit key confirmation, attempt/retry policy and identity binding. Not first release.
+
+Proposed UX
+1. Owner: Add participant; choose intended role and deadline; copy pairing link or show QR.
+2. Recipient: open/paste link in Lockbox; create independent local identity/device keys, master password and recovery words when needed. Existing profile must remain eligible to join.
+3. App delivers signed encrypted contact request containing name, User ID, Device ID and full certificate. Owner sees pending request, verifies full user/device fingerprints through independent trusted channel, then approves that exact request/role and issues addressed invitation.
+4. App delivers invitation automatically. Recipient authenticates full owner verification code through independent trusted channel, reviews space and role, explicitly consents. App sends exact persisted signed response.
+5. Owner app verifies response against exact persisted approval/offer and current policy, completes authorized admission and delivers exact persisted receipt. Recipient verifies receipt and completes previously authorized connection. Changed request/offer/role requires fresh administrator approval.
+- QR for verification must carry full authenticated value and be scanned through trusted independent interaction. QR inside attacker-controlled invitation does not authenticate its sender.
+- First version retains two existing trust checks. One session-comparison ceremony could replace them only after separately specifying and reviewing a full transcript commitment covering both identities, descriptor, anchor, role and session.
+- UI exposes waiting, verification, approval, cancellation and retry. No save/open dialogs in normal online flow.
+- Existing file flow remains offline/recovery fallback. Owner controller must be unlocked for issuance/admission; no always-on signing service.
+
+Transport proposal: temporary Storj mailbox
+- Separate PairingTransport from immutable synchronization Storage. Current Storage::put validates protocol Object; it cannot accept arbitrary sharing artifacts. Storj adapter routes by space name and ignores namespace argument for normal paths; fake namespace is not access isolation.
+- Random per-session mailbox outside spaces/<name>/objects/ and recovery/v1/. Owner credentials need separately provisioned access to that prefix.
+- Use short-lived presigned GET/PUT for exact bootstrap/request/response objects. Guest needs no broad bucket write rights; Reader can return consent without PUT rights to main space.
+- Owner writes offer/receipt with existing credentials. Guest receives capabilities only for designated request uploads and response downloads; no LIST/DELETE or main-space/recovery access.
+- Bootstrap manifest contains exact temporary routes and envelope parameters. Link references bounded manifest; large proofs travel separately. Presigned URLs are long; compact-looking links require configured lookup service or another indirection. No promise of tiny offline-decodable URL.
+- Protect certificate/control metadata with encrypted envelopes before placing on shared storage. Existing HPKE/AEAD primitives are available; envelope suite and bootstrap key authentication still need explicit design/review.
+- Fresh pairing encryption material, independent of device/root/epoch keys. Link may carry random 256-bit contact capability; public mailbox identifiers separate from secret material.
+- Bind envelope authentication to session, direction, message type and sequence; validate inner signed artifact and expected state regardless of envelope validity. Persist exact ciphertext or enforce fresh nonce rules on retransmission.
+- Prefer app-native paste/open handling. If HTTPS landing page added, secrets stay outside request query/path; exclude third-party scripts, previews, telemetry and referrer leakage. URL fragment alone does not protect against page scripts, clipboard history or forwarded links.
+- All routes untrusted until validated. HTTPS, bounded URL/parser inputs, no redirects or credential forwarding; constrain destinations to approved provider configuration. New endpoint from ticket needs explicit setup validation before requests.
+- Artifact/proof bounds remain. MAX_INVITATION_BYTES is 96 MiB; normal MAX_OBJECT_BYTES is 4 MiB. Specify bounded chunking or dedicated bounded artifact transfer; do not enlarge normal sync limits silently.
+- Preserve privacy limits explicitly: provider can observe traffic timing, sizes and random object names. Encrypting payloads does not hide those.
+
+Single use and cancellation
+- Presigned URL is a temporary bearer capability, reusable until expiration; PUT may overwrite same object. It is not cryptographic single-use delivery.
+- Enforce consumption in durable local session ledger and existing invitation ledger. Duplicate exact response returns existing result; another certificate/response cannot replace accepted binding.
+- First network request must not claim identity or consume invitation automatically. Forwarded link / competing joiners cannot trigger admission or silently choose recipient; owner must authenticate intended certificate.
+- Malicious storage or stolen mailbox rights can overwrite, hide or delay messages. Reject invalid/mismatched messages; report availability failure, never infer revocation or success.
+- Persist contact session, selected peer, issued offer and approvals before external publication. On restart resend exact artifacts; never regenerate consent challenges or sign a second membership transition for a retry.
+- Session cancellation invalidates unconsumed contact workflow and corresponding pending invitation locally. Provider TTL limits leftover capabilities; object deletion alone is not revocation.
+- Already reserved admission follows existing recovery semantics and completes even after deadline/cancellation attempt. Undo completed access through ordinary device removal and epoch rotation.
+- Bound session count, download/upload sizes, poll frequency, retries and lifetime. Reader/writer transport budgets apply before parsing or cryptographic work. Presigned PUT alone does not guarantee upload-size enforcement; verify actual gateway support and limit provider-side storage exposure before shipping.
+
+Security invariants
+- Current verified controller remains sole admission authority. Server, URL, mailbox possession, username or successful TLS connection cannot authenticate a person or grant role.
+- Owner independently authenticates exact recipient certificate. Recipient independently authenticates complete descriptor and control anchor; no auto-fill from same invitation as independent proof.
+- Exact recipient/role-bound invitation and device-signed consent remain mandatory. No generic signed offer that anyone may redeem.
+- No .lbx cloning, master password, recovery words, root/device private keys or current epoch key in link or mailbox manifest.
+- Signed receipt, exact acceptance hash, verified control proof and independent minimum head remain mandatory before installation.
+- Current policy rechecked at admission: controller, cancellation, deadline, exact certificate/role, prior use and retired device rules. Earlier UI check never sufficient.
+- New epoch/checkpoint grants remain bound to admitted devices; no plaintext vault or historical epoch keys passed for convenience.
+- Session lock/profile switch invalidates workers and UI replies; resumption requires same encrypted profile and persisted session. Never apply late approval to another space/session.
+- Provider can withhold newer signed history. Pairing does not prove global freshness beyond authenticated anchors already known; retain existing rollback/freshness limits.
+
+Credentials: separate remaining setup
+- Mailbox capabilities cover onboarding only. They do not give ongoing GET/LIST/PUT for normal synchronization.
+- Initial version retains independently provisioned participant-specific Storj credentials. One link removes four manual files, not all provider setup.
+- Future delegated per-user access may be delivered inside authenticated encrypted channel after peer verification. Needs actual provider provisioning API, prefix/role scoping and revocation design; not implemented by current S3 adapter.
+- Never copy owner's unrestricted S3 secret into link or recipient profile to hide setup.
+
+Short code option
+- PAKE prevents offline password guessing when correctly composed; it does not turn a few words/digits into 256-bit authentication strength. Active online guesses and aggregate retries remain.
+- Magic Wormhole illustrates this UX; its default two-word security must not be assumed equivalent to existing full fingerprint/code ceremony.
+- No six-digit hash truncation, ordinary ECDH without authentication, or short password used directly as AEAD/HPKE PSK.
+- If required later: reviewed symmetric PAKE with explicit key confirmation, domain-separated context, identity/role/transcript binding, bounded attempts and preserved independent identity checks. Review security parameters before choosing library/protocol.
+
+Implementation boundaries / sequence
+1. Add bounded contact ticket/manifest and durable pairing session model beside sharing; define encrypted envelope and trust model before implementation.
+2. Add dedicated PairingTransport + scoped Storj capabilities; exercise expiry, overwrite, Reader upload, bounds and confidentiality against real gateway using fictional data.
+3. Orchestrate existing Vault APIs: issue_invitation, accept_invitation, admit_invitation, join_invitation. Keep membership wire formats and verification unchanged.
+4. Add paste link, status/retry/cancel UI. Deep links/QR optional presentation layer after end-to-end transport works.
+5. Retain full independent verification and explicit consent/owner approval. Add consolidated verification ceremony or short code only as separate reviewed change.
+- Existing encrypted profile schema needs durable-session migration; older clients must reject unsupported state rather than silently drop it.
+- Existing four artifacts can stay unversioned; new contact envelope still requires strict type/domain discrimination and explicit compatibility policy.
+
+Acceptance before release
+- Stolen/forwarded link, substituted certificate, wrong space/role, fake controller, cross-session replay: no unauthorized consent/admission/key grant.
+- No independent verification: block issuance/acceptance as current desktop does.
+- Provider truncates/rewinds proof or sends valid old receipt below local minimum: reject/wait; never reset anchor.
+- Duplicate delivery, expired URL refresh, restart after every persistence/publication boundary: exact existing consent/control/receipt reused.
+- Cancel/expiry before reservation: no admission. After reservation: documented completion/removal semantics, no false cancellation success.
+- Reader joins using temporary request-only uploads; cannot write main sync objects or recovery prefix.
+- Provider metadata inspection: no plaintext certificates, roster proofs, secrets or credentials in mailbox payloads/logs/link previews.
+- Malicious URLs, oversized manifest/proof, compression/chunk expansion, endless polling/listing: bounded failure without credential leaks.
+- Session lock/switch, stale native dialog/worker and concurrent participant requests: no peer/space mixups.
+- Named requests: name/certificate tampering invalidates request signature; same-name users remain distinct; changed request cannot inherit approval; selected name/IDs survive retry/restart and render safely.
+- New live Storj transport check and independent security review remain necessary. Existing passing tests do not validate unimplemented pairing design.
+
+Validation performed
+- cargo test --locked --offline --lib sharing: 20 passed.
+- cargo test --locked --offline --lib sync::protocol::machine::tests::invitations: 6 passed.
+- Coverage includes trusted-code gating, signature/role/recipient substitution, missing consent, receipt truncation, retirement, cancellation/expiry, restart retries and independent minimum anchor.
+- No live bucket, new transport, cryptographic envelope or native QR/deep-link verification claimed. Runtime source unchanged.
+
+Primary references checked
+- Storj presigned GET/PUT, exact key and expiry: https://storj.dev/dcs/api/s3/presigned-urls
+- S3 bearer/reuse/overwrite semantics: https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html
+  AWS limits/policies are not automatically Storj guarantees; verify gateway support.
+- HPKE properties, replay non-goal, PSK entropy: https://www.rfc-editor.org/rfc/rfc9180.html
+- SPAKE2, transcript/context and explicit key confirmation: https://www.rfc-editor.org/rfc/rfc9382.html
+- Wormhole PAKE/mailbox UX and online-guess model: https://magic-wormhole.readthedocs.io/en/latest/welcome.html

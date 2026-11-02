@@ -1,0 +1,4 @@
+Popup: visible load banner, before JavaScript/native host.
+Startup: running text after script starts; failure text on init error.
+Native connection: existing error panel stays separate.
+Build: ext/dist/chrome, ext/dist/firefox. Reload installed extension after rebuild.

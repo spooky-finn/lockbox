@@ -1,0 +1,20 @@
+Join flow usability implementation
+2026-11-02
+
+- Implemented working desktop file-based wizard; single-use pairing-link transport remains design work in join-pairing-design.txt.
+- One current-step primary action. Progress indicator informational; no arbitrary forward navigation.
+- Successful save stays on send stage. Explicit Request / Invitation / Consent sent advances; failed/cancelled save cannot advance.
+- Context-specific file opener uses same strict content detection and verification. Save retry retained; file history, extra copies and deadline controls collapsed.
+- Administrator selects access level, then Create invitation. Read only default; new recipient review resets role and fingerprint verification.
+- Recipient sees Copy message for administrator, preview and second-channel instructions during request step. Public identity copy remains available under This device later.
+- Message contains current profile username, complete User ID and Device ID, plus request to compare both IDs before approving. IDs taken from current certified device; no credentials, recovery words, private keys or records copied.
+- Owner can copy full invitation verification code. Recipient still receives code independently; no expected-code autofill or display on acceptance screen.
+- Existing guarded clipboard handles copying, errors, concealed history and 20-second clear. Success feedback short-lived; profile switch resolves current identity at click time. Lock prevents copy and clears owned clipboard.
+- EN/RU text and Storj/setup documentation updated. Cryptographic artifacts, consent/admission checks and persistence unchanged.
+
+Validation
+- cargo test --locked --offline --quiet: 474 library tests, 4 integration tests, 2 doctests passed; 2 explicit system probes ignored.
+- cargo clippy --locked --offline --all-targets -- -D warnings: passed.
+- Component coverage: saved-file handoffs, independent-code gate, draft preservation, both-language public identity clipboard payloads, changed-profile IDs, escaped usernames, clipboard failure/lock and cancelled code export.
+- New recipient review resets prior Editor selection to Reader.
+- Native visual inspection unavailable: Firefox and Thorium headless processes exit 134 in environment. SSR rendering and workflow tests passed; no manual native UI or live Storj claim.

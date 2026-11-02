@@ -1,0 +1,90 @@
+Pairing design security review
+2026-11-02. Review of notes/join-pairing-design.txt; runtime unchanged.
+
+Verdict
+- Better interaction: no manual save/open of four artifacts. Cryptographic admission can retain existing guarantees.
+- Overall equivalence not established. New bearer capabilities, bootstrap encryption and automated state transitions enlarge attack surface.
+- Current draft describes required invariants, not complete protocol. Several risks already acknowledged; treating them as solved would be wrong.
+- No demonstrated password-disclosure or unauthorized-admission exploit in existing implementation from this design review.
+- Original review preference: recipient-first addressed-link pilot. Subsequent user direction selects owner-first pending request with name/User ID/Device ID and explicit per-request administrator approval. Bootstrap and exact approval bindings remain implementation requirements.
+
+Baseline / attacker model
+- Existing artifacts expose public metadata plus encrypted grants/checkpoints. Copying an artifact alone gives neither provider PUT rights nor device signing/decryption keys.
+- Existing flow already requires two independent checks: owner authenticates recipient user/device; recipient authenticates descriptor/control anchor. Signatures alone do not identify a human.
+- Existing synchronized Control objects expose member certificates/roles to storage provider. Mailbox encryption must not be described as hiding all existing roster metadata from Storj.
+- Compare under same device integrity and trusted-channel assumptions. Include stolen link, malicious provider, unrelated valid signer, concurrent requests, app restart and compromised message-delivery channel.
+- Endpoint malware or compromised authorized controller remains outside protections offered by either delivery method.
+
+R1. High / incomplete specification: bootstrap key authentication
+- Design lines 42-45 defer envelope suite and initial-key authentication. Contact capability is not specified as encryption key; do not claim it already leaks plaintext.
+- If implementation uses link secret as shared envelope key, leaked link also reveals retained pairing messages encrypted with that key. Link entropy does not help after disclosure.
+- If manifest supplies unauthenticated recipient encryption key, substituted key can redirect metadata encryption even when later inner signatures stop admission.
+- Require explicit key provenance before private metadata transmission; distinguish transport permission from decryption authority. No private keys/shared transcript-decryption secret in ordinary contact link.
+- After peer certificate authenticated, encrypt addressed artifacts to its certified HPKE public key; authenticate sender through verified signed inner artifacts and independently authenticated history. Never treat HPKE Base as identity authentication.
+- HPKE alone does not enforce replay/state rules or recipient-compromise forward secrecy. Define envelope domains, expected recipient/session/type/sequence, retry/nonce handling, ephemeral-key lifecycle and transcript binding before claiming properties.
+- Release gate: substituted manifest/key and disclosed bearer capabilities must not cause unauthorized record/key release; document precise metadata exposure separately.
+
+R2. High / incomplete specification: verified approvals need exact durable bindings
+- Design lines 29-33 and 56 require independent checks but do not define persisted approval records or full state-transition guards.
+- Async attack scenario: owner checks certificate A; incoming request replaces it with B; stale verified flag or delayed approval signs offer for B. Equivalent risk exists for recipient when invitation/role changes after review.
+- Existing desktop resets recipient_verified on new review; new scheduler must preserve this protection across callbacks, retries and restart.
+- Persist owner approval against profile/space/session, exact certificate hash, intended role and issued offer binding. Persist recipient authorization against exact verified invitation/descriptor/anchor; role/deadline from same signed offer.
+- Seal reviewed payload for action; reject stale worker/dialog/approval context. New request must never inherit another peer's verification or occupy session by first-writer priority.
+- Separate delivery success from Verified, Consented, Reserved, Admitted and Joined states. No auto-verification from QR/link/HTTP success.
+- Existing APIs intentionally assume caller independently authenticates expected descriptor. Passing invitation.descriptor() without trusted-code gate validates internally consistent attacker space; it does not establish intended owner.
+- Release gate: race each verified step against changed certificate/offer/role and session lock/switch/reopen. No automatic signing or admission for changed input.
+
+R3. Medium / definite new exposure: mailbox bearer writes
+- Design lines 40-41, 52-59: leaked PUT capability allows repeated writes/overwrites to permitted slot until expiry, unlike possession of old public invitation file.
+- Exact signed admission still blocks membership takeover when independent checks remain. Attacker can corrupt/delay onboarding and consume requests, storage or bandwidth.
+- Local consumption/cancellation prevents fresh admission; does not revoke issued provider capabilities. Deleting object does not invalidate still-valid write URL.
+- Require short expiry, exact object/method scope, no main-space/recovery rights, polling/request budgets and enforced provider-side upload exposure bounds.
+- Client download limit cannot cap bytes/storage that attacker uploads directly to gateway. Verify supported size/checksum/conditional-write restrictions on actual Storj; AWS bucket-policy examples are not portable guarantees.
+- Keep cancellation UI explicit: pending membership cancelled locally; residual transport rights may remain until expiration. Reserved admission follows existing completion/removal policy.
+- Release gate: abuse actual presigned upload after cancel/first successful use; demonstrate bounded cost and zero rights outside dedicated pairing slots.
+
+R4. Medium / new network input and privacy surface
+- Design lines 42, 46-48: link/manifest adds destination parsing, possible automatic HTTP, application URL dispatch and large remote proof transfer before admission.
+- HTTPS alone permits requests to attacker-selected or local-network destinations. Validate approved origin/port and required destination policy before network I/O; no arbitrary bootstrap probe, redirect or credential forwarding.
+- Link preview must not upload certificate, consume session, confirm identity or initiate admission. Prefer explicit paste/open inside native app for first release; no web landing page or shortener required.
+- Keep payload signatures/canonical parsing and total memory/CPU/request budgets. Existing artifact ceiling is 96 MiB; automatic repeated downloads need aggregate limits as well as per-object limits.
+- Additional mailbox copies of pending certificates and activity are privacy exposure; exact incremental exposure depends on encryption and existing delivery channel. Existing cloud roster is already public to provider.
+- Release gate: malicious URL/redirect/DNS target, manifest substitution, repeated valid giant proofs, missing chunks and preview fetch produce bounded failure without credentials or user-identity leakage beyond stated policy.
+
+Comparison
+- Password/content-key confidentiality: same intended cryptography; no additional grant justified. New envelope design unvalidated.
+- Peer authentication: potentially equivalent with unchanged independent checks; weaker if link possession replaces either check.
+- Link/file leak: new link adds temporary mailbox rights; old file alone grants no storage rights. Both should remain insufficient for membership.
+- Availability: online pairing depends on Storj during onboarding; old files allow offline handoffs. File fallback retains existing recovery path.
+- Metadata privacy: depends on envelope/key design; no blanket improvement. Stored cloud roster visibility remains.
+- Implementation assurance: currently worse evidence for new route; more code and no pairing-specific implementation/tests/audit yet. Existing flow also remains experimental, without independent review.
+- Human effort: fewer file operations certain; lower real-world security-error rate plausible but unmeasured.
+
+Recommended narrower first implementation
+1. Recipient shares public contact certificate as QR/text/link; owner independently checks it as today.
+2. Owner issues existing addressed invitation, returns link to encrypted artifact for that exact device. Recipient independently authenticates existing full owner code and exact role.
+3. Consent and receipt travel automatically through tightly scoped mailbox. Existing explicit consent, owner approval, ledger, epoch rotation and minimum-head verification retained.
+- Two contact exchanges instead of four manual files. Owner knows authenticated recipient HPKE key before publishing invitation; no anonymous certificate-selection/bootstrap channel required.
+- No short authentication codes, owner credentials in URLs, persistent public inbox, web landing page or delegated credential provisioning in first implementation.
+- Still requires full transport/envelope specification, failure tests and live provider checks; narrower scope is easier to assess, not automatically proven safe.
+- Owner-first single-link flow remains future option, conditional on authenticated bootstrap and exact durable approval/state bindings.
+
+User review discussion
+- User requires invite link single-use and inactive after intended recipient completes connection. Expiry alone insufficient; mark this as product requirement, not implemented capability.
+- Successful use admits exactly one independently authenticated device. First URL open/preview must not consume invitation. Same-device interrupted delivery may resume idempotently without second admission.
+- True retirement must cover underlying mailbox capabilities; local consumed flag or object deletion cannot disable direct still-authorized provider writes. Specify enforcement before choosing presigned transport.
+- Single use limits reuse after consumption, not interception before legitimate use or disclosure of messages already downloaded. Keep transport secrets separate from content keys and preserve independent peer checks.
+- User asks plain explanation of stale approvals: user reviews A, background update changes current request to B, delayed approval accidentally applies to B. Bind action to exact reviewed device/role/session.
+- Initial rollout uses small trusted group. Defer sophisticated anti-abuse infrastructure; retain approved destinations, bounded input/transfer sizes, timeouts and retry budgets. Narrow audience lowers exposure, not consequences of malformed link or stale approval.
+- User selected owner-first flow: link activation submits named pending request, administrator sees name/User ID/Device ID and explicitly approves exact request. Carry name in signed encrypted contact envelope; persist approved name with User ID. Approval must capture immutable request/certificate/session/role; displaying IDs alone does not prevent stale-target bugs or prove human identity.
+
+Review evidence / limits
+- Read design, desktop trust gates, certificate/offer/consent/receipt checks, Vault ledger/cancellation/retry code, Control schema and storage adapter contracts.
+- Previous run: 20 sharing tests + 6 protocol invitation tests passed. No runtime changes since; not rerun for note-only review.
+- Existing tests validate baseline only. No pairing implementation, live capability restrictions, red-team result or independent security audit claimed.
+
+Primary references checked
+- Storj presigned access: https://storj.dev/dcs/api/s3/presigned-urls
+- S3 reuse, overwrite, bearer capability and expiry: https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html
+- Storj compatibility: PutBucketPolicy unsupported; do not assume AWS policy enforcement: https://storj.dev/dcs/api/s3/s3-compatibility
+- HPKE modes, identity assumptions, replay and forward-secrecy limits: https://www.rfc-editor.org/rfc/rfc9180.html#section-9

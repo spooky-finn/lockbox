@@ -57,7 +57,7 @@ fn sharing_page_renders_member_controls_without_record_or_provider_secrets() {
     });
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("People and access"));
-    assert!(html.contains("Open sharing file"));
+    assert!(html.contains("Open recipient device file"));
     assert!(html.contains("Controls membership"));
     assert!(html.contains("<h3>owner</h3>"));
     assert!(html.contains("Devices and access"));
@@ -135,7 +135,7 @@ fn wizard_follows_artifacts_and_resumes_a_recipient_waiting_for_admission() {
     });
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("<h2>Finish connecting</h2>"));
-    assert!(html.contains("Open sharing file"));
+    assert!(html.contains("Open admission confirmation"));
     assert!(html.contains("Awaiting owner confirmation"));
     assert!(!html.contains("Create and save join request"));
 
@@ -165,7 +165,8 @@ fn wizard_follows_artifacts_and_resumes_a_recipient_waiting_for_admission() {
         });
     });
     let html = dioxus_ssr::render(&dom);
-    assert!(html.contains("<h2>Approve access</h2>"));
+    assert!(html.contains("<h2>Send an invitation</h2>"));
+    assert!(html.contains("Invitation sent — continue"));
     assert!(html.contains("Awaiting consent"));
     assert!(html.contains(&verification_code));
     update(&mut dom, |state| {
@@ -210,8 +211,10 @@ fn wizard_follows_file_outputs_through_a_complete_admission() {
         edit_unlocked(state, |u| u.sharing.saved_output = u.sharing.output.take());
     });
     let html = dioxus_ssr::render(&guest_dom);
-    assert!(html.contains("<h2>Accept the invitation</h2>"));
-    assert!(html.contains("Request saved. Send it to the owner and wait for an invitation."));
+    assert!(html.contains("<h2>Prepare your device</h2>"));
+    assert!(html.contains("Request sent — continue"));
+    assert!(html.contains("Copy message for administrator"));
+    assert!(html.contains("second trusted channel"));
 
     let mut response = None;
     update(&mut guest_dom, |state| {
@@ -229,7 +232,8 @@ fn wizard_follows_file_outputs_through_a_complete_admission() {
         edit_unlocked(state, |u| u.sharing.saved_output = u.sharing.output.take());
     });
     let html = dioxus_ssr::render(&guest_dom);
-    assert!(html.contains("<h2>Finish connecting</h2>"));
+    assert!(html.contains("<h2>Accept the invitation</h2>"));
+    assert!(html.contains("Consent sent — continue"));
     assert!(html.contains("Awaiting owner confirmation"));
 
     let mut owner_dom = mounted();
@@ -273,6 +277,215 @@ fn wizard_follows_file_outputs_through_a_complete_admission() {
     assert!(html.contains("This device joined the space"));
     assert!(!html.contains("sharing-navigation"));
     assert!(!html.contains("Open admission confirmation"));
+}
+
+#[test]
+fn next_step_requires_a_successfully_saved_file_and_an_explicit_handoff() {
+    let directory = tempfile::tempdir().unwrap();
+    let guest = vault(&directory, "guest");
+    let mut dom = mounted();
+    update(&mut dom, |state| {
+        runtime::set_language(crate::settings::language::Language::English);
+        edit_unlocked(state, |u| {
+            u.vault = guest;
+            u.sharing.joining = true;
+            u.open_sharing();
+            let initial = Workflow::new(u, None, 0);
+            assert_eq!(initial.step(), Step::PrepareDevice);
+            assert!(initial.next_action().is_none());
+            u.sharing_action(Action::Certificate, 0);
+            assert!(u.error.is_none());
+            // A closed or failed save dialog must not let the user skip sending.
+            assert!(Workflow::new(u, None, 0).next_action().is_none());
+            u.sharing.saved_output = u.sharing.output.take();
+            let saved = Workflow::new(u, None, 0);
+            assert_eq!(saved.step(), Step::PrepareDevice);
+            assert!(!saved.show_step_action());
+            let (next, label) = saved.next_action().unwrap();
+            assert_eq!(label, Text::SharingRequestSent);
+            u.sharing.cancel_output();
+            let sent = Workflow::new(u, Some(next), 0);
+            assert_eq!(sent.step(), Step::AcceptInvitation);
+            assert!(sent.next_action().is_none());
+        });
+    });
+    let html = dioxus_ssr::render(&dom);
+    let progress = html
+        .split("sharing-steps")
+        .nth(1)
+        .unwrap()
+        .split("</ol>")
+        .next()
+        .unwrap();
+    assert!(
+        !progress.contains("<button"),
+        "progress indicator must not skip steps"
+    );
+}
+
+#[test]
+fn identity_copy_uses_current_full_ids_and_localized_username_without_secrets() {
+    use crate::{
+        desktop::context::SecurityHandle,
+        platform::clipboard::{Guard, tests::FakeBoard},
+        settings::language::Language,
+    };
+
+    let directory = tempfile::tempdir().unwrap();
+    let first = vault(&directory, "first");
+    let second = vault(&directory, "Alice <Admin> {name}");
+    let expected = second.device_certificate().unwrap();
+    let board = FakeBoard::default();
+    let mut dom = mounted();
+    update(&mut dom, |state| {
+        consume_context::<SecurityHandle>().borrow_mut().clipboard =
+            Guard::new(Box::new(board.clone()));
+        runtime::set_language(Language::English);
+        edit_unlocked(state, |u| {
+            u.vault = first;
+            u.sharing.joining = true;
+            u.open_sharing();
+        });
+        assert!(verification::copy(
+            state,
+            Language::English,
+            CopyTarget::Identity
+        ));
+        // An existing copy control must resolve the replacement profile, not capture old IDs.
+        edit_unlocked(state, |u| u.vault = second);
+        for language in [Language::English, Language::Russian] {
+            assert!(verification::copy(state, language, CopyTarget::Identity));
+            let text = board.0.borrow().clone().unwrap();
+            assert!(text.contains("Username: Alice <Admin> {name}"));
+            assert!(text.contains(&format!("User ID: {}", expected.body.user)));
+            assert!(text.contains(&format!("Device ID: {}", expected.body.device)));
+            for secret in [
+                "private-access-marker",
+                "private-provider-marker",
+                "master",
+                "recovery",
+            ] {
+                assert!(!text.contains(secret));
+            }
+            let screen = state.read();
+            let Screen::Unlocked(u) = &*screen else {
+                panic!("expected unlocked profile")
+            };
+            assert_eq!(text, verification::message(u, language).unwrap());
+        }
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("Copy message for administrator"));
+    assert!(html.contains("Alice &#60;Admin&#62; {name}"));
+    update(&mut dom, |state| {
+        runtime::lock(None);
+        assert!(!verification::copy(
+            state,
+            Language::English,
+            CopyTarget::Identity
+        ));
+    });
+    assert!(board.0.borrow().is_none());
+}
+
+#[test]
+fn invitation_code_copy_reuses_the_current_export_and_stops_after_cancellation() {
+    use crate::{
+        desktop::context::SecurityHandle,
+        platform::clipboard::{Guard, tests::FakeBoard},
+        settings::language::Language,
+    };
+
+    let directory = tempfile::tempdir().unwrap();
+    let owner = vault(&directory, "owner");
+    let guest = vault(&directory, "guest");
+    let board = FakeBoard::default();
+    let mut dom = mounted();
+    update(&mut dom, |state| {
+        consume_context::<SecurityHandle>().borrow_mut().clipboard =
+            Guard::new(Box::new(board.clone()));
+        edit_unlocked(state, |u| {
+            u.vault = owner;
+            u.open_sharing();
+            u.sharing.review = Some(Artifact::Certificate(guest.device_certificate().unwrap()));
+            u.sharing.recipient_verified = true;
+            u.sharing_action(Action::Issue(Role::Reader), 0);
+            assert!(u.error.is_none());
+            u.sharing.saved_output = u.sharing.output.take();
+        });
+        assert!(verification::copy(
+            state,
+            Language::English,
+            CopyTarget::InvitationCode
+        ));
+        let expected = match &*state.read() {
+            Screen::Unlocked(u) => u.sharing.saved_output.as_ref().unwrap().code.unwrap(),
+            _ => unreachable!(),
+        };
+        assert_eq!(
+            board.0.borrow().as_deref(),
+            Some(expected.to_string().as_str())
+        );
+        edit_unlocked(state, |u| {
+            let id = u.vault.issued_invitations(0)[0].id;
+            u.sharing_action(Action::Cancel(id), 0);
+        });
+        *board.0.borrow_mut() = Some("a newer unrelated clipboard value".into());
+        assert!(!verification::copy(
+            state,
+            Language::English,
+            CopyTarget::InvitationCode
+        ));
+        assert_eq!(
+            board.0.borrow().as_deref(),
+            Some("a newer unrelated clipboard value")
+        );
+    });
+}
+
+#[test]
+fn failed_verification_copy_reports_error_without_claiming_success() {
+    use crate::{
+        desktop::context::SecurityHandle,
+        platform::clipboard::{Board, Guard},
+        settings::language::Language,
+    };
+
+    struct Unavailable;
+    impl Board for Unavailable {
+        fn get(&mut self) -> Option<zeroize::Zeroizing<String>> {
+            None
+        }
+        fn set(&mut self, _: &str) -> Result<(), String> {
+            Err("clipboard is unavailable".into())
+        }
+        fn clear(&mut self) {}
+    }
+
+    let directory = tempfile::tempdir().unwrap();
+    let guest = vault(&directory, "guest");
+    let mut dom = mounted();
+    update(&mut dom, |state| {
+        consume_context::<SecurityHandle>().borrow_mut().clipboard =
+            Guard::new(Box::new(Unavailable));
+        edit_unlocked(state, |u| {
+            u.vault = guest;
+            u.open_sharing();
+        });
+        assert!(!verification::copy(
+            state,
+            Language::English,
+            CopyTarget::Identity
+        ));
+        let screen = state.read();
+        let Screen::Unlocked(u) = &*screen else {
+            panic!("expected unlocked profile")
+        };
+        assert_eq!(
+            u.error.as_deref(),
+            Some("Could not copy: clipboard is unavailable")
+        );
+    });
 }
 
 #[test]
