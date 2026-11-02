@@ -261,9 +261,10 @@ fn recovery_words_are_hidden_after_key_setup_and_preserved_on_back() {
         })
     });
     let html = dioxus_ssr::render(&dom);
-    assert!(html.contains("Show recovery words"));
-    assert!(!html.contains(words));
-    assert!(!html.contains("recovery-word-display"));
+    assert!(html.contains("Hide recovery words"));
+    assert!(html.contains("Copy words as a column"));
+    assert!(html.contains("Download words as a file"));
+    assert!(html.contains("recovery-word-display"));
     update(&mut dom, |state| {
         edit_locked(state, |form| form.show_recovery_words = true)
     });

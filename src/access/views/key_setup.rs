@@ -1,7 +1,7 @@
 //! Confirm the recovery key before choosing local or cloud storage.
 
 use crate::desktop::{
-    context::{Session, edit_locked},
+    context::{SecurityHandle, Session, edit_locked},
     i18n::Text,
     session::Screen,
 };
@@ -12,6 +12,8 @@ use zeroize::Zeroize;
 pub(crate) fn KeySetupView() -> Element {
     let language = crate::desktop::i18n::use_language();
     let state = use_context::<Session>();
+    let native = use_context::<SecurityHandle>();
+    let mut copied = use_signal(|| false);
     let screen = state.read();
     let Screen::Locked(locked) = &*screen else {
         return rsx! {};
@@ -39,6 +41,27 @@ pub(crate) fn KeySetupView() -> Element {
                         else { {language.text(Text::ShowRecoveryWords)} }
                     }
                 }
+                if !locked.importing_words {
+                    button { r#type: "button", class: "setup-button", disabled: busy,
+                        onclick: move |_| {
+                            edit_locked(state, |locked| {
+                                let words = column_words(&locked.recovery_words);
+                                match native.borrow_mut().clipboard.copy(&words, std::time::Instant::now()) {
+                                    Ok(()) => { copied.set(true); locked.error = None; }
+                                    Err(error) => { copied.set(false); locked.error = Some(error); }
+                                }
+                            });
+                        },
+                        {language.text(Text::CopyRecoveryWords)}
+                    }
+                    button { r#type: "button", class: "setup-button", disabled: busy,
+                        onclick: move |_| { download_words(state); },
+                        {language.text(Text::DownloadRecoveryWords)}
+                    }
+                    if copied() {
+                        span { role: "status", {language.text(Text::Copied)} }
+                    }
+                }
                 button { r#type: "button", class: "setup-button", disabled: busy,
                     onclick: move |_| edit_locked(state, |locked| {
                         if locked.importing_words { locked.generate_recovery_words(); }
@@ -63,4 +86,36 @@ pub(crate) fn KeySetupView() -> Element {
             button { id: "recovery-submit", r#type: "submit", class: "setup-button", disabled: busy, {language.text(Text::Continue)} }
         }
     }
+}
+
+fn column_words(phrase: &str) -> zeroize::Zeroizing<String> {
+    zeroize::Zeroizing::new(phrase.replace(' ', "\n"))
+}
+
+fn download_words(state: Session) {
+    let words = match &*state.peek() {
+        Screen::Locked(locked) if !locked.busy() && !locked.importing_words => {
+            column_words(&locked.recovery_words)
+        }
+        _ => return,
+    };
+    spawn(async move {
+        let Some(file) = rfd::AsyncFileDialog::new()
+            .set_file_name("lockbox-recovery-words.txt")
+            .add_filter("Text", &["txt"])
+            .save_file()
+            .await
+        else {
+            return;
+        };
+        use std::io::Write;
+        let result =
+            crate::platform::files::create_new_private(file.path()).and_then(|mut output| {
+                output.write_all(words.as_bytes())?;
+                output.sync_all()
+            });
+        edit_locked(state, |locked| {
+            locked.error = result.err().map(|error| error.to_string())
+        });
+    });
 }

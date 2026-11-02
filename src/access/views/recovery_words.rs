@@ -128,7 +128,7 @@ pub(super) fn RecoveryWordsInput(readonly: bool, disabled: bool) -> Element {
                         let selected = highlighted().min(matches.len().saturating_sub(1));
                         let keyboard_matches = matches.clone();
                         let unknown = !word.is_empty() && Language::English.find_word(word).is_none() && active() != Some(index);
-                        let concealed = !word.is_empty() && focused().is_some_and(|position| position != index);
+                        let concealed = !word.is_empty() && focused() != Some(index);
                         rsx! {
                             div { class: "recovery-word-cell", key: "{index}-{revision()}",
                                 label { class: "recovery-word-number", r#for: "recovery-word-{index}",

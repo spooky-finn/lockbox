@@ -344,7 +344,7 @@ impl Locked {
             Ok(phrase) => {
                 self.recovery_words = Zeroizing::new(phrase.words().expose_secret().to_owned());
                 self.words_saved = false;
-                self.show_recovery_words = false;
+                self.show_recovery_words = true;
                 self.importing_words = false;
                 self.error = None;
                 true

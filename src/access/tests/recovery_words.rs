@@ -225,7 +225,7 @@ mod interaction {
     }
 
     #[test]
-    fn focusing_a_word_masks_other_words_without_changing_the_phrase() {
+    fn only_the_focused_word_is_visible_and_blur_masks_all_words() {
         use kuchikiki::traits::TendrilSink;
 
         let mut editor = Editor::new();
@@ -253,7 +253,7 @@ mod interaction {
 
         editor.input(0, PHRASE);
         editor.send("blur", 0, EventData::Focus(SerializedFocusData {}));
-        assert!(field_types(&editor).iter().all(|kind| kind == "text"));
+        assert!(field_types(&editor).iter().all(|kind| kind == "password"));
 
         editor.send("focus", 4, EventData::Focus(SerializedFocusData {}));
         assert_eq!(field_types(&editor), expected_types(4));
@@ -267,7 +267,7 @@ mod interaction {
         assert_eq!(editor.words().as_str(), PHRASE);
 
         editor.send("blur", 9, EventData::Focus(SerializedFocusData {}));
-        assert!(field_types(&editor).iter().all(|kind| kind == "text"));
+        assert!(field_types(&editor).iter().all(|kind| kind == "password"));
     }
 
     #[test]
