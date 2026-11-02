@@ -170,8 +170,10 @@ h2 { font-size: 15px; font-weight: 600; letter-spacing: -.2px; }
 .recovery-word-display > li { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 10px; border: 1px solid var(--lock-field-border); border-radius: 8px; background: var(--lock-field); font-size: 12px; user-select: text; }
 .recovery-word-display .recovery-word-number { min-width: 14px; }
 @media (max-width: 420px) { .recovery-word-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.recovery-actions { display: flex; gap: 12px; }
-.recovery-actions > button { flex: 1; min-width: 0; }
+.recovery-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.recovery-actions > button { flex: 0 1 auto; min-width: 0; padding: 6px 10px; font-size: 12px; }
+.recovery-check { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.recovery-check label { display: grid; gap: 6px; text-align: left; font-size: 12px; }
 .recovery-saved { display: flex; align-items: center; gap: 8px; text-align: left; }
 .unlock-input { position: relative; height: 34px; border: 1px solid var(--lock-field-border); border-radius: 8px; background: var(--lock-field); transition: border-color 140ms, box-shadow 140ms; }
 .unlock-input:focus-within { border-color: var(--lock-focus); box-shadow: 0 0 0 3px var(--lock-focus-shadow); }

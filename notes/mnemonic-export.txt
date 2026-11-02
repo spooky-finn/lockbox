@@ -3,3 +3,4 @@ Actions: copy all 12 words, newline separated; download same column as TXT.
 Clipboard: existing guard, auto-clear. File: private permissions, refuse existing paths.
 Import existing words: export actions hidden. Saved acknowledgment stays manual.
 Existing mnemonic entry: reveal focused word only. Blur: mask all filled words. Phrase unchanged.
+Generated mnemonic: hidden by default; compact Show/Copy/Download actions. Continue: three random distinct word positions, verify before storage setup. Import: existing acknowledgment.

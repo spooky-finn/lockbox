@@ -70,6 +70,8 @@ pub(crate) struct Locked {
     pub(crate) repeat: Zeroizing<String>,
     pub(crate) recovery_words: Zeroizing<String>,
     pub(crate) words_saved: bool,
+    pub(crate) word_challenge: Option<[usize; 3]>,
+    pub(crate) word_answers: [Zeroizing<String>; 3],
     pub(crate) show_recovery_words: bool,
     pub(crate) importing_words: bool,
     pub(crate) recovering: bool,
@@ -108,6 +110,8 @@ impl Locked {
             repeat: secret_buffer(),
             recovery_words: secret_buffer(),
             words_saved: false,
+            word_challenge: None,
+            word_answers: std::array::from_fn(|_| secret_buffer()),
             show_recovery_words: false,
             importing_words: false,
             recovering: false,
@@ -303,7 +307,64 @@ impl Locked {
         self.error.is_none()
     }
 
+    pub(crate) fn reset_word_challenge(&mut self) {
+        self.word_challenge = None;
+        for answer in &mut self.word_answers {
+            answer.zeroize();
+        }
+    }
+
     pub(crate) fn continue_key_setup(&mut self) {
+        if self.mode == Mode::Create
+            && self.creation_step == CreationStep::EncryptionKey
+            && !self.importing_words
+            && !self.words_saved
+            && self.identity.is_none()
+        {
+            self.show_recovery_words = false;
+            if let Err(error) = RecoveryPhrase::parse(&self.recovery_words) {
+                self.error = Some(error.to_string());
+                return;
+            }
+            if let Some(indices) = self.word_challenge {
+                let words: Vec<_> = self.recovery_words.split_whitespace().collect();
+                if !indices.iter().enumerate().all(|(slot, index)| {
+                    self.word_answers[slot]
+                        .trim()
+                        .eq_ignore_ascii_case(words[*index])
+                }) {
+                    self.error = Some("Recovery words do not match. Try again".into());
+                    return;
+                }
+                self.words_saved = true;
+                self.reset_word_challenge();
+            } else {
+                let mut indices = [0; 3];
+                for slot in 0..3 {
+                    loop {
+                        let mut byte = [0u8];
+                        if getrandom::fill(&mut byte).is_err() {
+                            self.error = Some(
+                                "could not obtain random data from the operating system".into(),
+                            );
+                            return;
+                        }
+                        if byte[0] >= 252 {
+                            continue;
+                        }
+                        let index = usize::from(byte[0] % 12);
+                        if !indices[..slot].contains(&index) {
+                            indices[slot] = index;
+                            break;
+                        }
+                    }
+                }
+                indices.sort_unstable();
+                self.word_challenge = Some(indices);
+                self.error = None;
+                return;
+            }
+        }
         if self.mode == Mode::Create
             && self.creation_step == CreationStep::EncryptionKey
             && self.validate_recovery_key()
@@ -344,7 +405,8 @@ impl Locked {
             Ok(phrase) => {
                 self.recovery_words = Zeroizing::new(phrase.words().expose_secret().to_owned());
                 self.words_saved = false;
-                self.show_recovery_words = true;
+                self.show_recovery_words = false;
+                self.reset_word_challenge();
                 self.importing_words = false;
                 self.error = None;
                 true

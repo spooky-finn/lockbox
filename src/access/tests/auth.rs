@@ -171,12 +171,8 @@ fn key_setup_requires_valid_saved_words_and_preserves_them_across_sync_choices()
     assert!(form.path.is_none());
     form.continue_key_setup();
     assert!(form.creation_step == CreationStep::EncryptionKey);
-    assert!(
-        form.error
-            .as_ref()
-            .unwrap()
-            .contains("Save your recovery words")
-    );
+    assert!(form.word_challenge.is_some());
+    assert!(form.error.is_none());
 
     form.recovery_words.clear();
     form.recovery_words.push_str("abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon");
@@ -682,4 +678,41 @@ fn wait_for_opened(form: &mut Locked) -> crate::access::auth::Opened {
         assert!(Instant::now() < deadline, "unlock worker timed out");
         std::thread::sleep(Duration::from_millis(10));
     }
+}
+
+#[test]
+fn generated_words_require_three_correct_answers_and_reset_on_regeneration() {
+    let mut form = Locked::begin_create();
+    assert!(!form.show_recovery_words);
+    form.continue_key_setup();
+    let indices = form.word_challenge.unwrap();
+    assert!(indices[0] < indices[1] && indices[1] < indices[2] && indices[2] < 12);
+    assert!(!form.show_recovery_words);
+    assert!(!form.words_saved);
+    form.continue_key_setup();
+    assert!(form.creation_step == CreationStep::EncryptionKey);
+    assert_eq!(form.word_challenge, Some(indices));
+    assert!(form.error.is_some());
+    let words = zeroize::Zeroizing::new(form.recovery_words.to_string());
+    for (slot, index) in indices.iter().enumerate() {
+        form.word_answers[slot].push_str(words.split_whitespace().nth(*index).unwrap());
+    }
+    form.word_answers[1].push_str("wrong");
+    form.continue_key_setup();
+    assert!(!form.words_saved);
+    form.word_answers[1].clear();
+    form.word_answers[1].push_str(words.split_whitespace().nth(indices[1]).unwrap());
+    form.continue_key_setup();
+    assert!(form.creation_step == CreationStep::Sync);
+    assert!(form.words_saved);
+    assert!(form.word_challenge.is_none());
+    assert!(form.word_answers.iter().all(|answer| answer.is_empty()));
+
+    let mut form = Locked::begin_create();
+    form.continue_key_setup();
+    form.word_answers[0].push_str("old");
+    assert!(form.generate_recovery_words());
+    assert!(form.word_challenge.is_none());
+    assert!(form.word_answers.iter().all(|answer| answer.is_empty()));
+    assert!(!form.words_saved);
 }

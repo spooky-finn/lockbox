@@ -63,7 +63,7 @@ fn creation_requires_key_setup_before_storage_choice_and_cloud_fields() {
     };
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("Настройте ключ шифрования"));
-    assert!(html.contains("id=\"recovery-saved\""));
+    assert!(!html.contains("id=\"recovery-saved\""));
     assert!(!html.contains("storage-choices"));
     assert!(!html.contains("id=\"cloud-secret\""));
     assert!(!html.contains("id=\"master-password\""));
@@ -261,10 +261,10 @@ fn recovery_words_are_hidden_after_key_setup_and_preserved_on_back() {
         })
     });
     let html = dioxus_ssr::render(&dom);
-    assert!(html.contains("Hide recovery words"));
-    assert!(html.contains("Copy words as a column"));
-    assert!(html.contains("Download words as a file"));
-    assert!(html.contains("recovery-word-display"));
+    assert!(html.contains("Show"));
+    assert!(html.contains("Copy"));
+    assert!(html.contains("Download"));
+    assert!(!html.contains("recovery-word-display"));
     update(&mut dom, |state| {
         edit_locked(state, |form| form.show_recovery_words = true)
     });
@@ -272,10 +272,20 @@ fn recovery_words_are_hidden_after_key_setup_and_preserved_on_back() {
     assert!(html.contains("recovery-word-display"));
     assert_eq!(html.matches(">abandon</span>").count(), 11);
     assert!(html.contains(">about</span>"));
-    assert!(html.contains("id=\"recovery-saved\""));
+    assert!(!html.contains("id=\"recovery-saved\""));
+    update(&mut dom, |state| {
+        edit_locked(state, |form| form.continue_key_setup());
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("Enter three words from your saved mnemonic"));
+    assert!(!html.contains("recovery-word-display"));
+    assert!(!html.contains(">abandon</span>"));
+    assert_eq!(html.matches("type=\"password\"").count(), 3);
     update(&mut dom, |state| {
         edit_locked(state, |form| {
-            form.words_saved = true;
+            for (slot, index) in form.word_challenge.unwrap().iter().enumerate() {
+                form.word_answers[slot].push_str(words.split_whitespace().nth(*index).unwrap());
+            }
             form.continue_key_setup();
         })
     });
@@ -290,7 +300,7 @@ fn recovery_words_are_hidden_after_key_setup_and_preserved_on_back() {
         })
     });
     let html = dioxus_ssr::render(&dom);
-    assert!(html.contains("Show recovery words"));
+    assert!(html.contains("Show"));
     assert!(!html.contains(">abandon</span>"));
     update(&mut dom, |_| runtime::begin_create());
     update(&mut dom, |state| {
@@ -367,7 +377,7 @@ fn saved_identity_requires_unlock_and_never_offers_key_generation() {
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("Unlock your identity"));
     assert!(!html.contains("Set up your encryption key"));
-    assert!(!html.contains("Show recovery words"));
+    assert!(!html.contains("Show"));
     assert!(!html.contains("I already have 12 words"));
     assert!(!html.contains("id=\"repeat-password\""));
     assert!(!html.contains("id=\"cloud-secret\""));

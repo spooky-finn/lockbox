@@ -27,12 +27,33 @@ pub(crate) fn KeySetupView() -> Element {
             },
             p { id: "recovery-words-label", class: "recovery-label", {language.text(Text::RecoveryWords)} }
             p { id: "recovery-words-hint", class: "muted", {language.text(Text::RecoveryWordsHint)} }
-            if locked.importing_words || locked.show_recovery_words {
+            if let Some(indices) = locked.word_challenge {
+                p { class: "muted", {language.text(Text::RecoveryCheckHint)} }
+                div { class: "recovery-check",
+                    for (slot, index) in indices.iter().copied().enumerate() {
+                        label {
+                            {language.format(Text::RecoveryWord, &[(index + 1).to_string()])}
+                            input { r#type: "password", value: locked.word_answers[slot].as_str(),
+                                disabled: busy, autocomplete: "off", spellcheck: "false", autocapitalize: "none",
+                                oninput: move |event| edit_locked(state, |locked| {
+                                    locked.word_answers[slot] = zeroize::Zeroizing::new(event.value());
+                                    locked.error = None;
+                                }),
+                            }
+                        }
+                    }
+                }
+                button { r#type: "button", class: "setup-button", disabled: busy,
+                    onclick: move |_| edit_locked(state, |locked| { locked.reset_word_challenge(); locked.error = None; }),
+                    {language.text(Text::BackToWords)}
+                }
+            }
+            if locked.word_challenge.is_none() && (locked.importing_words || locked.show_recovery_words) {
                 super::recovery_words::RecoveryWordsInput {
                     readonly: !locked.importing_words, disabled: busy,
                 }
             }
-            if !locked.cloud_recovery.restoring {
+            if !locked.cloud_recovery.restoring && locked.word_challenge.is_none() {
             div { class: "recovery-actions",
                 if !locked.importing_words {
                     button { r#type: "button", class: "setup-button", disabled: busy,
@@ -66,6 +87,7 @@ pub(crate) fn KeySetupView() -> Element {
                     onclick: move |_| edit_locked(state, |locked| {
                         if locked.importing_words { locked.generate_recovery_words(); }
                         else {
+                            locked.reset_word_challenge();
                             locked.recovery_words.zeroize();
                             locked.importing_words = true;
                             locked.words_saved = false;
@@ -77,11 +99,13 @@ pub(crate) fn KeySetupView() -> Element {
                 }
             }
             }
+            if locked.importing_words {
             label { class: "recovery-saved",
                 input { id: "recovery-saved", r#type: "checkbox", disabled: busy || (!locked.show_recovery_words && !locked.importing_words), checked: locked.words_saved,
                     onchange: move |event| edit_locked(state, |locked| locked.words_saved = event.checked()),
                 }
                 {language.text(Text::RecoveryWordsSaved)}
+            }
             }
             button { id: "recovery-submit", r#type: "submit", class: "setup-button", disabled: busy, {language.text(Text::Continue)} }
         }
