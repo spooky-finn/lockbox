@@ -5,28 +5,28 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 104; 438 library, four integration, two doctests passed.
+Last full suite: cycle 105; 438 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 104: Share exclusive private-file creation
-- platform::files::create_new_private owns write-only/create_new/Unix0600 setup.
-  Four original option blocks (attachment export, sharing export, vault create,
-  vault stale-sidecar recreation) matched helper setup byte-for-byte. Callers keep
-  existing cancellation, size checks, errors, unlink ordering, cleanup and sync.
-- Witness files/locks and config retain their distinct read/write/open semantics.
-  No cross-purpose policy merge. Clock formula extraction declined: too little
-  duplication to justify another API.
+Cycle 105: Isolate root-capsule cryptography
+- Private profile/root_capsule module holds unchanged RootCapsule serde/Zeroize
+  type and key/AAD/seal/open operations. Profile lifecycle drops primitive crypto
+  imports and uses capsule API. Only type, seal/open and three metadata fields
+  visible to parent where existing validation/tests require access.
+- Moved type/methods match original after normalizing required visibility and
+  format::stretch module qualification, then formatting both versions identically.
+  Wire fields/order, domains, key handling and errors unchanged. No new tests for
+  source move; existing capsule wrong-password/key/tamper and profile reopen cover it.
 - Full suite: 438 library, four integration, two doctests passed; two OS probes
-  ignored. Existing permission, symlink, overwrite, cancellation and stale-sidecar
-  cases cover moved policy. Formatting/strict all-target Clippy passed. Five sources
-  match verified snapshot; whitespace clean. Unrelated work untouched. lib touched.
-- Snapshot: /tmp/lockbox-refactor-104.dpmjkn4q.
+  ignored. Formatting/strict all-target Clippy passed. Both sources match verified
+  snapshot; whitespace clean. Unrelated work untouched. src/lib.rs touched.
+- Snapshot: /tmp/lockbox-refactor-105.1c4qz4q5.
 
-Next search: profile.rs mixes profile lifecycle with independent root-capsule crypto.
-Consider moving RootCapsule type/impl unchanged into private profile/root_capsule.rs.
-Parent use RootCapsule; child type, seal/open, version/kdf/ciphertext pub(super) only
-where parent/tests require access. Keep serde/Zeroize attributes unchanged; compare
-moved code after normalizing visibility and format::stretch qualification. Parent
-can drop ChaCha/HKDF/Sha256/Zeroizing imports; retain Key/SigningKey/serde/Zeroize.
-Full suite and original capsule tamper/wrong-key tests. No delegation. End03:13:13 UTC.
+Next search: desktop/workspace.rs delete_selected clones self.selected solely to
+borrow ID during vault.delete_entry, then clears selection on success. Borrow
+self.selected.as_deref instead; disjoint fields and NLL permit call. Keep selection
+on failure. Existing desktop/records/scheduler tests; no new mechanical test.
+Later capsule validation owns version/KDF/ciphertext checks currently in profile;
+consider encapsulating metadata and moving capsule-only test beside implementation.
+No delegation. Ends 2026-11-02 03:13:13 UTC.
