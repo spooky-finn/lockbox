@@ -394,7 +394,7 @@ fn Invitations(blocked: bool) -> Element {
     rsx! {
         section { class: "settings-section stack",
             h2 { {language.text(Text::SharingInvitations)} }
-            for invitation in u.vault.issued_invitations(now) {
+            for invitation in u.vault.iter_issued_invitations(now) {
                 div { class: "sharing-member stack", key: "{invitation.id}",
                     if let Some(name) = u.vault.participant_name(invitation.user) {
                         h3 { "{name}" }
@@ -420,7 +420,7 @@ fn Invitations(blocked: bool) -> Element {
                     }
                 }
             }
-            for invitation in u.vault.accepted_invitations().into_iter().filter(|invitation| !invitation.joined) {
+            for invitation in u.vault.iter_accepted_invitations().filter(|invitation| !invitation.joined) {
                 div { class: "sharing-member stack", key: "accepted-{invitation.id}",
                     code { class: "sharing-code", "{invitation.id}" }
                     p { {language.text(Text::SharingAwaitingOwner)} }

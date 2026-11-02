@@ -139,15 +139,13 @@ impl Step {
     fn resume(unlocked: &Unlocked, now: u64) -> Self {
         if unlocked
             .vault
-            .accepted_invitations()
-            .iter()
+            .iter_accepted_invitations()
             .any(|invitation| !invitation.joined)
         {
             Self::Connect
         } else if unlocked
             .vault
-            .issued_invitations(now)
-            .iter()
+            .iter_issued_invitations(now)
             .any(|invitation| invitation.status == InvitationStatus::Pending)
         {
             Self::ApproveAccess

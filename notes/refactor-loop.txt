@@ -9,23 +9,21 @@ Last full suite: cycle 81; 421 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 83: Isolate identity worker workflow
-- Private auth/identity.rs child holds submit_identity and poll_identity. Parent
-  submit dispatches same method; poll calls identity completion at original point
-  before vault completion and automatic Touch ID. Form owns unchanged fields.
-- Only moved methods gain pub(super) visibility within auth parent; struct field
-  visibility and public APIs unchanged. Validation, recovery/import, password
-  transfer, interrupted-worker error and creation transitions unchanged.
-- Byte proof: submitted method (visibility normalized) and completion block match
-  original exactly after formatting. Poll call remains directly before vault
-  completion. No new tests needed for mechanical move.
-- Formatting/strict all-target Clippy and 42 access tests passed. Both sources
-  match verified snapshot; whitespace clean. Unrelated edits untouched.
-- Snapshot: /tmp/lockbox-refactor-83.5kx00_dz.
+Cycle 84: Iterate invitation summaries directly
+- Private issued/accepted info iterators flatten optional profile and map same
+  BTreeMap values/fields. Public Vec APIs collect these iterators, unchanged.
+- Session joining detection and wizard resume use any directly; no full vectors,
+  stop at first match. Sharing invitation sections iterate directly. Same order,
+  joined filtering, status(now), keys, buttons and fallback for absent profiles.
+- Formatting/strict all-target Clippy, 14 sharing, 45 desktop and five durable
+  vault-sharing tests passed. Four sources match verified snapshot; whitespace
+  clean. Unrelated edits untouched. Last full suite remains cycle 81.
+- Snapshot: /tmp/lockbox-refactor-84.rx_ssubt.
 
-Next search: Vault issued_invitations/accepted_invitations eagerly build vectors.
-Session.open and sharing flow only need any; sharing view iterates vectors once.
-Consider private iterator accessors shared with unchanged public Vec wrappers.
-Consumers can short-circuit/iterate directly, preserving BTreeMap order, all info
-fields, status(now), and behavior for profiles without invitation ledgers. Existing
-sharing wizard/admission and session tests cover consumers. Inspect first.
+Next search: Language.message collects recursively translated captures into
+Vec<String> just to pass once to private interpolate. Consider interpolate taking
+IntoIterator<Item=impl AsRef<str>>, keeping Language.format slice API unchanged,
+passing translated capture map directly. Same inserted-brace handling, template
+matching and fallback text; retain Strings only while appending. Inspect existing
+interpolation/nested-message tests and generic inference before changing. Catalog
+has unrelated dirty work; preserve it and validate committed snapshot catalog.

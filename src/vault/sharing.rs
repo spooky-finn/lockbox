@@ -72,41 +72,40 @@ impl Vault {
     }
 
     pub fn issued_invitations(&self, now: u64) -> Vec<crate::vault::IssuedInvitationInfo> {
+        self.iter_issued_invitations(now).collect()
+    }
+
+    pub(crate) fn iter_issued_invitations(
+        &self,
+        now: u64,
+    ) -> impl Iterator<Item = crate::vault::IssuedInvitationInfo> + '_ {
         self.profile
-            .as_ref()
-            .map(|profile| {
-                profile
-                    .sharing
-                    .issued
-                    .values()
-                    .map(|record| crate::vault::IssuedInvitationInfo {
-                        id: record.invitation.id(),
-                        user: record.invitation.recipient().body.user,
-                        device: record.invitation.recipient().body.device,
-                        role: record.invitation.role(),
-                        status: record.status(now),
-                    })
-                    .collect()
+            .iter()
+            .flat_map(|profile| profile.sharing.issued.values())
+            .map(move |record| crate::vault::IssuedInvitationInfo {
+                id: record.invitation.id(),
+                user: record.invitation.recipient().body.user,
+                device: record.invitation.recipient().body.device,
+                role: record.invitation.role(),
+                status: record.status(now),
             })
-            .unwrap_or_default()
     }
 
     pub fn accepted_invitations(&self) -> Vec<crate::vault::AcceptedInvitationInfo> {
+        self.iter_accepted_invitations().collect()
+    }
+
+    pub(crate) fn iter_accepted_invitations(
+        &self,
+    ) -> impl Iterator<Item = crate::vault::AcceptedInvitationInfo> + '_ {
         self.profile
-            .as_ref()
-            .map(|profile| {
-                profile
-                    .sharing
-                    .accepted
-                    .values()
-                    .map(|record| crate::vault::AcceptedInvitationInfo {
-                        id: record.invitation.id(),
-                        role: record.invitation.role(),
-                        joined: record.joined.is_some(),
-                    })
-                    .collect()
+            .iter()
+            .flat_map(|profile| profile.sharing.accepted.values())
+            .map(|record| crate::vault::AcceptedInvitationInfo {
+                id: record.invitation.id(),
+                role: record.invitation.role(),
+                joined: record.joined.is_some(),
             })
-            .unwrap_or_default()
     }
 
     /// Re-export a durable offer without allocating a new invitation ID.

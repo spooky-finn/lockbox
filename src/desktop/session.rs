@@ -57,8 +57,7 @@ impl Screen {
         let joining = matches!(self, Self::Locked(form) if form.joining)
             || opened
                 .vault
-                .accepted_invitations()
-                .iter()
+                .iter_accepted_invitations()
                 .any(|invitation| !invitation.joined);
         let (touch_id, biometric_error) =
             TouchId::open(&opened.vault, settings, biometrics, opened.with_password);
