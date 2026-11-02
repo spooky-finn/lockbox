@@ -25,8 +25,10 @@ Bundled icons are used by default. **Settings → Security → Download website 
 opts into contacting the selected record's website. Downloads use the exact HTTPS
 origin, public IP addresses pinned for the connection, no redirects, and no
 system proxy. Website-provided cross-origin icons are ignored. Icons are cached
-only in the unlocked workspace's memory; locking discards that cache. The desktop
-removes its obsolete plaintext `lockbox/favicons/v1` cache on startup.
+unencrypted in the OS cache directory at `lockbox/favicons/v1`, using hashed
+filenames. The cache survives locking and restarting: icons expire after 30 days,
+and failed lookups retry after five minutes. Unix cache directories use `0700`
+permissions and files use `0600`. Cache failures leave downloaded icons usable.
 
 Vault reads and writes are limited to 256 MiB; identity files to 64 KiB. Argon2id
 keeps its creation default of 256 MiB and three passes. Readers accept at most

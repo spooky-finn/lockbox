@@ -1,10 +1,11 @@
 Lockbox security review
 2026-11-01. Reviewed working tree at commit 3863a74.
 
-Historical findings, reproduced before remediation. Five primary fixes now
-implemented; see security-fixes.txt for behavior and validation. Severity below
-reflects prerequisites and demonstrated impact, not a formal CVSS score.
-Additional improvements remain separate follow-up work.
+Historical findings, reproduced before remediation. Hardening implemented; see
+security-fixes.txt for behavior and validation. User accepts unencrypted favicon
+caching and its website metadata (finding 3); persistence restored with private
+permissions. Severity below describes the original review, not a formal CVSS
+score. Additional improvements remain separate follow-up work.
 
 1. HIGH: Unauthenticated objects exhaust durable sync journal
 
@@ -64,6 +65,9 @@ rebinding and IPv4-mapped IPv6. Avoid forwarding provider credentials or cookies
 Reference: [OWASP SSRF prevention](https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html).
 
 3. MEDIUM: Plaintext favicon cache reveals vault website metadata after locking
+
+Accepted tradeoff: user explicitly permits unencrypted icon caching. Persistent
+cache restored with bounded raster validation and owner-only Unix permissions.
 
 Locations: src/records/favicon.rs:71, :97, :117, :124, :129.
 

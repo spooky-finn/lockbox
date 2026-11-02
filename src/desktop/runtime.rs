@@ -19,7 +19,6 @@ use std::{
 };
 
 pub(crate) fn use_runtime() -> Session {
-    use_hook(crate::records::favicon::cleanup_legacy_cache);
     let settings = use_signal(Settings::load);
     let hardware = use_hook(|| BiometricProvider(touchid::system()));
     let native = use_hook(|| {

@@ -8,8 +8,10 @@ Security fixes 2026-11-01
   authenticated fork evidence and exact signing intents preserved.
 - Icons: bundled default. Security setting opts into selected-site lookup.
   Same HTTPS origin, public IPv4/IPv6, pinned DNS, redirects/proxies disabled.
-  Raster MIME allowlist. Per-workspace memory cache; no new disk cache.
-  Desktop startup removes old plaintext cache, refuses symlinked components.
+  Raster MIME allowlist. User accepts unencrypted persistent icon caching:
+  `lockbox/favicons/v1` survives locking/restarting. Icons expire after 30 days;
+  failures retry after five minutes. Unix directories 0700, files 0600.
+  Startup no longer deletes cache. Bounded raster validation also applies on read.
 - Files: bounded regular-file reads, including identity, import and Touch ID ID
   lookup. Vault limit 256 MiB; identity limit 64 KiB. Saves respect vault limit.
   Truncated ciphertext rejected before hashing. FIFO paths cannot block opening.
@@ -28,7 +30,7 @@ Compatibility
 - Data-key rotation, dependency-stack upgrades, independent cryptographic audit,
   signed Touch ID interaction probes and live Storj checks remain follow-up work.
 
-Validation
+Validation before persistent favicon caching follow-up
 
 - Working-tree Rust library: 360 passed; 2 explicit OS probes ignored. Coverage:
   forged-object flood, byte-budget eviction, out-of-order admission, discarded

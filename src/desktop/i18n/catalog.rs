@@ -757,7 +757,7 @@ impl Text {
             Self::VaultSettings => ("Настройки хранилища", "Vault settings"),
             Self::AutoLock => ("Автоблокировка", "Auto-lock"),
             Self::WebsiteIcons => ("Загружать значки сайтов", "Download website icons"),
-            Self::WebsiteIconsDescription => ("Обращаться к сайту выбранной записи. Значки хранятся только до блокировки; по умолчанию используются встроенные.", "Contact the selected record’s website. Icons stay in memory until locking; bundled icons are used by default."),
+            Self::WebsiteIconsDescription => ("Обращаться к сайту выбранной записи и сохранять значки в кэше на этом устройстве. По умолчанию используются встроенные значки.", "Contact the selected record’s website and cache icons on this device. Bundled icons are used by default."),
             Self::AutoLockTimeout => ("Время автоблокировки", "Auto-lock timeout"),
             Self::LockVault => ("Заблокировать", "Lock vault"),
             Self::SecretOrOtpauthURL => ("Секрет или ссылка otpauth://", "Secret or otpauth:// URL"),

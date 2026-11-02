@@ -1,0 +1,16 @@
+Persistent favicon cache restored
+
+- User accepts unencrypted icons and associated website cache metadata.
+- OS cache path: lockbox/favicons/v1. Existing raster entries reusable.
+- Persists across vault locking, app restarts and fresh memory-cache instances.
+- Successful icons fresh 30 days; failed lookups retry after five minutes.
+- SHA-256 filenames. Unix directories 0700, files 0600; random exclusive
+  temporary files and atomic replacement. Startup cache deletion removed.
+- Bounded reads, raster MIME/base64 checks, symlink/FIFO safeguards. Corrupt or
+  unwritable cache falls back to downloads plus memory caching. Concurrent
+  requests within workspace share one download.
+- Network protections retained: opt-in, same HTTPS origin, pinned public IPs,
+  no redirects/proxies. English/Russian settings copy updated.
+- Validation: 9 favicon, 19 settings, 3 translation tests pass. Strict Clippy
+  all-targets, touched Rust formatting, diff checks pass. Temporary cache fixtures
+  only; no real cache directory deleted or changed during verification.
