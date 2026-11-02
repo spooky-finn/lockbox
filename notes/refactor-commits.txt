@@ -1,0 +1,121 @@
+Refactor commits; one concern per cycle. Checks in per-commit rolling notes.
+
+001 b88e9ea refactor(totp): trim normalized padding in place
+002 39dfc7f refactor(import): clone records after deduplication
+003 070ee7b refactor(records): index sidebar nodes by parent
+004 1574466 refactor(vault): index local history snapshots
+005 f72be1a refactor(browser): share account origin lookup
+006 12229ef refactor(records): reuse folder hierarchy walks
+007 1ba48c7 refactor(import): index target folder placement
+008 abc85c8 refactor(records): encapsulate draft save setup
+009 04743c7 refactor(vault): retain replaced alias for undo
+010 264d463 refactor(sharing): reuse artifact state resets
+011 dea75e4 refactor(sync): share provider worker setup
+012 f87c3cd refactor(sync): borrow projection conflict views
+013 1439da1 refactor(import): count bytes without buffering
+014 22eedb0 refactor(records): load active history page data
+015 e0a81fb refactor(clipboard): borrow saved field values
+016 baf6f94 refactor(sync): index control successors
+017 5e127ac refactor(sync): share stored control extraction
+018 1c3dce6 refactor(jobs): unify mailbox completion state
+019 12629c9 refactor(icons): cache normalized search titles
+020 9d72815 refactor(icons): borrow URL site suffixes
+021 48df1f5 refactor(sync): reuse checkpoint projection
+022 0be22d7 refactor(sync): borrow replay control map
+023 3081f97 refactor(sync): borrow desired diff values
+024 adcd66c refactor(sync): stream strict ordering checks
+025 c833dd5 refactor(records): share canonical ID checks
+026 b10fe0c refactor(records): format random IDs once
+027 63189e6 refactor(i18n): borrow interpolation values
+028 7ff631b refactor(desktop): extract sync review view
+029 c42fd05 refactor(records): cache normalized sort keys
+030 d09e8b3 refactor(records): normalize tree query once
+031 13f81bd refactor(sync): reuse rebase verification
+032 5522b9e refactor(vault): narrow acknowledgement undo
+033 fc7f923 refactor(identity): share buffered hex encoding
+034 fcba576 refactor(sync): stream bounded dependency hints
+035 b6554bd refactor(vault): narrow folder save rollback
+036 cb710e3 refactor(vault): compact deletions in one pass
+037 882b5ff refactor(vault): borrow projection comparisons
+038 94be964 refactor(vault): move folder assignment undo
+039 e84b7f9 refactor(sync): stream publication graph setup
+040 a7a8298 refactor(sync): borrow authenticated headers
+041 44774f1 refactor(records): move parsed TOTP link fields
+042 728c6a2 refactor(sync): borrow validation heads
+043 b6af3bb refactor(sync): encode stored objects once
+044 59af563 refactor(sync): share checked object decoding
+045 c6230d9 refactor(sync): reuse transport object decoding
+046 9f9a00a refactor(access): reuse worker lifecycle
+047 96f33a2 refactor(access): reuse biometric worker
+048 c3ee6b7 refactor(vault): borrow saved history on write
+049 8a553cf refactor(vault): select trash before cloning
+050 5ba00dc refactor(records): borrow history render text
+051 5b7103b refactor(browser): share script injection setup
+052 fb68244 refactor(browser): extract native connection
+053 0559fb8 refactor(browser): remove duplicate lock route
+054 4957455 refactor(sync): borrow entity identity checks
+055 34f5e86 refactor(vault): share synced file writes
+056 fc2f2c5 refactor(sync): prepare borrowed transactions
+057 5c945ff refactor(sync): move prepared capacity checks
+058 e99787c refactor(sync): stream signing message bytes
+059 e3976b8 refactor(sync): reuse device public key
+060 ec79eb3 refactor(sync): hoist device identity lookups
+061 fa5d66a refactor(sync): retain only relay headers
+062 5d259bd refactor(sync): share change header checks
+063 61a1e2c refactor(sharing): separate artifact detection
+064 5e1876f refactor(sharing): borrow review before cloning
+065 9635ef7 refactor: share serialized byte counting
+066 7978509 refactor(sync): count prepared object bytes
+067 f328ab6 refactor(records): count alphabets lazily
+068 4b8583c refactor(records): share folder name checks
+069 9d1e4bc refactor(records): iterate folder lineage
+070 7125444 refactor(sync): extract history construction
+071 03bf704 refactor(sync): omit unused record history
+072 361cec8 refactor(vault): avoid unused replay history
+073 8dc7d5d refactor(sync): use state replay in UI jobs
+074 75cfcf9 refactor(sync): reuse history actor IDs
+075 5745d82 refactor(sync): omit unused history ordering
+076 84795fb refactor(sync): type epoch replay results
+077 7aec37b refactor(sync): derive only current frontier
+078 ac0a66d refactor(history): project selected revisions
+079 e7e6e99 refactor(history): select displayable events
+080 1e8de35 refactor(folders): collect path names once
+081 42c7841 refactor(auth): share new-password validation
+082 f092ffd refactor(auth): scope identity clone to cloud setup
+083 ae19d61 refactor(auth): isolate identity worker flow
+084 86ec58d refactor(sharing): iterate invitation summaries
+085 74f0595 refactor(i18n): interpolate translated captures
+086 4f91404 refactor(import): yield batches lazily
+087 5c1521c refactor(vault): reuse parsed header metadata
+088 2ea25fd refactor(tree): track placements during projection
+089 68a93ca refactor(totp): truncate digests on stack
+090 df59132 refactor(access): borrow unlock display names
+091 37389bf refactor(vault): share file metadata checks
+092 dcfd282 refactor(wire): compare canonical bytes directly
+093 cc5e7e3 refactor(sync): share canonical equality checks
+094 c4e304e refactor(wire): serialize scalar text directly
+095 858aa81 refactor(wire): borrow scalar text while parsing
+096 924cc07 fix(wire): preserve scalar parse error context
+097 9fb0a29 refactor(wire): validate counter prefixes directly
+098 dbf4183 refactor(wire): trust strict base64 decoding
+099 7fc0792 refactor(wire): buffer small blob encodings
+100 ada131c refactor(wire): isolate scalar codecs
+101 d4eb34e refactor(crypto): stream HKDF info slices
+102 5ae856f refactor(sync): stream canonical hashes
+103 5b77d64 refactor(sharing): move action errors
+104 3ea5d0a refactor(files): share private file creation
+105 b851027 refactor(vault): isolate root capsule crypto
+106 1effc78 refactor(records): borrow selected delete ID
+107 2c012b5 refactor(vault): encapsulate root capsule state
+108 d9afa4c refactor(sync): reuse transfer payloads
+109 9983071 refactor(sync): decode transfer imports once
+110 cb097c5 refactor(sync): share artifact byte budgeting
+111 89a147a refactor(sync): remove hash forwarding wrapper
+112 b1af04b refactor(sync): reuse controller device IDs
+113 97d087c refactor(folders): index collapsed ID cleanup
+114 358a296 refactor(import): index duplicate candidates
+115 3bc6555 refactor(import): queue ready source folders
+116 0098c7a refactor(history): resolve restores in one pass
+117 53ef0dc refactor(browser): borrow reply text
+118 241e44b refactor(browser): compare typed origins
+119 759c4bc refactor(sync): share object byte addressing
