@@ -21,6 +21,9 @@ pub(super) const CERT_DOMAIN: &[u8] = b"lockbox.sync.certificate\0";
 pub(super) const CONTROL_DOMAIN: &[u8] = b"lockbox.sync.control\0";
 pub(super) const CHANGE_DOMAIN: &[u8] = b"lockbox.sync.change\0";
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Signed<T> {
@@ -223,11 +226,9 @@ pub(super) fn content_key(
         b"lockbox.changes\0".as_slice()
     };
 
-    let mut info = domain.to_vec();
-    info.extend(context.0);
     let mut out = Zeroizing::new([0; 32]);
     Hkdf::<Sha256>::new(Some(&space.0), key)
-        .expand(&info, out.as_mut())
+        .expand_multi_info(&[domain, &context.0], out.as_mut())
         .expect("fixed HKDF length");
     out
 }
