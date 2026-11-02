@@ -21,6 +21,12 @@ pub struct Plan {
     pub skipped: usize,
 }
 
+// Planned positions stay valid as the output grows, without borrowing its Vec.
+enum KnownEntry<'a> {
+    Existing(&'a Entry),
+    Planned(usize),
+}
+
 /// Plans the import without changing either vault.
 ///
 /// A source folder is merged into an existing sibling with the same name
@@ -35,6 +41,19 @@ pub fn plan(
 ) -> Plan {
     let mut plan = Plan::default();
     let mapping = map_folders(folders, source_folders, &mut plan.folders);
+    if source_entries.is_empty() {
+        return plan;
+    }
+
+    let mut by_title: BTreeMap<&str, Vec<KnownEntry<'_>>> = source_entries
+        .iter()
+        .map(|source| (source.title.as_str(), Vec::new()))
+        .collect();
+    for known in entries {
+        if let Some(candidates) = by_title.get_mut(known.title.as_str()) {
+            candidates.push(KnownEntry::Existing(known));
+        }
+    }
 
     for source in source_entries {
         let folder_id = source
@@ -50,10 +69,17 @@ pub fn plan(
             period: source.period,
         });
 
-        if entries
-            .iter()
-            .chain(&plan.entries)
-            .any(|known| same_entry(known, source, folder_id, totp.as_ref()))
+        if by_title
+            .get(source.title.as_str())
+            .into_iter()
+            .flatten()
+            .any(|known| {
+                let known = match known {
+                    KnownEntry::Existing(entry) => *entry,
+                    KnownEntry::Planned(index) => &plan.entries[*index],
+                };
+                same_entry(known, source, folder_id, totp.as_ref())
+            })
         {
             plan.skipped += 1;
             continue;
@@ -63,7 +89,12 @@ pub fn plan(
         entry.id = crate::records::id::new();
         entry.folder_id = folder_id.map(str::to_owned);
         entry.totp = totp;
+        let index = plan.entries.len();
         plan.entries.push(entry);
+        by_title
+            .entry(source.title.as_str())
+            .or_default()
+            .push(KnownEntry::Planned(index));
     }
 
     plan

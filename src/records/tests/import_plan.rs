@@ -284,3 +284,181 @@ fn attachment_name_bytes_and_order_distinguish_imported_records() {
         assert_eq!(imported.skipped, 0);
     }
 }
+
+#[test]
+fn deduplication_matches_legacy_content_folder_and_source_order_rules() {
+    let folders = [
+        folder("work", "Work", None),
+        folder("home", "Personal", None),
+    ];
+    let source_folders = [
+        folder("s-work", " work ", None),
+        folder("s-home", "PERSONAL", None),
+        folder("s-invalid", " ", Some("s-work")),
+    ];
+    let titles = ["", "Same", "same", "雪🗝", "é", "e\u{301}"];
+    let mut original = Vec::new();
+    for i in 0..48 {
+        let location = [None, Some("work"), Some("home")][i % 3];
+        let mut value = entry(titles[i % titles.len()], location);
+        value.username = format!("user-{}", i % 7);
+        value.password = format!("password-{}", i % 11);
+        value.url = format!("https://site{}.example", i % 5);
+        value.notes = format!("note-{}", i % 3);
+        value.icon = (i % 3 == 0).then(|| "github".into());
+        if i % 4 == 0 {
+            value.totp = Some(Totp {
+                secret: if i == 0 {
+                    "jbsw y3dp ehpk 3pxp===="
+                } else {
+                    "JBSWY3DPEHPK3PXP"
+                }
+                .into(),
+                algorithm: TotpAlgorithm::Sha256,
+                digits: 8,
+                period: 60,
+            });
+        }
+        if i % 6 == 0 {
+            value
+                .add_attachment("one.bin".into(), vec![0, 255, i as u8])
+                .unwrap();
+            value.add_attachment("two.bin".into(), vec![73]).unwrap();
+        }
+        original.push(value);
+    }
+    let mut sources = Vec::new();
+    for i in 0..96 {
+        let mut value = original[i % original.len()].clone();
+        value.id = format!("{:032x}", i + 10000);
+        value.folder_id = match value.folder_id.as_deref() {
+            Some("work") => Some("s-work".into()),
+            Some("home") => Some("s-home".into()),
+            _ => None,
+        };
+        if i % 11 == 0 {
+            value.folder_id = Some("missing-source".into());
+        }
+        if let Some(totp) = &mut value.totp {
+            totp.secret = "jbsw y3dp ehpk 3pxp====".into();
+        }
+        if let Some(file) = value.attachments.first_mut() {
+            file.id = format!("{:032x}", i + 20000);
+        }
+        match i % 9 {
+            1 => value.username.push('!'),
+            2 => value.password.push('!'),
+            3 => value.url.push_str("/different"),
+            4 => value.notes.push('!'),
+            5 => {
+                value.icon = if value.icon.is_some() {
+                    None
+                } else {
+                    Some("other".into())
+                }
+            }
+            6 => {
+                value.folder_id = Some(
+                    if value.folder_id.as_deref() == Some("s-work") {
+                        "s-home"
+                    } else {
+                        "s-work"
+                    }
+                    .into(),
+                )
+            }
+            7 => {
+                value.totp = Some(Totp {
+                    secret: "JBSWY3DPEHPK3PXP".into(),
+                    algorithm: TotpAlgorithm::Sha1,
+                    digits: 6,
+                    period: 30,
+                })
+            }
+            8 => value
+                .add_attachment("added.bin".into(), vec![i as u8])
+                .unwrap(),
+            _ => {}
+        }
+        sources.extend([value.clone(), value]);
+    }
+    for title in ["New", "new", "New🗝"] {
+        let mut value = entry("shared new content", Some("s-invalid"));
+        value.title = title.into();
+        sources.extend([value.clone(), value]);
+    }
+
+    for rotation in [0, 1, 7, 31] {
+        let mut known = original.clone();
+        known.rotate_left(rotation);
+        let mut source_entries = sources.clone();
+        source_entries.rotate_left(rotation);
+        let known_before = known.clone();
+        let sources_before = source_entries.clone();
+        for use_known in [false, true] {
+            let existing = if use_known { known.as_slice() } else { &[] };
+            for length in [0, 1, source_entries.len()] {
+                let source = &source_entries[..length];
+                let mut expected = legacy_plan(&folders, existing, &source_folders, source);
+                let mut actual = plan(&folders, existing, &source_folders, source);
+                assert!(expected.folders.is_empty());
+                assert_eq!(actual.folders, expected.folders);
+                assert_eq!(actual.skipped, expected.skipped);
+                if length == source_entries.len() {
+                    assert!(!actual.entries.is_empty());
+                    assert!(actual.skipped > 0);
+                }
+                for result in [&mut expected, &mut actual] {
+                    for value in &mut result.entries {
+                        value.id.clear();
+                    }
+                }
+                assert_eq!(actual.entries, expected.entries);
+            }
+        }
+        assert_eq!(known, known_before);
+        assert_eq!(source_entries, sources_before);
+    }
+}
+
+fn legacy_plan(
+    folders: &[Folder],
+    entries: &[Entry],
+    source_folders: &[Folder],
+    source_entries: &[Entry],
+) -> Plan {
+    let mut plan = Plan::default();
+    let mapping = map_folders(folders, source_folders, &mut plan.folders);
+
+    for source in source_entries {
+        let folder_id = source
+            .folder_id
+            .as_deref()
+            .and_then(|id| mapping.get(id))
+            .and_then(Option::as_deref);
+        let totp = source.totp.as_ref().map(|source| Totp {
+            // Shared spaces accept only canonical Base32 secrets.
+            secret: totp::normalize_secret(&source.secret),
+            algorithm: source.algorithm,
+            digits: source.digits,
+            period: source.period,
+        });
+
+        if entries
+            .iter()
+            .chain(&plan.entries)
+            .any(|known| same_entry(known, source, folder_id, totp.as_ref()))
+        {
+            plan.skipped += 1;
+            continue;
+        }
+
+        let mut entry = source.clone();
+        entry.id = crate::records::id::new();
+        entry.folder_id = folder_id.map(str::to_owned);
+        entry.totp = totp;
+        plan.entries.push(entry);
+    }
+
+    plan
+}

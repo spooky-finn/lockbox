@@ -5,38 +5,41 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 112; 439 library, four integration, two doctests passed.
+Last full suite: cycle 114; 441 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 113: Reuse collapsed-ID index during folder cleanup
-- After durable deletion, take old collapsed BTreeSet and walk surviving folders.
-  Set.take moves matching owned IDs into result; stale/deleted IDs drop. Stops once
-  old set empty, retaining empty/early-match fast paths. No ID copies or full extra
-  folder index. Original reveal afterward expands selected surviving ancestors.
-- New baseline test passed first: blocked save preserves selected child, confirmation,
-  collapsed IDs and folders; successful retry drops stale/deleted IDs, reveals
-  parent, retains unrelated collapsed branch. One new library test.
-- Standalone old/indexed set oracle passed40 cases, including empty/duplicates/stale/
-  Unicode. For1024 matching IDs:524800 linear equalities vs1024 B-tree lookups (each
-  logarithmic); no timing claim. /tmp/lockbox-refactor-113-intersection.rs and .log.
-- Formatting/strict all-target Clippy passed;80 records,45 desktop,12 scheduler
-  tests passed (137). Both sources match verified snapshot; whitespace clean.
-  Unrelated work untouched. lib touched. Last full remains112 (439 library).
-- Snapshot: /tmp/lockbox-refactor-113.9m2dy7c0.
+Cycle 114: Index import duplicate candidates by requested title
+- Borrowed title buckets contain Existing(&Entry)/Planned(usize). Seed only source
+  titles; keep matching saved entries and append planned indices after push. Growing
+  Vec holds no borrowed references. Exact same_entry predicate, folder mapping,
+  normalization and source/output order unchanged. No copied secret fields or hashes.
+- Folder mapping still runs before empty-source fast return. One new same-binary
+  legacy-plan oracle passed first, then after indexing:24 fixture combinations,
+  empty/case/Unicode titles, same other content with case-only titles, mapped and
+  missing folders, canonical/noncanonical TOTP, attachment IDs/content, metadata,
+  repeated/planned duplicates and varied input order. Clear only fresh entry IDs;
+  compare whole ordered outputs/skipped/folders and unchanged inputs. Legacy body,
+  same_entry and map_folders match saved originals after formatting.
+- Off-worktree real predicate counter:4096 matching unique titles,8390656 old calls
+  vs4096 indexed; equal outputs. Not a timing claim. Probe:
+  /tmp/lockbox-refactor-114-probe.etya1fdh; /tmp/lockbox-refactor-114-work.log.
+- Full suite:441 library,four integration,two doctests passed;two OS probes ignored.
+  Formatting/strict all-target Clippy passed. Both sources match verified snapshot;
+  whitespace clean. Unrelated work untouched. lib touched.
+- Snapshot: /tmp/lockbox-refactor-114.820txlab.
 
-Next search: import_plan::plan dedup scans existing.chain(planned) per source.
-Index exact unchanged titles with BTreeMap<&str,Vec<KnownEntry>>. Enum Existing
-(&Entry)/Planned(usize); resolver borrows same existing/planned entry for final
-unchanged same_entry predicate. Only candidate subset changes; preserve source
-order, mapped folder/TOTP normalization and cloned output. Save imported index
-before push and add to bucket after push. Keys borrow stable inputs, never growing
-planned Vec. No copied secret fields or persistent plaintext fingerprints.
-First save original plan function as legacy_plan in test module. Same-binary oracle
-with varied titles (case/Unicode/empty), mapped existing folders only (avoid random
-new folder IDs), TOTP/attachment/metadata differences, repeated sources/planned
-matches; clear only fresh output entry IDs before comparing whole entries/skipped/
-folders, assert inputs unchanged. Baseline first, then index, full suite. Instrument
-same_entry only in off-worktree probe snapshot;4096 unique titles matching existing
-expected8390656 old predicate calls vs4096 indexed, assert same outputs. No timing
-claim. No delegation. Ends 2026-11-02 03:13:13 UTC.
+Next search: map_folders repeatedly scans/removes pending Vec for earliest ready
+source. Consider ordered pending/ready original-index sets plus parent-ID->children
+map. Initial ready: no parent or parent absent from source ID set. Pop earliest
+ready; if none, first pending breaks cycle with parentNone. Keep Targets.place and
+mapping updates unchanged. Unblock children when ID first mapped (even targetNone),
+remove dependency bucket once; filter pending before adding (self/cycle/duplicates).
+Original selection order and duplicate-ID overwrites must remain exact.
+Save original map_folders as legacy_map_folders in tests; redirect legacy_plan
+call to it so oracle remains independent. New oracle normalizes only fresh folder
+IDs by created position (and entry IDs), compares all ordered fields/parent mappings.
+Cover reorderings, missing parents, cycles, self-links, duplicate IDs, sibling name
+aliases, invalid names, deep reverse chains. Baseline first. Full suite. Off-worktree
+probe reverse4096 chain:old8390656 ready predicates vs4096 queue selections, equal
+normalized outputs; no timing claim. No delegation. End03:13:13 UTC.
