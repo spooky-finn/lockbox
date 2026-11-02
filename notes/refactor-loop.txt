@@ -9,26 +9,30 @@ Last full suite: cycle 88; 423 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 90: Borrow unlock display names
-- Optional redundant_clone discovery found exactly three filename.to_string
-  copies in LockedView descriptions. Replace with slice::from_ref borrowed input.
-- Display name becomes Cow<str>: borrow profile space name or valid path filename;
-  own only lossy non-UTF8 conversion. Empty fallback unchanged. Same form lifetime,
-  language/template choice, escaping, path tooltip and text. No extra secret copy.
-- Formatting/strict all-target Clippy, optional library redundant_clone with
-  warnings denied, 15 access-view and 45 desktop tests passed (60 total).
-  Existing local/cloud/recovery/identity, language and remembered-profile checks
-  cover view consumers. No new tests for mechanical representation change.
+Cycle 91: Share file metadata validation
+- Private check_metadata owns regular-file then maximum-size rule. regular_file
+  invokes before open and after descriptor metadata, retaining both checks.
+  Preserve nonblocking Unix open, pathname replacement defense and all errors.
+- Optional needless_pass_by_value discovery found 14 suggestions; public APIs,
+  error callbacks and ownership boundaries intentionally retained. SDK body has
+  borrowed bytes only, no direct owned accessor; deferred broader transport
+  change rather than introduce new body/stream semantics for clone removal.
+- Formatting/strict all-target Clippy, 22 vault, 18 protection, six recovery,
+  three profile and six identity tests passed (55 total). Existing nonregular,
+  sparse oversized, truncated, FIFO/directory and format tests retained.
 - Source matches verified snapshot; whitespace clean. Unrelated work untouched.
   Last full suite remains cycle 88.
-- Snapshot: /tmp/lockbox-refactor-90.yiid1agm.
+- Snapshot: /tmp/lockbox-refactor-91.njal54kj.
 
-Next search: optional Clippy needless_pass_by_value on clean verified library
-snapshot may identify needless owned parameters/private clone requirements.
-Inspect each reason; preserve public APIs and intentional ownership in durable
-intents, rollback snapshots and async results. No automatic fixes. If no useful
-candidate, file.regular_file repeats identical metadata is_file/size checks before
-open and on descriptor after nonblocking open. Private validate_metadata helper
-can share exact rule while keeping both checks and error order. Existing file/
-protection tests cover regular, oversized sparse, truncated, FIFO and directory
-inputs. Use rg --files before guessed paths. Window ends 03:13:13 UTC.
+Next search: wire.decode_bounded canonical(&value) allocates complete JCS Vec
+only to compare input bytes. Consider serialization.canonical_matches(value,
+bytes)->serde_json::Result<bool>, shared private ByteMatch writer holding
+Option<&[u8]> remaining. Each write sets remaining=remaining.and_then(|rest|
+rest.strip_prefix(chunk)), ALWAYS returns Ok(chunk.len()) even after mismatch;
+serializer still traverses fully and preserves errors/side effects. Flush Ok;
+final Some(empty) means exact match. No index overflow/output buffer; JCS internal
+sorting buffers remain. Protocol maps serialization failure/false to same
+InvalidEncoding after unchanged budget/typed deserialize checks. Public canonical
+Vec API unchanged. Baseline wire alternate JSON forms before refactor; test helper
+against to_vec oracle, prefixes/tails/Unicode, chunks and late serializer error.
+Full suite warranted for canonical wire guard. Inspect source first.

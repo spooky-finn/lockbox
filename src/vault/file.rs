@@ -16,13 +16,7 @@ pub(super) const MAX_VAULT_BYTES: usize = 256 * 1024 * 1024;
 pub(super) const MAX_IDENTITY_BYTES: usize = 64 * 1024;
 
 fn regular_file(path: &Path, max: usize) -> Result<File> {
-    let metadata = fs::metadata(path)?;
-    if !metadata.is_file() {
-        return Err(VaultError::NotAVault);
-    }
-    if metadata.len() > max as u64 {
-        return Err(VaultError::ResourceLimit);
-    }
+    check_metadata(&fs::metadata(path)?, max)?;
     let mut options = OpenOptions::new();
     options.read(true);
     #[cfg(unix)]
@@ -32,14 +26,18 @@ fn regular_file(path: &Path, max: usize) -> Result<File> {
         options.custom_flags(libc::O_NONBLOCK);
     }
     let file = options.open(path)?;
-    let metadata = file.metadata()?;
+    check_metadata(&file.metadata()?, max)?;
+    Ok(file)
+}
+
+fn check_metadata(metadata: &fs::Metadata, max: usize) -> Result<()> {
     if !metadata.is_file() {
         return Err(VaultError::NotAVault);
     }
     if metadata.len() > max as u64 {
         return Err(VaultError::ResourceLimit);
     }
-    Ok(file)
+    Ok(())
 }
 
 pub(super) fn read_bounded(path: &Path, max: usize) -> Result<Vec<u8>> {
