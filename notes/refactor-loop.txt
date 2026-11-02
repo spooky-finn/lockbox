@@ -5,37 +5,40 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 95; 430 library, four integration, two doctests passed.
+Last full suite: cycle 96; 431 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 95: Parse scalar wire text through shared borrowing visitor
-- Private WireText trait keeps original Hash/Counter/Blob parsing and canonical
-  guards; generic TextVisitor parses str directly. Default borrowed/owned string
-  and byte-buffer delegation used. UTF8 byte validation and expecting 'a string'
-  mirror installed Serde StringVisitor. Keep deserialize_string hint exactly.
-- No intermediate String retention for borrowed raw or scratch escaped text.
-  Output values still owned; private attachment fields untouched. Parser errors
-  map directly through generic de::Error; no Box/error-string adapters.
-- Baseline input-mode test passed first: all six borrowed/owned str/byte modes,
-  custom deserializer enforcing String hint, escaped JSON, invalid UTF8, wrong
-  JSON types against String diagnostics, malformed hashes/counters and canonical
-  counter errors. One new test; all existing wire/crypto fixtures retained.
-- Isolated allocator probe: raw JSON Hash 1->0, Counter 2->1, 8192-byte Blob 3->2
-  allocations per decode; zero reallocs, 1000 iterations, values asserted.
-  /tmp/lockbox-refactor-95-probe.77e87b5l/examples/refactor_95_alloc.rs.
-- Full suite: 430 library, four integration, two doctests passed; two OS probes
-  ignored. Formatting/strict all-target Clippy passed. Both sources match verified
-  snapshot; whitespace clean. Unrelated work untouched.
-- Snapshot: /tmp/lockbox-refactor-95.wtflol5r.
+Cycle 96: Preserve scalar parse diagnostic boundary
+- Same-binary legacy reference exposed cycle95 regression: parsing errors inside
+  visitor gained JSON locations and custom deserializer decoration. Earlier
+  cross-snapshot normal-library probe reused cached artifact, falsely showed
+  parity. Main unit tests compile current source; new same-binary oracle avoids
+  this baseline hazard. Do not trust reverse-version probes sharing target cache.
+- TextVisitor carries Result<T,D::Error> as value. Text parse failures returned
+  AFTER deserialize_string completes; string/type/UTF8 errors still propagate
+  inside visitor. Same string hint and borrowed parsing, original diagnostics.
+- New JSON parity test failed before fix, now passes: direct and convenience
+  APIs vs original String+parse oracle for Hash/Counter/Blob, checking message,
+  line/column/category, malformed text, overflow, wrong type and syntax. Existing
+  six-mode fixture now decorates deserializer errors, ensuring parse errors stay
+  outside decoration while UTF8 errors retain it. One new test.
+- Allocation probe unchanged: Hash 0, Counter 1, Blob 2 per raw JSON decode;
+  1000 iterations. Full suite: 431 library, four integration, two doctests passed;
+  two OS probes ignored. Formatting/strict all-target Clippy passed. Both sources
+  match verified snapshot; whitespace clean. Unrelated work untouched.
+- Snapshot: /tmp/lockbox-refactor-96.11szd2ki.
 
-Next search: Counter.from_text still allocates value.to_string() to verify canonical
-input after successful u64 parse. Unsigned decimal parser permits optional '+'
-and leading zeroes; canonical text disallows both except single '0'. Consider
-AFTER unchanged parse: reject s.starts_with('+') || (s.len()>1 && s.starts_with('0')).
-Preserve parse/overflow errors before canonical error. Verify grammar from primary
-local Rust source if available; baseline exhaustive short alphabet + numeric-edge,
-plus/zero/overflow/Unicode strings against original parse+format oracle, including
-error text. Measure remaining counter allocation 1->0; existing decimal precision
-and wire fixtures cover output. Do not change Blob canonical guard yet. Inspect
-before implementing; no delegation. Window ends 2026-11-02 03:13:13 UTC.
+Next search: resume deferred Counter canonical spelling optimization. Baseline
+original parse+format oracle ALREADY passed 37,999 short/edge/Unicode/overflow
+cases. Test saved /tmp/lockbox-refactor-counter-oracle.rs; removed from fix commit
+for focus. Restore before receive_checks_canonical_encoding_before_object_hash
+in tests/wire.rs. Current source still value.to_string()!=s. Installed Rust source
+core/src/num/mod.rs:1546/1723 confirms unsigned optional '+' then decimal digits.
+AFTER unchanged parse reject starts_with('+') || (len>1 && starts_with('0')). Keep
+numeric errors/overflow before canonical error. Rerun oracle and JSON boundary
+regression, measure counter allocation 1->0, then full checks. Probe workspace
+/tmp/lockbox-refactor-95-probe.77e87b5l mutable; snapshot96 contains no examples.
+For future snapshots touch src/lib.rs before validation to force current library
+build; prefer same-binary legacy references for baseline comparisons. No
+subagents. Window ends 2026-11-02 03:13:13 UTC.

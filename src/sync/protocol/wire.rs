@@ -128,23 +128,23 @@ trait WireText: Sized {
     fn from_text<E: serde::de::Error>(text: &str) -> std::result::Result<Self, E>;
 }
 
-struct TextVisitor<T>(std::marker::PhantomData<T>);
+struct TextVisitor<T, E>(std::marker::PhantomData<(T, E)>);
 
-impl<'de, T: WireText> serde::de::Visitor<'de> for TextVisitor<T> {
-    type Value = T;
+impl<'de, T: WireText, E: serde::de::Error> serde::de::Visitor<'de> for TextVisitor<T, E> {
+    type Value = std::result::Result<T, E>;
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str("a string")
     }
 
-    fn visit_str<E: serde::de::Error>(self, text: &str) -> std::result::Result<T, E> {
-        T::from_text(text)
+    fn visit_str<F: serde::de::Error>(self, text: &str) -> std::result::Result<Self::Value, F> {
+        Ok(T::from_text(text))
     }
 
-    fn visit_bytes<E: serde::de::Error>(self, bytes: &[u8]) -> std::result::Result<T, E> {
+    fn visit_bytes<F: serde::de::Error>(self, bytes: &[u8]) -> std::result::Result<Self::Value, F> {
         match std::str::from_utf8(bytes) {
-            Ok(text) => T::from_text(text),
-            Err(_) => Err(E::invalid_value(serde::de::Unexpected::Bytes(bytes), &self)),
+            Ok(text) => Ok(T::from_text(text)),
+            Err(_) => Err(F::invalid_value(serde::de::Unexpected::Bytes(bytes), &self)),
         }
     }
 }
@@ -152,7 +152,8 @@ impl<'de, T: WireText> serde::de::Visitor<'de> for TextVisitor<T> {
 fn deserialize_text<'de, D: Deserializer<'de>, T: WireText>(
     deserializer: D,
 ) -> std::result::Result<T, D::Error> {
-    deserializer.deserialize_string(TextVisitor::<T>(std::marker::PhantomData))
+    // Return parse errors after string deserialization, preserving their original context.
+    deserializer.deserialize_string(TextVisitor::<T, D::Error>(std::marker::PhantomData))?
 }
 
 #[derive(Clone, Serialize, Deserialize)]

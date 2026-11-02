@@ -217,14 +217,15 @@ fn wire_text_deserialization_preserves_input_modes_and_diagnostics() {
             self,
             visitor: V,
         ) -> std::result::Result<V::Value, TextError> {
-            match self {
+            let result = match self {
                 Self::Str(value) => visitor.visit_str(value),
                 Self::BorrowedStr(value) => visitor.visit_borrowed_str(value),
                 Self::String(value) => visitor.visit_string(value),
                 Self::Bytes(value) => visitor.visit_bytes(value),
                 Self::BorrowedBytes(value) => visitor.visit_borrowed_bytes(value),
                 Self::ByteBuf(value) => visitor.visit_byte_buf(value),
-            }
+            };
+            result.map_err(|error: TextError| TextError::custom(format!("string context: {error}")))
         }
         serde::forward_to_deserialize_any! {
             bool i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 char str bytes byte_buf
@@ -297,6 +298,84 @@ fn wire_text_deserialization_preserves_input_modes_and_diagnostics() {
             .to_string(),
         "bad".parse::<u64>().unwrap_err().to_string()
     );
+}
+
+#[test]
+fn wire_text_parse_errors_keep_the_original_json_context_boundary() {
+    use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+    use serde::{Deserialize, de::DeserializeOwned, de::Error as _};
+    fn details(error: serde_json::Error) -> (String, usize, usize, String) {
+        (
+            error.to_string(),
+            error.line(),
+            error.column(),
+            format!("{:?}", error.classify()),
+        )
+    }
+    fn compare<T: DeserializeOwned>(
+        source: &str,
+        parse: impl FnOnce(&str) -> serde_json::Result<T>,
+    ) {
+        let mut legacy = serde_json::Deserializer::from_str(source);
+        let expected = String::deserialize(&mut legacy)
+            .and_then(|text| parse(&text))
+            .err()
+            .map(details);
+        let mut current = serde_json::Deserializer::from_str(source);
+        let direct = T::deserialize(&mut current).err().map(details);
+        assert_eq!(direct, expected, "direct: {source}");
+        let convenience = serde_json::from_str::<T>(source).err().map(details);
+        assert_eq!(convenience, expected, "from_str: {source}");
+    }
+    for source in [
+        "\"bad\"",
+        "\"\"",
+        "\"\\u0041\"",
+        "true",
+        "null",
+        "\"unterminated",
+    ] {
+        compare::<Hash>(source, |text| {
+            text.parse().map_err(serde_json::Error::custom)
+        });
+    }
+    for source in [
+        "\"0\"",
+        "\"01\"",
+        "\"+1\"",
+        "\"bad\"",
+        "\"18446744073709551616\"",
+        "7",
+        "null",
+        "\"unterminated",
+    ] {
+        compare::<Counter>(source, |text| {
+            let value = text.parse::<u64>().map_err(serde_json::Error::custom)?;
+            if value.to_string() != text {
+                return Err(serde_json::Error::custom("noncanonical counter"));
+            }
+            Ok(Counter(value))
+        });
+    }
+    for source in [
+        "\"\"",
+        "\"AAH_Kg\"",
+        "\"YQ==\"",
+        "\"%\"",
+        "true",
+        "null",
+        "\"unterminated",
+    ] {
+        compare::<Blob>(source, |text| {
+            let bytes = URL_SAFE_NO_PAD
+                .decode(text)
+                .map_err(serde_json::Error::custom)?;
+            if URL_SAFE_NO_PAD.encode(&bytes) != text {
+                return Err(serde_json::Error::custom("noncanonical bytes"));
+            }
+            Ok(Blob(bytes))
+        });
+    }
 }
 
 #[test]
