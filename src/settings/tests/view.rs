@@ -366,7 +366,7 @@ fn english_translates_existing_errors_and_creation_without_translating_user_data
     assert!(html.contains("Copy password"));
     update(&mut dom, |_| runtime::begin_create());
     let html = dioxus_ssr::render(&dom);
-    assert!(html.contains("Set up your encryption key"));
+    assert!(html.contains("Set up your mnemonic"));
     update(&mut dom, |state| {
         crate::desktop::context::edit_locked(state, |form| {
             form.words_saved = true;

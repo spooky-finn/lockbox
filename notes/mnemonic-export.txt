@@ -4,3 +4,4 @@ Clipboard: existing guard, auto-clear. File: private permissions, refuse existin
 Import existing words: export actions hidden. Saved acknowledgment stays manual.
 Existing mnemonic entry: reveal focused word only. Blur: mask all filled words. Phrase unchanged.
 Generated mnemonic: hidden by default; compact Show/Copy/Download actions. Continue: three random distinct word positions, verify before storage setup. Import: existing acknowledgment.
+UI terminology: mnemonic only (RU: мнемоника). Replace phrase, recovery words, private identity key labels and diagnostics; no word-count naming. Individual word labels stay.

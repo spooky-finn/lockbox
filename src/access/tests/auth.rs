@@ -179,7 +179,7 @@ fn key_setup_requires_valid_saved_words_and_preserves_them_across_sync_choices()
     form.words_saved = true;
     form.continue_key_setup();
     assert!(form.creation_step == CreationStep::EncryptionKey);
-    assert!(form.error.as_ref().unwrap().contains("12-word"));
+    assert!(form.error.as_ref().unwrap().contains("valid mnemonic"));
 
     form.recovery_words.clear();
     form.recovery_words.push_str(&generated);
@@ -411,7 +411,7 @@ fn recovery_mode_clears_secrets_and_validates_before_starting_worker() {
     form.recovery_words.push_str("invalid recovery words");
     form.submit();
     assert!(form.pending.is_none());
-    assert!(form.error.as_ref().unwrap().contains("12-word"));
+    assert!(form.error.as_ref().unwrap().contains("valid mnemonic"));
     form.toggle_recovery();
     assert!(!form.recovering);
     assert!(form.password.is_empty());
@@ -645,12 +645,7 @@ fn concurrent_identity_setup_cannot_silently_switch_the_confirmed_key() {
     wait_for_identity(&mut form);
     assert!(form.identity.is_none());
     assert!(form.creation_step == CreationStep::Identity);
-    assert!(
-        form.error
-            .as_ref()
-            .unwrap()
-            .contains("different private identity key")
-    );
+    assert!(form.error.as_ref().unwrap().contains("different mnemonic"));
     assert_eq!(
         Identity::open(
             &path,

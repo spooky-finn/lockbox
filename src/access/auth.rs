@@ -300,7 +300,7 @@ impl Locked {
         self.error = if let Err(error) = RecoveryPhrase::parse(&self.recovery_words) {
             Some(error.to_string())
         } else if !self.words_saved {
-            Some("Save your recovery words before continuing".into())
+            Some("Save your mnemonic before continuing".into())
         } else {
             None
         };

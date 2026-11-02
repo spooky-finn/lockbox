@@ -78,15 +78,15 @@ pub enum VaultError {
     Sync(#[from] crate::sync::protocol::Error),
     #[error("Storj: {0}")]
     Transport(#[from] crate::sync::transport::TransportError),
-    #[error("could not unlock the root key: check the recovery password")]
+    #[error("could not unlock the mnemonic: check the recovery password")]
     RecoveryFailed,
-    #[error("Recovery words do not match this vault")]
+    #[error("Mnemonic does not match this vault")]
     WrongRecoveryPhrase,
-    #[error("This vault does not have recovery words")]
+    #[error("This vault does not have a mnemonic")]
     RecoveryUnavailable,
-    #[error("A different private identity key is already saved on this device")]
+    #[error("A different mnemonic is already saved on this device")]
     IdentityMismatch,
-    #[error("No cloud recovery backup was found for this private key and bucket")]
+    #[error("No cloud recovery backup was found for this mnemonic and bucket")]
     CloudRecoveryMissing,
     #[error("Cloud recovery backups have conflicting signed heads; recovery stopped")]
     CloudRecoveryConflict,

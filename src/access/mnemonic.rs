@@ -14,7 +14,7 @@ use zeroize::Zeroizing;
 pub enum Error {
     #[error("could not obtain random data from the operating system")]
     Random,
-    #[error("Enter a valid 12-word English recovery phrase")]
+    #[error("Enter a valid mnemonic")]
     InvalidPhrase,
 }
 

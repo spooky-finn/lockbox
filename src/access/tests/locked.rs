@@ -13,7 +13,7 @@ fn cloud_restore_requires_original_words_and_has_no_create_or_join_storage_choic
     update(&mut dom, |_| runtime::begin_cloud_restore());
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("Восстановить из Storj"));
-    assert!(html.contains("прежние 12 слов"));
+    assert!(html.contains("прежнюю мнемонику"));
     assert!(html.contains("id=\"recovery-words\"") || html.contains("recovery-word"));
     assert!(!html.contains("Сгенерировать"));
     update(&mut dom, |state| {
@@ -62,7 +62,7 @@ fn creation_requires_key_setup_before_storage_choice_and_cloud_fields() {
         )
     };
     let html = dioxus_ssr::render(&dom);
-    assert!(html.contains("Настройте ключ шифрования"));
+    assert!(html.contains("Настройте мнемонику"));
     assert!(!html.contains("id=\"recovery-saved\""));
     assert!(!html.contains("storage-choices"));
     assert!(!html.contains("id=\"cloud-secret\""));
@@ -209,7 +209,7 @@ fn joining_sets_up_key_before_connection_without_creating_a_named_space() {
         runtime::begin_join();
     });
     let html = dioxus_ssr::render(&dom);
-    assert!(html.contains("Set up your encryption key"));
+    assert!(html.contains("Set up your mnemonic"));
     assert!(!html.contains("id=\"cloud-secret\""));
     update(&mut dom, |state| {
         edit_locked(state, |form| {
@@ -242,7 +242,7 @@ fn joining_sets_up_key_before_connection_without_creating_a_named_space() {
     assert!(!html.contains("id=\"recovery-password\""));
     update(&mut dom, |_| runtime::begin_create());
     assert!(!dioxus_ssr::render(&dom).contains("storage-choices"));
-    assert!(dioxus_ssr::render(&dom).contains("Set up your encryption key"));
+    assert!(dioxus_ssr::render(&dom).contains("Set up your mnemonic"));
 }
 
 #[test]
@@ -375,10 +375,10 @@ fn saved_identity_requires_unlock_and_never_offers_key_generation() {
         runtime::begin_join();
     });
     let html = dioxus_ssr::render(&dom);
-    assert!(html.contains("Unlock your identity"));
-    assert!(!html.contains("Set up your encryption key"));
+    assert!(html.contains("Unlock your mnemonic"));
+    assert!(!html.contains("Set up your mnemonic"));
     assert!(!html.contains("Show"));
-    assert!(!html.contains("I already have 12 words"));
+    assert!(!html.contains("Use existing mnemonic"));
     assert!(!html.contains("id=\"repeat-password\""));
     assert!(!html.contains("id=\"cloud-secret\""));
     update(&mut dom, |mut state| {
@@ -391,8 +391,8 @@ fn saved_identity_requires_unlock_and_never_offers_key_generation() {
         form.creation_step = crate::access::auth::CreationStep::Sync;
     });
     let html = dioxus_ssr::render(&dom);
-    assert!(html.contains("Using your existing private identity key"));
-    assert!(!html.contains("Back to encryption key"));
+    assert!(html.contains("Using your existing mnemonic"));
+    assert!(!html.contains("Back to mnemonic"));
     update(&mut dom, |_| runtime::begin_create());
     dom.in_scope(ScopeId::APP, || {
         let state = consume_context::<Session>();

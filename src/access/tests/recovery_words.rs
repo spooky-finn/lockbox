@@ -212,16 +212,13 @@ mod interaction {
         let mut editor = Editor::new();
         editor.input(5, &PHRASE.to_uppercase().replace(' ', "\n"));
         assert_eq!(editor.words().as_str(), PHRASE);
-        assert!(dioxus_ssr::render(&editor.dom).contains("Recovery phrase is valid"));
+        assert!(dioxus_ssr::render(&editor.dom).contains("Mnemonic is valid"));
         editor.input(11, "abandon");
-        assert!(
-            dioxus_ssr::render(&editor.dom)
-                .contains("Enter a valid 12-word English recovery phrase")
-        );
+        assert!(dioxus_ssr::render(&editor.dom).contains("Enter a valid mnemonic"));
         editor.input(3, "");
         assert_eq!(slots(&editor.words())[3], "");
         assert_eq!(slots(&editor.words())[4], "abandon");
-        assert!(dioxus_ssr::render(&editor.dom).contains("11 of 12 words entered"));
+        assert!(dioxus_ssr::render(&editor.dom).contains("Words entered: 11"));
     }
 
     #[test]
@@ -276,11 +273,11 @@ mod interaction {
         editor.input(0, PHRASE);
         editor.input(0, &format!("{PHRASE} extra"));
         assert_eq!(editor.words().as_str(), PHRASE);
-        assert!(dioxus_ssr::render(&editor.dom).contains("Extra words were not added"));
+        assert!(dioxus_ssr::render(&editor.dom).contains("They were not added."));
         assert!(!dioxus_ssr::render(&editor.dom).contains("value=\"extra\""));
         editor.input(0, "aban");
         assert!(!editor.key(0, Key::Enter).default_action_enabled());
         assert_eq!(editor.words().as_str(), PHRASE);
-        assert!(dioxus_ssr::render(&editor.dom).contains("Recovery phrase is valid"));
+        assert!(dioxus_ssr::render(&editor.dom).contains("Mnemonic is valid"));
     }
 }
