@@ -207,6 +207,27 @@ fn failed_batch_is_rolled_back_and_retry_completes() {
 }
 
 #[test]
+fn batching_preserves_empty_oversized_and_exact_count_boundaries() {
+    let lengths = |entries: &[Entry]| {
+        entry_batches(entries)
+            .map(|batch| batch.len())
+            .collect::<Vec<_>>()
+    };
+    assert!(lengths(&[]).is_empty());
+    let mut oversized = Entry::new();
+    oversized.notes = "x".repeat(BATCH_BYTES + 1);
+    let entries = [Entry::new(), oversized, Entry::new()];
+    assert_eq!(lengths(&entries), [1, 1, 1]);
+    assert_eq!(
+        entry_batches(&entries).collect::<Vec<_>>().concat(),
+        entries
+    );
+
+    let entries: Vec<_> = (0..BATCH_MUTATIONS + 1).map(|_| Entry::new()).collect();
+    assert_eq!(lengths(&entries), [BATCH_MUTATIONS, 1]);
+}
+
+#[test]
 fn large_imports_are_split_into_bounded_batches() {
     let mut entries = Vec::new();
 
@@ -223,7 +244,7 @@ fn large_imports_are_split_into_bounded_batches() {
     entries.insert(1, big.clone());
     entries.insert(2, big);
 
-    let batches = entry_batches(&entries);
+    let batches: Vec<_> = entry_batches(&entries).collect();
     assert_eq!(
         batches.iter().map(|b| b.len()).sum::<usize>(),
         entries.len()
@@ -260,7 +281,6 @@ fn batch_byte_boundaries_match_json_escaping_unicode_and_attachments() {
 
     assert_eq!(
         entry_batches(&entries)
-            .iter()
             .map(|batch| batch.len())
             .collect::<Vec<_>>(),
         [2, 1]
@@ -272,7 +292,6 @@ fn batch_byte_boundaries_match_json_escaping_unicode_and_attachments() {
     );
     assert_eq!(
         entry_batches(&entries)
-            .iter()
             .map(|batch| batch.len())
             .collect::<Vec<_>>(),
         [1, 2]

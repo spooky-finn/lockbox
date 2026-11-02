@@ -179,27 +179,25 @@ fn partial(saved: usize, total: usize, error: &str) -> String {
 }
 
 /// Splits entries so that each shared transaction stays within its limits.
-fn entry_batches(entries: &[Entry]) -> Vec<&[Entry]> {
-    let mut batches = Vec::new();
-    let mut start = 0;
-    let mut bytes = 0;
-
-    for (index, entry) in entries.iter().enumerate() {
-        let size = json_size(entry).unwrap_or(BATCH_BYTES);
-
-        if index > start && (index - start == BATCH_MUTATIONS || bytes + size > BATCH_BYTES) {
-            batches.push(&entries[start..index]);
-            start = index;
-            bytes = 0;
+fn entry_batches(entries: &[Entry]) -> impl Iterator<Item = &[Entry]> {
+    let mut sizes = entries
+        .iter()
+        .map(|entry| json_size(entry).unwrap_or(BATCH_BYTES))
+        .enumerate()
+        .peekable();
+    std::iter::from_fn(move || {
+        let (start, mut bytes) = sizes.next()?;
+        let mut end = start + 1;
+        while let Some(&(index, size)) = sizes.peek() {
+            if index - start == BATCH_MUTATIONS || bytes + size > BATCH_BYTES {
+                break;
+            }
+            let _ = sizes.next();
+            bytes += size;
+            end = index + 1;
         }
-        bytes += size;
-    }
-
-    if start < entries.len() {
-        batches.push(&entries[start..]);
-    }
-
-    batches
+        Some(&entries[start..end])
+    })
 }
 
 fn same_file(a: &std::path::Path, b: &std::path::Path) -> bool {
