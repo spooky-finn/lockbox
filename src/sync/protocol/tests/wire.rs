@@ -53,6 +53,43 @@ fn wire_rejects_duplicates_unknown_fields_and_noncanonical_primitives() {
 }
 
 #[test]
+fn canonical_decoder_rejects_alternate_json_spellings() {
+    for text in [
+        r#"{"z":1,"a":2}"#,
+        r#"{"a":1,"a":2}"#,
+        r#""\u0061""#,
+        r#""\u96ea""#,
+        "1e-6",
+        "1.0",
+        "-0",
+        "true ",
+        " true",
+    ] {
+        assert!(serde_json::from_str::<serde_json::Value>(text).is_ok());
+        assert_eq!(
+            decode::<serde_json::Value>(text.as_bytes()),
+            Err(Error::InvalidEncoding),
+            "{text}"
+        );
+    }
+    let value = serde_json::json!({"z": [true, null, "雪\n\"\\"], "a": 0.000001});
+    assert_eq!(
+        decode::<serde_json::Value>(&canonical(&value).unwrap()).unwrap(),
+        value
+    );
+
+    #[derive(Debug, serde::Serialize, serde::Deserialize)]
+    struct Defaulted {
+        #[serde(default)]
+        flag: bool,
+    }
+    assert!(matches!(
+        decode::<Defaulted>(b"{}"),
+        Err(Error::InvalidEncoding)
+    ));
+}
+
+#[test]
 fn receive_checks_canonical_encoding_before_object_hash() {
     let bytes = include_bytes!("../fixtures/change.json");
     let noncanonical = [b" ".as_slice(), bytes.as_slice()].concat();

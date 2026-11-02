@@ -168,7 +168,9 @@ pub(super) fn decode_bounded<T: DeserializeOwned + Serialize>(
 
     let value: T = serde_json::from_slice(bytes).map_err(|_| Error::InvalidEncoding)?;
 
-    if canonical(&value)? != bytes {
+    if !crate::serialization::canonical_matches(&value, bytes)
+        .map_err(|_| Error::InvalidEncoding)?
+    {
         return Err(Error::InvalidEncoding);
     }
 

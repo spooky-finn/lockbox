@@ -5,34 +5,35 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 88; 423 library, four integration, two doctests passed.
+Last full suite: cycle 92; 427 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 91: Share file metadata validation
-- Private check_metadata owns regular-file then maximum-size rule. regular_file
-  invokes before open and after descriptor metadata, retaining both checks.
-  Preserve nonblocking Unix open, pathname replacement defense and all errors.
-- Optional needless_pass_by_value discovery found 14 suggestions; public APIs,
-  error callbacks and ownership boundaries intentionally retained. SDK body has
-  borrowed bytes only, no direct owned accessor; deferred broader transport
-  change rather than introduce new body/stream semantics for clone removal.
-- Formatting/strict all-target Clippy, 22 vault, 18 protection, six recovery,
-  three profile and six identity tests passed (55 total). Existing nonregular,
-  sparse oversized, truncated, FIFO/directory and format tests retained.
-- Source matches verified snapshot; whitespace clean. Unrelated work untouched.
-  Last full suite remains cycle 88.
-- Snapshot: /tmp/lockbox-refactor-91.njal54kj.
+Cycle 92: Compare canonical wire bytes without output buffer
+- serialization.canonical_matches streams JCS into ByteMatch, retaining only
+  Option<&[u8]> remaining input. strip_prefix handles arbitrary chunks; None marks
+  mismatch. Always consume writes, even mismatch, so serializer finishes and late
+  errors/side effects remain. Exact Some(empty) required; no index overflow.
+- decode_bounded keeps budget/typed-deserialize order, maps serialization error
+  and mismatch to existing InvalidEncoding. Public canonical Vec API unchanged.
+  Remove final re-encoded output Vec; JCS internal sorting buffers still exist.
+- Baseline public decoder test passed before refactor: key order/duplicates,
+  escapes, exponent/integral/negative-zero spellings, whitespace and omitted
+  default fields. Three helper tests cover buffered oracle, all truncation and
+  changed-byte positions, leading/trailing bytes, UTF8 split into one-byte chunks,
+  mismatch consumption, late serializer error and NaN. Four new tests total.
+- Full suite: 427 library, four integration, two doctests passed; two OS probes
+  ignored. Formatting/strict all-target Clippy passed. All three sources match
+  verified snapshot; whitespace clean. Unrelated work untouched.
+- Snapshot: /tmp/lockbox-refactor-92.li5an0cv.
 
-Next search: wire.decode_bounded canonical(&value) allocates complete JCS Vec
-only to compare input bytes. Consider serialization.canonical_matches(value,
-bytes)->serde_json::Result<bool>, shared private ByteMatch writer holding
-Option<&[u8]> remaining. Each write sets remaining=remaining.and_then(|rest|
-rest.strip_prefix(chunk)), ALWAYS returns Ok(chunk.len()) even after mismatch;
-serializer still traverses fully and preserves errors/side effects. Flush Ok;
-final Some(empty) means exact match. No index overflow/output buffer; JCS internal
-sorting buffers remain. Protocol maps serialization failure/false to same
-InvalidEncoding after unchanged budget/typed deserialize checks. Public canonical
-Vec API unchanged. Baseline wire alternate JSON forms before refactor; test helper
-against to_vec oracle, prefixes/tails/Unicode, chunks and late serializer error.
-Full suite warranted for canonical wire guard. Inspect source first.
+Next search: seven canonical(left)? != canonical(right)? comparisons allocate two
+Vecs: vault/sharing.rs three, machine/invitations.rs three, machine/authority.rs
+one. Consider crate-private protocol.wire canonical_eq(left,right)->Result<bool>:
+serialize LEFT with existing canonical first, then canonical_matches RIGHT against
+left bytes, mapping same InvalidEncoding. Preserve left-to-right serialization,
+complete traversal even mismatch, error precedence and existing callers' domain
+errors. Reexport pub(crate) only; public canonical API unchanged. Replace seven
+comparisons/imports. Add equality/error-order oracle tests (baseline buffered path
+first) and run invitation/authority/sharing checks or full suite. Inspect types
+before choosing same-T generic signature. No delegation; end 03:13:13 UTC.
