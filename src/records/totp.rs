@@ -100,15 +100,7 @@ fn validated_key(totp: &Totp) -> Result<Zeroizing<Vec<u8>>, TotpError> {
 pub fn code(totp: &Totp, unix_time: u64) -> Result<String, TotpError> {
     let key = validated_key(totp)?;
     let counter = unix_time / u64::from(totp.period);
-    let digest = hmac(totp.algorithm, &key, counter);
-    // RFC 4226 dynamic truncation.
-    let offset = usize::from(digest[digest.len() - 1] & 0x0f);
-    let binary = u32::from_be_bytes([
-        digest[offset] & 0x7f,
-        digest[offset + 1],
-        digest[offset + 2],
-        digest[offset + 3],
-    ]);
+    let binary = truncated_hmac(totp.algorithm, &key, counter);
     let code = binary % 10u32.pow(u32::from(totp.digits));
     Ok(format!("{code:0width$}", width = usize::from(totp.digits)))
 }
@@ -125,19 +117,27 @@ pub fn group(code: &str) -> String {
     format!("{left} {right}")
 }
 
-fn hmac(algorithm: TotpAlgorithm, key: &[u8], counter: u64) -> Zeroizing<Vec<u8>> {
+fn truncated_hmac(algorithm: TotpAlgorithm, key: &[u8], counter: u64) -> u32 {
     macro_rules! digest {
-        ($hash:ty) => {{
+        ($hash:ty, $len:literal) => {{
             let mut mac = Hmac::<$hash>::new_from_slice(key).expect("HMAC accepts any key length");
             mac.update(&counter.to_be_bytes());
-            mac.finalize().into_bytes().to_vec()
+            let digest: Zeroizing<[u8; $len]> = Zeroizing::new(mac.finalize().into_bytes().into());
+            // RFC 4226 dynamic truncation.
+            let offset = usize::from(digest[digest.len() - 1] & 0x0f);
+            u32::from_be_bytes([
+                digest[offset] & 0x7f,
+                digest[offset + 1],
+                digest[offset + 2],
+                digest[offset + 3],
+            ])
         }};
     }
-    Zeroizing::new(match algorithm {
-        TotpAlgorithm::Sha1 => digest!(Sha1),
-        TotpAlgorithm::Sha256 => digest!(Sha256),
-        TotpAlgorithm::Sha512 => digest!(Sha512),
-    })
+    match algorithm {
+        TotpAlgorithm::Sha1 => digest!(Sha1, 20),
+        TotpAlgorithm::Sha256 => digest!(Sha256, 32),
+        TotpAlgorithm::Sha512 => digest!(Sha512, 64),
+    }
 }
 
 /// What an `otpauth://totp/` link describes.

@@ -9,29 +9,25 @@ Last full suite: cycle 88; 423 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 88: Track placements while projecting record tree
-- Placed borrowed-ID sets passed through branch; folders inserted only when
-  emitted, entries while constructing Record nodes. Emitted child guarantees
-  parent included. Remove separate recursive traversal over finished Nodes.
-- Fallback consults original rooted placements only; never inserts fallback IDs.
-  Preserve duplicate orphans, rooted duplicates hidden only when counterpart
-  displayed, source fallback order, sorted siblings, search inheritance and
-  depth limit. No search fields or secret ownership changed.
-- Seven baseline tree tests passed before change. New mixed duplicate-ID fixture
-  checks empty/needle/ghost/orphan searches; exact visible outlines and orphan
-  order. Existing cycles, depth, Unicode, inherited folder and hidden-secret
-  checks retained. One new test.
-- Full suite: 423 library, four integration, two doctests passed; two OS probes
-  ignored. Formatting/strict all-target Clippy passed. Both sources match verified
-  snapshot; whitespace clean. Unrelated edits untouched.
-- Snapshot: /tmp/lockbox-refactor-88.82jthzbl.
+Cycle 89: Truncate HMAC digests without heap buffer
+- Private truncated_hmac returns existing RFC4226 binary value. Macro finalizes
+  SHA1/256/512 into typed Zeroizing<[u8;20/32/64]>, truncates within guard lifetime.
+  Remove intermediate digest Vec while retaining automatic wiping on all exits.
+- Installed generic-array primary source confirms owned fixed-array conversion;
+  compiler enforces each output length. Same HMAC/key/counter bytes, offset/mask,
+  modulo, leading-zero formatting, validation order and public TOTP APIs.
+- Formatting/strict all-target Clippy, 79 record and 45 desktop tests passed
+  (124 total). Existing 18 RFC6238 cases across all hashes, leading-zero and
+  invalid-settings tests provide oracle. No new tests for pure representation
+  change. Source matches verified snapshot; whitespace clean. Unrelated work
+  untouched. Last full suite remains cycle 88.
+- Snapshot: /tmp/lockbox-refactor-89.yihkscde.
 
-Next search: records/totp.hmac returns Zeroizing<Vec<u8>> used solely for RFC4226
-four-byte truncation in code(). Consider private truncated_hmac returning u32;
-macro finalizes each known hash into typed Zeroizing<[u8;20/32/64]>, truncates
-while digest live, returns same binary value. Remove digest heap Vec while
-retaining automatic wiping. Const sizes must match output types at compile time;
-verify installed GenericArray conversion from primary local source if needed.
-Keep algorithm choice, counter endian, offset masking, modulo/leading-zero format
-and validation error order unchanged. Existing RFC6238 SHA1/256/512 vectors,
-leading zeros and settings-order tests provide strong oracle. Inspect first.
+Next search: broaden discovery beyond already-refactored hot paths. Run optional
+Clippy redundant_clone lint on clean verified snapshot; inspect ownership/lifetime
+reasons before choosing any suggestion. Do not auto-fix clones protecting failed
+commits, durable intents, retained snapshots or async results. If no useful clone
+found, inspect file.regular_file duplicated metadata validation before and after
+open; helper could share exact type/size rule while preserving nonblocking open,
+TOCTOU defense and error order. Check paths with rg --files before guessed reads.
+No delegation authorized. Window still ends 2026-11-02 03:13:13 UTC.
