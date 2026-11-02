@@ -57,8 +57,9 @@ impl Machine {
         replay.require_ready()?;
         with_history(state, |history| {
             let (anchor, current) = history.tip();
+            let device_id = device.id();
 
-            if current.body.controller != device.id() {
+            if current.body.controller != device_id {
                 return Err(Error::InsufficientRole);
             }
             validate_recipient(&recipient, role, &current.body)?;
@@ -71,7 +72,7 @@ impl Machine {
                 space_name: space_name.map(str::to_owned),
                 anchor,
                 id: Hash(*crypto::random32()?),
-                author: device.id(),
+                author: device_id,
                 recipient,
                 role,
                 expires_at: expires_at.map(Counter),
@@ -168,7 +169,8 @@ impl Machine {
         with_history(state, |history| {
             find_admission(history, admission)?.ok_or(Error::InvalidInvitation)?;
             let (control, current) = history.tip();
-            if current.body.controller != device.id() {
+            let device_id = device.id();
+            if current.body.controller != device_id {
                 return Err(Error::InsufficientRole);
             }
             if !current
@@ -184,7 +186,7 @@ impl Machine {
                 invitation: admission.id(),
                 acceptance: admission.hash()?,
                 control,
-                author: device.id(),
+                author: device_id,
             };
             let receipt = AdmissionReceipt {
                 confirmation: crypto::sign(confirmation, &device.signer(), RECEIPT_DOMAIN)?,

@@ -308,8 +308,9 @@ impl Machine {
         let replay = Self::replay_state(state, device)?;
         replay.require_writer()?;
         let previous = control_at(state, replay.membership)?;
+        let device_id = device.id();
 
-        if previous.body.controller != device.id() {
+        if previous.body.controller != device_id {
             return Err(Error::InsufficientRole);
         }
 
@@ -337,7 +338,7 @@ impl Machine {
         let mut control = build_control(
             epoch,
             previous.body.owner,
-            device.id(),
+            device_id,
             members,
             replay.frontier.into_iter().collect(),
             &replay.projection,
