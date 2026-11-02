@@ -5,29 +5,33 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 86; 422 library, four integration, two doctests passed.
+Last full suite: cycle 88; 423 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 87: Reuse parsed vault header metadata
-- Header.parse constructs decoded header after existing base/version/KDF/slot
-  checks, then uses header.len()+16 for ciphertext minimum. Remove duplicate
-  recovery-slot length rule. Salt/check slices already bounded by base check;
-  only infallible field copies move before final length check. Error order same.
-- Decryption uses parsed.version instead of decoding same bytes again. Public
-  APIs, supported versions, header authentication and profile/generation checks
-  unchanged. No extra parsed-file abstraction or new tests for mechanical change.
-- Formatting/strict all-target Clippy, 22 vault, 18 protection, six recovery and
-  three profile tests passed (49 total). Source matches verified snapshot;
-  whitespace clean. Unrelated edits untouched. Last full suite cycle 86.
-- Snapshot: /tmp/lockbox-refactor-87.6zk0qc2t.
+Cycle 88: Track placements while projecting record tree
+- Placed borrowed-ID sets passed through branch; folders inserted only when
+  emitted, entries while constructing Record nodes. Emitted child guarantees
+  parent included. Remove separate recursive traversal over finished Nodes.
+- Fallback consults original rooted placements only; never inserts fallback IDs.
+  Preserve duplicate orphans, rooted duplicates hidden only when counterpart
+  displayed, source fallback order, sorted siblings, search inheritance and
+  depth limit. No search fields or secret ownership changed.
+- Seven baseline tree tests passed before change. New mixed duplicate-ID fixture
+  checks empty/needle/ghost/orphan searches; exact visible outlines and orphan
+  order. Existing cycles, depth, Unicode, inherited folder and hidden-secret
+  checks retained. One new test.
+- Full suite: 423 library, four integration, two doctests passed; two OS probes
+  ignored. Formatting/strict all-target Clippy passed. Both sources match verified
+  snapshot; whitespace clean. Unrelated edits untouched.
+- Snapshot: /tmp/lockbox-refactor-88.82jthzbl.
 
-Next search: records/tree.project builds hierarchy then recursively walks Nodes
-again solely to collect placed folder/entry IDs before unreachable fallback.
-Consider Placed sets passed into branch; insert only when node emitted, so child
-placements always belong to emitted parent (nonempty children force inclusion).
-Remove second traversal. Keep fallback insert behavior unchanged: sets describe
-original rooted tree only, never add orphan fallback IDs. Preserve duplicate-ID,
-cycle/depth, search ancestor inclusion and ordering. Inspect existing tree tests;
-baseline malformed/filtered hierarchy coverage before changing. Avoid unrelated
-favicon/runtime/catalog edits. No delegation authorized.
+Next search: records/totp.hmac returns Zeroizing<Vec<u8>> used solely for RFC4226
+four-byte truncation in code(). Consider private truncated_hmac returning u32;
+macro finalizes each known hash into typed Zeroizing<[u8;20/32/64]>, truncates
+while digest live, returns same binary value. Remove digest heap Vec while
+retaining automatic wiping. Const sizes must match output types at compile time;
+verify installed GenericArray conversion from primary local source if needed.
+Keep algorithm choice, counter endian, offset masking, modulo/leading-zero format
+and validation error order unchanged. Existing RFC6238 SHA1/256/512 vectors,
+leading zeros and settings-order tests provide strong oracle. Inspect first.

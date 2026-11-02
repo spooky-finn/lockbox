@@ -7,7 +7,7 @@ use crate::{
     },
     vault::Vault,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 pub(crate) enum Node<'a> {
     Folder(&'a Folder, Vec<Node<'a>>),
@@ -15,35 +15,13 @@ pub(crate) enum Node<'a> {
 }
 
 pub(crate) fn project<'a>(vault: &'a Vault, query: &str) -> Vec<Node<'a>> {
-    use std::collections::BTreeSet;
     let query = query.trim().to_lowercase();
-    let mut nodes = Hierarchy::new(vault).branch(None, &query, false, 0);
+    let mut placed = Placed::default();
+    let mut nodes = Hierarchy::new(vault).branch(None, &query, false, 0, &mut placed);
     // Concurrent valid folder moves can create a cycle or dangling parent.
     // Keep every unreachable record and folder available for search and repair.
-    fn placed<'a>(
-        nodes: &[Node<'a>],
-        folders: &mut BTreeSet<&'a str>,
-        entries: &mut BTreeSet<&'a str>,
-    ) {
-        for node in nodes {
-            match node {
-                Node::Folder(folder, children) => {
-                    folders.insert(&folder.id);
-                    placed(children, folders, entries);
-                }
-                Node::Record(entry) => {
-                    entries.insert(&entry.id);
-                }
-            }
-        }
-    }
-
-    let mut folders = BTreeSet::new();
-    let mut entries = BTreeSet::new();
-    placed(&nodes, &mut folders, &mut entries);
-
     for folder in vault.folders() {
-        if !folders.contains(folder.id.as_str())
+        if !placed.folders.contains(folder.id.as_str())
             && (query.is_empty() || folder.name.to_lowercase().contains(&query))
         {
             nodes.push(Node::Folder(folder, Vec::new()));
@@ -51,7 +29,7 @@ pub(crate) fn project<'a>(vault: &'a Vault, query: &str) -> Vec<Node<'a>> {
     }
 
     for entry in vault.entries() {
-        if !entries.contains(entry.id.as_str()) && entry_matches(entry, &query) {
+        if !placed.entries.contains(entry.id.as_str()) && entry_matches(entry, &query) {
             nodes.push(Node::Record(entry));
         }
     }
@@ -63,6 +41,12 @@ fn entry_matches(entry: &Entry, query: &str) -> bool {
         || [&entry.title, &entry.username, &entry.url]
             .iter()
             .any(|field| field.to_lowercase().contains(query))
+}
+
+#[derive(Default)]
+struct Placed<'a> {
+    folders: BTreeSet<&'a str>,
+    entries: BTreeSet<&'a str>,
 }
 
 struct Hierarchy<'a> {
@@ -103,6 +87,7 @@ impl<'a> Hierarchy<'a> {
         query: &str,
         inherited: bool,
         depth: usize,
+        placed: &mut Placed<'a>,
     ) -> Vec<Node<'a>> {
         if depth > MAX_DEPTH {
             return Vec::new();
@@ -111,9 +96,10 @@ impl<'a> Hierarchy<'a> {
         let mut nodes = Vec::new();
         for folder in self.folders.get(&parent).into_iter().flatten().copied() {
             let matching = inherited || folder.name.to_lowercase().contains(query);
-            let children = self.branch(Some(&folder.id), query, matching, depth + 1);
+            let children = self.branch(Some(&folder.id), query, matching, depth + 1, placed);
 
             if query.is_empty() || matching || !children.is_empty() {
+                placed.folders.insert(folder.id.as_str());
                 nodes.push(Node::Folder(folder, children));
             }
         }
@@ -125,7 +111,10 @@ impl<'a> Hierarchy<'a> {
                 .flatten()
                 .copied()
                 .filter(|entry| inherited || entry_matches(entry, query))
-                .map(Node::Record),
+                .map(|entry| {
+                    placed.entries.insert(entry.id.as_str());
+                    Node::Record(entry)
+                }),
         );
         nodes
     }

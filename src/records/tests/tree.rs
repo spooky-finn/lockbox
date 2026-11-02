@@ -83,6 +83,74 @@ fn concurrent_folder_cycles_and_dangling_parents_do_not_hide_records() {
 }
 
 #[test]
+fn filtered_placements_preserve_duplicate_ids_and_orphan_input_order() {
+    use crate::records::{entry::Entry, folder::Folder};
+    let directory = tempfile::tempdir().unwrap();
+    let mut workspace = unlocked(&directory);
+    *workspace.vault.test_folders_mut() = [
+        ("root", "Root", None),
+        ("child", "Leaf", Some("root")),
+        ("child", "Orphan duplicate of visible", Some("missing")),
+        ("orphan", "First orphan", Some("missing")),
+        ("orphan", "Second orphan", Some("missing")),
+        ("hidden", "Hidden", None),
+    ]
+    .into_iter()
+    .map(|(id, name, parent)| Folder {
+        id: id.into(),
+        name: name.into(),
+        parent_id: parent.map(str::to_owned),
+    })
+    .collect();
+    *workspace.vault.test_entries_mut() = [
+        ("visible", "Needle", "child"),
+        ("visible", "Ghost duplicate", "missing"),
+        ("orphan", "First orphan entry", "missing"),
+        ("orphan", "Second orphan entry", "missing"),
+    ]
+    .into_iter()
+    .map(|(id, title, parent)| {
+        let mut entry = Entry::new();
+        entry.id = id.into();
+        entry.title = title.into();
+        entry.folder_id = Some(parent.into());
+        entry
+    })
+    .collect();
+    assert_eq!(
+        outline(&project(&workspace.vault, "")),
+        [
+            "0:folder:Hidden",
+            "0:folder:Root",
+            "1:folder:Leaf",
+            "2:entry:Needle",
+            "0:folder:First orphan",
+            "0:folder:Second orphan",
+            "0:entry:First orphan entry",
+            "0:entry:Second orphan entry",
+        ]
+    );
+    assert_eq!(
+        outline(&project(&workspace.vault, "needle")),
+        ["0:folder:Root", "1:folder:Leaf", "2:entry:Needle"]
+    );
+    assert_eq!(
+        outline(&project(&workspace.vault, "ghost")),
+        ["0:entry:Ghost duplicate"]
+    );
+    assert_eq!(
+        outline(&project(&workspace.vault, "orphan")),
+        [
+            "0:folder:Orphan duplicate of visible",
+            "0:folder:First orphan",
+            "0:folder:Second orphan",
+            "0:entry:First orphan entry",
+            "0:entry:Second orphan entry",
+        ]
+    );
+}
+
+#[test]
 fn branches_keep_sorted_siblings_and_inherit_matching_folder_names() {
     use crate::records::{entry::Entry, folder::Folder};
     let dir = tempfile::tempdir().unwrap();
