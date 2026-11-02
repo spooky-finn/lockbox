@@ -3,6 +3,9 @@ use crate::records::{
     import_plan::*,
 };
 
+#[path = "import_plan/folders.rs"]
+mod folder_queue;
+
 fn entry(title: &str, folder: Option<&str>) -> Entry {
     let mut entry = Entry::new();
     entry.title = title.into();
@@ -428,7 +431,7 @@ fn legacy_plan(
     source_entries: &[Entry],
 ) -> Plan {
     let mut plan = Plan::default();
-    let mapping = map_folders(folders, source_folders, &mut plan.folders);
+    let mapping = folder_queue::legacy_map_folders(folders, source_folders, &mut plan.folders);
 
     for source in source_entries {
         let folder_id = source

@@ -10,7 +10,7 @@ use crate::records::{
     folder::{self, Folder},
     totp,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Records to append to the current vault. Folders are ordered parents first.
 #[derive(Debug, Default)]
@@ -110,21 +110,29 @@ fn map_folders<'a>(
         return BTreeMap::new();
     }
 
-    let known: BTreeMap<&str, &Folder> = source.iter().map(|f| (f.id.as_str(), f)).collect();
+    let known: BTreeSet<&str> = source.iter().map(|folder| folder.id.as_str()).collect();
     let mut mapping: BTreeMap<&str, Option<String>> = BTreeMap::new();
     let mut targets = Targets::new(folders, created);
-    let mut pending: Vec<&Folder> = source.iter().collect();
+    let mut pending: BTreeSet<_> = (0..source.len()).collect();
+    let mut ready = BTreeSet::new();
+    let mut blocked: BTreeMap<&str, Vec<usize>> = BTreeMap::new();
+    for (index, folder) in source.iter().enumerate() {
+        if let Some(parent) = folder.parent_id.as_deref()
+            && known.contains(parent)
+        {
+            blocked.entry(parent).or_default().push(index);
+        } else {
+            ready.insert(index);
+        }
+    }
 
-    while !pending.is_empty() {
-        let ready = pending.iter().position(|folder| {
-            folder
-                .parent_id
-                .as_deref()
-                .is_none_or(|parent| mapping.contains_key(parent) || !known.contains_key(parent))
-        });
+    while let Some(first) = pending.first().copied() {
+        let ready_index = ready.pop_first();
         // Only a cycle leaves no folder ready; break it at the first member.
-        let folder = pending.remove(ready.unwrap_or(0));
-        let parent = match ready {
+        let index = ready_index.unwrap_or(first);
+        pending.remove(&index);
+        let folder = &source[index];
+        let parent = match ready_index {
             Some(_) => folder
                 .parent_id
                 .as_deref()
@@ -133,6 +141,9 @@ fn map_folders<'a>(
         };
         let target = targets.place(&folder.name, parent);
         mapping.insert(folder.id.as_str(), target);
+        if let Some(children) = blocked.remove(folder.id.as_str()) {
+            ready.extend(children.into_iter().filter(|index| pending.contains(index)));
+        }
     }
 
     mapping
