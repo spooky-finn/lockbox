@@ -5,34 +5,31 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 108; 438 library, four integration, two doctests passed.
+Last full suite: cycle 109; 439 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 108: Reuse transfer payload ownership
-- verify_signature serializes borrowed descriptor/control tuple instead of cloning
-  entire control; signature64-byte clone retained. Offer creation moves signed.body
-  tuple fields into artifact instead of cloning them again after signing. Two full
-  control copies removed across send/verify, including checkpoints/rosters/grants.
-- No helpers or new tests needed: existing owned signing producer and borrowed
-  verifier exercise identical bytes, plus six authority roundtrip/tamper/frontier/
-  pending-intent cases. Domains, signatures, closure and artifact budgets unchanged.
-- Full suite: 438 library, four integration, two doctests passed; two OS probes
-  ignored. Formatting/strict all-target Clippy passed. Source matches verified
+Cycle 109: Decode transfer-history imports once
+- Object::decode_with_hash returns parsed object/address after original size and
+  canonical checks. Expected-hash decode reuses it, comparison/error order unchanged.
+- Machine::import_object shares private receive_decoded with public receive;
+  transfer uses new machine-scoped entry. Removes redundant preliminary parse and
+  typed hash serialization from artifact import; candidate promotion/authentication
+  remains unchanged. Valid bytes copied only after decoding/hash. Metadata Control-
+  only guard unchanged. Existing receive mutation body exact after formatting.
+- New same-binary legacy oracle passed before refactor and full suite after:
+  11 payload forms across four initial journals, repeated imports, complete state
+  and Result parity. Includes foreign genesis, signature rejection, missing control,
+  collisions/rejected hashes, duplicate/unknown keys, alternate/malformed/oversized
+  JSON. Existing canonical-before-hash precedence test still passes. One new test.
+- Full suite: 439 library, four integration, two doctests passed; two OS probes
+  ignored. Formatting/strict all-target Clippy passed. Four sources match verified
   snapshot; whitespace clean. Unrelated work untouched. src/lib.rs touched.
-- Snapshot: /tmp/lockbox-refactor-108.h4yn9cc4. Disk63GiB free.
+- Snapshot: /tmp/lockbox-refactor-109.xrypzh6q.
 
-Next search: transfer.receive_objects currently decode + object.hash + Machine.receive
-(redecode/canonical check/raw hash). Consider Object::decode_with_hash returning
-computed (Hash,Object) after existing budget/canonical checks, reused by decode
-(expected hash comparison unchanged). Split Machine.receive after decode into
-private commands-only receive_decoded with exact unchanged mutation body. Add
-machine-scoped import_object(&[u8]) calling decode_with_hash then clone valid bytes
-and same mutator; transfer calls import_object. No expected hash supplied for
-artifact input anyway. Canonical/budget gates BEFORE hashing/copying; no raw hash
-of over-limit input. Keep metadata_state Control-only guard unchanged.
-First add import_object with legacy implementation plus same-binary state/error
-oracle vs old decode/hash/receive pipeline; baseline then refactor, full suite.
-Cover duplicate, foreign genesis, pending candidates, invalid signature, malformed,
-unknown/duplicate keys, alternate JSON and oversized bytes. Preserve mutator body
-exactly. No delegation. Ends 2026-11-02 03:13:13 UTC.
+Next search: transfer.ControlTransfer::bytes duplicates invitation::artifact_bytes
+canonical encoding then MAX_INVITATION_BYTES guard. Make existing artifact_bytes
+pub(super) and reuse it from transfer, removing canonical import there. Same
+96MiB budget/order/error; no generic wrapper or extra serialization. Existing
+protocol authority/invitations/wire and sharing tests sufficient for reuse; strict
+all-target checks. No new mechanical tests. No delegation. End03:13:13 UTC.

@@ -120,6 +120,22 @@ impl Machine {
     /// Plaintext and causal validity remain replay's responsibility.
     pub fn receive(state: &mut SyncState, expected: Hash, bytes: Vec<u8>) -> Result<bool> {
         let object = Object::decode(&bytes, expected)?;
+        Self::receive_decoded(state, expected, bytes, object)
+    }
+
+    /// Artifact inputs carry canonical object bytes without a separately advertised hash.
+    pub(super) fn import_object(state: &mut SyncState, bytes: &[u8]) -> Result<bool> {
+        let (hash, object) = Object::decode_with_hash(bytes)?;
+        Self::receive_decoded(state, hash, bytes.to_vec(), object)
+    }
+
+    // Both ingress paths validate canonical bytes before reaching this mutation boundary.
+    fn receive_decoded(
+        state: &mut SyncState,
+        expected: Hash,
+        bytes: Vec<u8>,
+        object: Object,
+    ) -> Result<bool> {
         if state.rejected_candidates.contains_key(&expected) {
             return Ok(false);
         }

@@ -276,6 +276,84 @@ fn canonical_equality_preserves_values_and_serialization_error_order() {
 }
 
 #[test]
+fn artifact_import_preserves_receive_results_errors_and_journal_state() {
+    fn legacy_import(state: &mut SyncState, bytes: &[u8]) -> crate::sync::protocol::Result<bool> {
+        let object: Object = decode(bytes)?;
+        Machine::receive(state, object.hash()?, bytes.to_vec())
+    }
+
+    let (base, device) = owner();
+    let change = encrypted_change(
+        &base,
+        base.genesis,
+        &device,
+        1,
+        None,
+        vec![],
+        &empty_transaction(),
+    );
+    let hash = change.hash().unwrap();
+    let bytes = change.bytes().unwrap();
+    let mut invalid_signature = change.clone();
+    let Object::Change(signed) = &mut invalid_signature else {
+        unreachable!()
+    };
+    signed.signature.0[0] ^= 1;
+    let mut missing_control = change.clone();
+    let Object::Change(signed) = &mut missing_control else {
+        unreachable!()
+    };
+    signed.body.header.membership = Hash([250; 32]);
+    let (foreign, _) = owner();
+    let duplicate = std::str::from_utf8(&bytes)
+        .unwrap()
+        .replacen(
+            "\"kind\":\"change\"",
+            "\"kind\":\"change\",\"kind\":\"change\"",
+            1,
+        )
+        .into_bytes();
+    assert_ne!(duplicate, bytes);
+
+    let inputs = [
+        base.objects[&base.genesis].0.clone(),
+        bytes.clone(),
+        foreign.objects[&foreign.genesis].0.clone(),
+        invalid_signature.bytes().unwrap(),
+        missing_control.bytes().unwrap(),
+        [b" ".as_slice(), &bytes].concat(),
+        [bytes.as_slice(), b"\n"].concat(),
+        [b"{\"unknown\":0,".as_slice(), &bytes[1..]].concat(),
+        duplicate,
+        b"{".to_vec(),
+        vec![b' '; crate::sync::protocol::MAX_OBJECT_BYTES + 1],
+    ];
+    let mut collision = base.clone();
+    collision
+        .objects
+        .insert(hash, Blob(b"different bytes".to_vec()));
+    let mut rejected = base.clone();
+    rejected
+        .rejected_candidates
+        .insert(hash, Error::InvalidSignature);
+    let empty = Machine::join(base.space, base.namespace, base.genesis, base.owner_root);
+
+    for initial in [base, empty, collision, rejected] {
+        for bytes in &inputs {
+            let mut legacy = initial.clone();
+            let mut current = initial.clone();
+            for _ in 0..2 {
+                assert_eq!(
+                    Machine::import_object(&mut current, bytes),
+                    legacy_import(&mut legacy, bytes)
+                );
+                assert_eq!(canonical(&current).unwrap(), canonical(&legacy).unwrap());
+            }
+        }
+    }
+}
+
+#[test]
 fn receive_checks_canonical_encoding_before_object_hash() {
     let bytes = include_bytes!("../fixtures/change.json");
     let noncanonical = [b" ".as_slice(), bytes.as_slice()].concat();

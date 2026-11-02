@@ -55,8 +55,7 @@ impl ControlTransfer {
         }
         let mut candidate = state.clone();
         for blob in &self.objects {
-            let object: Object = decode(&blob.0)?;
-            Machine::receive(&mut candidate, object.hash()?, blob.0.clone())?;
+            Machine::import_object(&mut candidate, &blob.0)?;
         }
         Ok(candidate)
     }

@@ -41,11 +41,17 @@ impl Object {
 
     /// Check canonical encoding before comparing the complete-object hash.
     pub(crate) fn decode(bytes: &[u8], expected: Hash) -> Result<Self> {
-        let object = decode(bytes)?;
-        if Hash::digest(OBJECT_DOMAIN, bytes) != expected {
+        let (hash, object) = Self::decode_with_hash(bytes)?;
+        if hash != expected {
             return Err(Error::HashMismatch);
         }
         Ok(object)
+    }
+
+    /// Decode canonical bytes before computing their complete-object address.
+    pub(super) fn decode_with_hash(bytes: &[u8]) -> Result<(Hash, Self)> {
+        let object = decode(bytes)?;
+        Ok((Hash::digest(OBJECT_DOMAIN, bytes), object))
     }
 }
 
