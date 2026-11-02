@@ -16,6 +16,7 @@ use crate::{
     settings::state::Settings,
 };
 use dioxus::prelude::*;
+use std::borrow::Cow;
 use zeroize::Zeroizing;
 
 #[component]
@@ -42,14 +43,18 @@ pub(crate) fn LockedView() -> Element {
         || create_password
         || !create && locked.path.as_ref().is_some_and(|path| path.exists());
     let touch_id = ready && !create && locked.touch_id.is_some();
-    let filename = locked.space_name.clone().unwrap_or_else(|| {
-        locked
-            .path
-            .as_ref()
-            .and_then(|path| path.file_name())
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_default()
-    });
+    let filename = locked
+        .space_name
+        .as_deref()
+        .map(Cow::Borrowed)
+        .unwrap_or_else(|| {
+            locked
+                .path
+                .as_ref()
+                .and_then(|path| path.file_name())
+                .map(|name| name.to_string_lossy())
+                .unwrap_or_default()
+        });
     let path = locked
         .path
         .as_ref()
@@ -106,9 +111,9 @@ pub(crate) fn LockedView() -> Element {
                     else if create && locked.joining && !cloud_password { {language.text(Text::SharingJoinSetup)} }
                     else if cloud_password { {language.text(Text::ChooseAMasterPasswordToProtectYourLocalProfile)} }
                     else if create && locked.path.is_none() { {language.text(Text::ChooseAVaultType)} }
-                    else if create { {language.format(Text::ChooseAMasterPasswordForTheNewVault, &[filename.to_string()])} }
-                    else if touch_id { {language.format(Text::UseTouchIDOrEnterTheMasterPasswordToOpen, &[filename.to_string()])} }
-                    else if ready { {language.format(Text::EnterTheMasterPasswordToOpenVault, &[filename.to_string()])} }
+                    else if create { {language.format(Text::ChooseAMasterPasswordForTheNewVault, std::slice::from_ref(&filename))} }
+                    else if touch_id { {language.format(Text::UseTouchIDOrEnterTheMasterPasswordToOpen, std::slice::from_ref(&filename))} }
+                    else if ready { {language.format(Text::EnterTheMasterPasswordToOpenVault, std::slice::from_ref(&filename))} }
                     else { {language.text(Text::OpenAVaultOrCreateOneToStoreYourPasswords)} }
                 }
 

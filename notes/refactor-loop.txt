@@ -9,25 +9,26 @@ Last full suite: cycle 88; 423 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 89: Truncate HMAC digests without heap buffer
-- Private truncated_hmac returns existing RFC4226 binary value. Macro finalizes
-  SHA1/256/512 into typed Zeroizing<[u8;20/32/64]>, truncates within guard lifetime.
-  Remove intermediate digest Vec while retaining automatic wiping on all exits.
-- Installed generic-array primary source confirms owned fixed-array conversion;
-  compiler enforces each output length. Same HMAC/key/counter bytes, offset/mask,
-  modulo, leading-zero formatting, validation order and public TOTP APIs.
-- Formatting/strict all-target Clippy, 79 record and 45 desktop tests passed
-  (124 total). Existing 18 RFC6238 cases across all hashes, leading-zero and
-  invalid-settings tests provide oracle. No new tests for pure representation
-  change. Source matches verified snapshot; whitespace clean. Unrelated work
-  untouched. Last full suite remains cycle 88.
-- Snapshot: /tmp/lockbox-refactor-89.yihkscde.
+Cycle 90: Borrow unlock display names
+- Optional redundant_clone discovery found exactly three filename.to_string
+  copies in LockedView descriptions. Replace with slice::from_ref borrowed input.
+- Display name becomes Cow<str>: borrow profile space name or valid path filename;
+  own only lossy non-UTF8 conversion. Empty fallback unchanged. Same form lifetime,
+  language/template choice, escaping, path tooltip and text. No extra secret copy.
+- Formatting/strict all-target Clippy, optional library redundant_clone with
+  warnings denied, 15 access-view and 45 desktop tests passed (60 total).
+  Existing local/cloud/recovery/identity, language and remembered-profile checks
+  cover view consumers. No new tests for mechanical representation change.
+- Source matches verified snapshot; whitespace clean. Unrelated work untouched.
+  Last full suite remains cycle 88.
+- Snapshot: /tmp/lockbox-refactor-90.yiid1agm.
 
-Next search: broaden discovery beyond already-refactored hot paths. Run optional
-Clippy redundant_clone lint on clean verified snapshot; inspect ownership/lifetime
-reasons before choosing any suggestion. Do not auto-fix clones protecting failed
-commits, durable intents, retained snapshots or async results. If no useful clone
-found, inspect file.regular_file duplicated metadata validation before and after
-open; helper could share exact type/size rule while preserving nonblocking open,
-TOCTOU defense and error order. Check paths with rg --files before guessed reads.
-No delegation authorized. Window still ends 2026-11-02 03:13:13 UTC.
+Next search: optional Clippy needless_pass_by_value on clean verified library
+snapshot may identify needless owned parameters/private clone requirements.
+Inspect each reason; preserve public APIs and intentional ownership in durable
+intents, rollback snapshots and async results. No automatic fixes. If no useful
+candidate, file.regular_file repeats identical metadata is_file/size checks before
+open and on descriptor after nonblocking open. Private validate_metadata helper
+can share exact rule while keeping both checks and error order. Existing file/
+protection tests cover regular, oversized sparse, truncated, FIFO and directory
+inputs. Use rg --files before guessed paths. Window ends 03:13:13 UTC.
