@@ -39,6 +39,7 @@ pub use machine::cloud_recovery;
 mod invitation;
 mod machine;
 mod model;
+pub(crate) mod pairing;
 mod wire;
 
 pub use crypto::{Certificate, DeviceSecret, Signed};

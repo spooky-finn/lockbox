@@ -16,6 +16,8 @@ use dioxus::prelude::*;
 pub(super) enum CopyTarget {
     Identity,
     InvitationCode,
+    Link(crate::sync::protocol::Hash),
+    LinkCode(crate::sync::protocol::Hash),
 }
 
 pub(super) fn message(unlocked: &Unlocked, language: Language) -> Option<String> {
@@ -45,6 +47,16 @@ pub(super) fn copy(state: Session, language: Language, target: CopyTarget) -> bo
                 .or(unlocked.sharing.saved_output.as_ref())
                 .and_then(|output| output.code)
                 .map(|code| code.to_string()),
+            CopyTarget::Link(id) | CopyTarget::LinkCode(id) => match unlocked
+                .vault
+                .export_link(id, matches!(target, CopyTarget::LinkCode(_)))
+            {
+                Ok(value) => Some(value),
+                Err(error) => {
+                    unlocked.error = Some(error.to_string());
+                    None
+                }
+            },
         };
         if let Some(text) = text {
             unlocked.error = native

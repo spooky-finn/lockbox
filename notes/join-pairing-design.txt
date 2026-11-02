@@ -1,5 +1,5 @@
 Join pairing: fewer handoffs, same admission checks
-2026-11-02. Design proposal; no runtime changes.
+2026-11-02. Historical design. Implementation: docs/sync-invitations.md and notes/link-invites-implementation.txt.
 Review status: see notes/join-pairing-review.txt. User selected owner-first request/approval flow below; bootstrap encryption and actual capability retirement still need specification.
 
 Decision

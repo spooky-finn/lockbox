@@ -540,3 +540,79 @@ fn participant_names_are_rendered_and_saved_in_the_encrypted_profile() {
     assert!(html.contains("Remove device access"));
     assert!(html.contains("Names are saved on this device only"));
 }
+
+#[test]
+fn link_is_primary_and_admin_reviews_the_signed_name_and_exact_ids_before_approval() {
+    use crate::sync::protocol::pairing::Ticket;
+    use crate::vault::profile::pairing::Slot;
+    let directory = tempfile::tempdir().unwrap();
+    let mut owner = vault(&directory, "owner");
+    let mut guest = vault(&directory, "Alice <Device>");
+    let now = crate::desktop::time::unix_now();
+    let session = owner.create_link(now, 1).unwrap();
+    let ticket: Ticket = owner.issued_links().next().unwrap().ticket.clone();
+    guest
+        .request_link(
+            &ticket.link().unwrap(),
+            &ticket.verification_code().unwrap().to_string(),
+            now,
+        )
+        .unwrap();
+    let proof = owner
+        .pairing_plans(now)
+        .unwrap()
+        .into_iter()
+        .flat_map(|plan| plan.outgoing)
+        .find(|delivery| delivery.slot == Slot::Bootstrap)
+        .unwrap();
+    guest
+        .receive_pairing(session, Slot::Bootstrap, &proof.bytes.0, now)
+        .unwrap();
+    let request = guest
+        .pairing_plans(now)
+        .unwrap()
+        .into_iter()
+        .flat_map(|plan| plan.outgoing)
+        .find(|delivery| matches!(delivery.slot, Slot::Request(_)))
+        .unwrap();
+    owner
+        .receive_pairing(session, request.slot, &request.bytes.0, now)
+        .unwrap();
+    let certificate = guest.device_certificate().unwrap();
+    let mut dom = mounted();
+    update(&mut dom, |state| {
+        runtime::set_language(crate::settings::language::Language::English);
+        edit_unlocked(state, |u| {
+            u.vault = owner;
+            u.open_sharing();
+        });
+    });
+    let html = dioxus_ssr::render(&dom);
+    let primary = html.split("Connect using files").next().unwrap();
+    assert!(primary.contains("Create invitation link"));
+    assert!(primary.contains("Copy invitation link"));
+    assert!(primary.contains("Alice &#60;Device&#62;"));
+    assert!(primary.contains(&certificate.body.user.to_string()));
+    assert!(primary.contains(&certificate.body.device.to_string()));
+    assert!(!primary.contains("Open recipient device file"));
+    let approve = primary
+        .split("Approve this device")
+        .next()
+        .unwrap()
+        .rsplit("<button")
+        .next()
+        .unwrap();
+    assert!(approve.contains("disabled"));
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| {
+            u.vault = guest;
+            u.sharing.joining = true;
+        })
+    });
+    let html = dioxus_ssr::render(&dom);
+    let primary = html.split("Connect using files").next().unwrap();
+    assert!(primary.contains("wait for the administrator to approve"));
+    assert!(primary.contains("Copy message for administrator"));
+    assert!(!primary.contains(&ticket.verification_code().unwrap().to_string()));
+    assert!(!primary.contains("Save sharing file"));
+}

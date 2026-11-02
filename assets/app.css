@@ -310,6 +310,11 @@ button.sidebar-settings[aria-current="page"]:focus-visible { outline-color: var(
 .sharing-message-preview summary, .sharing-file-options summary, .sharing-history > summary { cursor: pointer; font-size: 12px; font-weight: 600; }
 .sharing-file-options[open] > summary, .sharing-history[open] > summary { margin-bottom: 12px; }
 .sharing-navigation > .primary { margin-left: auto; }
+.sharing-link-card, .sharing-request { border: 1px solid var(--border); border-radius: 12px; padding: 16px; background: var(--subtle); }
+.sharing-request { background: var(--surface); }
+.sharing-request h3 { overflow-wrap: anywhere; }
+.sharing-page textarea { width: 100%; box-sizing: border-box; resize: vertical; min-height: 90px; font: inherit; overflow-wrap: anywhere; border: 1px solid var(--border); border-radius: var(--button-radius); padding: 10px; color: inherit; background: var(--control); }
+.sharing-link-card p, .sharing-request p { font-size: 12px; line-height: 1.7; }
 
 .sharing-check { display: flex; align-items: flex-start; gap: 10px; font-size: 12px; line-height: 1.6; }
 .settings-back { align-self: flex-start; }

@@ -72,6 +72,8 @@ pub enum VaultError {
     KeyMismatch,
     #[error("participant name must contain at most 256 bytes and no control characters")]
     InvalidParticipantName,
+    #[error("{0}")]
+    Pairing(&'static str),
     #[error("invalid folder structure: {0}")]
     InvalidFolders(&'static str),
     #[error("sync: {0}")]
@@ -181,6 +183,7 @@ mod records;
 mod recovery;
 pub use crate::sync::protocol::cloud_recovery::CloudSpace;
 pub use cloud_recovery::{CloudRecoveryTrust, CloudRestore};
+pub(crate) mod pairing;
 mod root_journal;
 mod shared;
 mod sharing;

@@ -8,60 +8,109 @@ and member-management flows below; other production release gates remain open.
 
 ## Desktop workflow
 
-The owner opens **Sharing and participants** from an unlocked cloud profile's
-sidebar. A new participant selects **Join a space** on the welcome screen,
-enters their name and independent credentials for the owner's Storj storage,
-then chooses and confirms one master password and saves 12 BIP39 recovery words.
-These words derive the user root key and, together with the local profile file or
-a backup, recover access without the master password. See [recovery words](recovery-words.md). The app creates an encrypted local
-staging profile with fresh identity/device keys and opens the joining wizard.
-The participant does not need to name or manually create a separate space.
-Provider credentials remain required and are never included in sharing files.
-Existing records or signing history cannot be discarded to join another space.
+**Invite with a link** is the primary desktop flow. The owner opens **Sharing
+and participants** from an unlocked cloud profile. A new participant selects
+**Join a space** on the welcome screen, enters their username and independently
+provisioned credentials for the owner's Storj endpoint/bucket, chooses a local
+master password and saves their mnemonic. This creates fresh device keys in an
+encrypted staging profile. Normal space sync waits until joining completes.
+The local profile is never copied or uploaded to admit another device.
 
-1. Recipient selects **Create and save join request** and sends the saved device
-   file to the administrator. **Copy message for administrator** copies a ready-made
-   message containing the profile username and complete User ID / Device ID.
-   Send this message through a second trusted channel, separately from the file;
-   the administrator compares both complete IDs with the imported request.
-   **Preview the message** shows exactly what will be copied. The name is a
-   display label; the verified IDs establish identity. After sending, select
-   **Request sent — continue**.
-2. Owner selects **Open recipient device file**, reviews the detected request,
-   confirms fingerprints and chooses the role under **Access level**, then
-   selects **Create invitation**. The deadline can be adjusted under
-   **Invitation validity**. Read only is
-   the default and resets for each newly imported request. An additional device
-   of the owner's own identity retains the owner-device admission rules.
-3. Owner sends the saved invitation file and shares its 64-character verification
-   code through a separate trusted channel. The code remains visible after
-   saving and binds the full space descriptor and signed control anchor.
-   The recipient screen does not display the expected code for copying into its
-   own verification field. **Copy verification code** copies the complete code.
-   After sending, select **Invitation sent — continue**.
-4. Recipient selects **Open invitation**, enters the independently received
-   code and selects **Sign and save consent**. Send the saved response to the owner.
-   Select **Consent sent — continue** after sending.
-5. Owner opens that response using **Open signed response**, reviews the verified
-   device/role and selects **Approve and save confirmation**. Send the saved
-   confirmation to the recipient.
-6. Recipient opens the confirmation using **Open admission confirmation** and selects
-   **Complete connection**. The app installs the verified checkpoint and begins
-   normal synchronization.
+1. Owner selects **Create invitation link** and **Copy invitation link**. Send
+   the `lockbox://invite/...` text to the participant. Use **Copy verification
+   code** to deliver the complete 64-character code through a second trusted
+   channel, separately from the link. A link defaults to seven days; one and
+   thirty days are available under **Invitation validity**.
+2. Participant pastes the link into **Join with a link**, enters the separately
+   received code and selects **Verify and send request**. The app verifies the
+   signed ticket and pinned control proof before sending a device-signed,
+   encrypted request containing username and complete device certificate.
+   Links are pasted into Lockbox; OS/browser URL-handler registration is not
+   required or claimed by this implementation.
+3. Participant selects **Copy message for administrator** and sends their
+   username, complete User ID and complete Device ID through the second trusted
+   channel. The administrator sees the signed username and both IDs in the
+   pending request and compares the complete values. Usernames are self-declared
+   labels; signatures and the independent ID check establish the device binding.
+4. Administrator checks the verification box, chooses the role and selects
+   **Approve this device**. New users default to Read only; an existing user's
+   additional devices retain that user's role. Approval captures the exact
+   signed request hash and selected role. Other requests cannot inherit it.
+   **Decline request** rejects only the chosen request.
+5. Participant reviews the offered role and selects **Confirm and connect**.
+   The app signs the exact addressed offer and automatically delivers consent,
+   the controller's admission receipt and a signed completion acknowledgement.
+   The administrator approves once. Ordinary admission still rotates the epoch
+   and requires the original consent/receipt checks. No files are exchanged in
+   this path.
 
-A shared opener, labelled for the current step, detects all four artifact types
-by content and retains strict parsing and signature checks. Artifact creation opens the save dialog directly;
-it does not send files to another person. Cancelling that dialog leaves the
-artifact available under **Save sharing file**, and failed writes can be retried.
-Successful saves keep the current handoff visible until the user confirms sending.
-The progress indicator cannot skip steps; only the current step's action is
-prominent. Retry exports, invitation history and deadline settings are collapsed
-until needed. Public identity details remain available under **This device** at
-later steps. Copying uses the existing guarded clipboard and reports success or
-failure; credentials, recovery words, vault records and private keys are excluded.
-Pending invitations/consents remain resumable from the encrypted ledger after
-restart. A session lock preserves the joining
-path, and reopening a profile with pending consent returns to sharing.
+Both applications must keep the relevant profile unlocked during their part of
+this exchange. Pending requests, exact approvals, consent and encrypted outgoing
+messages survive restart. An opening profile with a pending link returns to the
+joining page. **Retry connection exchange** republishes the stored bytes;
+retries do not consume another invitation or create another membership change.
+Locking drops session workers; replies are bound to the originating profile and
+device. Clipboard copies use the existing concealed-history/20-second guard and
+exclude credentials, private keys, mnemonic and record contents.
+
+The controller pins the link to one request when approving it. A signed completion
+acknowledgement retires the link; cancelled and expired links also stop new
+admissions. An already reserved membership transition follows existing recovery
+semantics and cannot be undone by cancelling the link: remove the device through
+normal member management. Completed links can be removed from the local list
+after their terminal status has been published. Removing history cannot make an
+unknown/consumed ticket authorise another admission.
+
+## Storage and trust boundaries for links
+
+Link tickets contain public routing, an owner-certified controller certificate,
+a random session ID, control anchor/proof hash, expiry and controller signature.
+They contain no provider credential, decryption secret, private device key or
+epoch key. Link possession grants no S3 operation and no membership. The complete
+verification code binds the exact ticket, including owner identity, anchor,
+routing and certified encryption key. It must be authenticated independently.
+The subsequent addressed invitation must extend this pinned control anchor.
+
+Each client uses its own configured Storj credentials. The ticket's endpoint and
+bucket must match that explicit configuration before any request. No arbitrary
+URL from a link is fetched, no credentials are forwarded to a new endpoint, and
+redirects remain disabled. The adapter uses a separate
+`spaces/<escaped space name>/pairing/<random session>/` directory. The controller
+needs GET/PUT and LIST for request discovery there; joining clients need GET/PUT
+for their mailbox messages. A Reader can have write permission only for this
+pairing prefix, retaining GET/LIST without PUT for ordinary space objects.
+Provision these permissions independently; copying the owner's unrestricted
+credentials is not part of joining. No presigned bearer URLs are issued.
+
+Requests, offers, consent, receipts and completion acknowledgements use
+HPKE-encrypted envelopes with separate domains and ticket/request/type/recipient
+context. Requests additionally bind the username and exact certificate with the
+device signature. The public bootstrap control proof and signed terminal status
+remain public metadata, like ordinary signed control objects. Storage sees
+object names, sizes and traffic; no claim of hidden membership metadata or
+recipient-compromise forward secrecy is made.
+
+Large documents use 1 MiB hash-checked chunks and bounded manifests, separately
+from the normal 4 MiB immutable sync object contract. The normal proof/history
+limits still apply. Link parsing is bounded to 16 KiB, contacts/manifests to
+64 KiB, and link state/outgoing caches to 64 MiB with 16 sessions and 32 requests
+per session. Request polling is bounded and partial uploads can be retried.
+Providers can withhold, overwrite or replay bytes; signatures, exact approvals,
+minimum heads and the local witness protect authority, not availability. A link
+becoming inactive does not erase already stored ciphertext or revoke separately
+provisioned S3 credentials.
+
+## File fallback
+
+**Connect using files** expands the existing three-step recipient/controller
+wizards. Their opener still detects all four artifact types by content:
+recipient certificate, addressed invitation, signed consent and admission
+confirmation. The recipient sends a device file; the owner verifies fingerprints
+and sends an invitation; the recipient authenticates the owner code and sends
+consent; the owner returns the signed confirmation. The recipient imports it to
+finish. Save retry, explicit sent-file handoffs, independent verification and
+exact durable artifacts remain supported. This fallback also permits offline
+handoffs; link delivery requires the configured provider.
 
 The page lists devices and pending invitations after restart. The controller can
 change a participant's role across all its devices, cancel a pending invitation,
@@ -127,7 +176,8 @@ fn connect(owner: &mut Vault, recipient: &mut Vault) -> Result<()> {
 After admission, normal `synchronize` exchanges immutable objects. The current
 checkpoint permits a fresh device to join without old content keys. Writer
 profiles may relay owner-signed control metadata received out of band; readers
-need no provider PUT permission. Publishing still follows dependency discovery
+need no provider PUT permission for ordinary space objects. Link onboarding uses
+separately provisioned pairing-directory write permissions. Publishing still follows dependency discovery
 and the durable outbox boundary.
 
 ## Deterministic authority
@@ -152,6 +202,12 @@ there is no upgrade, downgrade or compatibility path. `change.json` pins the
 canonical wire bytes and an independently generated signature.
 
 ## Persistence and local policy
+
+Bootstrap schema **7** adds the durable link ledger and exact encrypted delivery
+cache. The existing witness also protects link approvals, consumption and
+cancellation against local profile rollback. Schema-6 profiles upgrade on first
+link operation; older applications reject the new schema. Membership wire
+artifacts remain unchanged.
 
 Bootstrap schema **4** stores issued invitations, exact responses, cancellation,
 reserved admissions and receipts inside the encrypted profile. Schema-3 profiles

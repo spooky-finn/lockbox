@@ -119,6 +119,7 @@ enum FileReply {
 }
 
 pub(crate) struct Sharing {
+    pub links: crate::sharing::pairing::Pairing,
     session: u64,
     job: Option<(Ticket, Worker<Result<FileReply, String>>)>,
     pub review: Option<Artifact>,
@@ -137,6 +138,7 @@ impl Default for Sharing {
     fn default() -> Self {
         static SESSIONS: AtomicU64 = AtomicU64::new(1);
         Self {
+            links: crate::sharing::pairing::Pairing::default(),
             session: SESSIONS.fetch_add(1, Ordering::Relaxed),
             job: None,
             review: None,

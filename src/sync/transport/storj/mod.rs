@@ -14,6 +14,7 @@ use aws_sdk_s3::{
 use tokio::runtime::Runtime;
 use zeroize::Zeroizing;
 
+pub(crate) mod pairing;
 mod transport;
 
 /// Client bound to one space name. Protocol namespaces remain in sync state;

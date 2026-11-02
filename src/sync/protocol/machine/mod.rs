@@ -10,6 +10,7 @@ mod commands;
 mod history;
 mod invitations;
 mod membership;
+mod pairing;
 mod parents;
 mod protocol;
 mod relay;

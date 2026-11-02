@@ -444,7 +444,7 @@ fn find_admission(history: &ControlHistory<'_>, admission: &Admission) -> Result
     Ok(None)
 }
 
-fn encode_history(history: &ControlHistory<'_>) -> Result<Vec<Blob>> {
+pub(super) fn encode_history(history: &ControlHistory<'_>) -> Result<Vec<Blob>> {
     history
         .chain
         .iter()
@@ -452,7 +452,7 @@ fn encode_history(history: &ControlHistory<'_>) -> Result<Vec<Blob>> {
         .collect()
 }
 
-fn metadata_state(descriptor: &SpaceDescriptor, bytes: &[Blob]) -> Result<SyncState> {
+pub(super) fn metadata_state(descriptor: &SpaceDescriptor, bytes: &[Blob]) -> Result<SyncState> {
     if bytes.len() > crate::sync::protocol::MAX_OBJECTS
         || bytes.iter().map(|blob| blob.0.len()).sum::<usize>()
             > crate::sync::protocol::MAX_CACHE_BYTES

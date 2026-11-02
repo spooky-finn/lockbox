@@ -13,6 +13,7 @@ use crate::{
 use dioxus::prelude::*;
 
 mod flow;
+mod links;
 mod verification;
 
 use flow::{Path, Step, Workflow};
@@ -82,7 +83,11 @@ pub(crate) fn SharingView() -> Element {
                 && !matches!(notice, "Sharing file saved" | "Sharing file ready to save") {
                 p { class: "notice", role: "status", {language.message(notice)} }
             }
-            Wizard { blocked }
+            links::LinkInvitations { blocked }
+            details { class: "settings-section sharing-history",
+                summary { {language.text(Text::LinkFileFallback)} }
+                Wizard { blocked }
+            }
             details { class: "settings-section sharing-identity",
                 summary { {language.text(Text::SharingThisDevice)} }
                 DeviceVerification {}

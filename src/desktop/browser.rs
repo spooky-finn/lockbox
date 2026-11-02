@@ -123,10 +123,9 @@ pub(crate) fn BrowserConsent() -> Element {
                                         _ => None,
                                     }
                                 };
-                                if let Some(credential) = credential {
-                                    if let Some(request) = pending.write().take() {
-                                        std::thread::spawn(move || { let _ = request.respond(Some(credential)); });
-                                    }
+                                if let Some(credential) = credential
+                                    && let Some(request) = pending.write().take() {
+                                    std::thread::spawn(move || { let _ = request.respond(Some(credential)); });
                                 }
                             },
                             "Fill {title} — {username}"

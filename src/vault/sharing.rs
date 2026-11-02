@@ -435,7 +435,7 @@ impl Vault {
         Ok(())
     }
 
-    fn ensure_sharing_view(&self) -> Result<()> {
+    pub(super) fn ensure_sharing_view(&self) -> Result<()> {
         match self.ensure_sync_projection() {
             Err(crate::vault::VaultError::Sync(Error::MissingDependency))
                 if self.entries.is_empty()
@@ -450,7 +450,7 @@ impl Vault {
         }
     }
 
-    fn ensure_joinable(&self, expected: &SpaceDescriptor) -> Result<()> {
+    pub(super) fn ensure_joinable(&self, expected: &SpaceDescriptor) -> Result<()> {
         let profile = self.profile.as_ref().ok_or(Error::UnauthorizedDevice)?;
         let state = profile.sync.as_ref().ok_or(Error::UnauthorizedDevice)?;
         if !self.entries.is_empty()

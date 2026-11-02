@@ -1,0 +1,29 @@
+Link invitation implementation
+2026-11-02
+
+- Default desktop flow now uses link; old file wizard collapsed under Connect using files.
+- Owner creates single-use signed ticket, copies link and independently sends full verification code.
+- New participant creates own profile/credentials, pastes link/code. App verifies ticket and anchored control proof before submitting signed encrypted request.
+- Administrator sees signed username, full User ID, full Device ID. Independent ID-check checkbox mandatory; approval captures exact request hash and role. Existing user role retained; new user defaults Reader.
+- Recipient reviews role, explicitly consents once. Existing addressed invitation, consent, admission/epoch rotation and signed receipt run automatically. Signed recipient completion retires ticket.
+- Link pinned to selected request at approval; other requests cannot inherit approval. Rejection scoped to request, never accepted as global status. Terminal links can be forgotten after status publication.
+- Link contains public identity/routing only. No content key, decryption secret, provider key or S3 bearer right. No separate relay/server or presigned URL.
+- Clients use independent configured credentials; endpoint/bucket must match ticket before network work. Separate spaces/<escaped name>/pairing/<session>/ prefix needs GET/PUT; controller LIST discovers requests. Reader needs no PUT to ordinary objects.
+- Metadata/consent/receipt encrypted with HPKE using certified device key. AAD binds ticket, request, message type and recipient. Inner signatures retain identity/authority checks.
+- Bootstrap proof/status public; roster metadata already public in ordinary controls. No forward-secrecy or global freshness upgrade claimed.
+- Large documents use 1 MiB hash-checked chunks, 64 KiB manifests. Normal immutable sync contract unchanged. Link 16 KiB, contact 64 KiB, 16 sessions, 32 requests/session, 64 MiB local link cache. Polling/request/CPU budgets enforced.
+- Exact outgoing ciphertext persisted before publication; ambiguous save blocks export/delivery until same session commits. Retry reuses stored consent and membership intent.
+- Bootstrap schema 7 retains link state; independent witness protects cancellation/consumption against rollback. Cloud backup activation preserves schema 7. Old clients reject schema; wire membership artifacts unchanged.
+- Locks/profile changes drop workers; workers carry ciphertext/configuration only. Pending link resumes after reopen. Staging profiles do not publish dummy normal-sync state.
+- UI supports copy, second-channel message, pending/role-confirmation states, reject/cancel/expiry/retry, withdrawing unsigned requests and entering another link. No automatic email/chat send.
+- Schema-7 profiles need updated app. Paste link into Lockbox; OS URL-handler registration not implemented. Existing credentials still provisioned separately.
+
+Validation
+- Full cargo test --locked --offline --quiet: 483 library + 5 integration + 2 doctests passed; 2 explicit system probes ignored.
+- Additional regression: per-request signed rejection cannot masquerade as global closure; covered by focused pairing suite after full run.
+- Pairing tests cover named-device E2E, restart, single use, exact role/recipient, two concurrent requests, ciphertext recipient binding, tampering, expiry/cancel/reservation, partial availability, failed-save publication, rollback, profile switch and scoped S3 chunk transport.
+- Component tests verify link-first UI, exact named request/IDs, disabled approval before independent check, recipient waiting/copy state and no expected-code display.
+- cargo clippy --locked --offline --all-targets -- -D warnings: passed for final tree.
+- cargo build --locked --offline --bin lockbox: passed; target/debug/lockbox rebuilt.
+- cargo fmt --all -- --check and git diff --check: passed.
+- Local S3 HTTP fixture only. No live Storj, native GUI manual check or independent cryptographic audit claimed.

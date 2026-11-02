@@ -117,6 +117,71 @@ fn joining_opens_sharing_and_survives_a_session_lock() {
 }
 
 #[test]
+fn pending_link_resumes_joining_without_the_original_creation_screen() {
+    use crate::vault::{
+        KdfParams, ProfileStore, ProviderConfiguration, SharedProfile, witness::MemoryWitness,
+    };
+    let directory = tempfile::tempdir().unwrap();
+    let store = ProfileStore::new(std::sync::Arc::new(MemoryWitness::default()));
+    let create = |name: &str| {
+        store
+            .create_shared(
+                directory.path().join(format!("{name}.lbx")),
+                &secrecy::SecretString::from("master".to_owned()),
+                &secrecy::SecretString::from("recovery".to_owned()),
+                KdfParams {
+                    memory_kib: 8192,
+                    passes: 1,
+                    lanes: 1,
+                },
+                SharedProfile {
+                    username: name.into(),
+                    space_name: "Team".into(),
+                    provider: ProviderConfiguration {
+                        base_url: "https://gateway.storjshare.io".into(),
+                        bucket: "fixture".into(),
+                        access_key: "fictional".into(),
+                        secret_key: "fictional".into(),
+                    },
+                },
+            )
+            .unwrap()
+    };
+    let mut owner = create("owner");
+    let mut guest = create("guest");
+    owner.create_link(0, 1).unwrap();
+    let ticket = owner.issued_links().next().unwrap().ticket.clone();
+    guest
+        .request_link(
+            &ticket.link().unwrap(),
+            &ticket.verification_code().unwrap().to_string(),
+            0,
+        )
+        .unwrap();
+    let mut settings = Settings {
+        config: Config::default(),
+        path: None,
+    };
+    let mut screen = Screen::Locked(Box::new(Locked::new(None)));
+    screen.open(
+        Opened {
+            vault: guest,
+            with_password: true,
+            recovery_notice: None,
+        },
+        &mut settings,
+        &FakeBiometrics::default(),
+        &mut security(),
+    );
+    let Screen::Unlocked(workspace) = screen else {
+        panic!("profile did not open")
+    };
+    assert!(workspace.sharing.joining);
+    assert!(workspace.page == crate::desktop::workspace::Page::Sharing);
+    assert!(workspace.vault.pairing_waits_to_join());
+}
+
+#[test]
 fn space_name_is_available_after_lock_restart_and_selecting_the_profile() {
     use crate::vault::{
         KdfParams, ProfileStore, ProviderConfiguration, SharedProfile, witness::MemoryWitness,

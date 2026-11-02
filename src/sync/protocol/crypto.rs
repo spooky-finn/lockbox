@@ -155,6 +155,30 @@ impl DeviceSecret {
         SigningKey::from_bytes(&self.signing)
     }
 
+    pub(super) fn open_pairing(
+        &self,
+        enc: &Blob,
+        ciphertext: &Blob,
+        aad: &[u8],
+    ) -> Result<Zeroizing<Vec<u8>>> {
+        let private = <X25519HkdfSha256 as Kem>::PrivateKey::from_bytes(&self.hpke)
+            .map_err(|_| Error::AuthenticationFailed)?;
+        let enc = <X25519HkdfSha256 as Kem>::EncappedKey::from_bytes(&enc.0)
+            .map_err(|_| Error::AuthenticationFailed)?;
+        let mut info = b"lockbox.pairing.envelope\0".to_vec();
+        info.extend(aad);
+        hpke::single_shot_open::<ChaCha20Poly1305, HkdfSha256, X25519HkdfSha256>(
+            &OpModeR::Base,
+            &private,
+            &enc,
+            &info,
+            &ciphertext.0,
+            aad,
+        )
+        .map(Zeroizing::new)
+        .map_err(|_| Error::AuthenticationFailed)
+    }
+
     pub(super) fn open_grant(
         &self,
         enc: &Blob,
@@ -185,6 +209,24 @@ impl DeviceSecret {
                 .map_err(|_| Error::AuthenticationFailed)?,
         ))
     }
+}
+
+pub(super) fn seal_pairing(public: &Key, bytes: &[u8], aad: &[u8]) -> Result<(Blob, Blob)> {
+    let public = <X25519HkdfSha256 as Kem>::PublicKey::from_bytes(public)
+        .map_err(|_| Error::InvalidEncoding)?;
+    let mut info = b"lockbox.pairing.envelope\0".to_vec();
+    info.extend(aad);
+    let (enc, ciphertext) =
+        hpke::single_shot_seal::<ChaCha20Poly1305, HkdfSha256, X25519HkdfSha256, _>(
+            &OpModeS::Base,
+            &public,
+            &info,
+            bytes,
+            aad,
+            &mut OsRng.unwrap_err(),
+        )
+        .map_err(|_| Error::AuthenticationFailed)?;
+    Ok((Blob(enc.to_bytes().to_vec()), Blob(ciphertext)))
 }
 
 pub(super) fn seal_grant(public: &Key, key: &Key, aad: &[u8]) -> Result<(Blob, Blob)> {

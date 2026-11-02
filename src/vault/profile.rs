@@ -12,6 +12,7 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 mod root_capsule;
 use root_capsule::RootCapsule;
 
+pub(crate) mod pairing;
 mod sharing;
 pub(crate) use sharing::{AcceptedInvitation, IssuedInvitation, SharingState};
 pub use sharing::{AcceptedInvitationInfo, InvitationStatus, IssuedInvitationInfo};
@@ -47,6 +48,9 @@ pub(crate) struct BootstrapProfile {
     #[serde(default)]
     #[zeroize(skip)]
     pub(crate) sharing: SharingState,
+    #[serde(default)]
+    #[zeroize(skip)]
+    pub(crate) pairing: pairing::PairingState,
     #[serde(default)]
     #[zeroize(skip)]
     pub(crate) control_approvals: std::collections::BTreeMap<
@@ -144,6 +148,7 @@ impl BootstrapProfile {
             sync: Some(sync),
             certificate: Some(certificate),
             sharing: SharingState::default(),
+            pairing: pairing::PairingState::default(),
             control_approvals: std::collections::BTreeMap::new(),
             root_capsule,
             cloud_backup: None,
@@ -152,11 +157,13 @@ impl BootstrapProfile {
 
     pub(crate) fn validate(&self) -> bool {
         ((self.schema_version == 1 && self.sync.is_none())
-            || ((2..=6).contains(&self.schema_version)
+            || ((2..=7).contains(&self.schema_version)
                 && self.sync.is_some()
                 && self.certificate.is_some()))
             && (self.schema_version >= 4 || self.sharing.is_empty())
             && (self.schema_version >= 5 || self.control_approvals.is_empty())
+            && (self.schema_version >= 7 || self.pairing.is_empty())
+            && self.pairing.validate()
             && self.control_approvals.len() <= 128
             && self
                 .control_approvals
@@ -189,11 +196,15 @@ impl BootstrapProfile {
     }
 
     pub(crate) fn requires_witness(&self) -> bool {
-        (3..=6).contains(&self.schema_version)
+        (3..=7).contains(&self.schema_version)
     }
 
     pub(crate) fn enable_sharing(&mut self) {
         self.schema_version = self.schema_version.max(4);
+    }
+
+    pub(crate) fn enable_pairing(&mut self) {
+        self.schema_version = self.schema_version.max(7);
     }
 
     pub(crate) fn enable_authority(&mut self) {
@@ -211,7 +222,7 @@ impl BootstrapProfile {
             archive: Vec::new(),
             upload: None,
         });
-        self.schema_version = 6;
+        self.schema_version = self.schema_version.max(6);
         Ok(())
     }
 

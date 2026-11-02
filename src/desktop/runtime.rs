@@ -93,8 +93,46 @@ pub(crate) fn tick() {
     }
     {
         let mut state = consume_context::<Session>();
+        let pairing_tick = matches!(&*state.peek(), Screen::Unlocked(u) if u.sharing.links.needs_tick(&u.vault, u.is_editing()));
+        if pairing_tick {
+            state.with_mut(|screen| {
+                if let Screen::Unlocked(workspace) = screen {
+                    let editing = workspace.is_editing();
+                    let was_joining = workspace.vault.pairing_waits_to_join();
+                    if let Some(error) = workspace.sharing.links.tick(
+                        &mut workspace.vault,
+                        &mut workspace.sync,
+                        editing,
+                        unix_now(),
+                    ) {
+                        workspace.error = Some(error);
+                    }
+                    if was_joining
+                        && !workspace.vault.pairing_waits_to_join()
+                        && workspace
+                            .vault
+                            .joining_link()
+                            .is_some_and(|link| link.joined)
+                    {
+                        workspace.sharing.joining = false;
+                        workspace.sync.saved();
+                        let mut settings = consume_context::<Signal<Settings>>();
+                        workspace.error = settings
+                            .write()
+                            .remember_profile(
+                                workspace.vault.path().to_path_buf(),
+                                workspace
+                                    .vault
+                                    .profile_summary()
+                                    .map(|profile| profile.space_name.to_owned()),
+                            )
+                            .err();
+                    }
+                }
+            });
+        }
         // Avoid notifying the whole UI at 10 Hz while the network worker waits.
-        let should_tick = matches!(&*state.peek(), Screen::Unlocked(u) if u.sync.needs_tick_for(&u.vault, u.is_editing()));
+        let should_tick = matches!(&*state.peek(), Screen::Unlocked(u) if !u.sharing.joining && !u.vault.pairing_waits_to_join() && u.sync.needs_tick_for(&u.vault, u.is_editing()));
 
         if should_tick {
             state.with_mut(|screen| {
