@@ -8,7 +8,7 @@ use crate::{
         touchid::{self, Biometrics},
     },
     settings::config::Config,
-    vault::{KdfParams, Vault, identity::Identity, profile::ProviderConfiguration},
+    vault::{KdfParams, SharedProfile, Vault, identity::Identity, profile::ProviderConfiguration},
 };
 use secrecy::{ExposeSecret, SecretString};
 use std::{path::PathBuf, sync::Arc};
@@ -418,9 +418,8 @@ impl Locked {
             self.error = Some(error);
             return;
         }
-        let identity = self.identity.clone();
         let phrase = if self.mode == Mode::Create
-            && let Some(identity) = identity.as_ref()
+            && let Some(identity) = self.identity.as_ref()
         {
             match identity.phrase() {
                 Ok(phrase) => phrase,
@@ -452,14 +451,17 @@ impl Locked {
         let recovering = self.recovering;
         let cloud_creation = cloud.then(|| {
             (
-                self.cloud.username.trim().to_owned(),
-                self.cloud.space_name.trim().to_owned(),
-                ProviderConfiguration {
-                    base_url: self.cloud.base_url.clone(),
-                    bucket: self.cloud.bucket.clone(),
-                    access_key: self.cloud.access_key.to_string(),
-                    secret_key: self.cloud.secret_key.to_string(),
+                SharedProfile {
+                    username: self.cloud.username.trim().to_owned(),
+                    space_name: self.cloud.space_name.trim().to_owned(),
+                    provider: ProviderConfiguration {
+                        base_url: self.cloud.base_url.clone(),
+                        bucket: self.cloud.bucket.clone(),
+                        access_key: self.cloud.access_key.to_string(),
+                        secret_key: self.cloud.secret_key.to_string(),
+                    },
                 },
+                self.identity.clone(),
             )
         });
         self.pending = Some(Worker::spawn(move |_| {
@@ -480,12 +482,12 @@ impl Locked {
                 match mode {
                     Mode::Open => Vault::open(&path, &password),
                     Mode::Create => {
-                        if let Some((username, space_name, provider)) = cloud_creation {
+                        if let Some((profile, identity)) = cloud_creation {
                             crate::vault::ProfileStore::default().create_shared_with_identity(
                                 &path,
                                 &password,
                                 KdfParams::default(),
-                                crate::vault::SharedProfile { username, space_name, provider },
+                                profile,
                                 &identity.unwrap_or_else(|| Identity::from_phrase(phrase.as_ref().expect("validated recovery phrase"))),
                             )
                         } else if let Some(phrase) = phrase.as_ref() {

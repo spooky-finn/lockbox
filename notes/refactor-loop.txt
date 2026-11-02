@@ -9,25 +9,25 @@ Last full suite: cycle 81; 421 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 81: Share new-password validation
-- Private new_password_error returns existing minimum-character/confirmation
-  errors. Creation, recovery and identity setup use same rule. Remove duplicate
-  creation confirmation after validate_creation already succeeded.
-- Preserve creation cloud-first/key-last order; empty create reports minimum,
-  recovery/identity report empty first. Existing vault/identity unlock bypasses
-  new-password policy. Secret buffers unchanged on validation failure.
-- Two baseline tests passed before refactor: three-flow matrix covers empty,
-  eleven/twelve Unicode characters, mismatch, phrase errors, cloud precedence;
-  actual existing vault/identity unlock accepts short unconfirmed password and
-  preserves saved identity bytes. Two new tests.
-- Full suite: 421 library, four integration, two doctests passed; two OS probes
-  ignored. Formatting/strict all-target Clippy passed. Both sources match verified
-  snapshot; whitespace clean. Unrelated edits untouched.
-- Snapshot: /tmp/lockbox-refactor-81.5flp926q.
+Cycle 82: Scope identity cloning to cloud worker setup
+- Derive owned recovery phrase through borrowed form identity. Local creation,
+  ordinary open and recovery no longer clone unused root/word payloads.
+- Cloud setup captures SharedProfile and cloned optional identity together;
+  worker consumes profile directly. Same trimming, provider fields, imported
+  roots without words, lazy phrase fallback and secret/password lifetimes.
+- Extended local-worker baseline passed before refactor: create from loaded
+  identity with empty form recovery words, recover using expected phrase, keep
+  original form identity root. Existing plain-phrase creation check retained.
+- Formatting/strict all-target Clippy, 42 access and six identity tests passed.
+  Both sources match verified snapshot; whitespace clean. Unrelated edits
+  untouched. Last full suite remains cycle 81.
+- Snapshot: /tmp/lockbox-refactor-82.0q79ygzy.
 
-Next search: Locked.submit clones self.identity before deriving phrase, even when
-local creation only consumes phrase and never uses cloned identity. Consider
-borrowing self.identity for phrase derivation, then cloning only for cloud worker
-creation where owned root/words are required. Preserve imported identities with
-no phrase, fallback generation, worker ownership/error order. Existing auth tests
-cover local, cloud and imported identity flows. Inspect first.
+Next search: auth.rs mixes identity worker submission/completion with vault unlock
+workflow. Consider private auth/identity.rs child module containing unchanged
+submit_identity and extracted poll_identity completion block. Parent poll invokes
+identity completion at same point before vault completion/auto Touch ID. Child
+accesses parent-private fields without widening struct visibility; methods need
+pub(super) only. Preserve worker errors, interrupted panic handling, recovery and
+creation transitions, secret buffers. Prove moved bodies unchanged; access tests
+cover setup, join/import, recovery, concurrent identity replacement, stale paths.

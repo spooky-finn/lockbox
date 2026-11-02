@@ -245,6 +245,23 @@ fn application_worker_creates_local_vault_with_the_confirmed_key() {
     drop(opened);
     let recovered = Vault::open_with_recovery_phrase(&path, &phrase).unwrap();
     assert!(recovered.test_profile().is_none());
+    drop(recovered);
+
+    let path = dir.path().join("local-from-identity.lbx");
+    form.path = Some(path.clone());
+    form.identity = Some(crate::vault::identity::Identity::from_phrase(&phrase));
+    form.recovery_words.clear();
+    form.password.push_str("local master password");
+    form.repeat.push_str("local master password");
+    form.submit();
+    let opened = wait_for_opened(&mut form);
+    assert!(opened.vault.test_profile().is_none());
+    drop(opened);
+    assert!(Vault::open_with_recovery_phrase(&path, &phrase).is_ok());
+    assert_eq!(
+        form.identity.as_ref().unwrap().signing_key().to_bytes(),
+        phrase.signing_key().to_bytes()
+    );
 }
 
 #[test]
