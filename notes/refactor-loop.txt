@@ -5,35 +5,36 @@ Goal: find useful simplifications independently; preserve behavior and public AP
 Cycle: inspect, refactor one concern, verify, commit, compact handoff, repeat.
 Manual compaction tool unavailable; rolling handoff supports automatic compaction.
 No delegation requested. Keep unrelated work outside refactor commits.
-Last full suite: cycle 97; 432 library, four integration, two doctests passed.
+Last full suite: cycle 98; 433 library, four integration, two doctests passed.
 Two OS probes ignored. Isolated snapshot; no live cloud.
 Last extension check: cycle 53; 19 tests and both builds passed; two browser probes skipped.
 
-Cycle 97: Validate canonical counter prefixes directly
-- Keep u64 parse first. Successful unsigned decimal text is canonical unless
-  prefixed '+' or redundant leading zeroes; single '0' remains valid. Replace
-  value.to_string()!=s with prefix checks, preserving numeric/overflow failure
-  precedence, canonical message, diagnostic boundary and u64 precision.
-- Installed core/src/num/mod.rs:1546/1723 confirms grammar. Eleven baseline wire
-  tests passed first. Restored 37,999-case same-binary old parse+format oracle:
-  all short eight-symbol strings through length five, numeric boundaries,
-  plus/zero/sign/whitespace/suffix variations, overflow and Unicode. One new test.
-- Allocation probe confirms raw JSON Counter 1->0; Hash stays0, Blob stays2 per
-  decode, zero reallocations, 1000 iterations. Full suite: 432 library, four
-  integration, two doctests passed; two OS probes ignored. Formatting/strict
-  all-target Clippy passed. Both sources match verified snapshot; whitespace
-  clean. Unrelated work untouched. Snapshot src/lib.rs touched for fresh build.
-- Snapshot: /tmp/lockbox-refactor-97.swd4b4_o.
+Cycle 98: Remove redundant blob canonical re-encoding
+- URL_SAFE_NO_PAD directly decodes into Blob; remove encoded String comparison
+  and unreachable noncanonical-bytes branch. Same engine/config/errors; string
+  visitor and diagnostic boundary unchanged. Private attachment code untouched.
+- Primary base640.22.1 config fixes URL alphabet, RequireNone padding, trailing
+  bits false. decode_suffix.rs:102/134 rejects padding and unused bits; accepted
+  complete groups/tails uniquely re-encode to original text.
+- New baseline old decode+reencode oracle passed before refactor: >528k short
+  tails plus complete-prefix variants, explicit accepted-input canonicality,
+  padding/whitespace/standard alphabet/Unicode negatives, byte-pattern roundtrips
+  across size boundaries through8192. One new test; all fixed wire fixtures kept.
+- Allocator probe: 8192-byte raw JSON Blob2->1 allocations, zero reallocs, 1000
+  iterations; Hash/Counter remain0. Full suite: 433 library, four integration,
+  two doctests passed; two OS probes ignored. Formatting/strict all-target Clippy
+  passed. Both sources match verified snapshot; whitespace clean. Unrelated work
+  untouched. Snapshot src/lib.rs touched. Disk check:66GiB free.
+- Snapshot: /tmp/lockbox-refactor-98.iwov7p4f.
 
-Next search: Blob.from_text re-encodes decoded bytes only to check canonical
-base64. Direct dependency base640.22.1 URL_SAFE_NO_PAD uses NO_PAD with RequireNone
-padding and decode_allow_trailing_bits=false. Inspect actual decoder tail/error
-logic to prove accepted strings already canonical; guard may be redundant.
-Primary general_purpose/mod.rs:252/341/350 confirms config. Baseline old decode+
-reencode oracle across all alphabet tails length1/2/3 (266k), padding/whitespace/
-standard alphabet/Unicode negatives, all-byte roundtrips and larger payloads.
-Preserve engine error text/order and cycle96 diagnostic boundary. If proven,
-remove redundant guard only, measure Blob2->1 allocations. Do not weaken config
-or touch private attachment base64. Same-binary oracles; touch snapshot src/lib.rs
-before checks. Mutable probe /tmp/lockbox-refactor-95-probe.77e87b5l.
-No delegation. Window ends 2026-11-02 03:13:13 UTC.
+Next search: Blob Serialize still allocates base64 String for every nonce/key/
+signature. Consider small-value stack path: <=96 raw bytes fit128 base64 bytes;
+URL_SAFE_NO_PAD.encode_slice into [u8;128], serialize_str one ASCII fragment;
+larger values keep existing owned-string path. Public Blob only; private
+attachment Zeroizing path untouched. Hash experience warns against fragmenting
+Display because JCS allocates per fragment. Read engine/mod.rs:171/194 contract.
+Measure same-binary legacy/proposed serializers for JSON/JCS at0/1/24/32/64/80/
+95/96/97/256/8192 bytes before editing. Preserve single-fragment semantics and
+exact URL-safe/no-pad bytes; baseline all-byte and threshold fixtures, then full
+checks. No manual codec/unsafe changes. Touch snapshot src/lib.rs; no subagents.
+Window ends 2026-11-02 03:13:13 UTC.

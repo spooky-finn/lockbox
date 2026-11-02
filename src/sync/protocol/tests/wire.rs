@@ -446,6 +446,71 @@ fn counter_text_validation_matches_decimal_formatting_and_error_order() {
 }
 
 #[test]
+fn blob_text_matches_strict_decoder_and_reencode_oracle() {
+    use base64::{Engine as _, alphabet, engine::general_purpose::URL_SAFE_NO_PAD};
+    use serde::{
+        Deserialize,
+        de::value::{Error as TextError, StrDeserializer},
+    };
+    fn check(text: &str) {
+        let decoded = URL_SAFE_NO_PAD.decode(text);
+        if let Ok(bytes) = &decoded {
+            assert_eq!(
+                URL_SAFE_NO_PAD.encode(bytes),
+                text,
+                "strict decoder accepted alternate spelling"
+            );
+        }
+        let expected = decoded
+            .map_err(|error| error.to_string())
+            .and_then(|bytes| {
+                if URL_SAFE_NO_PAD.encode(&bytes) == text {
+                    Ok(Blob(bytes))
+                } else {
+                    Err("noncanonical bytes".to_owned())
+                }
+            });
+        let actual = Blob::deserialize(StrDeserializer::<TextError>::new(text))
+            .map_err(|error| error.to_string());
+        assert_eq!(actual, expected, "{text:?}");
+    }
+    check("");
+    let symbols = alphabet::URL_SAFE.as_str().as_bytes();
+    for &first in symbols {
+        check(std::str::from_utf8(&[first]).unwrap());
+        for &second in symbols {
+            check(std::str::from_utf8(&[first, second]).unwrap());
+            for &third in symbols {
+                check(std::str::from_utf8(&[first, second, third]).unwrap());
+                let mut prefixed = *b"AAECAwQFAAA";
+                prefixed[8..].copy_from_slice(&[first, second, third]);
+                check(std::str::from_utf8(&prefixed).unwrap());
+            }
+        }
+    }
+    for text in [
+        "+", "/", "AA+A", "AA/A", " YQ", "YQ ", "YQ\n", "YQ\r\n", "YQ\0", "YQ==", "YQ=", "YQ===",
+        "YR", "Yf", "YWJ", "雪", "é",
+    ] {
+        check(text);
+    }
+    for size in [
+        0, 1, 2, 3, 4, 16, 24, 32, 64, 80, 95, 96, 97, 255, 256, 257, 1023, 1024, 1025, 8192,
+    ] {
+        let bytes: Vec<_> = (0..size).map(|index| index as u8).collect();
+        let text = URL_SAFE_NO_PAD.encode(&bytes);
+        check(&text);
+        assert_eq!(
+            Blob::deserialize(StrDeserializer::<TextError>::new(&text)).unwrap(),
+            Blob(bytes)
+        );
+        for suffix in ["=", "==", "===", " ", "\n", "%", "+", "/"] {
+            check(&format!("{text}{suffix}"));
+        }
+    }
+}
+
+#[test]
 fn receive_checks_canonical_encoding_before_object_hash() {
     let bytes = include_bytes!("../fixtures/change.json");
     let noncanonical = [b" ".as_slice(), bytes.as_slice()].concat();

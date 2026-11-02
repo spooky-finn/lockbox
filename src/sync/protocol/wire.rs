@@ -114,13 +114,8 @@ impl<'de> Deserialize<'de> for Blob {
 }
 impl WireText for Blob {
     fn from_text<E: serde::de::Error>(s: &str) -> std::result::Result<Self, E> {
-        let bytes = URL_SAFE_NO_PAD.decode(s).map_err(E::custom)?;
-
-        if URL_SAFE_NO_PAD.encode(&bytes) != s {
-            return Err(E::custom("noncanonical bytes"));
-        }
-
-        Ok(Self(bytes))
+        // This engine rejects padding and nonzero unused trailing bits.
+        URL_SAFE_NO_PAD.decode(s).map(Self).map_err(E::custom)
     }
 }
 
