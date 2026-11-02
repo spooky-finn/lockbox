@@ -3,6 +3,7 @@
 pub(crate) mod context;
 pub(crate) mod i18n;
 pub mod icons;
+pub mod browser;
 mod root;
 pub(crate) mod runtime;
 pub(crate) mod security;

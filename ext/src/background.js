@@ -1,117 +1,66 @@
+import { installAutomatic } from "./automatic.js";
 import { secureOrigin, trustedPopup } from "./policy.js";
 import { inspectPage, fillPage } from "./page.js";
 import { createNativeSession } from "./native.js";
-
 const api = globalThis.browser ?? globalThis.chrome;
 const companion = createNativeSession(api.runtime);
-let chain = Promise.resolve();
+let pending = false;
+let status = "Ready. Open Lockbox to choose an account.";
 
-async function tabAt(tabId, expectedOrigin) {
-  if (!Number.isInteger(tabId) || typeof expectedOrigin !== "string") throw new Error("Open Lockbox again.");
+async function tabAt(tabId, origin) {
+  if (!Number.isInteger(tabId) || typeof origin !== "string") throw new Error("Open Lockbox again.");
   const tab = await api.tabs.get(tabId);
-  if (!tab.active || secureOrigin(tab.url) !== expectedOrigin) throw new Error("The active page changed. Open Lockbox again.");
-  return tab;
+  if (!tab.active || secureOrigin(tab.url) !== origin) throw new Error("The active page changed. Open Lockbox again.");
 }
-
-function pageScript(tabId, func, args) {
-  return {
-    target: { tabId, frameIds: [0] },
-    world: "ISOLATED",
-    func,
-    args,
-  };
+function script(tabId, func, args) {
+  return { target: { tabId, frameIds: [0] }, world: "ISOLATED", func, args };
 }
-
-async function inspect(tabId, origin, mode) {
-  await tabAt(tabId, origin);
-  const results = await api.scripting.executeScript(pageScript(tabId, inspectPage, [origin, mode]));
-  const result = results[0]?.result;
-  if (!result?.token) throw new Error(result?.error || "This page does not allow autofill.");
-  return result.token;
-}
-
-async function fill(tabId, origin, entryId, mode, token) {
-  const version = companion.generation;
-  const credential = await companion.request({ action: "credential", origin, entry_id: entryId });
-  try {
-    await tabAt(tabId, origin);
-    if (version !== companion.generation) throw new Error("Vault locked during fill. Unlock again.");
-    const results = await api.scripting.executeScript(pageScript(
-      tabId, fillPage, [origin, token, credential.username, credential.password, mode],
-    ));
-    const result = results[0]?.result;
-    if (!result?.filled) throw new Error(result?.error || "Could not fill this page.");
-    return { filled: true };
-  } finally {
-    credential.username = "";
-    credential.password = "";
-  }
-}
-
-function stillAllowed(ticket) {
-  if (ticket !== companion.cancellation) throw new Error("Vault locked during the request. Unlock again.");
-}
-
-async function handle(message, ticket) {
-  switch (message.action) {
-    case "status": return companion.request({ action: "status" });
-    case "unlock": {
-      try { return await companion.request({ action: "unlock", path: message.path, password: message.password }); }
-      finally { message.password = ""; }
-    }
-    case "suggestions":
-      await tabAt(message.tabId, message.origin);
-      stillAllowed(ticket);
-      return companion.request({ action: "suggestions", origin: message.origin });
-    case "generate":
-      await tabAt(message.tabId, message.origin);
-      stillAllowed(ticket);
-      return companion.request({ action: "generate", origin: message.origin, length: message.length, symbols: message.symbols });
-    case "fill": {
-      const token = await inspect(message.tabId, message.origin, "login");
-      stillAllowed(ticket);
-      return fill(message.tabId, message.origin, message.entryId, "login", token);
-    }
-    case "save_generated": {
-      // Inspect before saving, then write durably before any credential reaches the page.
-      const token = await inspect(message.tabId, message.origin, "new");
-      stillAllowed(ticket);
-      const saved = await companion.request({
-        action: "save_generated", origin: message.origin, title: message.title,
-        username: message.username, entry_id: message.entryId || null,
-      });
-      try {
-        return { ...saved, ...await fill(message.tabId, message.origin, saved.entry_id, "new", token) };
-      } catch {
-        throw new Error("Password saved in your vault, but filling was blocked. You can retrieve it in the desktop app to retry.");
-      }
-    }
-    default: throw new Error("Unknown request.");
-  }
-}
-
-api.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (!trustedPopup(sender, api.runtime)) return false;
-  // Lock immediately so pending work cannot delay cancellation.
-  if (message.action === "lock") {
-    companion.disconnect();
-    sendResponse({ ok: true, data: { unlocked: false } });
-    return false;
-  }
-  // Serialize other requests so unlocking, generation and saving cannot overlap.
+async function fill(message) {
+  if (pending) throw new Error("A request is already open in Lockbox.");
+  pending = true;
   const ticket = companion.cancellation;
-  const work = chain.then(() => {
-    stillAllowed(ticket);
-    return handle(message, ticket);
-  });
-  chain = work.catch(() => {});
-  work.then((data) => sendResponse({ ok: true, data }),
-    (error) => sendResponse({ ok: false, error: error.message }));
-  return true; // Callback form works in both Firefox and Chrome.
+  let credential;
+  try {
+    await tabAt(message.tabId, message.origin);
+    const results = await api.scripting.executeScript(script(message.tabId, inspectPage, [message.origin, "login"]));
+    const token = results[0]?.result?.token;
+    if (!token) throw new Error(results[0]?.result?.error || "This page does not allow autofill.");
+    if (ticket !== companion.cancellation) throw new Error("Request cancelled.");
+    status = "Choose an account in the Lockbox desktop app.";
+    credential = await companion.request({ action: "fill", origin: message.origin });
+    await tabAt(message.tabId, message.origin);
+    if (ticket !== companion.cancellation) throw new Error("Request cancelled.");
+    if (typeof credential?.username !== "string" || typeof credential?.password !== "string" ||
+        credential.username.length > 4096 || credential.password.length > 4096) throw new Error("Invalid desktop reply.");
+    const filled = await api.scripting.executeScript(script(message.tabId, fillPage,
+      [message.origin, token, credential.username, credential.password, "login"]));
+    if (!filled[0]?.result?.filled) throw new Error(filled[0]?.result?.error || "Could not fill this page.");
+    status = "Login filled. Submit the website form when ready.";
+    return { filled: true };
+  } catch (error) {
+    status = error.message;
+    throw error;
+  } finally {
+    if (credential) { credential.username = ""; credential.password = ""; }
+    pending = false;
+  }
+}
+api.runtime.onMessage.addListener((message, sender, respond) => {
+  if (!trustedPopup(sender, api.runtime)) return false;
+  if (message.action === "status") { respond({ ok: true, data: { pending, status } }); return false; }
+  if (message.action === "cancel") {
+    companion.disconnect(); status = "Browser request cancelled.";
+    respond({ ok: true, data: { cancelled: true } }); return false;
+  }
+  if (message.action !== "fill") { respond({ ok: false, error: "Unknown request." }); return false; }
+  fill(message).then(data => respond({ ok: true, data }), error => respond({ ok: false, error: error.message }));
+  return true;
 });
-
 api.idle.setDetectionInterval(300);
-api.idle.onStateChanged.addListener((state) => {
-  if (state !== "active") companion.disconnect();
-});
+api.idle.onStateChanged.addListener(state => { if (state !== "active") companion.disconnect(); });
 api.runtime.onSuspend?.addListener(companion.disconnect);
+
+installAutomatic(api, async origin => {
+  const reply = await companion.request({ action: "match", origin });
+  return reply?.matched === true;
+}, () => pending);

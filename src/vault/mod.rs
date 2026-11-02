@@ -435,6 +435,7 @@ impl Vault {
             vault.recover_sync()?;
         }
 
+        crate::browser::index::refresh(&vault);
         Ok(vault)
     }
 
@@ -586,6 +587,7 @@ impl Vault {
             protection.ensure_ready(&self.path)?;
         }
 
+        crate::browser::index::refresh(self);
         Ok(())
     }
 

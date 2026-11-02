@@ -45,6 +45,7 @@ pub fn App() -> Element {
                 }
             }
 
+            crate::desktop::browser::BrowserConsent {}
             if locked { LockedView {} } else { UnlockedView {} }
         }
     }

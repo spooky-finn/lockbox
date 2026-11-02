@@ -45,7 +45,15 @@ pub fn config(first: bool) -> Config {
         .with_navigation_handler(|_| false);
 
     if first || cfg!(not(target_os = "macos")) {
-        config.with_menu(menu(Settings::load().config.language))
+        config
+            .with_menu(menu(Settings::load().config.language))
+            .with_custom_event_handler(|event, _| {
+                if let dioxus::desktop::tao::event::Event::Opened { urls } = event {
+                    for url in urls {
+                        crate::desktop::browser::receive(url.as_str());
+                    }
+                }
+            })
     } else {
         config.with_menu(None)
     }

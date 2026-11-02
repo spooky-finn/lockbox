@@ -4,26 +4,23 @@ const HOST = "app.lockbox.browser";
 export function createNativeSession(runtime) {
   let port = null;
   let sequence = 0;
-  let generation = 0;
   let cancellation = 0;
   const pending = new Map();
 
   function disconnect() {
-    generation++;
     cancellation++;
     const old = port;
     port = null;
     old?.disconnect();
     for (const { reject, timer } of pending.values()) {
       clearTimeout(timer);
-      reject(new Error("Vault disconnected or locked. Unlock again."));
+      reject(new Error("Browser request cancelled or desktop disconnected."));
     }
     pending.clear();
   }
 
   function native(request) {
     if (!port) {
-      generation++;
       const connection = runtime.connectNative(HOST);
       port = connection;
       connection.onMessage.addListener((reply) => {
@@ -45,7 +42,7 @@ export function createNativeSession(runtime) {
       const timer = setTimeout(() => {
         disconnect();
         reject(new Error("Native host timed out. Check the companion installation."));
-      }, 30_000);
+      }, 125_000);
       pending.set(id, { resolve, reject, timer });
       try { port.postMessage({ id, request }); }
       catch { disconnect(); }
@@ -55,7 +52,6 @@ export function createNativeSession(runtime) {
   return {
     request: native,
     disconnect,
-    get generation() { return generation; },
     get cancellation() { return cancellation; },
   };
 }

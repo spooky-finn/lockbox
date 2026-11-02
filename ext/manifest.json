@@ -2,8 +2,9 @@
   "manifest_version": 3,
   "name": "Lockbox · Browser companion",
   "version": "0.1.0",
-  "description": "Suggest, generate and fill passwords from your encrypted local Lockbox vault. You control every fill.",
-  "permissions": ["activeTab", "scripting", "nativeMessaging", "idle"],
+  "description": "Open Lockbox to unlock and approve a login, then fill it on the current website.",
+  "permissions": ["activeTab", "scripting", "nativeMessaging", "idle", "tabs"],
+  "optional_host_permissions": ["https://*/*"],
   "action": {
     "default_title": "Open Lockbox",
     "default_popup": "popup.html",

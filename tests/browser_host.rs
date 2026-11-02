@@ -1,118 +1,81 @@
-//! Real stdio protocol round trip using a temporary vault and fictional secrets.
-
-use lockbox::{
-    records::entry::Entry,
-    vault::{KdfParams, Vault},
-};
-use secrecy::SecretString;
-use serde_json::{Value, json};
+//! Native host rejects legacy vault APIs and malformed input without emitting secrets.
 use std::{
-    io::{Read, Write},
+    io::Write,
     process::{Command, Stdio},
 };
 
 #[test]
-fn native_host_unlock_suggest_generate_save_fill_and_lock() {
-    let directory = tempfile::tempdir().unwrap();
-    let path = directory.path().join("browser.lbx");
-    let password = SecretString::from("fictional master");
-    let mut vault = Vault::create(
-        &path,
-        &password,
-        KdfParams {
-            memory_kib: 8192,
-            passes: 1,
-            lanes: 1,
-        },
+fn match_reads_plaintext_index_with_no_desktop_or_unlocked_vault() {
+    let home = tempfile::tempdir().unwrap();
+    let directory = home.path().join(".lockbox/browser-sites");
+    std::fs::create_dir_all(&directory).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    std::fs::write(
+        directory.join("fixture.json"),
+        br#"["https://saved.example"]"#,
     )
     .unwrap();
-    let mut entry = Entry::new();
-    entry.title = "Fictional account".into();
-    entry.username = "fictional-user".into();
-    entry.password = "fictional-password".into();
-    entry.url = "https://accounts.example/login".into();
-    let entry_id = entry.id.clone();
-    vault.upsert_entry(entry).unwrap();
-    drop(vault);
-
     let mut host = Command::new(env!("CARGO_BIN_EXE_lockbox-browser-host"))
+        .env("HOME", home.path())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
         .unwrap();
     let mut input = host.stdin.take().unwrap();
-    let mut output = host.stdout.take().unwrap();
-    let mut id = 0u32;
-    let mut request = |body: Value| -> Value {
-        id += 1;
-        let bytes = serde_json::to_vec(&json!({ "id": id, "request": body })).unwrap();
+    for (id, origin) in [
+        (1, "https://saved.example/login"),
+        (2, "https://unknown.example"),
+        (3, "https://saved.example:444"),
+    ] {
+        let bytes = serde_json::to_vec(
+            &serde_json::json!({"id":id,"request":{"action":"match","origin":origin}}),
+        )
+        .unwrap();
         input
             .write_all(&(bytes.len() as u32).to_ne_bytes())
             .unwrap();
         input.write_all(&bytes).unwrap();
-        input.flush().unwrap();
-        let mut length = [0u8; 4];
-        output.read_exact(&mut length).unwrap();
-        let length = u32::from_ne_bytes(length) as usize;
-        assert!(length <= 64 * 1024);
-        let mut reply = vec![0; length];
-        output.read_exact(&mut reply).unwrap();
-        let reply: Value = serde_json::from_slice(&reply).unwrap();
-        assert_eq!(reply["id"], id);
-        reply
-    };
-
-    assert_eq!(
-        request(json!({ "action": "status" }))["data"]["unlocked"],
-        false
-    );
-    assert_eq!(
-        request(json!({ "action": "unlock", "path": path, "password": "fictional master" }))["status"],
-        "ok"
-    );
-    let suggestions =
-        request(json!({ "action": "suggestions", "origin": "https://accounts.example" }));
-    assert_eq!(suggestions["data"]["items"][0]["id"], entry_id);
-    assert!(!suggestions.to_string().contains("fictional-password"));
-    assert_eq!(
-        request(
-            json!({ "action": "credential", "origin": "https://evil.example", "entry_id": entry_id })
-        )["status"],
-        "error"
-    );
-    assert_eq!(
-        request(
-            json!({ "action": "generate", "origin": "https://accounts.example", "length": 32, "symbols": true })
-        )["status"],
-        "ok"
-    );
-    assert_eq!(
-        request(
-            json!({ "action": "save_generated", "origin": "https://accounts.example", "entry_id": entry_id, "title": "", "username": "" })
-        )["status"],
-        "ok"
-    );
-    let credential = request(
-        json!({ "action": "credential", "origin": "https://accounts.example", "entry_id": entry_id }),
-    );
-    let generated = credential["data"]["password"].as_str().unwrap().to_owned();
-    assert_eq!(generated.len(), 32);
-    assert_eq!(
-        request(json!({ "action": "lock" }))["data"]["unlocked"],
-        false
-    );
-    assert_eq!(
-        request(
-            json!({ "action": "credential", "origin": "https://accounts.example", "entry_id": entry_id })
-        )["status"],
-        "error"
-    );
-
+    }
     drop(input);
-    assert!(host.wait().unwrap().success());
-    let vault = Vault::open(&path, &password).unwrap();
-    assert_eq!(vault.entries()[0].password, generated);
+    let output = host.wait_with_output().unwrap();
+    assert!(output.status.success());
+    assert!(output.stderr.is_empty());
+    let mut frames = output.stdout.as_slice();
+    for (id, matched) in [(1, true), (2, false), (3, false)] {
+        let length = u32::from_ne_bytes(frames[..4].try_into().unwrap()) as usize;
+        let reply: serde_json::Value = serde_json::from_slice(&frames[4..4 + length]).unwrap();
+        assert_eq!(
+            reply,
+            serde_json::json!({"id":id,"status":"ok","data":{"matched":matched}})
+        );
+        frames = &frames[4 + length..];
+    }
+    assert!(frames.is_empty());
+}
+#[test]
+fn legacy_unlock_is_rejected() {
+    let mut host = Command::new(env!("CARGO_BIN_EXE_lockbox-browser-host"))
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let bytes = br#"{"id":1,"request":{"action":"unlock","path":"/tmp/vault","password":"fictional-secret"}}"#;
+    let mut input = host.stdin.take().unwrap();
+    input
+        .write_all(&(bytes.len() as u32).to_ne_bytes())
+        .unwrap();
+    input.write_all(bytes).unwrap();
+    drop(input);
+    let result = host.wait_with_output().unwrap();
+    assert!(!result.status.success());
+    assert!(result.stdout.is_empty());
+    assert!(result.stderr.is_empty());
 }
 
 #[test]

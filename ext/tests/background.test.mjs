@@ -24,7 +24,7 @@ async function fixture(options = {}) {
           requests.push(message.request);
           if (options.post) return options.post(message, port);
           queueMicrotask(() => port.onMessage.fire({ id: message.id, status: "ok", data:
-            message.request.action === "credential" ? { username: "fictional-user", password: "fictional-password" } :
+            message.request.action === "fill" ? { username: "fictional-user", password: "fictional-password" } :
             message.request.action === "save_generated" ? { entry_id: "fictional-id" } : { unlocked: true } }));
         },
       };
@@ -35,7 +35,9 @@ async function fixture(options = {}) {
   const idle = { setDetectionInterval() {}, onStateChanged: new Event() };
   globalThis.browser = {
     runtime, idle,
-    tabs: { get: async () => ({ id: 1, active: true, url: options.url || "https://accounts.example/login" }) },
+    windows: { getLastFocused: async () => ({ focused: false }), onFocusChanged: new Event() },
+    action: {},
+    tabs: { onUpdated: new Event(), onActivated: new Event(), onRemoved: new Event(), get: async () => ({ id: 1, active: true, url: options.url || "https://accounts.example/login" }) },
     scripting: { executeScript: async (injection) => {
       injections.push(injection);
       if (options.inject) return options.inject(injection);
@@ -51,120 +53,89 @@ async function fixture(options = {}) {
   return { requests, injections, connections, idle, message, close: () => runtime.onSuspend.fire() };
 }
 
-test("untrusted web page messages cannot invoke native host", async () => {
+test("untrusted page cannot invoke desktop", async () => {
   const f = await fixture();
-  assert.equal(await f.message({ action: "unlock", path: "/secret", password: "secret" },
+  assert.equal(await f.message({ action: "fill", tabId: 1, origin: "https://accounts.example" },
     { id: "fictional-extension", url: "https://attacker.test", tab: { id: 1 } }), undefined);
   assert.equal(f.connections.length, 0);
   f.close();
 });
 
-test("credential fetched only after successful form inspection, never returned to popup", async () => {
+test("desktop approval follows inspection; only credential is filled, never sent to popup", async () => {
   const f = await fixture();
-  await f.message({ action: "status" });
-  const reply = await f.message({ action: "fill", tabId: 1, origin: "https://accounts.example", entryId: "id" });
+  const reply = await f.message({ action: "fill", tabId: 1, origin: "https://accounts.example" });
   assert.deepEqual(reply, { ok: true, data: { filled: true } });
-  assert.deepEqual(f.injections.map((item) => item.func.name), ["inspectPage", "fillPage"]);
-  for (const injection of f.injections) {
-    assert.deepEqual(injection.target, { tabId: 1, frameIds: [0] });
-    assert.equal(injection.world, "ISOLATED");
-  }
-  assert.equal(f.injections[1].args[1], "document-token");
-  assert.equal(f.requests.at(-1).action, "credential");
+  assert.deepEqual(f.requests, [{ action: "fill", origin: "https://accounts.example" }]);
+  assert.deepEqual(f.injections.map(item => item.func.name), ["inspectPage", "fillPage"]);
+  assert.deepEqual(f.injections[1].args, ["https://accounts.example", "document-token", "fictional-user", "fictional-password", "login"]);
   assert.ok(!JSON.stringify(reply).includes("fictional-password"));
   f.close();
 });
 
-test("cross-origin tab and unsafe forms block credential retrieval", async () => {
+test("unsafe origin and form never open desktop", async () => {
   for (const options of [{ url: "https://attacker.test" }, { inject: () => [{ result: { error: "Unsafe form" } }] }]) {
     const f = await fixture(options);
-    const reply = await f.message({ action: "fill", tabId: 1, origin: "https://accounts.example", entryId: "id" });
-    assert.equal(reply.ok, false);
+    assert.equal((await f.message({ action: "fill", tabId: 1, origin: "https://accounts.example" })).ok, false);
     assert.equal(f.requests.length, 0);
     f.close();
   }
 });
 
-test("generated credential saved before retrieval and page delivery", async () => {
-  const f = await fixture();
-  await f.message({ action: "status" });
-  const reply = await f.message({ action: "save_generated", tabId: 1, origin: "https://accounts.example",
-    title: "Fictional", username: "fictional-user", entryId: null });
-  assert.equal(reply.ok, true);
-  assert.deepEqual(f.requests.map((item) => item.action), ["status", "save_generated", "credential"]);
-  assert.equal(f.injections[0].args[1], "new");
-  f.close();
-});
-
-test("locking while form inspection is pending cancels fill without reopening native host", async () => {
+test("cancel during inspection prevents desktop launch", async () => {
   let release;
-  const paused = new Promise((resolve) => { release = resolve; });
+  const paused = new Promise(resolve => { release = resolve; });
   const f = await fixture({ inject: () => paused });
-  await f.message({ action: "status" });
-  const filling = f.message({ action: "fill", tabId: 1, origin: "https://accounts.example", entryId: "id" });
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.deepEqual(await f.message({ action: "lock" }), { ok: true, data: { unlocked: false } });
+  const filling = f.message({ action: "fill", tabId: 1, origin: "https://accounts.example" });
+  await new Promise(resolve => setImmediate(resolve));
+  await f.message({ action: "cancel" });
   release([{ result: { token: "document-token" } }]);
   assert.equal((await filling).ok, false);
-  assert.deepEqual(f.requests.map((item) => item.action), ["status"]);
-  assert.equal(f.connections.length, 1);
+  assert.equal(f.requests.length, 0);
   f.close();
 });
 
-test("browser idle and screen lock disconnect native session", async () => {
-  for (const state of ["idle", "locked"]) {
-    const f = await fixture();
-    await f.message({ action: "status" });
-    let closed = false;
-    f.connections[0].onDisconnect.addListener(() => { closed = true; });
-    f.idle.onStateChanged.fire(state);
-    assert.equal(closed, true);
+test("navigation while desktop consent is pending prevents fill", async () => {
+  let posted;
+  const f = await fixture({ post: (message, port) => { posted = { message, port }; } });
+  const filling = f.message({ action: "fill", tabId: 1, origin: "https://accounts.example" });
+  await new Promise(resolve => setImmediate(resolve));
+  globalThis.browser.tabs.get = async () => ({ active: true, url: "https://attacker.test" });
+  posted.port.onMessage.fire({ id: posted.message.id, status: "ok", data: { username: "fictional-user", password: "fictional-password" } });
+  assert.equal((await filling).ok, false);
+  assert.equal(f.injections.length, 1);
+  f.close();
+});
+
+test("cancel, idle, screen lock and suspension reject pending consent", async () => {
+  for (const reason of ["cancel", "idle", "locked", "suspend"]) {
+    const f = await fixture({ post() {} });
+    const filling = f.message({ action: "fill", tabId: 1, origin: "https://accounts.example" });
+    await new Promise(resolve => setImmediate(resolve));
+    if (reason === "cancel") await f.message({ action: "cancel" });
+    else if (reason === "suspend") f.close();
+    else f.idle.onStateChanged.fire(reason);
+    assert.equal((await filling).ok, false);
+    assert.equal(f.injections.length, 1);
     f.close();
   }
 });
 
-test("unmatched replies are ignored and native failures preserve the connection", async () => {
-  const posted = [];
-  const f = await fixture({ post: (message) => posted.push(message) });
-  const body = { action: "unlock", path: "/fictional-vault", password: "fictional-password" };
-  let settled = false;
-  const opening = f.message(body).then((reply) => { settled = true; return reply; });
-  await new Promise((resolve) => setImmediate(resolve));
-  const connection = f.connections[0];
-  connection.onMessage.fire({ id: posted[0].id + 1, status: "ok", data: { unlocked: true } });
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(settled, false);
-  connection.onMessage.fire({ id: posted[0].id, status: "error", error: "Fictional denial" });
-  assert.deepEqual(await opening, { ok: false, error: "Fictional denial" });
-  assert.equal(body.password, "");
-
-  const status = f.message({ action: "status" });
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(f.connections.length, 1);
-  connection.onMessage.fire({ id: posted[1].id, status: "ok", data: { unlocked: false } });
-  assert.deepEqual(await status, { ok: true, data: { unlocked: false } });
+test("legacy vault operations rejected without native connection", async () => {
+  const f = await fixture();
+  for (const action of ["unlock", "credential", "generate", "save_generated", "suggestions"]) {
+    assert.equal((await f.message({ action, password: "secret" })).ok, false);
+  }
+  assert.equal(f.connections.length, 0);
   f.close();
 });
 
-test("disconnection rejects pending work and old ports cannot reply to new requests", async () => {
-  const posted = [];
-  const f = await fixture({ post: (message) => posted.push(message) });
-  const first = f.message({ action: "status" });
-  await new Promise((resolve) => setImmediate(resolve));
-  const old = f.connections[0];
+test("only one pending desktop request; status survives popup closing", async () => {
+  const f = await fixture({ post() {} });
+  const filling = f.message({ action: "fill", tabId: 1, origin: "https://accounts.example" });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal((await f.message({ action: "status" })).data.pending, true);
+  assert.equal((await f.message({ action: "fill", tabId: 1, origin: "https://accounts.example" })).ok, false);
+  assert.equal(f.requests.length, 1);
   f.close();
-  assert.deepEqual(await first, { ok: false, error: "Vault disconnected or locked. Unlock again." });
-
-  let settled = false;
-  const next = f.message({ action: "status" }).then((reply) => { settled = true; return reply; });
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(f.connections.length, 2);
-  assert.ok(posted[1].id > posted[0].id);
-  old.onMessage.fire({ id: posted[1].id, status: "ok", data: { unlocked: true } });
-  old.onDisconnect.fire();
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(settled, false);
-  f.connections[1].onMessage.fire({ id: posted[1].id, status: "ok", data: { unlocked: false } });
-  assert.deepEqual(await next, { ok: true, data: { unlocked: false } });
-  f.close();
+  await filling;
 });

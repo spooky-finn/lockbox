@@ -13,11 +13,11 @@ behavior, recovery and release plans.
 
 ## Browser companion
 
-Chrome and Firefox companions suggest matching accounts, generate passwords, and
-fill logins from the existing `.lbx` vault through a local Rust native messaging
-host. Exact HTTPS origin matching, explicit fill actions and native session
-timeouts limit credential access. Passwords and vault keys are never persisted
-in browser storage. See the [installation and security guide](browser-extension/README.md).
+Chrome and Firefox extensions open the desktop app through a deep link. Unlock
+with the normal password or Touch ID flow, then choose an exact-origin account
+to fill. The extension only proxies the request and fills the approved login;
+master passwords and vault files stay in the desktop app. See the
+[installation and security guide](ext/README.md).
 
 ## Website icon privacy and resource limits
 
@@ -123,7 +123,7 @@ Code is grouped by feature. Start with the behavior you want to change:
 ```text
 src/
   access/          vault creation, unlocking, biometric access and recovery words
-  browser/         browser native messaging and vault session
+  browser/         browser native messaging relay and local callback
   records/         record/folder models, editor, imports, history and views
   sharing/         invitations, joining, participants and sharing views
   sync/            protocol, exchange scheduler and transport providers

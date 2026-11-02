@@ -11,66 +11,21 @@
   <header>
     <img src="mark.svg" width="38" height="38" alt="">
     <div class="brand">Lockbox<span>Your keys. Your device.</span></div>
-    <button id="lock" class="quiet" hidden>Lock vault</button>
   </header>
   <main>
-    <div class="extension-status" role="status" aria-live="polite">
-      <strong>Lockbox extension loaded</strong>
-      <span id="extension-status">Popup opened. Starting extension…</span>
-    </div>
-    <div id="message" role="status" aria-live="polite" hidden></div>
-    <section id="connect">
-      <p class="eyebrow">BROWSER COMPANION</p>
-      <h1>Your vault, within reach.</h1>
-      <p class="muted">Unlock your local <strong>.lbx</strong> file. Your vault stays encrypted on your device.</p>
-      <form id="unlock-form">
-        <label for="path">Vault file path</label>
-        <input id="path" type="text" required maxlength="4096" placeholder="/Users/you/Documents/passwords.lbx" autocomplete="off" spellcheck="false">
-        <label for="master">Master password</label>
-        <input id="master" type="password" required maxlength="4096" autocomplete="off">
-        <button class="primary" type="submit">Unlock local vault <span aria-hidden="true">↗</span></button>
-      </form>
-      <p class="hint">Lock this vault in the desktop app or other browser first.</p>
-      <details id="setup">
-        <summary>First time? Connect the native companion</summary>
-        <p>Build and register <code>lockbox-browser-host</code> using the <a href="INSTALL.md" target="_blank" rel="noopener">installation guide</a>. The companion opens your existing vault using Lockbox’s Rust encryption.</p>
-        <p>Extension ID: <code id="extension-id"></code></p>
-      </details>
-    </section>
-    <section id="vault" hidden>
-      <div class="site"><span class="site-dot" aria-hidden="true"></span><div><span class="eyebrow">CURRENT WEBSITE</span><p id="origin"></p></div></div>
-      <div id="unsupported" class="muted" hidden>Open an HTTPS website, then open Lockbox again to find matching logins.</div>
-      <div id="site-tools">
-        <div class="section-title"><h1>Suggested logins</h1><span id="count" class="badge">0</span></div>
-        <p class="hint">Exact website match. Choose an account to fill.</p>
-        <div id="accounts"></div>
-        <p id="empty" class="empty" hidden>No saved logins for this website.<br>Save a new one below, or add one in the desktop app.</p>
-        <details id="generator">
-          <summary>Suggest a new password <span aria-hidden="true">＋</span></summary>
-          <div class="generator-body">
-            <label for="length">Password length <output id="length-value" for="length">24</output></label>
-            <input id="length" type="range" min="16" max="128" value="24">
-            <label class="check"><input id="symbols" type="checkbox" checked> Include symbols</label>
-            <button id="generate" class="secondary" type="button">Generate secure password</button>
-            <p id="generated" class="hint" hidden></p>
-            <form id="save-form" hidden>
-              <label for="account">Save to</label>
-              <select id="account"><option value="">New login</option></select>
-              <div id="new-fields">
-                <label for="title">Login title</label>
-                <input id="title" type="text" maxlength="512" autocomplete="off" placeholder="Personal account">
-                <label for="username">Username or email</label>
-                <input id="username" type="text" maxlength="512" autocomplete="off" spellcheck="false">
-              </div>
-              <p id="replace-note" class="hint" hidden>This replaces the saved password. Your previous password stays in encrypted record history.</p>
-              <button type="submit" class="primary">Save, then fill new password</button>
-              <p class="hint">Changes your vault first. Submit the website’s form yourself to create or update the account.</p>
-            </form>
-          </div>
-        </details>
-      </div>
-    </section>
+    <div class="extension-status"><strong>Lockbox extension loaded</strong></div>
+    <h1>Fill with Lockbox</h1>
+    <p class="muted">Unlock and choose an account in the desktop app. Only the selected login returns to this website.</p>
+    <p id="origin" class="hint"></p>
+    <p id="message" role="status" aria-live="polite">Starting extension…</p>
+    <button id="open" class="primary" disabled>Open Lockbox</button>
+    <button id="cancel" class="secondary" hidden>Cancel request</button>
+    <details>
+      <summary>Setup desktop connection</summary>
+      <p>Install the desktop deep-link handler and native messaging relay using the <a href="INSTALL.md" target="_blank" rel="noopener">installation guide</a>.</p>
+      <p>Extension ID: <code id="extension-id"></code></p>
+    </details>
   </main>
-  <footer><span class="privacy-dot" aria-hidden="true"></span>Local vault · No telemetry<span id="session-label">Locked</span></footer>
+  <footer>Desktop vault · No telemetry</footer>
 </body>
 </html>

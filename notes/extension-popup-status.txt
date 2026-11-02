@@ -1,4 +1,27 @@
-Popup: visible load banner, before JavaScript/native host.
-Startup: running text after script starts; failure text on init error.
-Native connection: existing error panel stays separate.
-Build: ext/dist/chrome, ext/dist/firefox. Reload installed extension after rebuild.
+Browser now proxy. No vault path/master password input.
+Deep link: lockbox://browser/fill?request=<random token>.
+Desktop: normal unlock/Touch ID; exact-origin account choice; explicit Fill consent.
+Native host: stdio relay, private Unix callback socket, one use, 120s deadline.
+No credentials in links, files, clipboard, HTTP, browser storage.
+Cancel/EOF: pending reply rejected. Navigation: original document/fields rechecked.
+macOS setup: build desktop+host; node ext/scripts/setup-desktop.mjs; register-host.mjs.
+Firefox: load ext/dist/firefox/manifest.json; reload after build.
+Verified: library 466 passed, 2 ignored; bridge 7 passed; native host 2 passed.
+Verified: extension 19 passed; real Firefox install/popup/background passed.
+Verified: real macOS deep link delivered; local token handshake passed.
+Installed: target/Lockbox.app handler. Existing Firefox native manifest points to rebuilt host.
+Manual left: own-vault unlock, approve account, inspect filled website fields.
+Auto popup: active HTTPS origin; local plaintext per-vault site index; boolean reply only.
+Checks: navigation/tab/window focus, 5s while focused. No desktop launch on lookup.
+Popup: once per loaded page; Firefox 149+; badge fallback if browser rejects opening.
+Site filling: optional host permission requested on explicit Open Lockbox click.
+Verified: extension 25 passed; bridge/desktop 9 passed; host 2 passed; Firefox smoke passed.
+
+Plaintext index: ~/.lockbox/browser-sites/<hashed-vault-id>.json; Unix directory 0700, files 0600.
+Only canonical HTTPS origins. No paths/query/login/password. Local, no sync.
+Refresh: successful vault open/save; atomic replace. Lock/quit retain index.
+Existing vault: unlock once after update. External vault removal: clear stale index manually.
+Availability: disk lookup; desktop may stay closed/locked. Filling still needs unlock + consent.
+Verified persistent index: vault save/drop/unlock/delete lifecycle, independent vault updates, URL stripping, corrupt-file tolerance, 0600 files.
+Verified standalone native host: Match works from plaintext fixture with no desktop/vault; exact origin + port; boolean only.
+Verified: browser library/host tests passed; extension 25 passed, 2 optional skipped; release desktop+host built; Lockbox.app updated.

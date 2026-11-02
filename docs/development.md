@@ -36,10 +36,10 @@ Use feature names as the first navigation step:
 
 | Change | Location |
 | --- | --- |
-| Browser companion UI, manifests and form filling | `browser-extension/` |
-| Native messaging protocol, session and browser origin policy | `src/browser/`, `src/bin/lockbox-browser-host.rs` |
+| Browser companion UI, manifests and form filling | `ext/` |
+| Native messaging relay, callback protocol and browser origin policy | `src/browser/`, `src/bin/lockbox-browser-host.rs` |
 | Create/unlock a vault, recovery words, access screens | `src/access/` |
-| Browser native messaging and browser-owned vault sessions | `src/browser/` |
+| Desktop deep links and browser account consent | `src/desktop/browser.rs`, `src/desktop/window.rs` |
 | Records, folders, editor, imports, history and record views | `src/records/` |
 | Invitation files, joining, member workflows and sharing views | `src/sharing/` |
 | Signed protocol and deterministic replay | `src/sync/protocol/` |
