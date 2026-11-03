@@ -1,0 +1,7 @@
+- Repository description: Local-first, serverless password manager for teams, powered by S3-compatible storage.
+- README: English overview, features, macOS build/run, setup, security boundaries, docs, contribution checks.
+- Preserve previous README contents, including local edits, in docs/usage.md; adjust relative links.
+- Sync experimental, unversioned; independent audit and live Storj validation outstanding per existing docs.
+- Project license absent. Owner must choose license before open-source distribution; no license invented.
+- Cargo package description aligned. Remote repository metadata unchanged.
+- README rebuilt from scratch in English. Team-first positioning; explain direct bucket sync, offline edits, device approval. Storj current provider; other S3 providers unverified. Prior detailed guide retained.

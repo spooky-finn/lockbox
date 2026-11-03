@@ -1,6 +1,7 @@
 # Documentation guide
 
-Start with the [application README](../README.md) for usage and data protection,
+Start with the [application README](../README.md) for the project overview or the
+[detailed usage guide](usage.md) for usage and data protection,
 or the [developer guide](development.md) for build commands and layer boundaries.
 
 | Question | Document | Scope |

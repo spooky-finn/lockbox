@@ -5,7 +5,7 @@ edition = "2024"
 publish = false
 # `cargo run` starts the app; `build-icons` regenerates assets/icons.jsonl.
 default-run = "lockbox"
-description = "Local password manager with TOTP"
+description = "Local-first, serverless password manager for teams, powered by S3-compatible storage"
 
 # Brand icons are bundled; website icons require an explicit opt-in.
 [dependencies]

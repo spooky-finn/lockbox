@@ -1,201 +1,135 @@
-# lockbox
+# Lockbox
 
-Менеджер паролей с TOTP-кодами. Локальный режим хранит всё в одном
-зашифрованном файле `.lbx`. Облачный режим сохраняет изменения на устройстве
-и обменивается зашифрованными подписанными событиями через Storj.
+**Local-first, serverless password manager for teams, powered by S3-compatible storage.**
 
-## Development and documentation
+Keep passwords, TOTP codes, and attachments in encrypted vaults on your own devices. Share access with your team through an object storage bucket, with local edits available offline and encrypted changes exchanged in the background.
 
-From the repository root, run `cargo run --locked` to start the desktop app.
-See the [developer guide](docs/development.md) for validation and asset generation,
-and the [documentation index](docs/README.md) for architecture, implemented sync
-behavior, recovery and release plans.
+Lockbox runs as a Rust desktop application built with Dioxus. Team synchronization uses object storage directly, so there is no dedicated Lockbox application server to deploy or maintain. The current storage integration targets Storj through its S3-compatible API; compatibility with other S3 providers has not been established.
 
-## Browser companion
+> **Development status:** Lockbox is experimental and has not received an independent security audit. The shared sync protocol is unversioned and may change incompatibly. Live Storj bucket validation remains outstanding in the project documentation.
 
-Chrome and Firefox extensions open the desktop app through a deep link. Unlock
-with the normal password or Touch ID flow, then choose an exact-origin account
-to fill. The extension only proxies the request and fills the approved login;
-master passwords and vault files stay in the desktop app. See the
-[installation and security guide](ext/README.md).
+## What you can do
 
-## Website icon privacy and resource limits
+- **Keep a personal vault.** Store logins and TOTP secrets in one encrypted `.lbx` file. Work locally without configuring cloud storage.
+- **Share with your team.** Invite participants, approve specific devices, assign roles, and revoke device access.
+- **Work offline.** Save changes locally; a durable outbox retains shared changes for background synchronization.
+- **Handle concurrent edits.** Review conflicting versions and resolve them explicitly.
+- **Organize credentials.** Use folders, attach files, inspect record history, and restore entries from Trash.
+- **Fill browser logins.** Chrome and Firefox companions request account selection and approval in the desktop app before filling an exact HTTPS origin.
+- **Unlock with Touch ID.** Use macOS biometric access after setting it up with your master password.
+- **Recover access.** New shared profiles provide 12 recovery words, with local and cloud recovery workflows.
 
-Bundled icons are used by default. **Settings → Security → Download website icons**
-opts into contacting the selected record's website. Downloads use the exact HTTPS
-origin, public IP addresses pinned for the connection, no redirects, and no
-system proxy. Website-provided cross-origin icons are ignored. Icons are cached
-unencrypted in the OS cache directory at `lockbox/favicons/v1`, using hashed
-filenames. The cache survives locking and restarting: icons expire after 30 days,
-and failed lookups retry after five minutes. Unix cache directories use `0700`
-permissions and files use `0600`. Cache failures leave downloaded icons usable.
+English and Russian interfaces are available, along with system, light, and dark themes and custom colors.
 
-Vault reads and writes are limited to 256 MiB; identity files to 64 KiB. Argon2id
-keeps its creation default of 256 MiB and three passes. Readers accept at most
-512 MiB, six passes, and 768 MiB-passes of combined work. Files with higher custom
-costs are rejected before hashing; they need migration using a trusted compatible
-client. Truncated ciphertext and nonregular files are rejected before hashing.
-The complete Argon2 working memory is wiped after use.
+## How team sync works
 
-## Файлы в записи
+Each device maintains an encrypted local profile. Record and folder edits are saved locally before synchronization. Devices exchange encrypted, signed events through the configured bucket and verify signatures, membership, permissions, and causal dependencies before applying changes.
 
-В редакторе записи выберите «Добавить файл». Доступны до 16 файлов,
-суммарно до 1 МиБ на запись; изменения применяются кнопкой «Сохранить».
-В просмотре записи «Сохранить файл» выгружает выбранный файл в новое место
-на диске. Существующие файлы не перезаписываются.
+Invitations require participant verification and approval of a specific device. Each participant supplies their own bucket credentials; invitation links do not contain bucket credentials or vault keys. Membership changes rotate the encryption epoch key. Concurrent record versions remain available for review until resolved.
 
-Имена и байты вложений шифруются вместе с записью: в локальном `.lbx`
-и в подписанных событиях облачного обмена. Отдельные незашифрованные копии
-не создаются. Выгруженные пользователем файлы остаются обычными файлами.
-Удаление вложения сохраняет прежние версии в резервной копии и истории обмена.
-Для обмена вложениями обновите все устройства: старые клиенты отклоняют события
-с неизвестными полями. Локальные файлы теперь записываются как v6, облачные
-профили — v7; чтение прежних v1–v5 поддерживается. Старые приложения новые
-файлы не открывают, чтобы не потерять вложения при сохранении.
+The bucket acts as a transport for encrypted data. Clients perform encryption, verification, and conflict handling. See the [sync engine guide](docs/sync-engine.md) for the implemented behavior and the [invitation guide](docs/sync-invitations.md) for joining and access management.
 
-## Облачный профиль: идентичность и ключи
+## Quick start
 
-«Восстановить из Storj» на стартовом экране находит ваши пространства по прежним
-12 словам и доступу к bucket без старого `.lbx`. Выберите пространство, новый
-локальный пароль и явно подтвердите доверие к доступной облачной версии.
-Восстановление создаёт новое устройство владельца и отзывает прежний контроллер.
-Существующий профиль сначала откройте мастер-паролем и дождитесь завершения
-синхронизации, чтобы создать капсулу восстановления. Credentials нужны также для
-префикса `recovery/v1/`. Восстанавливаются только опубликованные данные;
-свежесть облачной версии после потери всех независимых копий доказать нельзя.
-Подробности и ограничения: [cloud recovery](docs/cloud-recovery.txt).
+### Requirements
 
-В создании хранилища выберите многопользовательский режим, заполните настройки
-Storj, имя пользователя и имя хранилища. После проверки полей задайте мастер-пароль
-(не менее 12 символов) и сохраните 12 слов восстановления. Приложение создаст
-локальный профиль `.lbx`. Слова и файл или его резервная копия восстановят доступ
-без старого мастер-пароля через «Забыли мастер-пароль?». Отмена выбора файла не создаёт ключи.
+- macOS, the primary desktop platform.
+- A Rust toolchain supporting edition 2024.
+- Xcode Command Line Tools, including Swift.
+- For shared vaults: a Storj bucket and S3 access credentials.
 
-Корневой Ed25519-ключ пользователя выводится из 12 слов BIP39 (SLIP-0010).
-Приложение создаёт независимые случайные Ed25519-ключи устройства,
-HPKE X25519-ключ устройства, случайные ID пространства, namespace, ключ эпохи
-и её контекст. Ключи изменений и checkpoint выводятся через HKDF по proposal.
-Полные публичные отпечатки доступны на стартовом экране открытого профиля.
+### Run from source
 
-Имена, credentials и ключи устройства хранятся внутри зашифрованного файла v8
-(Argon2id, HKDF-SHA256, XChaCha20-Poly1305). Корневой ключ дополнительно
-зашифрован тем же мастер-паролем с независимой солью. Открытие профиля
-паролем или Touch ID не расшифровывает корневой ключ автоматически.
-Старые профили сохраняют прежние пароли и не получают слова автоматически.
-Подробнее: [слова восстановления и формат v8](docs/recovery-words.md).
-При открытом профиле файл `.lbx.lock` блокирует второе открытие; оставшийся
-после закрытия lock-файл не означает, что профиль заблокирован.
+From your repository checkout:
 
-Новые профили содержат сертификат устройства, подписанный genesis и durable
-outbox. Сохранение записи или папки сначала фиксирует локальное событие;
-фоновый обмен со Storj не требует доступности сети для локальной работы.
-Проверяются подписи, роли, цепочка участников, причинные зависимости и счётчики
-устройств. Параллельные версии сохраняются до явного разрешения конфликта.
-Изменение состава участников меняет ключ эпохи; поздние изменения остаются
-доступны для проверки и переноса.
-
-Общие пространства используют единый экспериментальный протокол без версии, отдельный от полного
-proposal v1. API подключения независимых профилей и изменения состава участников
-реализован с подписанными приглашением, согласием устройства и подтверждением допуска;
-Прежние версии формата обмена не поддерживаются. [Описание API](docs/sync-invitations.md).
-Экран «Участники и доступ» создаёт одноразовую ссылку приглашения. Участник
-вставляет её в Lockbox, проверяет отдельно полученный код и отправляет заявку.
-Администратор видит имя, User ID и Device ID, сверяет их через второй канал
-и одобряет конкретное устройство. После согласия участника обмен завершается
-автоматически через Storj. Каждому нужны собственные credentials; в ссылке
-credentials и ключей хранилища нет. Файловое подключение осталось резервным
-способом в раскрывающемся пункте. Роль можно изменить, доступ устройства — отозвать.
-Старые bootstrap
-профили версии 1 активируются отдельным паролем восстановления с сохранением
-записей и пользовательской идентичности, с новыми ключами устройства. Новые
-облачные профили с восстановлением из Storj используют bootstrap-схему 6;
-первое действие с приглашением по ссылке обновляет профиль до схемы 7. Сохраняется независимый локальный якорь
-поколения файла. Откат или отсутствие якоря оставляет записи читаемыми и
-останавливает подпись и обмен. Облачные профили схемы 2 открываются для чтения;
-для продолжения используется восстановление с новым устройством и повторный допуск.
-Подробности: [защита профиля и восстановление](docs/profile-protection.md). Профиль
-не загружается в общий bucket и не копируется для подключения другого устройства.
-Существующие локальные файлы v1/v2 остаются совместимыми.
-
-Описание границ, API и проверки: [движок синхронизации](docs/sync-engine.md).
-Рабочий пример двух клиентов без сети: `cargo run --example shared_space`.
-Проверки используют adversarial transport и локальный S3 HTTP fixture;
-live-bucket Storj и независимое ревью безопасности пока не выполнены.
-
-## Code navigation
-
-Code is grouped by feature. Start with the behavior you want to change:
-
-```text
-src/
-  access/          vault creation, unlocking, biometric access and recovery words
-  browser/         browser native messaging relay and local callback
-  records/         record/folder models, editor, imports, history and views
-  sharing/         invitations, joining, participants and sharing views
-  sync/            protocol, exchange scheduler and transport providers
-  vault/           encrypted files, profiles, recovery and installation protection
-  settings/        preferences, config persistence and settings view
-  desktop/         app shell, session, windows, shared widgets and translations
-  platform/        clipboard, Touch ID, autolock and background jobs
-  bin/             asset build tools and browser native host
-  compatibility.rs legacy public import paths
-  lib.rs           feature modules and public exports
-  main.rs          desktop launch
+```sh
+cargo run --locked
 ```
 
-Models and protocol rules stay independent of Dioxus and system I/O. Feature
-views bind workflows to the desktop contexts; native services stay in `platform`.
-Both local and shared modes use the existing `Vault` facade. Shared edits retain
-its durable signing-intent and outbox boundaries.
+For an optimized build:
 
-Existing public paths, including `lockbox::vault`, `lockbox::core::sync`, and
-`lockbox::app::App`, remain supported. Internal code and examples use feature
-paths. See the [developer guide](docs/development.md#module-boundaries) for module
-ownership and extension rules.
+```sh
+cargo build --locked --release --bin lockbox
+./target/release/lockbox
+```
 
-## Как защищены данные
+Browser integration requires an app bundle and a native messaging relay. Follow the separate [Chrome and Firefox setup guide](ext/README.md).
 
-- Мастер-пароль → Argon2id (256 МиБ, 3 прохода) → HKDF → ключ
-  XChaCha20-Poly1305. Шифруется всё содержимое целиком, заголовок файла
-  тоже защищён от подмены.
-- Сохранение атомарное: временный файл → fsync → переименование;
-  предыдущая версия остаётся рядом как `.lbx.bak`.
-- Ключ и записи в Rust стираются из памяти при блокировке и закрытии окна.
-  При блокировке компоненты с записями и формами удаляются из интерфейса.
-  Введённые и показанные секреты также проходят через DOM, JavaScript и
-  виртуальный DOM Dioxus: гарантировать стирание этих копий из памяти WebView
-  нельзя.
-- Скопированный пароль или код помечается для менеджеров буфера как скрытый
-  и стирается из буфера через 20 с — если там всё ещё он.
-- Автоблокировка: после выбранного в настройках хранилища времени без действий
-  (по умолчанию 5 минут), после сна мака дольше этого времени и сразу при
-  блокировке экрана. Несохранённая правка записи при этом сбрасывается; за 30 с
-  окно предупреждает.
+### Create your first vault
 
-## Архитектурные предложения
+1. Open Lockbox and choose a local vault or shared mode.
+2. For shared mode, enter your Storj connection details, user name, and vault name. Follow the [Storj setup guide](docs/storj-setup.en.txt).
+3. Set a strong master password. Save the 12 recovery words provided for a new shared profile in a secure place.
+4. Add your login records, TOTP secrets, and folders.
+5. To share access, open **Participants and access**, create an invitation, and verify the participant through a separate channel before approving their device.
 
-[Lockbox Protocol](docs/lockbox-protocol.md) —
-подробный проект протокола на английском: идентичности и устройства, приглашения,
-подписанные изменения, шифрование, отзыв доступа и обмен через стороннее облако. Описанные
-возможности шире реализованного экспериментального протокола без версии;
-текущие границы описаны в [движке синхронизации](docs/sync-engine.md).
+To explore synchronization without a cloud bucket, run the example with two fictional clients and an in-memory storage provider:
 
-## Record history and Trash
+```sh
+cargo run --locked --example shared_space
+```
 
-Open a record and select **Record history** to compare changed fields before and
-after each revision. Passwords and TOTP secrets stay hidden until revealed.
-Shared history identifies the verified user and device by their full fingerprints;
-cloud events have causal ordering but no wall-clock timestamps. Local history
-records save times and labels the editor as “Local user”; it does not authenticate
-individual people sharing a master password.
+## Security and recovery
 
-Deleting moves a record to **Trash** in the sidebar. Restore preserves the record
-ID, secrets and attachments. If its folder was removed, it returns to the root.
-History and deleted values remain inside encrypted storage. There is no permanent
-purge operation. Local history begins with changes saved by this version; earlier
-local edits and deletions cannot be reconstructed. Shared history is limited to
-events the device can decrypt; a newly admitted device may lack older revisions.
-Concurrent shared versions stay in the existing conflict review until resolved.
+Local vaults use Argon2id, HKDF-SHA256, and XChaCha20-Poly1305. The default password derivation cost is 256 MiB of memory and three passes. Saves are atomic and preserve the previous file as `.lbx.bak`. Shared events are encrypted and signed.
 
-Files saved by this version use v6 (local) or v7 (shared); earlier clients reject
-them to avoid losing history. Update clients before reopening upgraded files.
+Lockbox clears Rust secret buffers when locking and removes secret-bearing views. Copies in WebView memory, browser JavaScript, IPC, or the DOM cannot be guaranteed erased. Automatic locking defaults to five minutes of inactivity. Copied secrets are cleared after 20 seconds if the clipboard still contains the same value.
+
+Keep backups of your vault and store recovery words separately. Cloud recovery requires recovery words and bucket access, and restores only published data. After losing all independent copies, you must explicitly trust the available cloud state; its freshness cannot be proven.
+
+A few storage boundaries matter when using Lockbox:
+
+- Record history and Trash retain previous values inside encrypted storage. There is no permanent purge operation.
+- Downloading website icons is optional. Downloaded icons remain in an unencrypted local cache.
+- The browser companion keeps an unencrypted local index of saved HTTPS origins, which can reveal which sites have saved logins.
+- Exported attachments are ordinary files on disk.
+- Updated vault formats may be rejected by older clients. Update devices before reopening upgraded files.
+
+Read the [detailed usage guide](docs/usage.md), [profile protection guide](docs/profile-protection.md), and [browser security boundary](ext/README.md#security-boundary) for limits and recovery details.
+
+## Platform support
+
+macOS has the primary documented desktop workflow, including Touch ID and Keychain integration. Other platforms do not have equivalent documented integration coverage. The supplied browser deep-link installer is macOS-only; the browser bridge does not implement Windows support.
+
+## Documentation
+
+| Topic | Guide |
+| --- | --- |
+| All project documentation | [Documentation index](docs/README.md) |
+| Build commands and code structure | [Developer guide](docs/development.md) |
+| Browser installation and autofill | [Browser companion](ext/README.md) |
+| Storage configuration | [Storj setup](docs/storj-setup.en.txt) |
+| Implemented synchronization | [Sync engine](docs/sync-engine.md) |
+| Team invitations and access | [Invitations](docs/sync-invitations.md) |
+| Recovery words and encrypted profiles | [Recovery words](docs/recovery-words.md) |
+| Recovery without the original vault | [Cloud recovery](docs/cloud-recovery.txt) |
+| Biometric access | [Touch ID](docs/touch-id.md) |
+| Release readiness | [Production plan](docs/sync-production-plan.md) |
+
+Some detailed documents are in Russian. The [protocol proposal](docs/lockbox-protocol.md) describes a broader target design; use the sync engine guide for implemented capabilities.
+
+## Contributing
+
+Start with the [developer guide](docs/development.md). Keep changes focused and explain the resulting behavior, validation, and any security or compatibility implications. Use fictional credentials and a separate vault for testing. Keep passwords, recovery words, keys, and vault contents out of logs, issues, and fixtures.
+
+Run the Rust checks from the repository root:
+
+```sh
+cargo fmt --all -- --check
+cargo test --locked
+cargo clippy --locked --all-targets -- -D warnings
+```
+
+For browser companion changes, also run:
+
+```sh
+npm --prefix ext run check
+```
+
+See [browser verification](ext/README.md#verification) for optional real-browser tests. Persistence and synchronization changes should cover failure and recovery paths as well as successful operations.
+
+## License
+
+A project-wide license has not yet been added. An open-source license must be selected before distributing Lockbox as licensed open-source software.
+
+Bundled Simple Icons assets carry their own [license](assets/LICENSE-simple-icons.md) and [disclaimer](assets/DISCLAIMER-simple-icons.md).
