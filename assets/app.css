@@ -386,7 +386,7 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 99px; }
 .empty-state p { color: var(--muted); max-width: 250px; margin: 10px 0 22px; line-height: 1.7; }
 
 /* Editor, generator and icon picker */
-.draft { max-width: 800px; margin: 0 auto; padding: 18px; border: 0; border-radius: 18px; background: var(--surface); box-shadow: none; gap: 4px; }
+.draft { min-height: calc(100% - 36px); max-width: 800px; margin: 0 auto; padding: 18px; border: 0; border-radius: 18px; background: var(--surface); box-shadow: none; gap: 4px; }
 .form-heading { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
 .form-heading h1 { font-size: 21px; }
 .form-heading .detail-kind { font-size: 10px; line-height: 1.25; margin-bottom: 3px; }
@@ -423,6 +423,10 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 99px; }
 .totp-options { display: flex; flex-wrap: wrap; gap: 12px; margin: 12px 0 4px; }
 .totp-options label { display: flex; flex-direction: column; gap: 7px; flex: 1; min-width: 80px; font-size: 11px; }
 .form-actions { border-top: 1px solid var(--separator); padding-top: 10px; margin-top: 6px; }
+.draft-footer { position: sticky; bottom: 0; z-index: 2; flex-wrap: wrap; flex-shrink: 0; margin-top: auto; padding: 10px 0; background: var(--surface); }
+.draft-delete-confirm { flex-basis: 100%; padding: 10px 0; }
+.draft-delete-confirm p { margin-bottom: 8px; }
+.draft-footer .draft-delete { margin-left: auto; }
 .delete-confirm { padding: 18px; border: 1px solid var(--error); border-radius: 16px; background: var(--surface); margin-top: 20px; }
 .delete-confirm p { margin-bottom: 14px; }
 .status { color: var(--muted); font-size: 10px; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 4px 12px; }

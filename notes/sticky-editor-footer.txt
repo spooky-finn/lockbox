@@ -1,0 +1,6 @@
+Editor footer
+- Save, Cancel stay visible during scroll. Opaque surface; separator above actions.
+- Existing entries offer Delete. Confirmation stays in footer; cancel keeps draft.
+- New entries omit Delete. Save uses existing form submission.
+- Checks: 4 editor tests passed; cargo fmt; git diff --check clean.
+- Native window scroll appearance not manually checked.

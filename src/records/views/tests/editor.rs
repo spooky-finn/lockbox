@@ -132,3 +132,25 @@ fn attachment_controls_render_names_and_sizes_without_file_contents() {
     assert!(html.contains("Сохранить файл"));
     assert!(!html.contains("never render file contents"));
 }
+
+#[test]
+fn footer_offers_delete_only_for_saved_entries() {
+    let mut dom = mounted();
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| u.start_edit());
+    });
+    let html = dioxus_ssr::render(&dom);
+    let footer = html.split("<footer").nth(1).expect("sticky action footer");
+    assert!(footer.contains("draft-footer"));
+    assert!(footer.contains("type=\"submit\""));
+    assert!(footer.contains("draft-delete"));
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| {
+            u.draft = None;
+            u.start_new();
+        });
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("draft-footer"));
+    assert!(!html.contains("draft-delete"));
+}

@@ -22,6 +22,7 @@ use dioxus::prelude::*;
 pub(crate) fn DraftView() -> Element {
     let language = crate::desktop::i18n::use_language();
     let state = use_context::<Session>();
+    let mut confirm_delete = use_signal(|| false);
     let screen = state.read();
     let Screen::Unlocked(unlocked) = &*screen else {
         return rsx! {};
@@ -93,9 +94,28 @@ pub(crate) fn DraftView() -> Element {
                 }
             }
             TotpEditor {}
-            div { class: "actions form-actions",
+            footer { class: "actions form-actions draft-footer",
+                if *confirm_delete.read() {
+                    div { class: "draft-delete-confirm",
+                        p { {language.format(Text::MoveEntryToTrash, &[entry.title.to_string()])} }
+                        div { class: "actions",
+                            IconButton { class: "danger", icon: Icon::Trash, label: language.text(Text::DeleteEntry), disabled: unlocked.vault.signing_error().is_some(),
+                                onclick: move |_| edit_unlocked(state, |u| {
+                                    u.error = u.delete_selected().err();
+                                    if u.error.is_none() { u.draft = None; }
+                                }),
+                            }
+                            IconButton { icon: Icon::Close, label: language.text(Text::Cancel), onclick: move |_| confirm_delete.set(false) }
+                        }
+                    }
+                }
                 IconButton { class: "primary", kind: "submit", icon: Icon::Save, label: language.text(Text::Save) }
                 IconButton { icon: Icon::Close, label: language.text(Text::Cancel), onclick: move |_| edit_unlocked(state, |u| { u.draft = None; u.error = None; }) }
+                if !draft.is_new {
+                    IconButton { class: "danger draft-delete", icon: Icon::Trash, label: language.text(Text::Delete), disabled: unlocked.vault.signing_error().is_some(),
+                        onclick: move |_| confirm_delete.set(true),
+                    }
+                }
             }
         }
     }
