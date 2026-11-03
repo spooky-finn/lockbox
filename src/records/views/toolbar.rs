@@ -4,11 +4,7 @@ use crate::desktop::{
     context::{Session, edit_unlocked},
     runtime,
     session::Screen,
-    widgets::{
-        button::IconButton,
-        status::StatusBar,
-        symbol::{Icon, Symbol},
-    },
+    widgets::{button::IconButton, status::StatusBar, symbol::Icon},
 };
 use dioxus::prelude::*;
 
@@ -21,24 +17,9 @@ pub(crate) fn Toolbar() -> Element {
         return rsx! {};
     };
 
-    let name = unlocked
-        .vault
-        .profile_summary()
-        .map(|profile| std::borrow::Cow::Borrowed(profile.space_name))
-        .unwrap_or_else(|| {
-            unlocked
-                .vault
-                .path()
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-        });
     rsx! {
         header { class: "toolbar",
-            div { class: "brand",
-                div { class: "brand-icon", Symbol { icon: Icon::Key } }
-                div { strong { "lockbox" } span { class: "vault-name", "{name}" } }
-            }
+            crate::desktop::space_switcher::SpaceSwitcher {}
             div { class: "toolbar-status",
                 if let Some(sync) = unlocked.vault.sync_state() {
                     div { class: if matches!(unlocked.sync.status, crate::sync::scheduler::Status::Saved | crate::sync::scheduler::Status::Syncing | crate::sync::scheduler::Status::Synced) { "sync-status" } else { "sync-status notice" },

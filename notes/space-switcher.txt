@@ -1,0 +1,14 @@
+Space switcher
+
+- Header name opens profile list. Unlock screen keeps same picker.
+- Local/cloud labels, current check, cloud names, path hints, missing-file state.
+- Open another file, create vault, join space stay inside picker.
+- Successful unlock remembers profiles across restarts; duplicate paths collapse.
+- Legacy last path + cloud names remain discoverable. Other tabs refresh on opening picker.
+- Switching releases old vault, clears guarded clipboard, requires target unlock.
+- Same current profile keeps session. Drafts, active import, pending unlock block switching.
+- File-dialog cancel keeps current session. Saved cloud outbox stays durable.
+- English/Russian labels; keyboard buttons, Escape, outside-click close, focus return.
+- Tests cover picker click, local/cloud list, missing files, target selection, clipboard, lease release, draft guard, restart, cross-tab metadata.
+- Validation: full suite 495 unit, 5 integration, 2 doc pass; 2 existing probes ignored.
+- Final desktop checks: 49 pass. Strict all-target Clippy, format, diff checks, desktop build pass.

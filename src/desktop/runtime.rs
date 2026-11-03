@@ -233,6 +233,28 @@ pub(crate) fn begin_create() {
     begin_creation(false);
 }
 
+pub(crate) fn select_profile(path: std::path::PathBuf) {
+    let mut state = consume_context::<Session>();
+    let settings = consume_context::<Signal<Settings>>();
+    let hardware = consume_context::<BiometricProvider>();
+    let native = consume_context::<SecurityHandle>();
+    state.write().select_profile(
+        path,
+        &settings.peek(),
+        &*hardware.0,
+        &mut native.borrow_mut(),
+    );
+    publish_status();
+}
+
+pub(crate) fn create_from_switcher(joining: bool) {
+    if !consume_context::<Session>().peek().can_switch_profile() {
+        return;
+    }
+    lock(None);
+    begin_creation(joining);
+}
+
 pub(crate) fn begin_join() {
     begin_creation(true);
 }
@@ -311,8 +333,9 @@ pub(crate) fn create_cloud_profile() {
 
 pub(crate) fn pick_vault(create: bool) {
     let mut state = consume_context::<Session>();
-    let settings = consume_context::<Signal<Settings>>();
-    let hardware = consume_context::<BiometricProvider>();
+    if !state.peek().can_switch_profile() {
+        return;
+    }
     if create {
         let mut screen = state.write();
         let Screen::Locked(form) = &mut *screen else {
@@ -344,10 +367,7 @@ pub(crate) fn pick_vault(create: bool) {
                     form.choose_local_path(path);
                 }
             } else {
-                let form = Locked::new(Some(path))
-                    .with_identity_path(settings.peek().identity_path(), None)
-                    .offer_touch_id(&settings.peek().config, &*hardware.0, false);
-                *state.write() = Screen::Locked(Box::new(form));
+                select_profile(path);
             }
         }
     });

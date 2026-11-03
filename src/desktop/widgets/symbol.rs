@@ -4,6 +4,7 @@ use dioxus::prelude::*;
 
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) enum Icon {
+    Cloud,
     Lock,
     Key,
     Folder,
@@ -34,6 +35,7 @@ pub(crate) enum Icon {
 #[component]
 pub(crate) fn Symbol(icon: Icon) -> Element {
     let path = match icon {
+        Icon::Cloud => "M6 18a5 5 0 0 1-1-9.9 7 7 0 0 1 13.5-1A5.5 5.5 0 0 1 18.5 18H6Z",
         Icon::Lock => {
             "M7 10V7a5 5 0 0 1 10 0v3M6 10h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2Zm6 5v3"
         }

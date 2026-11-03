@@ -16,6 +16,9 @@ pub struct Config {
     #[serde(default)]
     pub appearance: crate::settings::appearance::Appearance,
     pub last_vault: Option<PathBuf>,
+    /// Successfully opened profiles, most recent first. Paths only, no secrets.
+    #[serde(default)]
+    pub recent_vaults: Vec<PathBuf>,
     /// Display names for cloud profiles, available before password unlock.
     #[serde(default)]
     pub space_names: std::collections::BTreeMap<PathBuf, String>,
@@ -40,6 +43,7 @@ impl Default for Config {
             language: crate::settings::language::Language::default(),
             appearance: crate::settings::appearance::Appearance::default(),
             last_vault: None,
+            recent_vaults: Vec::new(),
             space_names: Default::default(),
             touch_id: Vec::new(),
             auto_lock_minutes: default_auto_lock(),

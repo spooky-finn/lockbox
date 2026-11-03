@@ -252,3 +252,72 @@ fn space_name_is_available_after_lock_restart_and_selecting_the_profile() {
     assert!(!config.contains("private-access-marker"));
     assert!(!config.contains("private-secret-marker"));
 }
+
+#[test]
+fn profile_selection_clears_clipboard_releases_old_vault_and_requires_unlock() {
+    let dir = tempfile::tempdir().unwrap();
+    let workspace = unlocked(&dir);
+    let previous = workspace.vault.path().to_path_buf();
+    let next = dir.path().join("team.lbx");
+    let mut screen = Screen::Unlocked(Box::new(workspace));
+    let settings = Settings {
+        config: Config {
+            space_names: [(next.clone(), "Team".into())].into(),
+            ..Config::default()
+        },
+        path: None,
+    };
+    let mut native = security();
+    native
+        .clipboard
+        .copy("secret", std::time::Instant::now())
+        .unwrap();
+    screen.select_profile(
+        next.clone(),
+        &settings,
+        &FakeBiometrics::default(),
+        &mut native,
+    );
+    let Screen::Locked(form) = &screen else {
+        panic!("selection unlocked a profile");
+    };
+    assert_eq!(form.path.as_ref(), Some(&next));
+    assert_eq!(form.space_name.as_deref(), Some("Team"));
+    assert!(form.password.is_empty());
+    assert!(!form.auto_touch_id);
+    assert!(
+        native
+            .clipboard
+            .remaining(std::time::Instant::now())
+            .is_none()
+    );
+    let _reopened =
+        crate::vault::Vault::open(&previous, &secrecy::SecretString::from("master".to_owned()))
+            .unwrap();
+}
+
+#[test]
+fn profile_selection_keeps_current_session_and_unsaved_edits() {
+    let dir = tempfile::tempdir().unwrap();
+    let workspace = unlocked(&dir);
+    let current = workspace.vault.path().to_path_buf();
+    let mut screen = Screen::Unlocked(Box::new(workspace));
+    let settings = Settings {
+        config: Config::default(),
+        path: None,
+    };
+    let fake = FakeBiometrics::default();
+    let mut native = security();
+    screen.select_profile(current.clone(), &settings, &fake, &mut native);
+    assert!(matches!(screen, Screen::Unlocked(_)));
+    if let Screen::Unlocked(workspace) = &mut screen {
+        workspace.start_new();
+        workspace.draft.as_mut().unwrap().entry.title = "Unsaved".into();
+    }
+    screen.select_profile(dir.path().join("other.lbx"), &settings, &fake, &mut native);
+    let Screen::Unlocked(workspace) = screen else {
+        panic!("discarded edits");
+    };
+    assert_eq!(workspace.vault.path(), current);
+    assert_eq!(workspace.draft.unwrap().entry.title, "Unsaved");
+}

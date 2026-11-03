@@ -8,6 +8,7 @@ mod root;
 pub(crate) mod runtime;
 pub(crate) mod security;
 pub(crate) mod session;
+pub(crate) mod space_switcher;
 mod sync_review;
 pub(crate) mod time;
 pub(crate) mod widgets;

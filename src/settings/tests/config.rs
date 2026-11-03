@@ -7,6 +7,7 @@ fn remembered_path_survives_a_restart() {
     let config = Config {
         language: crate::settings::language::Language::English,
         last_vault: Some("/tmp/vault.lbx".into()),
+        recent_vaults: vec!["/tmp/vault.lbx".into()],
         touch_id: vec!["00ff".into()],
         auto_lock_minutes: 15,
         website_icons: true,

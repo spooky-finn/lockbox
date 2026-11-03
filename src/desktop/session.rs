@@ -16,6 +16,36 @@ pub(crate) enum Screen {
 }
 
 impl Screen {
+    pub(crate) fn can_switch_profile(&self) -> bool {
+        match self {
+            Self::Unlocked(workspace) => !workspace.is_editing() && !workspace.import.busy(),
+            Self::Locked(form) => !form.busy(),
+        }
+    }
+
+    /// Drop the previous vault and clear its guarded clipboard before selecting
+    /// another profile. Selection never unlocks a profile or changes its data.
+    pub(crate) fn select_profile(
+        &mut self,
+        path: std::path::PathBuf,
+        settings: &Settings,
+        biometrics: &dyn Biometrics,
+        security: &mut Security,
+    ) {
+        if !self.can_switch_profile() {
+            return;
+        }
+        if matches!(self, Self::Unlocked(workspace) if workspace.vault.path() == path) {
+            return;
+        }
+        security.clipboard.clear_now();
+        *self = Self::Locked(Box::new(
+            Locked::new(Some(path))
+                .with_identity_path(settings.identity_path(), None)
+                .offer_touch_id(&settings.config, biometrics, false),
+        ));
+    }
+
     pub fn locked(settings: &Settings, biometrics: &dyn Biometrics) -> Self {
         Self::Locked(Box::new(
             Locked::new(settings.config.last_vault.clone())

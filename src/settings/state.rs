@@ -46,6 +46,7 @@ impl Settings {
                 && let Some(previous) = &config.last_vault
             {
                 config.space_names.remove(previous);
+                config.recent_vaults.retain(|path| path != previous);
             }
             config.last_vault = path;
         })
@@ -57,6 +58,8 @@ impl Settings {
         space_name: Option<String>,
     ) -> Result<(), String> {
         self.update(|config| {
+            config.recent_vaults.retain(|known| known != &path);
+            config.recent_vaults.insert(0, path.clone());
             if let Some(name) = space_name {
                 config.space_names.insert(path.clone(), name);
             } else {
@@ -64,6 +67,23 @@ impl Settings {
             }
             config.last_vault = Some(path);
         })
+    }
+
+    /// Include metadata saved before the recent-profile list was introduced.
+    pub(crate) fn known_profiles(&self) -> Vec<PathBuf> {
+        let mut paths = Vec::new();
+        for path in self
+            .config
+            .last_vault
+            .iter()
+            .chain(self.config.recent_vaults.iter())
+            .chain(self.config.space_names.keys())
+        {
+            if !paths.contains(path) {
+                paths.push(path.clone());
+            }
+        }
+        paths
     }
 
     pub fn set_touch_id(&mut self, id: &str, enabled: bool) -> Result<(), String> {
