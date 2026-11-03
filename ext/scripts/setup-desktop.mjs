@@ -1,10 +1,11 @@
 // Build a local macOS application bundle that owns lockbox:// links.
-import { mkdir, copyFile, writeFile, stat, rename } from "node:fs/promises";
+import { mkdir, copyFile, readFile, writeFile, stat, rename } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 if (process.platform !== "darwin") throw new Error("This installer currently supports macOS only.");
 const root = fileURLToPath(new URL("../../", import.meta.url));
+const { version } = JSON.parse(await readFile(new URL("../manifest.json", import.meta.url), "utf8"));
 const executable = path.join(root, "target/release/lockbox");
 await stat(executable);
 const bundle = path.join(root, "target/Lockbox.app");
@@ -20,8 +21,8 @@ await writeFile(path.join(contents, "Info.plist"), `<?xml version="1.0" encoding
 <key>CFBundleName</key><string>Lockbox</string>
 <key>CFBundleExecutable</key><string>lockbox</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleVersion</key><string>1</string>
-<key>CFBundleShortVersionString</key><string>0.1.0</string>
+<key>CFBundleVersion</key><string>${version}</string>
+<key>CFBundleShortVersionString</key><string>${version}</string>
 <key>NSHighResolutionCapable</key><true/>
 <key>CFBundleURLTypes</key><array><dict>
 <key>CFBundleURLName</key><string>app.lockbox.browser</string>

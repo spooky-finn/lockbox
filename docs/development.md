@@ -30,6 +30,73 @@ separate distinct stages of work. Comments should explain constraints and reason
 use `///` for public contracts and `//!` for module responsibilities.
 Use English for new documentation and developer notes.
 
+## GitHub CI and releases
+
+GitHub Actions runs [CI](../.github/workflows/ci.yml) for pushes to `main`, pull
+requests, and merge queues. It also supports manual runs. Formatting, browser
+checks, and release-script tests run first; strict Clippy, all-target Rust tests,
+and doctests then run on Linux x86_64 and macOS Apple Silicon. Configure branch
+protection to require **CI passed**. Documentation changes still receive this
+check, so required checks cannot remain pending because of path filters.
+
+The toolchain is pinned in `rust-toolchain.toml`. Native dependencies are installed
+by a shared setup action. Rust dependencies are cached separately by build profile,
+OS, architecture, toolchain, and dependency manifests; default-branch runs save
+caches and PRs restore them. New commits cancel superseded CI runs. Disabling debug
+symbols and incremental compilation reduces runner disk use; two compilation and
+test workers bound memory usage. The browser companion has no npm dependencies,
+so CI does not run `npm install`. Action revisions are pinned to commit SHAs and
+Dependabot proposes grouped updates weekly.
+
+To create a release:
+
+1. Update `[package].version` in `Cargo.toml` and `version` in `ext/manifest.json`
+   to the same `X.Y.Z`. Run `cargo check` to refresh the root package version in
+   `Cargo.lock`, then `cargo check --locked`. Commit the version changes
+   and merge them into the default branch. Browser ZIP filenames and the local
+   macOS bundle use the manifest version automatically.
+2. Open **Actions → Release → Run workflow**, select the default branch, and enter
+   that version without a `v` prefix. Leave **Create an unpublished draft** enabled
+   for a draft, or disable it to publish when the workflow finishes. Optionally
+   mark the release as a prerelease.
+3. The workflow validates versions and requires an unused `vX.Y.Z` tag, reruns full
+   CI at the selected commit, builds packages in parallel, smoke-tests each optimized
+   browser host, verifies the complete asset set, and generates `SHA256SUMS`.
+   The final job creates the tag/release at that exact commit, with generated
+   changelog notes. Existing tags and releases are never overwritten.
+
+The manual workflow can also be started with GitHub CLI:
+
+```sh
+gh workflow run release.yml --repo spooky-finn/lockbox --ref main \
+  -f version=0.1.0 -F draft=true -F prerelease=false
+```
+
+Release assets include:
+
+| Asset | Contents |
+| --- | --- |
+| `lockbox-X.Y.Z-aarch64-apple-darwin.zip` | Apple Silicon `Lockbox.app`, including native browser host |
+| `lockbox-X.Y.Z-x86_64-apple-darwin.zip` | Intel `Lockbox.app`, including native browser host |
+| `lockbox_X.Y.Z_amd64.deb` | Linux desktop app, host, runtime dependencies, menu and deep-link registration |
+| `lockbox-X.Y.Z-x86_64-unknown-linux-gnu.tar.gz` | Linux binaries, notices, and runtime dependency instructions |
+| `lockbox-chrome-X.Y.Z.zip`, `lockbox-firefox-X.Y.Z.zip` | Browser companions |
+| `SHA256SUMS` | SHA-256 hashes for all six packages |
+
+Linux builds use Ubuntu 22.04 to retain Linux Mint 21.1 compatibility. macOS builds
+are ad-hoc signed without Apple credentials and are not notarized. Firefox packages
+are unsigned development ZIPs. Browser native-host registration remains a separate
+step described in [the browser guide](../ext/README.md): packaged hosts are at
+`/Applications/Lockbox.app/Contents/MacOS/lockbox-browser-host` on macOS and
+`/usr/bin/lockbox-browser-host` after installing the Linux `.deb`.
+
+Only the publication job receives `contents: write`; other jobs use read-only
+repository access. The automatic `GITHUB_TOKEN` is sufficient, with no extra
+secrets. Ensure repository Actions policy allows the pinned actions and release
+creation, including any applicable tag rules. There is no release on push or tag
+creation. Release runs queue instead of cancelling one another; intermediate
+artifacts expire after seven days and release assets remain attached to the release.
+
 ## Module boundaries
 
 Use feature names as the first navigation step:
