@@ -14,6 +14,85 @@ use crate::{
 use secrecy::SecretString;
 use std::sync::Arc;
 
+#[test]
+fn short_link_copy_waits_for_upload_and_recipient_can_edit_a_pending_download() {
+    use crate::vault::profile::pairing::Slot;
+    let directory = tempfile::tempdir().unwrap();
+    let mut owner = vault(&directory, "owner");
+    let guest = vault(&directory, "guest");
+    let now = crate::desktop::time::unix_now();
+    let session = owner.create_link(now, 1).unwrap();
+    let ticket = owner.issued_links().next().unwrap().ticket.clone();
+    let reference = ticket.reference().unwrap();
+    let mut dom = mounted();
+    update(&mut dom, |state| {
+        runtime::set_language(crate::settings::language::Language::English);
+        edit_unlocked(state, |u| {
+            u.vault = owner;
+            u.open_sharing();
+        })
+    });
+    let html = dioxus_ssr::render(&dom);
+    let primary = html.split("Connect using files").next().unwrap();
+    assert!(primary.contains("Uploading invitation"));
+    assert!(primary.contains("Retry invitation upload"));
+    assert!(!primary.contains("Link ready to send"));
+    assert!(!primary.contains("lockbox://i/"));
+    let copy_button = primary
+        .split("Copy invitation link")
+        .next()
+        .unwrap()
+        .rsplit("<button")
+        .next()
+        .unwrap();
+    assert!(copy_button.contains("disabled"));
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| {
+            u.vault
+                .acknowledge_pairing(session, &[Slot::Bootstrap, Slot::Ticket(reference.ticket)])
+                .unwrap();
+        })
+    });
+    let html = dioxus_ssr::render(&dom);
+    let primary = html.split("Connect using files").next().unwrap();
+    assert!(primary.contains("Link ready to send"));
+    assert!(primary.contains(&reference.link()));
+    assert!(!primary.contains("lockbox://invite/"));
+    let copy_button = primary
+        .split("Copy invitation link")
+        .next()
+        .unwrap()
+        .rsplit("<button")
+        .next()
+        .unwrap();
+    assert!(!copy_button.contains("disabled"));
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| {
+            u.vault = guest;
+            u.sharing.joining = true;
+            u.vault
+                .request_link(
+                    &reference.link(),
+                    &ticket.verification_code().unwrap().to_string(),
+                    now,
+                )
+                .unwrap();
+        })
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("Downloading invitation"));
+    assert!(html.contains("Edit link or code"));
+    assert!(!html.contains("id=\"pairing-link\""));
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| {
+            u.vault.dismiss_join_link(reference.ticket).unwrap();
+        })
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(!html.contains("Downloading invitation"));
+    assert!(html.contains("id=\"pairing-link\""));
+}
+
 fn vault(directory: &tempfile::TempDir, name: &str) -> Vault {
     ProfileStore::new(Arc::new(MemoryWitness::default()))
         .create_shared(

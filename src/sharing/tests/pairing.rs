@@ -19,6 +19,8 @@ use std::sync::{
 struct Memory {
     messages: Mutex<BTreeMap<(Hash, Slot), Vec<u8>>>,
     request_unavailable_once: AtomicBool,
+    ticket_unavailable_once: AtomicBool,
+    ticket_upload_fails_once: AtomicBool,
 }
 
 struct Factory(Arc<Memory>);
@@ -38,6 +40,14 @@ impl Mailbox for Store {
         cancel: &Cancellation,
     ) -> NetworkResult<Option<Vec<u8>>> {
         cancel.check()?;
+        if matches!(slot, Slot::Ticket(_))
+            && self
+                .0
+                .ticket_unavailable_once
+                .swap(false, Ordering::Relaxed)
+        {
+            return Ok(None);
+        }
         if matches!(slot, Slot::Request(_))
             && self
                 .0
@@ -62,6 +72,14 @@ impl Mailbox for Store {
         cancel: &Cancellation,
     ) -> NetworkResult<()> {
         cancel.check()?;
+        if matches!(slot, Slot::Ticket(_))
+            && self
+                .0
+                .ticket_upload_fails_once
+                .swap(false, Ordering::Relaxed)
+        {
+            return Err(TransportError::Unavailable);
+        }
         self.0
             .messages
             .lock()
@@ -130,22 +148,30 @@ fn background_mailbox_completes_link_flow_and_retries_partially_available_reques
     let mut guest = profile(&directory, "Alice");
     let session = owner.create_link(0, 1).unwrap();
     let ticket = owner.issued_links().next().unwrap().ticket.clone();
-    guest
-        .request_link(
-            &ticket.link().unwrap(),
-            &ticket.verification_code().unwrap().to_string(),
-            1,
-        )
-        .unwrap();
     let memory = Arc::new(Memory::default());
     memory
         .request_unavailable_once
+        .store(true, Ordering::Relaxed);
+    memory
+        .ticket_unavailable_once
         .store(true, Ordering::Relaxed);
     let factory: Arc<dyn MailboxFactory> = Arc::new(Factory(memory.clone()));
     let mut controller = Pairing::new(Some(factory.clone()));
     let mut recipient = Pairing::new(Some(factory));
     let mut owner_sync = SpaceSync::default();
     let mut guest_sync = SpaceSync::default();
+    assert!(!owner.link_ready(session));
+    assert!(owner.export_link(session, false).is_err());
+    cycle(&mut controller, &mut owner, &mut owner_sync);
+    let link = owner.export_link(session, false).unwrap();
+    assert_eq!(link.len(), 62);
+    assert!(link.starts_with("lockbox://i/"));
+    guest
+        .request_link(&link, &ticket.verification_code().unwrap().to_string(), 1)
+        .unwrap();
+    cycle(&mut recipient, &mut guest, &mut guest_sync);
+    assert!(guest.resolving_link().is_some());
+    assert!(guest.joining_link().is_none());
     for _ in 0..16 {
         cycle(&mut controller, &mut owner, &mut owner_sync);
         let pending = owner
@@ -185,6 +211,92 @@ fn switching_profile_discards_pending_mailbox_results() {
     let mut runtime = Pairing::new(Some(Arc::new(Factory(memory))));
     let mut sync = SpaceSync::default();
     assert!(runtime.tick(&mut owner, &mut sync, false, 1).is_none());
+    assert!(runtime.worker.is_some());
+    let mut replacement = profile(&directory, "Replacement");
+    assert!(
+        runtime
+            .tick(&mut replacement, &mut sync, false, 1)
+            .is_none()
+    );
+    assert!(runtime.worker.is_none());
+    assert!(!replacement.has_pairing());
+    assert_eq!(replacement.space_members().unwrap().len(), 1);
+}
+
+#[test]
+fn interrupted_ticket_upload_disables_copy_until_the_exact_delivery_is_retried() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut owner = profile(&directory, "Owner");
+    let session = owner.create_link(0, 1).unwrap();
+    let ticket = owner.issued_links().next().unwrap().ticket.clone();
+    let hash = ticket.hash().unwrap();
+    let memory = Arc::new(Memory::default());
+    memory
+        .ticket_upload_fails_once
+        .store(true, Ordering::Relaxed);
+    let mut runtime = Pairing::new(Some(Arc::new(Factory(memory.clone()))));
+    let mut sync = SpaceSync::default();
+    assert!(runtime.tick(&mut owner, &mut sync, false, 1).is_none());
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let error = loop {
+        assert!(Instant::now() < deadline);
+        if let Some(error) = runtime.tick(&mut owner, &mut sync, false, 1) {
+            break error;
+        }
+        std::thread::yield_now();
+    };
+    assert!(error.contains("unavailable"));
+    assert!(!owner.link_ready(session));
+    assert!(owner.export_link(session, false).is_err());
+    assert!(
+        memory
+            .messages
+            .lock()
+            .unwrap()
+            .contains_key(&(session, Slot::Bootstrap))
+    );
+    assert!(
+        !memory
+            .messages
+            .lock()
+            .unwrap()
+            .contains_key(&(hash, Slot::Ticket(hash)))
+    );
+    owner.retry_pairing().unwrap();
+    cycle(&mut runtime, &mut owner, &mut sync);
+    assert!(owner.link_ready(session));
+    assert_eq!(
+        owner.export_link(session, false).unwrap(),
+        ticket.reference().unwrap().link()
+    );
+    assert_eq!(
+        memory.messages.lock().unwrap()[&(hash, Slot::Ticket(hash))],
+        crate::sync::protocol::canonical(&ticket).unwrap()
+    );
+}
+
+#[test]
+fn switching_profile_discards_a_pending_short_ticket_download() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut owner = profile(&directory, "Owner");
+    owner.create_link(0, 1).unwrap();
+    let ticket = owner.issued_links().next().unwrap().ticket.clone();
+    let mut guest = profile(&directory, "Guest");
+    guest
+        .request_link(
+            &ticket.reference().unwrap().link(),
+            &ticket.verification_code().unwrap().to_string(),
+            1,
+        )
+        .unwrap();
+    let memory = Arc::new(Memory::default());
+    memory.messages.lock().unwrap().insert(
+        (ticket.hash().unwrap(), Slot::Ticket(ticket.hash().unwrap())),
+        crate::sync::protocol::canonical(&ticket).unwrap(),
+    );
+    let mut runtime = Pairing::new(Some(Arc::new(Factory(memory))));
+    let mut sync = SpaceSync::default();
+    assert!(runtime.tick(&mut guest, &mut sync, false, 1).is_none());
     assert!(runtime.worker.is_some());
     let mut replacement = profile(&directory, "Replacement");
     assert!(

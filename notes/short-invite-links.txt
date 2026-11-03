@@ -1,0 +1,21 @@
+Short invite links
+2026-11-02
+
+- Default copy: lockbox://i/<base64url space name>/<base64url full ticket hash>. Team: 62 characters. SHA-256 stays complete; no shortener service.
+- Exact signed ticket stored under existing spaces/<escaped name>/pairing/<ticket hash>/ticket.json mailbox manifest; chunks use existing bounded transport. No extra bucket rights.
+- Copy/preview blocked until signed ticket and bootstrap proof receive durable publication acknowledgements. Interrupted upload exposes retry; retry keeps exact bytes.
+- Recipient resolves through own configured endpoint/bucket only. Download must match full hash, signed space name, certificate/signature and independent verification code. Control proof still required before encrypted named-device request.
+- Approval still binds exact device/request/role after independent username/User ID/Device ID comparison. Consent, epoch rotation, receipt, signed completion and single-use ledger unchanged.
+- Pending lookup/code saved in encrypted profile before network; survives restart. Sync waits while resolving. Lock/profile switch discards worker replies. Edit link or code cancels lookup and restores entered values.
+- Long links remain accepted. Existing sessions publish unchanged ticket at hash address on next exchange; verification code unchanged.
+- Bootstrap schema 8 retains ticket deliveries/pending lookups; schema-7 sessions readable. Older applications reject schema 8; witness and backup activation preserve protection.
+- Stored ticket public metadata; no provider credentials, decryption secrets or membership capability. Storage can withhold bytes; upload acknowledgement cannot guarantee later availability.
+
+Validation
+- cargo test --locked --offline --quiet: 491 library, 5 integration, 2 doctests passed; 2 explicit system probes ignored.
+- Focused pairing suite: 16 passed. Covers exact signed-ticket/hash/route checks, malformed encodings, wrong code/storage, expiry, absent/partial upload, retries with exact bytes, restart, migration, single use and stale profile replies.
+- Sharing component suite: 11 passed. Copy/preview gated on publication; pending download supports return to entry form. Session test covers restoring pending short lookup.
+- cargo clippy --locked --offline --all-targets -- -D warnings: passed.
+- cargo build --locked --offline --bin lockbox: passed; target/debug/lockbox rebuilt. Restart app to load change.
+- cargo fmt --all -- --check and git diff --check: passed.
+- S3 test uses local SigV4 HTTP fixture; no live Storj, native GUI manual check or independent cryptographic audit claimed.

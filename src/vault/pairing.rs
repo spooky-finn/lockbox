@@ -5,13 +5,17 @@ use crate::{
     sync::{
         protocol::{
             Admission, AdmissionReceipt, Blob, Error, Hash, Invitation, Machine, Role, canonical,
-            pairing::{ClosedReason, Closure, Contact, Envelope, Joined, Kind, Ticket},
+            pairing::{
+                ClosedReason, Closure, Contact, Envelope, Joined, Kind, LinkReference, Ticket,
+            },
         },
         transport::storj::pairing::Factory,
     },
     vault::{
         InvitationStatus, Result, Vault, VaultError,
-        profile::pairing::{Approval, Delivery, IssuedLink, JoiningLink, PairingState, Slot},
+        profile::pairing::{
+            Approval, Delivery, IssuedLink, JoiningLink, PairingState, ResolvingLink, Slot,
+        },
     },
 };
 use std::{
@@ -53,6 +57,38 @@ impl Vault {
             .is_some_and(|profile| !profile.pairing.is_empty())
     }
 
+    pub(crate) fn resolving_link(&self) -> Option<&ResolvingLink> {
+        self.profile.as_ref()?.pairing.resolving.as_ref()
+    }
+
+    pub(crate) fn link_ready(&self, session: Hash) -> bool {
+        let Some(link) = self
+            .issued_links()
+            .find(|link| link.ticket.body.id == session)
+        else {
+            return false;
+        };
+        let Ok(hash) = link.ticket.hash() else {
+            return false;
+        };
+        link.closed.is_none()
+            && [Slot::Bootstrap, Slot::Ticket(hash)]
+                .into_iter()
+                .all(|slot| {
+                    self.profile
+                        .as_ref()
+                        .unwrap()
+                        .pairing
+                        .outgoing
+                        .iter()
+                        .any(|delivery| {
+                            delivery.session == session
+                                && delivery.slot == slot
+                                && delivery.published
+                        })
+                })
+    }
+
     pub(crate) fn export_link(&mut self, session: Hash, code: bool) -> Result<String> {
         self.ensure_profile_writable()?;
         if self
@@ -72,12 +108,24 @@ impl Vault {
         if code {
             Ok(link.ticket.verification_code()?.to_string())
         } else {
-            link.ticket.link().map_err(Into::into)
+            if !self.link_ready(session) {
+                return Err(VaultError::Pairing(
+                    "Wait for the invitation to finish uploading",
+                ));
+            }
+            Ok(link.ticket.reference()?.link())
         }
     }
 
     pub(crate) fn dismiss_join_link(&mut self, session: Hash) -> Result<()> {
         self.ensure_profile_writable()?;
+        if self
+            .resolving_link()
+            .is_some_and(|link| link.reference.ticket == session)
+        {
+            self.profile.as_mut().unwrap().pairing.resolving = None;
+            return self.save_pairing();
+        }
         let link = self
             .profile
             .as_ref()
@@ -96,11 +144,12 @@ impl Vault {
 
     pub(crate) fn pairing_waits_to_join(&self) -> bool {
         self.profile.as_ref().is_some_and(|profile| {
-            profile
-                .pairing
-                .joining
-                .values()
-                .any(|link| !link.joined && link.closed.is_none())
+            profile.pairing.resolving.is_some()
+                || profile
+                    .pairing
+                    .joining
+                    .values()
+                    .any(|link| !link.joined && link.closed.is_none())
         })
     }
 
@@ -125,6 +174,8 @@ impl Vault {
         )?;
         let proof = Machine::pairing_proof(profile.sync.as_ref().unwrap(), &ticket)?;
         let id = ticket.body.id;
+        let hash = ticket.hash()?;
+        let bytes = canonical(&ticket)?;
         let profile = self.profile.as_mut().unwrap();
         profile.pairing.issued.insert(
             id,
@@ -137,6 +188,7 @@ impl Vault {
             },
         );
         self.queue_pairing(id, Slot::Bootstrap, proof)?;
+        self.queue_pairing(id, Slot::Ticket(hash), bytes)?;
         self.save_pairing()?;
         Ok(id)
     }
@@ -144,7 +196,6 @@ impl Vault {
     pub(crate) fn request_link(&mut self, link: &str, code: &str, now: u64) -> Result<Hash> {
         self.ensure_profile_writable()?;
         self.ensure_sharing_view()?;
-        let ticket = Ticket::parse_link(link)?;
         let supplied = code
             .trim()
             .to_ascii_lowercase()
@@ -154,6 +205,46 @@ impl Vault {
                     "Enter the administrator's verification code from a second channel",
                 )
             })?;
+        if LinkReference::is_short(link) {
+            let reference = LinkReference::parse(link)?;
+            let profile = self.profile.as_ref().ok_or(Error::UnauthorizedDevice)?;
+            if let Some(pending) = &profile.pairing.resolving {
+                if pending.reference == reference && pending.code == supplied {
+                    self.save_pairing()?;
+                    return Ok(reference.ticket);
+                }
+                return Err(VaultError::Pairing(
+                    "Finish or cancel the current connection first",
+                ));
+            }
+            if profile
+                .pairing
+                .joining
+                .values()
+                .any(|link| !link.joined && link.closed.is_none())
+            {
+                return Err(VaultError::Pairing(
+                    "Finish or cancel the current connection first",
+                ));
+            }
+            Self::pairing_capacity(&profile.pairing)?;
+            let hash = reference.ticket;
+            self.profile.as_mut().unwrap().pairing.resolving = Some(ResolvingLink {
+                reference,
+                code: supplied,
+            });
+            self.save_pairing()?;
+            return Ok(hash);
+        }
+        if self.resolving_link().is_some() {
+            return Err(VaultError::Pairing(
+                "Finish or cancel the current connection first",
+            ));
+        }
+        self.stage_link_ticket(Ticket::parse_link(link)?, supplied, now)
+    }
+
+    fn stage_link_ticket(&mut self, ticket: Ticket, supplied: Hash, now: u64) -> Result<Hash> {
         if supplied != ticket.verification_code()? {
             return Err(VaultError::Pairing(
                 "The administrator's verification code does not match the link",
@@ -166,6 +257,7 @@ impl Vault {
             if existing.ticket.hash()? != ticket.hash()? {
                 return Err(Error::InvalidInvitation.into());
             }
+            self.profile.as_mut().unwrap().pairing.resolving = None;
             self.save_pairing()?;
             return Ok(id);
         }
@@ -182,9 +274,13 @@ impl Vault {
                 "Finish or cancel the current connection first",
             ));
         }
-        Self::pairing_capacity(&profile.pairing)?;
+        if profile.pairing.resolving.is_none() {
+            Self::pairing_capacity(&profile.pairing)?;
+        }
         self.ensure_joinable(&ticket.body.descriptor)?;
-        self.profile.as_mut().unwrap().pairing.joining.insert(
+        let pairing = &mut self.profile.as_mut().unwrap().pairing;
+        pairing.resolving = None;
+        pairing.joining.insert(
             id,
             JoiningLink {
                 ticket,
@@ -458,6 +554,18 @@ impl Vault {
         self.ensure_profile_writable()?;
         if bytes.len() > slot.budget() {
             return Err(Error::ResourceBudgetExceeded.into());
+        }
+        if let Slot::Ticket(hash) = slot {
+            let pending = self
+                .resolving_link()
+                .ok_or(Error::InvalidInvitation)?
+                .clone();
+            if hash != session || pending.reference.ticket != hash {
+                return Err(Error::InvalidInvitation.into());
+            }
+            let ticket = pending.reference.decode_ticket(bytes)?;
+            self.stage_link_ticket(ticket, pending.code, now)?;
+            return Ok(());
         }
         if self
             .profile
@@ -754,6 +862,15 @@ impl Vault {
                 self.close_link(link.ticket.body.id, ClosedReason::Expired)?;
                 continue;
             }
+            let hash = link.ticket.hash()?;
+            if !self.has_delivery(link.ticket.body.id, Slot::Ticket(hash)) {
+                self.queue_pairing(
+                    link.ticket.body.id,
+                    Slot::Ticket(hash),
+                    canonical(&link.ticket)?,
+                )?;
+                self.save_pairing()?;
+            }
             if let Some(approval) = &link.approval {
                 if self.has_delivery(link.ticket.body.id, Slot::Offer(approval.request)) {
                     continue;
@@ -958,11 +1075,22 @@ impl Vault {
     pub(crate) fn pairing_factory(&self, ticket: &Ticket) -> Result<Arc<dyn MailboxFactory>> {
         let profile = self.profile.as_ref().ok_or(Error::UnauthorizedDevice)?;
         Self::check_pairing_storage(profile, ticket)?;
+        self.pairing_storage_factory(&ticket.body.space_name)
+    }
+
+    pub(crate) fn pairing_storage_factory(
+        &self,
+        space_name: &str,
+    ) -> Result<Arc<dyn MailboxFactory>> {
+        let profile = self.profile.as_ref().ok_or(Error::UnauthorizedDevice)?;
+        if !crate::sync::protocol::pairing::valid_name(space_name) {
+            return Err(Error::InvalidInvitation.into());
+        }
         let config = &profile.provider;
         Ok(Arc::new(Factory::new(
             &config.base_url,
             &config.bucket,
-            &ticket.body.space_name,
+            space_name,
             &config.access_key,
             &config.secret_key,
         )))
@@ -985,7 +1113,9 @@ impl Vault {
     }
 
     fn pairing_capacity(state: &PairingState) -> Result<()> {
-        if state.issued.len() + state.joining.len() >= PairingState::MAX_LINKS {
+        if state.issued.len() + state.joining.len() + usize::from(state.resolving.is_some())
+            >= PairingState::MAX_LINKS
+        {
             return Err(Error::ResourceBudgetExceeded.into());
         }
         Ok(())

@@ -16,17 +16,25 @@ master password and saves their mnemonic. This creates fresh device keys in an
 encrypted staging profile. Normal space sync waits until joining completes.
 The local profile is never copied or uploaded to admit another device.
 
-1. Owner selects **Create invitation link** and **Copy invitation link**. Send
-   the `lockbox://invite/...` text to the participant. Use **Copy verification
-   code** to deliver the complete 64-character code through a second trusted
-   channel, separately from the link. A link defaults to seven days; one and
+1. Owner selects **Create invitation link**, waits for **Link ready to send**,
+   then selects **Copy invitation link**. Send the short
+   `lockbox://i/<encoded space name>/<ticket hash>` text to the participant.
+   **Retry invitation upload** retries an interrupted upload; copying stays
+   disabled until both the signed ticket and control proof are published.
+   Use **Copy verification code** to deliver the complete 64-character code
+   through a second trusted channel, separately from the link. A link defaults to seven days; one and
    thirty days are available under **Invitation validity**.
 2. Participant pastes the link into **Join with a link**, enters the separately
-   received code and selects **Verify and send request**. The app verifies the
-   signed ticket and pinned control proof before sending a device-signed,
-   encrypted request containing username and complete device certificate.
+   received code and selects **Verify and send request**. The app downloads the
+   signed ticket from the configured storage, checks its complete hash, signature,
+   space name and independent code, then verifies the pinned control proof before
+   sending a device-signed, encrypted request containing username and complete
+   device certificate.
    Links are pasted into Lockbox; OS/browser URL-handler registration is not
    required or claimed by this implementation.
+   Pending downloads survive restart. **Edit link or code** returns to the form
+   with the entered values so a typo can be corrected before any request is sent.
+   Previously issued `lockbox://invite/...` links remain accepted.
 3. Participant selects **Copy message for administrator** and sends their
    username, complete User ID and complete Device ID through the second trusted
    channel. The administrator sees the signed username and both IDs in the
@@ -63,6 +71,17 @@ unknown/consumed ticket authorise another admission.
 
 ## Storage and trust boundaries for links
 
+Short links contain the base64url-encoded space name and complete 256-bit ticket
+hash (43 base64url characters), not the ticket itself. A space named `Team`
+produces a 62-character link. No hash truncation or URL-shortening service is used.
+The exact signed ticket is published through the existing bounded/chunked mailbox
+adapter at `spaces/<escaped space name>/pairing/<ticket hash>/ticket.json`.
+The app uses only the recipient's configured endpoint and bucket to resolve it;
+the downloaded ticket must match the locator hash and space name before it can
+advance joining. Missing or overwritten data cannot substitute another ticket;
+it can prevent joining. A provider acknowledgement establishes upload completion,
+not a promise that the provider will retain or serve those bytes.
+
 Link tickets contain public routing, an owner-certified controller certificate,
 a random session ID, control anchor/proof hash, expiry and controller signature.
 They contain no provider credential, decryption secret, private device key or
@@ -72,7 +91,8 @@ routing and certified encryption key. It must be authenticated independently.
 The subsequent addressed invitation must extend this pinned control anchor.
 
 Each client uses its own configured Storj credentials. The ticket's endpoint and
-bucket must match that explicit configuration before any request. No arbitrary
+bucket must match that explicit configuration before any contact message is sent.
+Ticket resolution reads only the configured endpoint and bucket. No arbitrary
 URL from a link is fetched, no credentials are forwarded to a new endpoint, and
 redirects remain disabled. The adapter uses a separate
 `spaces/<escaped space name>/pairing/<random session>/` directory. The controller
@@ -85,14 +105,15 @@ credentials is not part of joining. No presigned bearer URLs are issued.
 Requests, offers, consent, receipts and completion acknowledgements use
 HPKE-encrypted envelopes with separate domains and ticket/request/type/recipient
 context. Requests additionally bind the username and exact certificate with the
-device signature. The public bootstrap control proof and signed terminal status
-remain public metadata, like ordinary signed control objects. Storage sees
+device signature. The signed ticket, bootstrap control proof and signed terminal
+status remain public metadata, like ordinary signed control objects. Storage sees
 object names, sizes and traffic; no claim of hidden membership metadata or
 recipient-compromise forward secrecy is made.
 
 Large documents use 1 MiB hash-checked chunks and bounded manifests, separately
 from the normal 4 MiB immutable sync object contract. The normal proof/history
-limits still apply. Link parsing is bounded to 16 KiB, contacts/manifests to
+limits still apply. Short links are bounded to 512 bytes, signed tickets to 8 KiB,
+legacy link parsing to 16 KiB, contacts/manifests to
 64 KiB, and link state/outgoing caches to 64 MiB with 16 sessions and 32 requests
 per session. Request polling is bounded and partial uploads can be retried.
 Providers can withhold, overwrite or replay bytes; signatures, exact approvals,
@@ -203,11 +224,13 @@ canonical wire bytes and an independently generated signature.
 
 ## Persistence and local policy
 
-Bootstrap schema **7** adds the durable link ledger and exact encrypted delivery
-cache. The existing witness also protects link approvals, consumption and
-cancellation against local profile rollback. Schema-6 profiles upgrade on first
-link operation; older applications reject the new schema. Membership wire
-artifacts remain unchanged.
+Bootstrap schema **7** added the durable link ledger and exact encrypted delivery
+cache. Schema **8** additionally retains short-link publication and pending ticket
+resolution. Existing link sessions gain the same signed ticket's short delivery
+on their next exchange, without changing their verification code. Profiles
+upgrade on a link operation; older applications reject the new schema. The
+existing witness also protects link approvals, consumption and cancellation
+against local profile rollback. Membership wire artifacts remain unchanged.
 
 Bootstrap schema **4** stores issued invitations, exact responses, cancellation,
 reserved admissions and receipts inside the encrypted profile. Schema-3 profiles

@@ -1,6 +1,8 @@
 Link invitation implementation
 2026-11-02
 
+Update: short-link delivery now implemented. See short-invite-links.txt; schema 8 supersedes schema 7 for link operations. Historical validation below describes initial long-link implementation.
+
 - Default desktop flow now uses link; old file wizard collapsed under Connect using files.
 - Owner creates single-use signed ticket, copies link and independently sends full verification code.
 - New participant creates own profile/credentials, pastes link/code. App verifies ticket and anchored control proof before submitting signed encrypted request.

@@ -157,12 +157,13 @@ impl BootstrapProfile {
 
     pub(crate) fn validate(&self) -> bool {
         ((self.schema_version == 1 && self.sync.is_none())
-            || ((2..=7).contains(&self.schema_version)
+            || ((2..=8).contains(&self.schema_version)
                 && self.sync.is_some()
                 && self.certificate.is_some()))
             && (self.schema_version >= 4 || self.sharing.is_empty())
             && (self.schema_version >= 5 || self.control_approvals.is_empty())
             && (self.schema_version >= 7 || self.pairing.is_empty())
+            && (self.schema_version >= 8 || !self.pairing.uses_short_links())
             && self.pairing.validate()
             && self.control_approvals.len() <= 128
             && self
@@ -196,7 +197,7 @@ impl BootstrapProfile {
     }
 
     pub(crate) fn requires_witness(&self) -> bool {
-        (3..=7).contains(&self.schema_version)
+        (3..=8).contains(&self.schema_version)
     }
 
     pub(crate) fn enable_sharing(&mut self) {
@@ -204,7 +205,7 @@ impl BootstrapProfile {
     }
 
     pub(crate) fn enable_pairing(&mut self) {
-        self.schema_version = self.schema_version.max(7);
+        self.schema_version = self.schema_version.max(8);
     }
 
     pub(crate) fn enable_authority(&mut self) {

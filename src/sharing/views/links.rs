@@ -64,9 +64,15 @@ fn act(command: Command) {
                 }
                 Command::Retry => u.vault.retry_pairing()?,
                 Command::Dismiss(session) => {
+                    let pending = u.vault.resolving_link().cloned();
                     u.vault.dismiss_join_link(session)?;
-                    u.sharing.links.link.clear();
-                    u.sharing.links.code.clear();
+                    if let Some(pending) = pending {
+                        u.sharing.links.link = pending.reference.link();
+                        u.sharing.links.code = pending.code.to_string();
+                    } else {
+                        u.sharing.links.link.clear();
+                        u.sharing.links.code.clear();
+                    }
                 }
                 Command::Forget(session) => u.vault.forget_link(session)?,
             }
@@ -76,7 +82,9 @@ fn act(command: Command) {
         .map(|error| error.to_string());
         if u.error.is_none() {
             u.sharing.links.wake();
-            if u.vault.joining_link().is_some_and(|link| link.joined) {
+            if !u.vault.pairing_waits_to_join()
+                && u.vault.joining_link().is_some_and(|link| link.joined)
+            {
                 u.error = settings
                     .write()
                     .remember_profile(
@@ -100,7 +108,10 @@ pub(super) fn LinkInvitations(blocked: bool) -> Element {
     };
     if u.is_controller() && !u.sharing.joining {
         rsx! { OwnerLinks { blocked } }
-    } else if !u.sharing.joining && u.vault.joining_link().is_none() {
+    } else if !u.sharing.joining
+        && u.vault.joining_link().is_none()
+        && u.vault.resolving_link().is_none()
+    {
         rsx! {}
     } else {
         rsx! { JoinLink { blocked } }
@@ -156,6 +167,7 @@ fn LinkCard(session: Hash, blocked: bool) -> Element {
     else {
         return rsx! {};
     };
+    let ready = u.vault.link_ready(session);
     rsx! {
         div { class: "sharing-link-card stack",
             if let Some(closed) = &link.closed {
@@ -163,10 +175,13 @@ fn LinkCard(session: Hash, blocked: bool) -> Element {
                 button { class: "quiet", disabled: blocked || !u.vault.can_forget_link(session), onclick: move |_| act(Command::Forget(session)), {language.text(Text::LinkForget)} }
             } else {
                 if link.approval.is_none() {
-                    p { {language.text(Text::LinkReady)} }
+                    p { role: "status", {language.text(if ready { Text::LinkReady } else { Text::LinkUploading })} }
                     div { class: "actions sharing-actions",
-                        button { class: "primary", disabled: blocked, onclick: move |_| copied.set(verification::copy(state, language, CopyTarget::Link(session))), {language.text(Text::LinkCopy)} }
+                        button { class: "primary", disabled: blocked || !ready, onclick: move |_| copied.set(verification::copy(state, language, CopyTarget::Link(session))), {language.text(Text::LinkCopy)} }
                         if copied() { span { class: "copy-indicator", role: "status", {language.text(Text::Copied)} } }
+                        if !ready {
+                            button { class: "quiet", disabled: blocked, onclick: move |_| act(Command::Retry), {language.text(Text::LinkRetryUpload)} }
+                        }
                     }
                     p { class: "muted", {language.text(Text::LinkCodeHint)} }
                     div { class: "actions sharing-actions",
@@ -174,11 +189,13 @@ fn LinkCard(session: Hash, blocked: bool) -> Element {
                     }
                     details { class: "sharing-message-preview",
                         summary { {language.text(Text::LinkShow)} }
-                        pre { class: "sharing-message", "{link.ticket.link().unwrap_or_default()}" }
+                        if ready {
+                            pre { class: "sharing-message", "{link.ticket.reference().map(|reference| reference.link()).unwrap_or_default()}" }
+                        }
                         p { {language.text(Text::SharingVerificationCode)} }
                         code { class: "sharing-code", "{link.ticket.verification_code().map(|code| code.to_string()).unwrap_or_default()}" }
                     }
-                    if link.requests.is_empty() { p { role: "status", {language.text(Text::LinkWaitingRequests)} } }
+                    if ready && link.requests.is_empty() { p { role: "status", {language.text(Text::LinkWaitingRequests)} } }
                 } else {
                     p { role: "status", {language.text(Text::LinkApprovedWaiting)} }
                 }
@@ -262,11 +279,19 @@ fn JoinLink(blocked: bool) -> Element {
     let Screen::Unlocked(u) = &*screen else {
         return rsx! {};
     };
-    let session = u.vault.joining_link().map(|link| link.ticket.body.id);
+    let session = u
+        .vault
+        .resolving_link()
+        .map(|link| link.reference.ticket)
+        .or_else(|| u.vault.joining_link().map(|link| link.ticket.body.id));
     rsx! {
         section { class: "settings-section stack", aria_label: language.text(Text::LinkJoin),
             h2 { {language.text(Text::LinkJoin)} }
-            if let Some(link) = u.vault.joining_link() {
+            if u.vault.resolving_link().is_some() {
+                p { role: "status", {language.text(Text::LinkDownloading)} }
+                button { class: "quiet", disabled: blocked, onclick: move |_| act(Command::Retry), {language.text(Text::LinkRetry)} }
+                button { class: "quiet", disabled: blocked, onclick: move |_| { if let Some(session) = session { act(Command::Dismiss(session)); } }, {language.text(Text::LinkEdit)} }
+            } else if let Some(link) = u.vault.joining_link() {
                 p { "{link.ticket.body.space_name}" }
                 if link.joined {
                     p { role: "status", {language.text(Text::SharingConnectedHint)} }

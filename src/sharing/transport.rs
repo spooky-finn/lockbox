@@ -9,6 +9,8 @@ use crate::{
 };
 
 pub(crate) trait Mailbox: Send {
+    /// Ticket documents use their complete hash as the address; all subsequent
+    /// slots use the signed ticket's random session ID under the same space prefix.
     fn get(&mut self, session: Hash, slot: Slot, cancel: &Cancellation) -> Result<Option<Vec<u8>>>;
     fn put(&mut self, session: Hash, slot: Slot, bytes: &[u8], cancel: &Cancellation)
     -> Result<()>;

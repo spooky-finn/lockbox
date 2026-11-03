@@ -2,7 +2,7 @@
 
 use crate::sync::protocol::{
     Blob, Hash, Invitation, Role,
-    pairing::{ClosedReason, Closure, Contact, Ticket},
+    pairing::{ClosedReason, Closure, Contact, LinkReference, Ticket},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -13,8 +13,17 @@ pub(crate) struct PairingState {
     pub issued: BTreeMap<Hash, IssuedLink>,
     pub joining: BTreeMap<Hash, JoiningLink>,
     pub outgoing: Vec<Delivery>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resolving: Option<ResolvingLink>,
     #[serde(skip)]
     pub needs_save: bool,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ResolvingLink {
+    pub reference: LinkReference,
+    pub code: Hash,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -55,6 +64,7 @@ pub(crate) struct JoiningLink {
     deny_unknown_fields
 )]
 pub(crate) enum Slot {
+    Ticket(Hash),
     Bootstrap,
     Request(Hash),
     Offer(Hash),
@@ -68,6 +78,7 @@ pub(crate) enum Slot {
 impl Slot {
     pub fn key(self) -> String {
         match self {
+            Self::Ticket(_) => "ticket".into(),
             Self::Bootstrap => "bootstrap".into(),
             Self::Status => "status".into(),
             Self::Request(id) => format!("requests/{id}"),
@@ -79,8 +90,17 @@ impl Slot {
         }
     }
 
+    /// Ticket lookup precedes discovery of the random pairing session ID.
+    pub fn address(self, session: Hash) -> Hash {
+        match self {
+            Self::Ticket(hash) => hash,
+            _ => session,
+        }
+    }
+
     pub fn budget(self) -> usize {
         match self {
+            Self::Ticket(_) => crate::sync::protocol::pairing::MAX_TICKET_BYTES,
             Self::Bootstrap => crate::sync::protocol::MAX_INVITATION_BYTES,
             Self::Offer(_) | Self::Receipt(_) => crate::sync::protocol::pairing::MAX_MESSAGE_BYTES,
             _ => crate::sync::protocol::pairing::MAX_CONTACT_BYTES,
@@ -102,12 +122,31 @@ impl PairingState {
     pub const MAX_REQUESTS: usize = 32;
 
     pub fn is_empty(&self) -> bool {
-        self.issued.is_empty() && self.joining.is_empty() && self.outgoing.is_empty()
+        self.issued.is_empty()
+            && self.joining.is_empty()
+            && self.outgoing.is_empty()
+            && self.resolving.is_none()
+    }
+
+    pub fn uses_short_links(&self) -> bool {
+        self.resolving.is_some()
+            || self
+                .outgoing
+                .iter()
+                .any(|delivery| matches!(delivery.slot, Slot::Ticket(_)))
     }
 
     pub fn validate(&self) -> bool {
         let mut deliveries = BTreeSet::new();
-        self.issued.len() + self.joining.len() <= Self::MAX_LINKS
+        self.issued.len() + self.joining.len() + usize::from(self.resolving.is_some())
+            <= Self::MAX_LINKS
+            && self.resolving.as_ref().is_none_or(|pending| {
+                pending.reference.validate()
+                    && !self
+                        .joining
+                        .values()
+                        .any(|link| !link.joined && link.closed.is_none())
+            })
             && self.outgoing.len() <= 256
             && self.issued.iter().all(|(id, link)| {
                 *id == link.ticket.body.id
@@ -142,6 +181,18 @@ impl PairingState {
                     || self.joining.contains_key(&delivery.session))
                     && delivery.bytes.0.len() <= delivery.slot.budget()
                     && deliveries.insert((delivery.session, delivery.slot))
+                    && match delivery.slot {
+                        Slot::Ticket(hash) => {
+                            self.issued.get(&delivery.session).is_some_and(|link| {
+                                link.ticket.hash().ok() == Some(hash)
+                                    && crate::sync::protocol::canonical(&link.ticket)
+                                        .ok()
+                                        .as_deref()
+                                        == Some(delivery.bytes.0.as_slice())
+                            })
+                        }
+                        _ => true,
+                    }
             })
             && crate::serialization::canonical_size(self).is_ok_and(|size| size <= 64 * 1024 * 1024)
     }

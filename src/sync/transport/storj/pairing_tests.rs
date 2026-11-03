@@ -15,8 +15,9 @@ fn scoped_s3_mailbox_chunks_round_trip_and_rejects_corruption_and_oversized_mani
     let server_objects = objects.clone();
     let session = Hash([7; 32]);
     let request = Hash([8; 32]);
+    let ticket = Hash([9; 32]);
     let server = std::thread::spawn(move || {
-        for _ in 0..10 {
+        for _ in 0..14 {
             let (mut stream, _) = listener.accept().unwrap();
             stream
                 .set_read_timeout(Some(Duration::from_secs(5)))
@@ -41,7 +42,10 @@ fn scoped_s3_mailbox_chunks_round_trip_and_rejects_corruption_and_oversized_mani
             let url = url::Url::parse(&format!("http://localhost{target}")).unwrap();
             let path = url.path().to_owned();
             let (status, bytes) = if method == "PUT" {
-                assert!(path.contains(&format!("/pairing/{session}/")));
+                assert!(
+                    path.contains(&format!("/pairing/{session}/"))
+                        || path.contains(&format!("/pairing/{ticket}/"))
+                );
                 assert!(!path.contains("/objects/"));
                 assert!(!path.contains("/recovery/"));
                 let length = headers["content-length"].parse::<usize>().unwrap();
@@ -89,6 +93,17 @@ fn scoped_s3_mailbox_chunks_round_trip_and_rejects_corruption_and_oversized_mani
     .unwrap();
     let mut store = Store(storj);
     let cancel = Cancellation::default();
+    let ticket_bytes = b"fictional signed ticket";
+    store
+        .put(ticket, Slot::Ticket(ticket), ticket_bytes, &cancel)
+        .unwrap();
+    assert_eq!(
+        store
+            .get(ticket, Slot::Ticket(ticket), &cancel)
+            .unwrap()
+            .unwrap(),
+        ticket_bytes
+    );
     let bytes = vec![42; CHUNK_BYTES + 23];
     store
         .put(session, Slot::Offer(request), &bytes, &cancel)

@@ -1,7 +1,7 @@
 # Profile protection and fresh-device recovery
 
 Cloud-recoverable desktop profiles start with encrypted bootstrap schema **6**;
-link invitations upgrade them to schema **7** inside the versioned
+link invitations upgrade them to schema **8** inside the versioned
 `.lbx` container. Signed remote objects use one unversioned protocol; previous versioned
 histories are unsupported. Local file generations
 and witnesses are never uploaded. Local vaults now write v4; v1/v2 remain readable. Shared profiles also read v3.
@@ -13,7 +13,9 @@ recovery target and encrypted historical epoch keys. Existing event signatures
 and the independent profile witness retain their existing contracts.
 Schema 7 retains durable link requests, exact device/role approvals, consumption
 and encrypted mailbox deliveries. It keeps the same witness protection; older
-clients reject the schema. Recovery backup activation never downgrades schema 7.
+clients reject the schema. Schema 8 adds short-link publication and pending ticket
+downloads while retaining the complete signed ticket and independent code check.
+Recovery backup activation never downgrades these schemas.
 Protected schema-3 profiles retain their witness and upgrade when using sharing.
 
 ## Independent installation evidence

@@ -8,7 +8,9 @@ use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 const LINK_PREFIX: &str = "lockbox://invite/";
+const SHORT_LINK_PREFIX: &str = "lockbox://i/";
 pub(crate) const MAX_LINK_BYTES: usize = 16 * 1024;
+pub(crate) const MAX_TICKET_BYTES: usize = MAX_LINK_BYTES / 2;
 pub(crate) const MAX_CONTACT_BYTES: usize = 64 * 1024;
 pub(crate) const MAX_MESSAGE_BYTES: usize = 128 * 1024 * 1024 + 4096;
 pub(super) const TICKET_DOMAIN: &[u8] = b"lockbox.pairing.ticket\0";
@@ -32,7 +34,80 @@ pub(crate) struct TicketBody {
 
 pub(crate) type Ticket = Signed<TicketBody>;
 
+/// Public locator. Its complete ticket hash pins the downloaded signed document;
+/// storage credentials and the independent verification code remain separate.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct LinkReference {
+    pub space_name: String,
+    pub ticket: Hash,
+}
+
+impl LinkReference {
+    pub fn is_short(link: &str) -> bool {
+        link.trim().starts_with(SHORT_LINK_PREFIX)
+    }
+
+    pub fn validate(&self) -> bool {
+        valid_name(&self.space_name)
+    }
+
+    pub fn link(&self) -> String {
+        format!(
+            "{SHORT_LINK_PREFIX}{}/{}",
+            URL_SAFE_NO_PAD.encode(self.space_name.as_bytes()),
+            URL_SAFE_NO_PAD.encode(self.ticket.0),
+        )
+    }
+
+    pub fn parse(link: &str) -> Result<Self> {
+        let link = link.trim();
+        if link.len() > 512 {
+            return Err(Error::ResourceBudgetExceeded);
+        }
+        let (space, ticket) = link
+            .strip_prefix(SHORT_LINK_PREFIX)
+            .and_then(|value| value.split_once('/'))
+            .ok_or(Error::InvalidInvitation)?;
+        let reference = Self {
+            space_name: String::from_utf8(
+                URL_SAFE_NO_PAD
+                    .decode(space)
+                    .map_err(|_| Error::InvalidEncoding)?,
+            )
+            .map_err(|_| Error::InvalidEncoding)?,
+            ticket: Hash(
+                URL_SAFE_NO_PAD
+                    .decode(ticket)
+                    .map_err(|_| Error::InvalidEncoding)?
+                    .try_into()
+                    .map_err(|_| Error::InvalidEncoding)?,
+            ),
+        };
+        if !reference.validate() || reference.link() != link {
+            return Err(Error::InvalidEncoding);
+        }
+        Ok(reference)
+    }
+
+    pub fn decode_ticket(&self, bytes: &[u8]) -> Result<Ticket> {
+        let ticket: Ticket = wire::decode_bounded(bytes, MAX_TICKET_BYTES)?;
+        if ticket.hash()? != self.ticket || ticket.body.space_name != self.space_name {
+            return Err(Error::HashMismatch);
+        }
+        ticket.verify_ticket()?;
+        Ok(ticket)
+    }
+}
+
 impl Ticket {
+    pub fn reference(&self) -> Result<LinkReference> {
+        Ok(LinkReference {
+            space_name: self.body.space_name.clone(),
+            ticket: self.hash()?,
+        })
+    }
+
     pub fn hash(&self) -> Result<Hash> {
         Hash::digest_canonical(b"lockbox.pairing.ticket-object\0", self)
     }
@@ -43,7 +118,7 @@ impl Ticket {
 
     pub fn link(&self) -> Result<String> {
         let bytes = canonical(self)?;
-        if bytes.len() > MAX_LINK_BYTES / 2 {
+        if bytes.len() > MAX_TICKET_BYTES {
             return Err(Error::ResourceBudgetExceeded);
         }
         Ok(format!("{LINK_PREFIX}{}", URL_SAFE_NO_PAD.encode(bytes)))

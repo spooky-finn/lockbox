@@ -160,6 +160,37 @@ impl Pairing {
             return Ok(());
         }
         let plans = vault.pairing_plans(now)?;
+        if let Some(pending) = vault.resolving_link() {
+            let session = pending.reference.ticket;
+            let scope = Scope {
+                profile: vault.path().to_path_buf(),
+                device: vault.device_certificate().unwrap().body.device,
+                session,
+            };
+            let factory = match &self.factory {
+                Some(factory) => factory.clone(),
+                None => vault.pairing_storage_factory(&pending.reference.space_name)?,
+            };
+            self.worker = Some((
+                scope,
+                Worker::spawn(move |cancel| {
+                    let slot = Slot::Ticket(session);
+                    let incoming = factory
+                        .connect()?
+                        .get(session, slot, &cancel)?
+                        .map(|bytes| (slot, bytes))
+                        .into_iter()
+                        .collect();
+                    Ok(Reply {
+                        published: Vec::new(),
+                        incoming,
+                        seen: Vec::new(),
+                        next: None,
+                    })
+                }),
+            ));
+            return Ok(());
+        }
         if plans.is_empty() {
             self.due = Instant::now() + Duration::from_secs(15);
             return Ok(());
@@ -198,7 +229,12 @@ impl Pairing {
                 }
                 for delivery in &plan.outgoing {
                     cancel.check()?;
-                    mailbox.put(session, delivery.slot, &delivery.bytes.0, &cancel)?;
+                    mailbox.put(
+                        delivery.slot.address(session),
+                        delivery.slot,
+                        &delivery.bytes.0,
+                        &cancel,
+                    )?;
                     reply.published.push(delivery.slot);
                 }
                 if plan.list_requests {

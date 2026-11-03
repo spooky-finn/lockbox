@@ -117,7 +117,7 @@ fn joining_opens_sharing_and_survives_a_session_lock() {
 }
 
 #[test]
-fn pending_link_resumes_joining_without_the_original_creation_screen() {
+fn pending_short_link_download_resumes_joining_without_the_original_creation_screen() {
     use crate::vault::{
         KdfParams, ProfileStore, ProviderConfiguration, SharedProfile, witness::MemoryWitness,
     };
@@ -153,7 +153,7 @@ fn pending_link_resumes_joining_without_the_original_creation_screen() {
     let ticket = owner.issued_links().next().unwrap().ticket.clone();
     guest
         .request_link(
-            &ticket.link().unwrap(),
+            &ticket.reference().unwrap().link(),
             &ticket.verification_code().unwrap().to_string(),
             0,
         )

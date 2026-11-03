@@ -10,3 +10,4 @@
 - Tradeoff: enclave blob device-bound, not app-identity-bound; copied envelope still requires fingerprint on same Mac.
 - Validation: cargo test --locked --offline passed (452 library, 4 integration, 2 doctests; 2 OS probes ignored). Strict all-target Clippy, formatting, diff checks passed.
 - Real hardware probe passed outside sandbox: unsigned binary stored encrypted fixture; enclave blocked decrypt with LAErrorNotInteractive; fixture removed. Interactive fingerprint success/cancellation remain manual checks.
+- 2026-11-02 availability diagnosis: outside-sandbox read-only probe found Secure Enclave available; LocalAuthentication returned -8, "Biometry is locked out." Generic settings message hides temporary lockout. Lock/unlock Mac with login password, then reopen Lockbox to refresh cached availability. Sandbox probe cannot diagnose hardware: helper connection fails with NSCocoaErrorDomain 4099.

@@ -55,6 +55,7 @@ impl Screen {
         security: &mut Security,
     ) {
         let joining = matches!(self, Self::Locked(form) if form.joining)
+            || opened.vault.pairing_waits_to_join()
             || opened.vault.joining_link().is_some_and(|link| !link.joined)
             || opened
                 .vault

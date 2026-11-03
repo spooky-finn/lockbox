@@ -1,0 +1,12 @@
+- Build: 2026-11-03; Lockbox 0.1.0; Linux Mint 21.1 Cinnamon x86_64.
+- Environment: macOS ARM host; OrbStack; Ubuntu 22.04 amd64 container; Rust/Cargo 1.95.0; glibc 2.35.
+- Source: 8eb15c867860339d5c0310bb045032e54318e13f + existing working-tree code changes. Snapshot: target/linux-mint-21.1/context/. No application source edits needed.
+- Command: cargo build --locked --release --bin lockbox --bin lockbox-browser-host -j 8.
+- Package: target/linux-mint-21.1/artifacts/lockbox_0.1.0_linux-mint-21.1_amd64.deb. Desktop + native host + menu entry + lockbox:// MIME handler.
+- Archive: target/linux-mint-21.1/artifacts/lockbox-0.1.0-linux-x86_64.tar.gz. Runtime libraries required; no desktop registration.
+- Install on Mint: sudo apt install ./lockbox_0.1.0_linux-mint-21.1_amd64.deb. Launch: lockbox.
+- Checks pass: release compilation; ELF x86-64; desktop GLIBC requirement <=2.34; shared-library resolution; .deb installation; native-host exact-origin/unknown-origin/different-port matching; malformed JSON + legacy unlock rejected without output.
+- GUI: installed executable opens X11 window; stays alive 10 s under Xvfb, ordinary user, Ubuntu 22.04. Harmless missing accessibility-bus warning. Manual Cinnamon + interactive vault checks not run.
+- Build records: target/linux-mint-21.1/artifacts/BUILD-INFO.txt, source-SHA256SUMS, validation.txt, elf-versions.txt. Dockerfile + package/check scripts: target/linux-mint-21.1/.
+- SHA-256 .deb: f2771a9ab85f150588ae71a05783ba046c0deceb50388ad01ff49c018a9a1b33.
+- SHA-256 .tar.gz: d7dafa8e662ef23fee5db870500cb9e0fb3e71d33f34ab6633dcdfb0c7010c6c.
