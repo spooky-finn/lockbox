@@ -121,10 +121,6 @@ h2 { font-size: 15px; font-weight: 600; letter-spacing: -.2px; }
     background: var(--canvas);
 }
 .app::before { display: none; }
-.app.macos { padding-top: 28px; }
-.app.macos.is-locked { padding-top: 36px; }
-.window-drag-region { position: absolute; inset: 0 0 auto; height: 28px; }
-.is-locked .window-drag-region { height: 36px; }
 .sidebar { background: var(--subtle); border-right: 1px solid var(--border); }
 
 /* A quiet, native-style lock screen; the vault controls stay in a discreet dock. */
