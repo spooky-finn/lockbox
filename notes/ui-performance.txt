@@ -14,3 +14,30 @@ Constraints
 - Preserve encrypted formats, transactional persistence and lock-time cleanup.
 - Do not lower password derivation costs to disguise UI latency.
 - Keep independent changes in separate commits; measure before broad rewrites.
+
+Implemented
+- Typed transient editor controls avoid cloning records when toggling panels,
+  revealing fields, or filtering icons. These controls never schedule persistence.
+- App-shell lock/title memos avoid root updates for unrelated session changes.
+- Tree metadata equality memo reuses its rendered VNode across draft updates.
+  The key stores only display metadata and search decisions, not secret fields.
+- Browser-local arrow/Home/End focus navigation; Enter/Space activate records.
+  Listener cleanup, disabled rows, modifier keys, folder boundaries tested.
+- Classic/Ocean/Forest/Plum palettes, automatic light/dark variants, optional
+  surface gradients, legacy custom-color compatibility, English/Russian labels.
+- Contrast tests cover semantic text at 4.5:1 on all curated surfaces.
+- Successful first durable save emits one brief spark burst and status message.
+  Failed/invalid saves and subsequent edits do not celebrate; reduced motion
+  hides particles and retains a static, automatically dismissed status.
+- docs/ui-architecture.md defines ownership, reactive work, and future profiling.
+
+Validation and limits
+- Node keyboard-navigation suite: four tests passed.
+- Focused suites: 60 desktop, 88 records, 20 settings tests passed.
+- Two doctests passed; strict all-target Clippy passed.
+- Full all-target suite is running separately; not yet claimed as passing.
+- No real credentials, live bucket, or encrypted format changes.
+- Native interactive WebView and end-to-end latency measurements not performed.
+- Encrypted autosave/close still writes synchronously; safe worker migration and
+  large-tree virtualization are documented follow-up work, not claimed fixed.
+- This session is a bounded implementation pass, not a completed 12-hour run.

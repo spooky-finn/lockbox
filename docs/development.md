@@ -30,6 +30,9 @@ separate distinct stages of work. Comments should explain constraints and reason
 use `///` for public contracts and `//!` for module responsibilities.
 Use English for new documentation and developer notes.
 
+Follow the [responsive UI architecture](ui-architecture.md) for input paths,
+reactive subscriptions, contrast, keyboard behavior and performance measurements.
+
 ## GitHub CI and releases
 
 GitHub Actions runs [CI](../.github/workflows/ci.yml) for pushes to `main`, pull

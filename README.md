@@ -19,7 +19,8 @@ Lockbox runs as a Rust desktop application built with Dioxus. Team synchronizati
 - **Unlock with Touch ID.** Use macOS biometric access after setting it up with your master password.
 - **Recover access.** New shared profiles provide 12 recovery words, with local and cloud recovery workflows.
 
-English and Russian interfaces are available, along with system, light, and dark themes and custom colors.
+English and Russian interfaces are available, along with system, light, and dark
+appearance modes, four coordinated theme presets, and optional gradient backgrounds.
 
 ## How team sync works
 
