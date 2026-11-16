@@ -91,3 +91,11 @@ pub(crate) fn set_field(state: Session, field: Field, value: String) {
         }
     });
 }
+
+pub(crate) fn draft_control(state: Session, control: crate::records::editor::Control) {
+    edit_unlocked(state, |unlocked| {
+        if let Some(draft) = &mut unlocked.draft {
+            draft.control(control);
+        }
+    });
+}

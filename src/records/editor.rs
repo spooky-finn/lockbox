@@ -16,6 +16,17 @@ pub(crate) enum Field {
     Totp,
 }
 
+/// Transient editor state is not record data and must not trigger autosave.
+pub(crate) enum Control {
+    TogglePassword,
+    ToggleTotp,
+    ToggleGenerator,
+    CloseGenerator,
+    ToggleIconPicker,
+    CloseIconPicker,
+    IconQuery(String),
+}
+
 pub(crate) struct Draft {
     pub(crate) entry: Entry,
     pub(crate) save_after: Option<std::time::Instant>,
@@ -30,6 +41,18 @@ pub(crate) struct Draft {
 }
 
 impl Draft {
+    pub(crate) fn control(&mut self, control: Control) {
+        match control {
+            Control::TogglePassword => self.show_password = !self.show_password,
+            Control::ToggleTotp => self.show_totp = !self.show_totp,
+            Control::ToggleGenerator => self.generator_open = !self.generator_open,
+            Control::CloseGenerator => self.generator_open = false,
+            Control::ToggleIconPicker => self.icon_picker_open = !self.icon_picker_open,
+            Control::CloseIconPicker => self.icon_picker_open = false,
+            Control::IconQuery(query) => self.icon_query = query,
+        }
+    }
+
     pub(crate) fn new(entry: Entry, is_new: bool) -> Self {
         Self {
             entry,

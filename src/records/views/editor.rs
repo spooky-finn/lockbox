@@ -2,7 +2,7 @@ use crate::desktop::i18n::Text;
 
 use crate::{
     desktop::{
-        context::{Session, edit_draft, edit_unlocked, set_field},
+        context::{Session, draft_control, edit_draft, edit_unlocked, set_field},
         icons,
         session::Screen,
         widgets::{
@@ -12,7 +12,7 @@ use crate::{
         },
     },
     records::{
-        editor::Field,
+        editor::{Control, Field},
         views::{folder_select::FolderSelect, generator::GeneratorView, totp::TotpEditor},
     },
 };
@@ -54,10 +54,10 @@ pub(crate) fn DraftView() -> Element {
                     value: "{entry.password}", oninput: move |e| set_field(state, Field::Password, e.value()) }
                 IconButton { icon: if draft.show_password { Icon::EyeOff } else { Icon::Eye },
                     label: if draft.show_password { language.text(Text::HidePassword) } else { language.text(Text::ShowPassword) }, pressed: Some(draft.show_password),
-                    onclick: move |_| edit_draft(state, |d| d.show_password = !d.show_password),
+                    onclick: move |_| draft_control(state, Control::TogglePassword),
                 }
                 IconButton { icon: Icon::Sparkles, label: language.text(Text::Generate), expanded: Some(draft.generator_open),
-                    onclick: move |_| edit_draft(state, |d| d.generator_open = !d.generator_open),
+                    onclick: move |_| draft_control(state, Control::ToggleGenerator),
                 }
             }
 
@@ -68,7 +68,7 @@ pub(crate) fn DraftView() -> Element {
                 EntryIcon { title: entry.title.clone(), slug: entry.icon.clone(), url: entry.url.clone() }
                 span { if automatic_favicon { {language.text(Text::Auto)} } else if let Some(icon) = icon { if entry.icon.is_none() { {language.text(Text::Auto)} } "{icon.title}" } else { {language.text(Text::AutoInitial)} } }
                 IconButton { icon: Icon::Image, label: language.text(Text::ChooseIcon), expanded: Some(draft.icon_picker_open),
-                    onclick: move |_| edit_draft(state, |d| d.icon_picker_open = !d.icon_picker_open),
+                    onclick: move |_| draft_control(state, Control::ToggleIconPicker),
                 }
 
                 if entry.icon.is_some() { IconButton { icon: Icon::Reset, label: language.text(Text::ChooseIconAutomatically), onclick: move |_| edit_draft(state, |d| d.entry.icon = None) } }

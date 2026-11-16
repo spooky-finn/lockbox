@@ -2,7 +2,7 @@ use crate::desktop::i18n::Text;
 
 use crate::{
     desktop::{
-        context::{Session, edit_draft, set_field},
+        context::{Session, draft_control, edit_draft, set_field},
         session::Screen,
         widgets::{
             button::IconButton,
@@ -39,7 +39,7 @@ pub(crate) fn TotpEditor() -> Element {
                         value: "{settings.secret}", oninput: move |e| set_field(state, Field::Totp, e.value()) }
                     IconButton { icon: if draft.show_totp { Icon::EyeOff } else { Icon::Eye },
                         label: if draft.show_totp { language.text(Text::HideTOTPSecret) } else { language.text(Text::ShowTOTPSecret) }, pressed: Some(draft.show_totp),
-                        onclick: move |_| edit_draft(state, |d| d.show_totp = !d.show_totp),
+                        onclick: move |_| draft_control(state, crate::records::editor::Control::ToggleTotp),
                     }
                 }
                 details { summary { class: "icon-button", title: language.text(Text::TOTPSettings), aria_label: language.text(Text::TOTPSettings), Symbol { icon: Icon::Settings } }

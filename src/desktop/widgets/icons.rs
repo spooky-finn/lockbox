@@ -1,7 +1,7 @@
 use crate::desktop::i18n::Text;
 
 use crate::desktop::{
-    context::{Session, edit_draft},
+    context::{Session, draft_control, edit_draft},
     icons,
     session::Screen,
     widgets::{button::IconButton, symbol::Icon},
@@ -100,8 +100,8 @@ pub(crate) fn IconPicker() -> Element {
     rsx! {
         section { class: "subpanel stack", aria_label: language.text(Text::ChooseIcon2),
             div { class: "input-actions",
-                input { aria_label: language.text(Text::ServiceName), placeholder: language.text(Text::ServiceName), value: "{draft.icon_query}", oninput: move |e| edit_draft(state, |d| d.icon_query = e.value()) }
-                IconButton { icon: Icon::Close, label: language.text(Text::CloseIconPicker), onclick: move |_| edit_draft(state, |d| d.icon_picker_open = false) }
+                input { aria_label: language.text(Text::ServiceName), placeholder: language.text(Text::ServiceName), value: "{draft.icon_query}", oninput: move |e| draft_control(state, crate::records::editor::Control::IconQuery(e.value())) }
+                IconButton { icon: Icon::Close, label: language.text(Text::CloseIconPicker), onclick: move |_| draft_control(state, crate::records::editor::Control::CloseIconPicker) }
             }
 
             if draft.icon_query.trim().is_empty() { p { class: "muted", {language.format(Text::StartTypingANameIconsAvailable, &[icons::catalog().len().to_string()])} } }
