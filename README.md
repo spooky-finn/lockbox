@@ -91,6 +91,11 @@ Read the [detailed usage guide](docs/usage.md), [profile protection guide](docs/
 
 macOS has the primary documented desktop workflow, including Touch ID and Keychain integration. Other platforms do not have equivalent documented integration coverage. The supplied browser deep-link installer is macOS-only; the browser bridge does not implement Windows support.
 
+GitHub releases provide macOS Apple Silicon/Intel app bundles, Linux x64 `.deb`
+and tarballs, and Windows x64 portable ZIPs (requires WebView2 Evergreen Runtime).
+See [CI and automatic releases](docs/development.md#github-ci-and-releases) for
+version-bump publishing and signing limitations.
+
 ## Documentation
 
 | Topic | Guide |

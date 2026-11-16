@@ -1,9 +1,11 @@
 //! One-use local callback. Deep links contain only a random rendezvous token.
 use serde::{Deserialize, Serialize};
+use std::{io, time::Duration};
+#[cfg(unix)]
 use std::{
-    io::{self, Read, Write},
+    io::{Read, Write},
     path::PathBuf,
-    time::{Duration, Instant},
+    time::Instant,
 };
 use zeroize::Zeroizing;
 
@@ -14,12 +16,14 @@ pub struct Credential {
     pub username: Zeroizing<String>,
     pub password: Zeroizing<String>,
 }
+#[cfg(unix)]
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Hello {
     origin: String,
 }
 
+#[cfg(any(unix, test))]
 fn token_valid(token: &str) -> bool {
     token.len() == 64
         && token
@@ -60,6 +64,7 @@ fn socket_path(token: &str) -> io::Result<PathBuf> {
     Ok(directory.join(&token[..32]))
 }
 
+#[cfg(unix)]
 fn write_frame<T: Serialize>(stream: &mut impl Write, value: &T) -> io::Result<()> {
     let bytes = Zeroizing::new(serde_json::to_vec(value)?);
     if bytes.len() > super::MAX_MESSAGE {
@@ -69,6 +74,7 @@ fn write_frame<T: Serialize>(stream: &mut impl Write, value: &T) -> io::Result<(
     stream.write_all(&bytes)?;
     stream.flush()
 }
+#[cfg(unix)]
 fn read_frame<T: serde::de::DeserializeOwned>(stream: &mut impl Read) -> io::Result<T> {
     let bytes =
         super::read_message(stream)?.ok_or_else(|| io::Error::other("connection closed"))?;

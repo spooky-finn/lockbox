@@ -1,4 +1,5 @@
 //! Browser consent lives alongside the normal desktop unlock flow.
+#[cfg(unix)]
 use crate::desktop::{context::Session, session::Screen};
 use dioxus::prelude::*;
 
@@ -39,7 +40,7 @@ pub fn receive(link: &str) {
 pub(crate) fn BrowserConsent() -> Element {
     #[cfg(not(unix))]
     {
-        return rsx! {};
+        rsx! {}
     }
     #[cfg(unix)]
     {
