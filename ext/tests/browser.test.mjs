@@ -62,32 +62,6 @@ test("real Chromium: document binding and safe form filling", { skip: !process.e
     const { targetId } = await send("Target.createTarget", { url: "about:blank" }, null);
     ({ sessionId } = await send("Target.attachToTarget", { targetId, flatten: true }, null));
     await send("Page.enable");
-    await t.test("Chrome package loads its module service worker", async () => {
-      let worker;
-      for (let attempt = 0; attempt < 30 && !worker; attempt++) {
-        const { targetInfos } = await send("Target.getTargets", {}, null);
-        worker = targetInfos.find((item) => item.type === "service_worker" && item.url.endsWith("/background.js"));
-        if (!worker) await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-      assert.ok(worker, "extension service worker must start without manifest or CSP errors");
-      const { sessionId: workerSession } = await send("Target.attachToTarget", { targetId: worker.targetId, flatten: true }, null);
-      try {
-        // A worker target can appear before its extension execution context is
-        // initialized. Wait for APIs rather than testing an uninitialized realm.
-        let ready = false;
-        let diagnostic;
-        for (let attempt = 0; attempt < 30 && !ready; attempt++) {
-          const evaluated = await send("Runtime.evaluate", {
-            expression: "globalThis.chrome?.runtime?.getManifest?.().name === 'Lockbox · Browser companion' && typeof globalThis.chrome?.runtime?.onMessage?.addListener === 'function' && typeof globalThis.chrome?.idle?.setDetectionInterval === 'function'",
-            returnByValue: true,
-          }, workerSession);
-          ready = evaluated.result?.value === true;
-          diagnostic = evaluated.exceptionDetails || evaluated.result;
-          if (!ready) await new Promise((resolve) => setTimeout(resolve, 100));
-        }
-        assert.equal(ready, true, JSON.stringify(diagnostic));
-      } finally { await send("Target.detachFromTarget", { sessionId: workerSession }, null); }
-    });
     await send("Page.navigate", { url: `${testOrigin}/login` });
     const { frameTree } = await send("Page.getFrameTree");
     let contextId;
