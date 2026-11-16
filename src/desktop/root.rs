@@ -27,7 +27,7 @@ pub fn App() -> Element {
         style { "{CSS}" }
         main {
             lang: language.code(),
-            class: if locked { "app is-locked" } else { "app" },
+            class: format!("app{}{}", if cfg!(target_os = "macos") { " macos" } else { "" }, if locked { " is-locked" } else { "" }),
             "data-theme": theme.name(),
             style: appearance_style,
             onpointerdown: move |_| runtime::record_activity(),
@@ -39,6 +39,12 @@ pub fn App() -> Element {
                     runtime::record_activity();
                 }
             },
+            if cfg!(target_os = "macos") {
+                div { class: "window-drag-region", aria_hidden: "true",
+                    onmousedown: move |_| dioxus::desktop::window().drag(),
+                }
+            }
+
             crate::desktop::browser::BrowserConsent {}
             if locked { LockedView {} } else { UnlockedView {} }
         }

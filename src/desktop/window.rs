@@ -36,9 +36,7 @@ pub fn config(first: bool) -> Config {
         window
             .with_titlebar_transparent(true)
             .with_title_hidden(true)
-            // Let AppKit reserve space for the title bar and native tab strip.
-            // Full-size content extends underneath both, obscuring the app header.
-            .with_fullsize_content_view(false)
+            .with_fullsize_content_view(true)
             .with_tabbing_identifier(TABBING_ID)
     };
     let config = Config::new()
