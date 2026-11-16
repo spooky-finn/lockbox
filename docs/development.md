@@ -32,6 +32,37 @@ Use English for new documentation and developer notes.
 
 ## GitHub CI and releases
 
+Development uses GitLab remote `origin`; GitHub remote `github` hosts releases.
+To publish the latest committed `origin/main` from a local checkout:
+
+```sh
+python3 scripts/sync-github.py --dry-run
+python3 scripts/sync-github.py
+```
+
+The script fetches both remote branches into a temporary bare repository. Local
+branches, staged changes, worktree files, and remote-tracking refs stay untouched;
+uncommitted or unpushed work is not published. Python 3, Git, and access to both
+remotes are required. The destination uses `github`'s push URL, including when it
+differs from its fetch URL.
+
+**GitLab owns all published files.** GitHub-only additions, edits, and deletions
+are replaced with the exact `origin/main` tree, including workflow files. Make
+permanent code, CI, license, and version changes in GitLab before syncing.
+When histories diverge, the script creates a merge commit with the previous
+GitHub tip as its first parent and GitLab's tip as its second parent, using
+GitLab's tree directly. This avoids textual merge conflicts while retaining
+GitHub history and reachable release commits. A normal fast-forward uses the
+GitLab commit directly. Repeating a completed sync does nothing.
+
+Only `github/main` is pushed; other branches, tags, and existing releases are
+untouched. An explicit lease rejects a push if GitHub's branch changed after
+fetching; rerun to include the new history. Branch rules must permit direct
+pushes and merge commits. Git must have a commit identity (`user.name` and
+`user.email`, or the standard author/committer environment variables) when a merge
+commit is needed. Publication uses the existing version-triggered workflow below;
+the script itself does not create a version or release.
+
 GitHub Actions runs [CI](../.github/workflows/ci.yml) for pushes to `main`, pull
 requests, and merge queues. It also supports manual runs. Formatting, browser
 checks, and release-script tests run first; strict Clippy, all-target Rust tests,
