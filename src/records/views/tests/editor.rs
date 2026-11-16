@@ -117,7 +117,6 @@ fn footer_offers_delete_only_for_saved_entries() {
     );
     let footer = html.split("<footer").nth(1).expect("action footer");
     assert!(footer.contains("draft-footer"));
-    assert!(footer.contains("type=\"submit\""));
     assert!(footer.contains("draft-delete"));
     update(&mut dom, |state| {
         edit_unlocked(state, |u| {

@@ -63,11 +63,9 @@ fn autosave_retains_version_snapshots_authorship_and_local_time_without_noop_rev
     assert_eq!(workspace.vault.record_history().unwrap().len(), 2);
     let path = workspace.vault.path().to_path_buf();
     drop(workspace);
-    let reopened = crate::vault::Vault::open(
-        &path,
-        &secrecy::SecretString::from("master".to_owned()),
-    )
-    .unwrap();
+    let reopened =
+        crate::vault::Vault::open(&path, &secrecy::SecretString::from("master".to_owned()))
+            .unwrap();
     let persisted = reopened.record_history().unwrap();
     assert_eq!(
         serde_json::to_vec(&persisted).unwrap(),
