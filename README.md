@@ -135,6 +135,6 @@ See [browser verification](ext/README.md#verification) for optional real-browser
 
 ## License
 
-A project-wide license has not yet been added. An open-source license must be selected before distributing Lockbox as licensed open-source software.
+Lockbox is licensed under the [GNU General Public License v3.0](LICENSE).
 
 Bundled Simple Icons assets carry their own [license](assets/LICENSE-simple-icons.md) and [disclaimer](assets/DISCLAIMER-simple-icons.md).

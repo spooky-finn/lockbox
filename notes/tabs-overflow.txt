@@ -1,0 +1,7 @@
+Tabs overflow
+
+- Cause: full-size macOS content sits behind native tabs; fixed CSS inset covers title bar only.
+- Fix: AppKit reserves title bar + tab strip. Remove manual top padding, synthetic drag region.
+- Native title bar handles dragging; tab grouping, transparent chrome stay enabled.
+- Validation: 49 desktop tests pass; cargo fmt --check, git diff --check pass. Native UI check pending.
+- Manual check: open second tab, switch tabs, close back to one; header stays below native chrome. Repeat locked, unlocked, resized, fullscreen.

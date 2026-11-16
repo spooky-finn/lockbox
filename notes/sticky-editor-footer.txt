@@ -1,0 +1,31 @@
+Editor footer
+- Save, Cancel stay visible during scroll. Opaque surface; separator above actions.
+- Existing entries offer Delete. Confirmation stays in footer; cancel keeps draft.
+- New entries omit Delete. Save uses existing form submission.
+- Checks: 4 editor tests passed; cargo fmt; git diff --check clean.
+- Native window scroll appearance not manually checked.
+
+Footer layout fix
+- Screenshot showed TOTP below footer. Sticky positioning moved actions over fields.
+- Detail panel now constrains editor height. Fields scroll inside form; footer stays outside scroll area.
+- Short forms fill available height. Footer reserves space; TOTP stays above actions.
+- Regression checks: TOTP inside fields; footer direct form child, outside fields.
+
+Compact footer
+- Action padding 4px; gap 4px; no top margin. Editor bottom padding 4px across breakpoints.
+- Keep 30px buttons. Tighten delete confirmation spacing.
+- Check: git diff --check clean.
+
+Editor fields
+- Remove visible heading and key icon. Keep accessible form name.
+- Inputs/selects 40px tall, 14px text; notes minimum 80px.
+
+Reduced editor spacing
+- Outer padding 12px top, 16px sides, 8px bottom; remove nested form padding.
+- Label margin 4px; attachments margin 4px, padding 6px. Keep enlarged inputs.
+- Check: git diff --check clean.
+
+Efficient editor layout
+- Remove 800px form cap. Fill detail width.
+- Adaptive grid pairs Name/Folder, Username/Password, Files/TOTP. Narrow panels stack.
+- URL, notes, icon picker, generator span full width. Keep larger inputs and fixed footer.

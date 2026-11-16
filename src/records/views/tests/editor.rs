@@ -81,3 +81,50 @@ fn attachment_controls_render_names_and_sizes_without_file_contents() {
     assert!(html.contains("Сохранить файл"));
     assert!(!html.contains("never render file contents"));
 }
+
+#[test]
+fn footer_offers_delete_only_for_saved_entries() {
+    use kuchikiki::traits::TendrilSink;
+    let mut dom = mounted();
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| u.start_edit());
+    });
+    let html = dioxus_ssr::render(&dom);
+    let document = kuchikiki::parse_html().one(html.clone()).document_node;
+    assert_eq!(
+        document
+            .select(".draft-fields > .draft-field")
+            .unwrap()
+            .count(),
+        6
+    );
+    assert!(document.select_first(".draft-field .draft-field").is_err());
+
+    assert!(
+        document
+            .select_first(".draft > .draft-fields > .totp-editor")
+            .is_ok()
+    );
+    assert!(
+        document
+            .select_first(".draft > footer.draft-footer")
+            .is_ok()
+    );
+    assert!(
+        document
+            .select_first(".draft-fields .draft-footer")
+            .is_err()
+    );
+    let footer = html.split("<footer").nth(1).expect("action footer");
+    assert!(footer.contains("draft-footer"));
+    assert!(footer.contains("draft-delete"));
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| {
+            u.draft = None;
+            u.start_new();
+        });
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("draft-footer"));
+    assert!(!html.contains("draft-delete"));
+}

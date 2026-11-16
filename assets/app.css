@@ -121,10 +121,6 @@ h2 { font-size: 15px; font-weight: 600; letter-spacing: -.2px; }
     background: var(--canvas);
 }
 .app::before { display: none; }
-.app.macos { padding-top: 28px; }
-.app.macos.is-locked { padding-top: 36px; }
-.window-drag-region { position: absolute; inset: 0 0 auto; height: 28px; }
-.is-locked .window-drag-region { height: 36px; }
 .sidebar { background: var(--subtle); border-right: 1px solid var(--border); }
 
 /* A quiet, native-style lock screen; the vault controls stay in a discreet dock. */
@@ -322,6 +318,8 @@ button.sidebar-settings[aria-current="page"]:focus-visible { outline-color: var(
 
 /* Credentials */
 .detail { min-width: 0; min-height: 0; overflow: auto; padding: 24px 32px 32px; background: var(--surface); }
+.detail:has(> .draft) { display: flex; flex-direction: column; overflow: hidden; padding: 12px 16px 8px; }
+.detail:has(> .draft) > :not(.draft) { flex-shrink: 0; }
 .detail > .error { margin-bottom: 18px; }
 .entry-detail { max-width: 720px; margin: 0 auto; }
 .directory-detail { max-width: 720px; margin: 0 auto; }
@@ -390,22 +388,27 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 99px; }
 .empty-state p { color: var(--muted); max-width: 250px; margin: 10px 0 22px; line-height: 1.7; }
 
 /* Editor, generator and icon picker */
-.draft { max-width: 800px; margin: 0 auto; padding: 18px; border: 0; border-radius: 18px; background: var(--surface); box-shadow: none; gap: 4px; }
+.draft { container-type: inline-size; flex: 1; min-height: 0; width: 100%; overflow: hidden; margin: 0; padding: 0; border: 0; border-radius: 18px; background: var(--surface); box-shadow: none; gap: 4px; }
 .form-heading { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
 .form-heading h1 { font-size: 21px; }
 .form-heading .detail-kind { font-size: 10px; line-height: 1.25; margin-bottom: 3px; }
 .form-icon { width: 36px; height: 36px; flex: 0 0 36px; margin: 0; border-radius: 11px; background: var(--selected); box-shadow: none; }
 .form-icon .symbol { width: 19px; height: 19px; }
-.draft.stack > label { font-size: 11px; line-height: 1.3; margin-top: 6px; }
+.draft-fields { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; align-items: start; overflow-y: auto; padding: 4px; gap: 10px 12px; scroll-padding-block: 8px; }
+.draft-fields > *, .draft-field { min-width: 0; }
+@container (max-width: 560px) { .draft-fields { grid-template-columns: minmax(0, 1fr); } }
+.draft-field { gap: 4px; }
+.draft-field > label { font-size: 11px; line-height: 1.3; margin-top: 0; }
+.draft-wide, .draft-fields > .subpanel { grid-column: 1 / -1; }
 .draft input:not([type=checkbox]):not([type=range]), .draft select, .draft textarea { background: var(--subtle); border-color: transparent; border-radius: 8px; box-shadow: none; }
-.draft input:not([type=checkbox]):not([type=range]), .draft select { height: 32px; min-height: 32px; padding: 5px 10px; line-height: 20px; }
+.draft input:not([type=checkbox]):not([type=range]), .draft select { height: 40px; min-height: 40px; padding: 9px 12px; font-size: 14px; line-height: 20px; }
 .draft .select-field > select { padding-right: 32px; }
-.draft textarea { min-height: 64px; padding: 6px 10px; line-height: 18px; }
+.draft textarea { min-height: 80px; padding: 9px 12px; font-size: 14px; line-height: 20px; }
 .draft .icon-button { width: 30px; height: 30px; min-height: 30px; flex-basis: 30px; padding: 6px; }
 .draft .icon-button { border-color: transparent; background: transparent; box-shadow: none; }
 .draft .icon-button.primary { color: var(--accent-ink); }
 .draft .icon-button:hover:not(:disabled) { background: var(--control); }
-.draft fieldset { min-width: 0; margin: 8px 0; padding: 12px 0; border: 0; }
+.draft fieldset { min-width: 0; margin: 4px 0; padding: 6px 0; border: 0; }
 .draft fieldset legend { padding: 0; }
 .draft .form-icon { border: 0; }
 .draft .entry-icon { width: 24px; height: 24px; flex-basis: 24px; border-radius: 6px; font-size: 14px; }
@@ -427,6 +430,10 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 99px; }
 .totp-options { display: flex; flex-wrap: wrap; gap: 12px; margin: 12px 0 4px; }
 .totp-options label { display: flex; flex-direction: column; gap: 7px; flex: 1; min-width: 80px; font-size: 11px; }
 .form-actions { border-top: 1px solid var(--separator); padding-top: 10px; margin-top: 6px; }
+.draft-footer { flex-wrap: wrap; flex-shrink: 0; gap: 4px; margin-top: 0; padding: 4px 0; background: var(--surface); }
+.draft-delete-confirm { flex-basis: 100%; padding: 4px 0; }
+.draft-delete-confirm p { margin-bottom: 4px; }
+.draft-footer .draft-delete { margin-left: auto; }
 .delete-confirm { padding: 18px; border: 1px solid var(--error); border-radius: 16px; background: var(--surface); margin-top: 20px; }
 .delete-confirm p { margin-bottom: 14px; }
 .status { color: var(--muted); font-size: 10px; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 4px 12px; }
@@ -476,7 +483,6 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 99px; }
     .toolbar { padding-inline: 12px; }
     .field-row { grid-template-columns: 1fr; gap: 6px; padding: 14px 0; }
     .detail { padding: 20px 24px; }
-    .draft { padding: 16px; }
 }
 @media (max-width: 640px) {
     .toolbar { padding: 2px 10px; gap: 2px 8px; grid-template-columns: minmax(0, 1fr) auto; }
@@ -508,7 +514,6 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 99px; }
     .lock-screen { padding: 40px 24px 64px; }
     .unlock-title { font-size: 19px; }
     .unlock-description { font-size: 13px; }
-    .draft { padding: 14px 12px; }
     .form-heading h1 { font-size: 21px; }
     .input-actions { flex-wrap: wrap; }
 }
