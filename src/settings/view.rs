@@ -11,7 +11,11 @@ use crate::{
     },
     platform::autolock,
     records::editor::replace_secret,
-    settings::{appearance::ThemeMode, language::Language, state::Settings},
+    settings::{
+        appearance::{ThemeMode, ThemePreset},
+        language::Language,
+        state::Settings,
+    },
 };
 use dioxus::prelude::*;
 use zeroize::Zeroizing;
@@ -121,17 +125,6 @@ fn AppearanceSection() -> Element {
     let language = use_language();
     let settings = use_context::<Signal<Settings>>();
     let appearance = settings.read().config.appearance;
-    let dark = try_use_context::<crate::desktop::widgets::theme::ResolvedTheme>()
-        .map(|theme| theme.is_dark())
-        .unwrap_or_else(|| crate::desktop::widgets::theme::effective_dark(appearance, false));
-    let color = appearance
-        .accent
-        .map(|color| color.hex())
-        .unwrap_or_else(|| if dark { "#409cff" } else { "#007aff" }.into());
-    let background = appearance
-        .background
-        .map(|color| color.hex())
-        .unwrap_or_else(|| if dark { "#202124" } else { "#f5f5f7" }.into());
     rsx! {
         section { class: "settings-section stack",
             h2 { {language.text(Text::Appearance)} }
@@ -158,34 +151,32 @@ fn AppearanceSection() -> Element {
             }
             div { class: "preference-row",
                 div { class: "preference-copy",
-                    label { r#for: "settings-accent", {language.text(Text::AccentColor)} }
-                    p { id: "accent-description", class: "muted", {language.text(Text::AccentColorDescription)} }
+                    label { r#for: "settings-preset", {language.text(Text::ThemePreset)} }
+                    p { class: "muted", {language.text(Text::ThemePresetDescription)} }
                 }
-                div { class: "color-controls",
-                    input { id: "settings-accent", r#type: "color", value: "{color}",
-                        aria_describedby: "accent-description",
-                        onchange: move |event| runtime::set_accent_color(Some(&event.value())),
-                    }
-                    button { class: "quiet", r#type: "button", disabled: appearance.accent.is_none(),
-                        onclick: move |_| runtime::set_accent_color(None),
-                        {language.text(Text::ResetAccentColor)}
+                select { id: "settings-preset", value: appearance.preset.code(),
+                    onchange: move |event| {
+                        if let Some(preset) = ThemePreset::ALL.into_iter().find(|preset| preset.code() == event.value()) {
+                            runtime::set_theme_preset(preset);
+                        }
+                    },
+                    for (preset, label) in [
+                        (ThemePreset::Classic, Text::ThemeClassic),
+                        (ThemePreset::Ocean, Text::ThemeOcean),
+                        (ThemePreset::Forest, Text::ThemeForest),
+                        (ThemePreset::Plum, Text::ThemePlum),
+                    ] {
+                        option { value: preset.code(), selected: appearance.preset == preset, {language.text(label)} }
                     }
                 }
             }
             div { class: "preference-row",
                 div { class: "preference-copy",
-                    label { r#for: "settings-background", {language.text(Text::BackgroundColor)} }
-                    p { id: "background-description", class: "muted", {language.text(Text::BackgroundColorDescription)} }
+                    label { r#for: "settings-gradient", {language.text(Text::GradientBackground)} }
                 }
-                div { class: "color-controls",
-                    input { id: "settings-background", r#type: "color", value: "{background}",
-                        aria_describedby: "background-description",
-                        onchange: move |event| runtime::set_background_color(Some(&event.value())),
-                    }
-                    button { class: "quiet", r#type: "button", disabled: appearance.background.is_none(),
-                        onclick: move |_| runtime::set_background_color(None),
-                        {language.text(Text::ResetBackgroundColor)}
-                    }
+                input { id: "settings-gradient", class: "switch", r#type: "checkbox",
+                    checked: appearance.gradient,
+                    onchange: move |event| runtime::set_gradient(event.checked()),
                 }
             }
         }

@@ -120,6 +120,7 @@ h2 { font-size: 15px; font-weight: 600; letter-spacing: -.2px; }
     overflow: hidden;
     background: var(--canvas);
 }
+.app { background-image: var(--canvas-image, none); }
 .app::before { display: none; }
 .app.macos { padding-top: 28px; }
 .app.macos.is-locked { padding-top: 36px; }
@@ -129,6 +130,7 @@ h2 { font-size: 15px; font-weight: 600; letter-spacing: -.2px; }
 
 /* A quiet, native-style lock screen; the vault controls stay in a discreet dock. */
 .app.is-locked { color: var(--lock-ink); background: var(--lock-canvas); }
+.app.is-locked { background-image: var(--canvas-image, none); }
 .app.is-locked::before { display: none; }
 .lock-screen { position: relative; flex: 1; min-height: 0; display: grid; place-items: center; padding: 56px 24px; overflow: auto; }
 .unlock-content { width: 100%; max-width: 420px; display: flex; flex-direction: column; align-items: center; margin: auto; text-align: center; }

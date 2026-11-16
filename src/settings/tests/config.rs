@@ -110,6 +110,7 @@ fn appearance_survives_a_restart() {
                 theme,
                 accent: RgbColor::parse("#AF52De"),
                 background: RgbColor::parse("#F3E8D2"),
+                ..Appearance::default()
             },
             ..Config::default()
         };

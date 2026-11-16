@@ -2,6 +2,14 @@
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Text {
+    ThemePreset,
+    ThemePresetDescription,
+    ThemeClassic,
+    ThemeOcean,
+    ThemeForest,
+    ThemePlum,
+    GradientBackground,
+    RecordCreated,
     CloudRestore,
     CloudRestoreHint,
     CloudRestoreWordsHint,
@@ -566,6 +574,14 @@ pub(crate) enum Text {
 impl Text {
     pub(super) fn translations(self) -> (&'static str, &'static str) {
         match self {
+            Self::ThemePreset => ("Готовая тема", "Theme preset"),
+            Self::ThemePresetDescription => ("Согласованные цвета с читаемым контрастом.", "Coordinated colors with readable contrast."),
+            Self::ThemeClassic => ("Классическая", "Classic"),
+            Self::ThemeOcean => ("Океан", "Ocean"),
+            Self::ThemeForest => ("Лес", "Forest"),
+            Self::ThemePlum => ("Слива", "Plum"),
+            Self::GradientBackground => ("Градиентный фон", "Gradient background"),
+            Self::RecordCreated => ("Запись создана", "Record created"),
             Self::CloudRestore => ("Восстановить из Storj", "Recover from Storj"),
             Self::CloudRestoreHint => ("Укажите доступ к прежнему bucket. Найдём пространства вашей мнемоники без старого файла .lbx.", "Enter access to your existing bucket. Find spaces belonging to your mnemonic without the old .lbx file."),
             Self::CloudRestoreWordsHint => ("Введите прежнюю мнемонику владельца. Новая мнемоника не откроет существующее пространство.", "Enter the owner’s original mnemonic. A new mnemonic cannot open an existing space."),
@@ -1130,6 +1146,14 @@ impl Text {
 }
 
 pub(super) const CATALOG: &[Text] = &[
+    Text::ThemePreset,
+    Text::ThemePresetDescription,
+    Text::ThemeClassic,
+    Text::ThemeOcean,
+    Text::ThemeForest,
+    Text::ThemePlum,
+    Text::GradientBackground,
+    Text::RecordCreated,
     Text::CloudRestore,
     Text::CloudRestoreHint,
     Text::CloudRestoreWordsHint,
