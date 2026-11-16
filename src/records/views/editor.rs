@@ -18,6 +18,14 @@ use crate::{
 };
 use dioxus::prelude::*;
 
+pub(crate) fn finish_on_enter(state: Session, event: KeyboardEvent) {
+    if !event.is_composing() && event.key() == Key::Enter {
+        event.prevent_default();
+        event.stop_propagation();
+        edit_unlocked(state, |u| u.error = u.close_draft().err());
+    }
+}
+
 #[component]
 pub(crate) fn DraftView() -> Element {
     let language = crate::desktop::i18n::use_language();
@@ -36,11 +44,18 @@ pub(crate) fn DraftView() -> Element {
     let icon = icons::catalog().for_entry(entry);
     let automatic_favicon = entry.icon.is_none() && icons::favicon_url(&entry.url).is_some();
     rsx! {
-        form { class: "draft stack", aria_label: if draft.is_new { language.text(Text::NewEntry) } else { language.text(Text::EditEntry) }, onsubmit: move |event| { event.prevent_default(); edit_unlocked(state, |u| u.error = u.autosave_draft().err()); },
+        form { class: "draft stack", aria_label: if draft.is_new { language.text(Text::NewEntry) } else { language.text(Text::EditEntry) }, onkeydown: move |event: KeyboardEvent| {
+                if !event.is_composing() && event.key() == Key::Enter && (event.modifiers().meta() || event.modifiers().ctrl()) {
+                    event.prevent_default();
+                    event.stop_propagation();
+                    edit_unlocked(state, |u| u.error = u.close_draft().err());
+                }
+            },
+            onsubmit: move |event| { event.prevent_default(); edit_unlocked(state, |u| u.error = u.close_draft().err()); },
             div { class: "draft-fields stack",
                 div { class: "draft-field stack",
                     label { r#for: "entry-title", {language.text(Text::Name)} }
-                    input { id: "entry-title", required: true, value: "{entry.title}", oninput: move |e| set_field(state, Field::Title, e.value()) }
+                    input { onkeydown: move |event| finish_on_enter(state, event), id: "entry-title", required: true, value: "{entry.title}", oninput: move |e| set_field(state, Field::Title, e.value()) }
                 }
                 div { class: "draft-field stack",
                     label { r#for: "entry-folder", {language.text(Text::Folder)} }
@@ -50,12 +65,12 @@ pub(crate) fn DraftView() -> Element {
                 }
                 div { class: "draft-field stack",
                     label { r#for: "entry-username", {language.text(Text::Username2)} }
-                    input { id: "entry-username", autocomplete: "off", value: "{entry.username}", oninput: move |e| set_field(state, Field::Username, e.value()) }
+                    input { onkeydown: move |event| finish_on_enter(state, event), id: "entry-username", autocomplete: "off", value: "{entry.username}", oninput: move |e| set_field(state, Field::Username, e.value()) }
                 }
                 div { class: "draft-field stack",
                     label { r#for: "entry-password", {language.text(Text::Password)} }
                     div { class: "input-actions",
-                        input { id: "entry-password", r#type: if draft.show_password { "text" } else { "password" }, autocomplete: "off",
+                        input { onkeydown: move |event| finish_on_enter(state, event), id: "entry-password", r#type: if draft.show_password { "text" } else { "password" }, autocomplete: "off",
                             value: "{entry.password}", oninput: move |e| set_field(state, Field::Password, e.value()) }
                         IconButton { icon: if draft.show_password { Icon::EyeOff } else { Icon::Eye },
                             label: if draft.show_password { language.text(Text::HidePassword) } else { language.text(Text::ShowPassword) }, pressed: Some(draft.show_password),
@@ -70,7 +85,7 @@ pub(crate) fn DraftView() -> Element {
                 if draft.generator_open { GeneratorView {} }
                 div { class: "draft-field draft-wide stack",
                     label { r#for: "entry-url", "URL" }
-                    input { id: "entry-url", value: "{entry.url}", oninput: move |e| set_field(state, Field::Url, e.value()) }
+                    input { onkeydown: move |event| finish_on_enter(state, event), id: "entry-url", value: "{entry.url}", oninput: move |e| set_field(state, Field::Url, e.value()) }
                 }
                 div { class: "input-actions icon-actions draft-wide",
                     EntryIcon { title: entry.title.clone(), slug: entry.icon.clone(), url: entry.url.clone() }
@@ -119,8 +134,7 @@ pub(crate) fn DraftView() -> Element {
                         }
                     }
                 }
-                span { class: "muted", {language.text(Text::ChangesAreSavedAutomatically)} }
-                IconButton { icon: Icon::Close, label: language.text(Text::CloseEditor), onclick: move |_| edit_unlocked(state, |u| u.error = u.close_draft().err()) }
+                span { class: "muted", {language.text(Text::ChangesAreSavedAutomatically)} " · " {language.text(Text::EditorKeyboardHint)} }
                 if !draft.is_new {
                     IconButton { class: "danger draft-delete", icon: Icon::Trash, label: language.text(Text::Delete), disabled: unlocked.vault.signing_error().is_some(),
                         onclick: move |_| confirm_delete.set(true),

@@ -102,7 +102,7 @@ impl Unlocked {
     }
 
     pub(crate) fn select_directory(&mut self, id: Option<String>) {
-        if self.is_editing() {
+        if !self.finish_editing() {
             return;
         }
 
@@ -117,7 +117,7 @@ impl Unlocked {
     }
 
     pub(crate) fn start_directory(&mut self) {
-        if self.is_editing() {
+        if !self.finish_editing() {
             return;
         }
 
@@ -134,7 +134,7 @@ impl Unlocked {
     }
 
     pub(crate) fn edit_directory(&mut self) {
-        if self.is_editing() {
+        if !self.finish_editing() {
             return;
         }
 

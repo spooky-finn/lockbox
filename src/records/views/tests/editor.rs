@@ -9,7 +9,7 @@ use crate::{
 use dioxus::prelude::*;
 
 #[test]
-fn submitting_the_dioxus_form_flushes_without_closing_or_browser_navigation() {
+fn submitting_the_dioxus_form_saves_and_finishes_without_browser_navigation() {
     use dioxus::dioxus_core::Mutation;
     use dioxus::html::{EventData, SerializedFormData, SerializedHtmlEventConverter};
     dioxus::html::set_event_converter(Box::new(SerializedHtmlEventConverter));
@@ -38,7 +38,7 @@ fn submitting_the_dioxus_form_flushes_without_closing_or_browser_navigation() {
     dom.render_immediate_to_vec();
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("From submit event"));
-    assert!(html.contains("id=\"entry-title\""));
+    assert!(!html.contains("id=\"entry-title\""));
     assert!(!html.contains("type=\"submit\""));
     dom.in_scope(ScopeId::APP, || {
         let state = consume_context::<Session>();
@@ -127,4 +127,110 @@ fn footer_offers_delete_only_for_saved_entries() {
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("draft-footer"));
     assert!(!html.contains("draft-delete"));
+}
+
+#[test]
+fn keyboard_finishes_inputs_and_keeps_notes_newlines_and_composition() {
+    use dioxus::dioxus_core::Mutation;
+    use dioxus::html::{EventData, SerializedHtmlEventConverter, SerializedKeyboardData};
+    use std::collections::HashSet;
+    dioxus::html::set_event_converter(Box::new(SerializedHtmlEventConverter));
+    // Form-level Enter is the bubbling event from a multiline note. Single-line
+    // fields handle Enter themselves; IME confirmation must never finish editing.
+    for (on_input, key, modifiers, composing, finishes) in [
+        (true, Key::Enter, Modifiers::empty(), false, true),
+        (true, Key::Enter, Modifiers::empty(), true, false),
+        (true, Key::Tab, Modifiers::empty(), false, false),
+        (false, Key::Enter, Modifiers::empty(), false, false),
+        (false, Key::Enter, Modifiers::CONTROL, false, true),
+        (false, Key::Enter, Modifiers::META, false, true),
+    ] {
+        let mut dom = mounted();
+        dom.in_scope(ScopeId::APP, || {
+            let state = consume_context::<Session>();
+            edit_unlocked(state, |u| u.start_new());
+            set_field(state, Field::Title, "Keyboard entry".into());
+            set_field(state, Field::Notes, "Line one\nLine two".into());
+        });
+        let changes = dom.render_immediate_to_vec();
+        let input_ids: HashSet<_> = changes
+            .edits
+            .iter()
+            .filter_map(|edit| match edit {
+                Mutation::NewEventListener { name, id } if name == "input" => Some(*id),
+                _ => None,
+            })
+            .collect();
+        let target = changes
+            .edits
+            .iter()
+            .find_map(|edit| match edit {
+                Mutation::NewEventListener { name, id }
+                    if (on_input && name == "keydown" && input_ids.contains(id))
+                        || (!on_input && name == "submit") =>
+                {
+                    Some(*id)
+                }
+                _ => None,
+            })
+            .unwrap();
+        let event = Event::new(
+            EventData::Keyboard(SerializedKeyboardData::new(
+                key,
+                Code::Unidentified,
+                Location::Standard,
+                false,
+                modifiers,
+                composing,
+            ))
+            .into_any(),
+            true,
+        );
+        dom.runtime().handle_event("keydown", event.clone(), target);
+        dom.render_immediate_to_vec();
+        assert_eq!(event.default_action_enabled(), !finishes);
+        dom.in_scope(ScopeId::APP, || {
+            let state = consume_context::<Session>();
+            let screen = state.peek();
+            let Screen::Unlocked(u) = &*screen else {
+                panic!("locked");
+            };
+            assert_eq!(u.draft.is_none(), finishes);
+            if finishes {
+                let saved = crate::desktop::test_support::reopen(u);
+                let entry = saved
+                    .entries
+                    .iter()
+                    .find(|e| e.title == "Keyboard entry")
+                    .unwrap();
+                assert_eq!(entry.notes, "Line one\nLine two");
+            }
+        });
+    }
+}
+
+#[test]
+fn editing_an_entry_keeps_sidebar_navigation_available_without_close_button() {
+    use kuchikiki::traits::TendrilSink;
+    let mut dom = mounted();
+    update(&mut dom, |state| edit_unlocked(state, |u| u.start_edit()));
+    let document = kuchikiki::parse_html()
+        .one(dioxus_ssr::render(&dom))
+        .document_node;
+    assert!(document.select_first(".entry-row[disabled]").is_err());
+    assert!(
+        document
+            .select_first(".sidebar-footer button[disabled]")
+            .is_err()
+    );
+    assert!(
+        document
+            .select_first(".sidebar-heading button[disabled]")
+            .is_err()
+    );
+    assert!(
+        document
+            .select_first(".draft-footer button[title='Закрыть']")
+            .is_err()
+    );
 }

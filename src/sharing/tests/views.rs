@@ -147,7 +147,7 @@ fn sharing_page_renders_member_controls_without_record_or_provider_secrets() {
 }
 
 #[test]
-fn recipient_enters_an_independent_code_and_drafts_remain_hidden_and_intact() {
+fn recipient_enters_an_independent_code_and_navigation_saves_private_draft() {
     let directory = tempfile::tempdir().unwrap();
     let mut owner = vault(&directory, "owner");
     let guest = vault(&directory, "guest");
@@ -171,7 +171,22 @@ fn recipient_enters_an_independent_code_and_drafts_remain_hidden_and_intact() {
     assert!(html.contains("id=\"invitation-code\""));
     assert!(!html.contains(&code));
     assert!(!html.contains("private-draft-marker"));
-    assert!(html.contains("Save or cancel the current draft"));
+    assert!(!html.contains("Save or cancel the current draft"));
+    dom.in_scope(ScopeId::APP, || {
+        let state = consume_context::<Session>();
+        let screen = state.peek();
+        let Screen::Unlocked(u) = &*screen else {
+            panic!("locked");
+        };
+        assert!(u.draft.is_none());
+        let saved = crate::desktop::test_support::reopen(u);
+        let entry = saved
+            .entries
+            .iter()
+            .find(|entry| entry.title == "Preserved draft")
+            .unwrap();
+        assert_eq!(entry.password, "private-draft-marker");
+    });
     let accept = html
         .split("Sign and save consent")
         .next()
@@ -179,7 +194,7 @@ fn recipient_enters_an_independent_code_and_drafts_remain_hidden_and_intact() {
         .rsplit("<button")
         .next()
         .unwrap();
-    assert!(accept.contains("disabled"));
+    assert!(!accept.contains("disabled"));
     update(&mut dom, |state| {
         edit_unlocked(state, |u| u.page = Page::Vault)
     });

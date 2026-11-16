@@ -38,10 +38,10 @@ pub(crate) fn Sidebar() -> Element {
                 h2 { {language.text(Text::Vault)} }
                 span { class: "count", "{workspace.vault.entries().len()}" }
                 IconButton { class: "primary", icon: Icon::Plus, label: language.text(Text::NewEntry),
-                    disabled: workspace.is_editing() || workspace.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.start_new()),
+                    disabled: workspace.directories.draft.is_some() || workspace.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.start_new()),
                 }
                 IconButton { class: "quiet", icon: Icon::FolderPlus, label: language.text(Text::NewFolder),
-                    disabled: workspace.is_editing() || workspace.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.start_directory()),
+                    disabled: workspace.directories.draft.is_some() || workspace.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.start_directory()),
                 }
             }
             label { class: "sr-only", r#for: "search", {language.text(Text::SearchEntriesAndFolders)} }
@@ -61,7 +61,7 @@ pub(crate) fn Sidebar() -> Element {
                 }
             }
             div { class: "sidebar-footer",
-                button { class: "quiet sidebar-settings", disabled: workspace.is_editing(),
+                button { class: "quiet sidebar-settings", disabled: workspace.directories.draft.is_some(),
                     aria_current: (workspace.page == crate::desktop::workspace::Page::Trash).then_some("page"),
                     onclick: move |_| edit_unlocked(state, |u| u.open_records_page(crate::desktop::workspace::Page::Trash)),
                     Symbol { icon: Icon::Trash } {language.text(Text::Trash)}

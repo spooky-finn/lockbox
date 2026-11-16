@@ -35,7 +35,7 @@ pub(crate) fn TotpEditor() -> Element {
             if let Some(settings) = &draft.entry.totp {
                 label { r#for: "totp-secret", {language.text(Text::SecretOrOtpauthURL)} }
                 div { class: "input-actions",
-                    input { id: "totp-secret", r#type: if draft.show_totp { "text" } else { "password" }, autocomplete: "off",
+                    input { onkeydown: move |event| super::editor::finish_on_enter(state, event), id: "totp-secret", r#type: if draft.show_totp { "text" } else { "password" }, autocomplete: "off",
                         value: "{settings.secret}", oninput: move |e| set_field(state, Field::Totp, e.value()) }
                     IconButton { icon: if draft.show_totp { Icon::EyeOff } else { Icon::Eye },
                         label: if draft.show_totp { language.text(Text::HideTOTPSecret) } else { language.text(Text::ShowTOTPSecret) }, pressed: Some(draft.show_totp),

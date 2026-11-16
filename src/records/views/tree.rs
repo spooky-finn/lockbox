@@ -16,7 +16,7 @@ pub(crate) fn nodes_ui(
     state: Session,
     language: crate::settings::language::Language,
 ) -> Element {
-    let editing = workspace.is_editing();
+    let editing = workspace.directories.draft.is_some();
     let searching = !workspace.search.trim().is_empty();
     rsx! {
         for node in nodes {

@@ -77,6 +77,9 @@ impl Unlocked {
     }
 
     pub(crate) fn select(&mut self, id: String) {
+        if !self.finish_editing() {
+            return;
+        }
         self.page = Page::Vault;
 
         if let Some(entry) = self.vault.entries().iter().find(|entry| entry.id == id) {
@@ -92,7 +95,7 @@ impl Unlocked {
     }
 
     pub(crate) fn start_new(&mut self) {
-        if self.is_editing() {
+        if !self.finish_editing() {
             return;
         }
 
@@ -106,6 +109,9 @@ impl Unlocked {
     }
 
     pub(crate) fn start_edit(&mut self) {
+        if !self.finish_editing() {
+            return;
+        }
         if let Some(entry) = self.selected_entry().cloned() {
             self.start_draft(entry, false);
         }
@@ -119,7 +125,7 @@ impl Unlocked {
     }
 
     pub(crate) fn open_records_page(&mut self, page: Page) {
-        if self.is_editing() {
+        if !self.finish_editing() {
             return;
         }
         self.page = page;
@@ -140,10 +146,28 @@ impl Unlocked {
     }
 
     pub(crate) fn open_settings(&mut self) {
+        if !self.finish_editing() {
+            return;
+        }
         self.page = Page::Settings;
         self.show_password = false;
         self.confirm_delete = false;
         self.directories.confirm_delete = false;
+    }
+
+    /// Navigation flushes the entry first; failures retain the draft and current page.
+    /// Folder editors still require their explicit save/cancel action.
+    pub(crate) fn finish_editing(&mut self) -> bool {
+        if self.directories.draft.is_some() {
+            return false;
+        }
+        match self.close_draft() {
+            Ok(()) => true,
+            Err(error) => {
+                self.error = Some(error);
+                false
+            }
+        }
     }
 
     /// Persist a validated snapshot without closing the editor or resetting its controls.

@@ -274,6 +274,9 @@ impl Unlocked {
     }
 
     pub fn open_sharing(&mut self) {
+        if !self.finish_editing() {
+            return;
+        }
         self.page = Page::Sharing;
         self.show_password = false;
         self.confirm_delete = false;
