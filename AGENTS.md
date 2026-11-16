@@ -1,1 +1,4 @@
 - Create notes using caveman plugin
+- Create notes in `notes/` only for architectural decisions: module boundaries, responsibilities, data flows, storage/protocol contracts, security invariants, and technical tradeoffs.
+- Do not create notes about UI appearance, layout, spacing, colors, icons, labels, or user flows. Document UI work only when it changes architectural contracts, state ownership, or security boundaries.
+- Do not create routine task summaries, implementation diaries, test reports, or release logs in `notes/`.
