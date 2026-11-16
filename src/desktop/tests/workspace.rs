@@ -1,6 +1,29 @@
 use crate::desktop::test_support::{add, reopen, unlocked};
 
 #[test]
+fn creation_event_requires_a_successful_first_save() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut workspace = unlocked(&dir);
+    workspace.start_new();
+    workspace.autosave_draft().unwrap();
+    assert_eq!(workspace.record_created, 0);
+    workspace.draft.as_mut().unwrap().entry.password = "fictional".into();
+    assert!(workspace.autosave_draft().is_err());
+    assert_eq!(workspace.record_created, 0);
+    workspace.draft.as_mut().unwrap().entry.title = "Example".into();
+    let tmp = workspace.vault.path().with_extension("lbx.tmp");
+    std::fs::create_dir(&tmp).unwrap();
+    assert!(workspace.autosave_draft().is_err());
+    assert_eq!(workspace.record_created, 0);
+    std::fs::remove_dir(tmp).unwrap();
+    workspace.autosave_draft().unwrap();
+    assert_eq!(workspace.record_created, 1);
+    workspace.autosave_draft().unwrap();
+    workspace.close_draft().unwrap();
+    assert_eq!(workspace.record_created, 1);
+}
+
+#[test]
 fn autosave_persists_changes_without_closing_or_resetting_the_editor() {
     let dir = tempfile::tempdir().unwrap();
     let mut workspace = unlocked(&dir);
@@ -13,6 +36,7 @@ fn autosave_persists_changes_without_closing_or_resetting_the_editor() {
     draft.icon_picker_open = true;
     draft.schedule_save();
     workspace.autosave_draft().unwrap();
+    assert_eq!(workspace.record_created, 1);
 
     let draft = workspace.draft.as_ref().unwrap();
     assert!(draft.show_password);
@@ -23,6 +47,10 @@ fn autosave_persists_changes_without_closing_or_resetting_the_editor() {
 
     workspace.draft.as_mut().unwrap().entry.username = "fictional-user".into();
     workspace.autosave_draft().unwrap();
+    assert_eq!(
+        workspace.record_created, 1,
+        "edits must not celebrate again"
+    );
     let saved = reopen(&workspace);
     assert_eq!(saved.entries.len(), 1);
     assert_eq!(saved.entries[0].id, id);

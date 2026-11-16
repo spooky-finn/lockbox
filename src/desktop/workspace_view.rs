@@ -41,6 +41,9 @@ pub(crate) fn UnlockedView() -> Element {
         || editing;
     rsx! {
         Toolbar {}
+        if unlocked.record_created > 0 {
+            CreationCelebration { key: "{unlocked.record_created}" }
+        }
         div { class: if has_detail { "workspace has-detail" } else { "workspace" },
             Sidebar {}
             section { class: "detail",
@@ -60,6 +63,28 @@ pub(crate) fn UnlockedView() -> Element {
                 else if sharing_open { crate::sharing::views::SharingView {} }
                 else if records_open { crate::records::views::history::RecordsView { key: "{records_open}:{unlocked.selected:?}:{unlocked.page == crate::desktop::workspace::Page::Trash}" } }
                 else { VaultContent {} }
+            }
+        }
+    }
+}
+
+/// A bounded, non-interactive burst, removed on animation completion or lock.
+#[component]
+fn CreationCelebration() -> Element {
+    let language = crate::desktop::i18n::use_language();
+    let mut visible = use_signal(|| true);
+    rsx! {
+        if visible() {
+            style { {include_str!("../../assets/celebration.css")} }
+            div { class: "creation-celebration", role: "status", aria_live: "polite",
+                onanimationend: move |_| visible.set(false),
+                div { class: "creation-sparks", aria_hidden: "true",
+                    onanimationend: move |event| event.stop_propagation(),
+                    for index in 0..16 {
+                        span { class: "creation-spark", style: "--angle:{index * 360 / 16}deg;" }
+                    }
+                }
+                span { class: "creation-message", {language.text(Text::RecordCreated)} }
             }
         }
     }

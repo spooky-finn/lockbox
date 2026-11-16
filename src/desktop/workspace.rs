@@ -32,6 +32,8 @@ pub(crate) struct Unlocked {
     pub(crate) show_password: bool,
     pub(crate) confirm_delete: bool,
     pub(crate) error: Option<String>,
+    /// UI-only event counter, incremented after the first durable record save.
+    pub(crate) record_created: u64,
     /// Generator settings last until the window closes; they are never saved.
     pub(crate) generator: generator::Options,
 }
@@ -54,6 +56,7 @@ impl Unlocked {
             show_password: false,
             confirm_delete: false,
             error: None,
+            record_created: 0,
             generator: generator::Options::default(),
         }
     }
@@ -165,6 +168,7 @@ impl Unlocked {
             return Ok(());
         }
 
+        let created = draft.is_new;
         self.vault
             .upsert_entry(entry)
             .map_err(|error| format!("Could not save: {error}"))?;
@@ -173,6 +177,9 @@ impl Unlocked {
             draft.is_new = false;
         }
         self.sync.saved();
+        if created {
+            self.record_created = self.record_created.wrapping_add(1);
+        }
         Ok(())
     }
 
