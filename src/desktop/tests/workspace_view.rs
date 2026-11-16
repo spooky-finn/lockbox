@@ -10,6 +10,30 @@ use crate::{
 };
 
 #[test]
+fn creation_feedback_is_noninteractive_and_removed_on_lock() {
+    let mut dom = mounted();
+    assert!(!dioxus_ssr::render(&dom).contains("creation-celebration"));
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| {
+            u.start_new();
+            u.draft.as_mut().unwrap().entry.title = "Fictional new record".into();
+            u.autosave_draft().unwrap();
+        })
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("Запись создана"));
+    assert!(html.contains("aria-live=\"polite\""));
+    assert!(html.contains("prefers-reduced-motion"));
+    assert!(!html.contains("private-test-password"));
+    update(&mut dom, |_| crate::desktop::runtime::lock(None));
+    update(&mut dom, |state| {
+        set_field(state, Field::Password, "late-fictional-input".into())
+    });
+    assert!(!dioxus_ssr::render(&dom).contains("creation-celebration"));
+    assert!(!dioxus_ssr::render(&dom).contains("late-fictional-input"));
+}
+
+#[test]
 fn an_imported_profile_keeps_records_readable_and_disables_mutating_actions() {
     use crate::desktop::session::Screen;
     use crate::desktop::workspace::Unlocked;

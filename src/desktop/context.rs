@@ -83,9 +83,11 @@ pub(crate) fn edit_draft(state: Session, edit: impl FnOnce(&mut Draft)) {
     });
 }
 pub(crate) fn set_field(state: Session, field: Field, value: String) {
+    // Late WebView input may arrive after lock removed the draft.
+    let mut value = zeroize::Zeroizing::new(value);
     edit_unlocked(state, |unlocked| {
         if let Some(draft) = &mut unlocked.draft
-            && draft.set_field(field, value)
+            && draft.set_field(field, std::mem::take(&mut *value))
         {
             draft.schedule_save();
         }
