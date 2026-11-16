@@ -2,6 +2,7 @@
 name = "lockbox"
 version = "0.1.0"
 edition = "2024"
+license = "GPL-3.0-only"
 publish = false
 # `cargo run` starts the app; `build-icons` regenerates assets/icons.jsonl.
 default-run = "lockbox"
