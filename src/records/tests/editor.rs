@@ -91,9 +91,13 @@ fn transient_controls_never_schedule_persistence_or_modify_record_data() {
     let mut draft = super::Draft::new(super::Entry::new(), true);
     let original = draft.entry.clone();
     for control in [
-        Control::TogglePassword, Control::ToggleTotp, Control::ToggleGenerator,
-        Control::CloseGenerator, Control::ToggleIconPicker,
-        Control::IconQuery("example".into()), Control::CloseIconPicker,
+        Control::TogglePassword,
+        Control::ToggleTotp,
+        Control::ToggleGenerator,
+        Control::CloseGenerator,
+        Control::ToggleIconPicker,
+        Control::IconQuery("example".into()),
+        Control::CloseIconPicker,
     ] {
         draft.control(control);
         assert_eq!(draft.entry, original);

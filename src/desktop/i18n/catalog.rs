@@ -3,6 +3,7 @@
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Text {
     ThemePreset,
+    LegacyTheme,
     ThemePresetDescription,
     ThemeClassic,
     ThemeOcean,
@@ -575,6 +576,7 @@ impl Text {
     pub(super) fn translations(self) -> (&'static str, &'static str) {
         match self {
             Self::ThemePreset => ("Готовая тема", "Theme preset"),
+            Self::LegacyTheme => ("Сохранённые пользовательские цвета", "Previous custom colors"),
             Self::ThemePresetDescription => ("Согласованные цвета с читаемым контрастом.", "Coordinated colors with readable contrast."),
             Self::ThemeClassic => ("Классическая", "Classic"),
             Self::ThemeOcean => ("Океан", "Ocean"),
@@ -1147,6 +1149,7 @@ impl Text {
 
 pub(super) const CATALOG: &[Text] = &[
     Text::ThemePreset,
+    Text::LegacyTheme,
     Text::ThemePresetDescription,
     Text::ThemeClassic,
     Text::ThemeOcean,

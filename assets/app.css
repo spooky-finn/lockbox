@@ -324,6 +324,7 @@ button.sidebar-settings[aria-current="page"]:focus-visible { outline-color: var(
 
 /* Credentials */
 .detail { min-width: 0; min-height: 0; overflow: auto; padding: 24px 32px 32px; background: var(--surface); }
+.detail { background-image: var(--canvas-image, none); }
 .detail > .error { margin-bottom: 18px; }
 .entry-detail { max-width: 720px; margin: 0 auto; }
 .directory-detail { max-width: 720px; margin: 0 auto; }

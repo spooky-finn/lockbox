@@ -125,6 +125,7 @@ fn AppearanceSection() -> Element {
     let language = use_language();
     let settings = use_context::<Signal<Settings>>();
     let appearance = settings.read().config.appearance;
+    let legacy_colors = appearance.accent.is_some() || appearance.background.is_some();
     rsx! {
         section { class: "settings-section stack",
             h2 { {language.text(Text::Appearance)} }
@@ -154,19 +155,22 @@ fn AppearanceSection() -> Element {
                     label { r#for: "settings-preset", {language.text(Text::ThemePreset)} }
                     p { class: "muted", {language.text(Text::ThemePresetDescription)} }
                 }
-                select { id: "settings-preset", value: appearance.preset.code(),
+                select { id: "settings-preset", value: if legacy_colors { "legacy" } else { appearance.preset.code() },
                     onchange: move |event| {
                         if let Some(preset) = ThemePreset::ALL.into_iter().find(|preset| preset.code() == event.value()) {
                             runtime::set_theme_preset(preset);
                         }
                     },
+                    if legacy_colors {
+                        option { value: "legacy", selected: true, disabled: true, {language.text(Text::LegacyTheme)} }
+                    }
                     for (preset, label) in [
                         (ThemePreset::Classic, Text::ThemeClassic),
                         (ThemePreset::Ocean, Text::ThemeOcean),
                         (ThemePreset::Forest, Text::ThemeForest),
                         (ThemePreset::Plum, Text::ThemePlum),
                     ] {
-                        option { value: preset.code(), selected: appearance.preset == preset, {language.text(label)} }
+                        option { value: preset.code(), selected: !legacy_colors && appearance.preset == preset, {language.text(label)} }
                     }
                 }
             }

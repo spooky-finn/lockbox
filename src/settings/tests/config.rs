@@ -131,3 +131,23 @@ fn accent_only_preferences_load_without_a_background() {
     assert_eq!(config.appearance.accent, RgbColor::parse("#af52de"));
     assert_eq!(config.appearance.background, None);
 }
+#[test]
+fn presets_and_gradient_roundtrip_and_unknown_presets_fall_back() {
+    use crate::settings::appearance::{Appearance, ThemePreset};
+    for preset in ThemePreset::ALL {
+        let appearance = Appearance {
+            preset,
+            gradient: true,
+            ..Appearance::default()
+        };
+        let json = serde_json::to_string(&appearance).unwrap();
+        assert_eq!(
+            serde_json::from_str::<Appearance>(&json).unwrap(),
+            appearance
+        );
+    }
+    let unknown: Appearance =
+        serde_json::from_str(r#"{"preset":"future","gradient":true}"#).unwrap();
+    assert_eq!(unknown.preset, ThemePreset::Classic);
+    assert!(unknown.gradient);
+}
