@@ -1,0 +1,16 @@
+UI performance and architecture — 2026-11-16
+
+Branch: dev/ui-performance-and-architecture
+Scope: editor responsiveness, tree navigation, curated themes, save feedback.
+Caveman plugin unavailable in this session; repository note used as fallback.
+
+Typing path
+- Field edits replace only the affected buffer, with zeroizing input ownership.
+- No whole-entry/attachment clone for each input event.
+- Unchanged input does not postpone autosave.
+- Generic multi-field commands retain snapshot comparison for correctness.
+
+Constraints
+- Preserve encrypted formats, transactional persistence and lock-time cleanup.
+- Do not lower password derivation costs to disguise UI latency.
+- Keep independent changes in separate commits; measure before broad rewrites.

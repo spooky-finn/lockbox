@@ -105,7 +105,8 @@ impl Draft {
         }
     }
 
-    pub(crate) fn set_field(&mut self, field: Field, value: String) {
+    /// Update only the changed field; never clone attachments on the typing path.
+    pub(crate) fn set_field(&mut self, field: Field, value: String) -> bool {
         let value = Zeroizing::new(value);
         let target = match field {
             Field::Title => &mut self.entry.title,
@@ -115,16 +116,20 @@ impl Draft {
             Field::Notes => &mut self.entry.notes,
             Field::Totp => {
                 let Some(totp) = &mut self.entry.totp else {
-                    return;
+                    return false;
                 };
                 &mut totp.secret
             }
         };
+        if *target == *value {
+            return false;
+        }
         replace_secret(target, &value);
 
         if matches!(field, Field::Totp) {
             self.apply_link();
         }
+        true
     }
 
     pub(crate) fn generate(&mut self, options: &generator::Options) {
