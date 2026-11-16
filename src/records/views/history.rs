@@ -68,11 +68,18 @@ pub(crate) fn RecordsView() -> Element {
                     if history.is_empty() { p { {language.text(Text::NoRecordHistory)} } }
                     for change in history.iter().rev() {
                         section { class: "history-change", key: "{change.revision}",
-                            h2 { {language.text(match change.action.as_str() { "Delete" => Text::Deleted, "Restore" => Text::HistoryRestored, "Resolve" => Text::HistoryResolved, _ if change.before.is_empty() => Text::HistoryCreated, _ => Text::HistoryUpdated })} }
+                             h2 { {language.text(match change.action.as_str() { "Delete" => Text::Deleted, "Restore" => Text::HistoryRestored, "Resolve" => Text::HistoryResolved, _ if change.before.is_empty() => Text::HistoryCreated, _ => Text::HistoryUpdated })} }
+                            if let Some(name) = change.actor.parse().ok().and_then(|user| u.vault.participant_name(user)) {
+                                p { strong { "{name}" } }
+                            }
                             p { {language.format(Text::HistoryAuthor, std::slice::from_ref(&change.actor))} }
                             p { class: "muted fingerprint", {language.format(Text::Device, std::slice::from_ref(&change.device))} }
                             code { class: "fingerprint", "{change.revision}" }
-                            if let Some(at) = change.at { p { class: "muted", {language.format(Text::HistoryTime, &[crate::desktop::time::utc_timestamp(at)])} } }
+                            if let Some(at) = change.at {
+                                p { class: "muted", {language.format(if u.vault.sync_state().is_some() { Text::HistoryAuthorTime } else { Text::HistoryTime }, &[crate::desktop::time::utc_timestamp(at)])} }
+                            } else {
+                                p { class: "muted", {language.text(Text::HistoryTimeUnavailable)} }
+                            }
                             button { class: "quiet", onclick: { let revision = change.revision.clone(); move |_| { let mut values = revealed.write(); if !values.remove(&revision) { values.insert(revision.clone()); } } }, {language.text(Text::HistorySecrets)} }
                             for before in &change.before {
                                 div { class: "history-diff",

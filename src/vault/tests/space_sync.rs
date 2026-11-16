@@ -313,6 +313,7 @@ fn automatic_frontier_folding_uses_durable_intents_before_the_requested_edit() {
                 Transaction {
                     mutations: vec![],
                     rebased_from: None,
+                    authored_at: None,
                 },
             )
             .unwrap(),
@@ -866,6 +867,7 @@ fn shared_history_attributes_signer_and_restores_deleted_record() {
     let certificate = vault.device_certificate().unwrap();
     assert_eq!(history[1].actor, certificate.body.user.to_string());
     assert_eq!(history[1].device, certificate.body.device.to_string());
+    assert!(history.iter().all(|change| change.at.is_some()));
     assert_eq!(vault.trash().unwrap(), vec![updated.clone()]);
     vault.restore_record(&updated.id).unwrap();
     assert_eq!(vault.entries, vec![updated]);

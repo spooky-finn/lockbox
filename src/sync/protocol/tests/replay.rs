@@ -1,6 +1,29 @@
 use crate::sync::protocol::Replay;
 use crate::sync::protocol::machine::tests::*;
 
+#[test]
+fn signed_author_time_is_retained_but_never_overrides_causality() {
+    let (mut state, device) = owner();
+    let mut account = entry(1, "first");
+    let mut first = Transaction::diff(&Projection::default(), &[account.clone()], &[]).unwrap();
+    first.authored_at = Some(2_000_000_000);
+    commit(&mut state, &device, first);
+    let before = Machine::replay(&state, &device).unwrap();
+    account.password = "causally later despite backdated clock".into();
+    let mut second = Transaction::diff(&before.projection, &[account.clone()], &[]).unwrap();
+    second.authored_at = Some(1);
+    commit(&mut state, &device, second);
+
+    let replay = Machine::replay(&state, &device).unwrap();
+    assert!(replay.ready && replay.history_verified);
+    assert_eq!(replay.projection.entries(), vec![account]);
+    assert_eq!(replay.history[0].at, Some(2_000_000_000));
+    assert_eq!(replay.history[1].at, Some(1));
+    assert_eq!(replay.history[1].before[0].password, "first");
+    assert_eq!(replay.history[1].device, device.id().to_string());
+    compare_selected_history(&state, &device, &[Some(&entry(1, "").id)]);
+}
+
 fn replay_facts(replay: &Replay) -> impl Eq + std::fmt::Debug + '_ {
     let Replay {
         history: _,
@@ -395,6 +418,7 @@ fn incomplete_bases_and_implicit_restore_are_rejected() {
     let entity = Value::Entry(entry(1, "changed")).entity();
     let transaction = Transaction {
         rebased_from: None,
+        authored_at: None,
         mutations: vec![Mutation {
             entity: entity.clone(),
             bases: vec![],
@@ -410,6 +434,7 @@ fn incomplete_bases_and_implicit_restore_are_rejected() {
     let replay = Machine::replay(&state, &device).unwrap();
     let transaction = Transaction {
         rebased_from: None,
+        authored_at: None,
         mutations: vec![Mutation {
             entity: entity.clone(),
             bases: replay.projection.heads(&entity),
@@ -544,6 +569,7 @@ fn invalid_ancestry_is_rejected_instead_of_waiting_forever_in_every_order() {
             value: None,
         }],
         rebased_from: None,
+        authored_at: None,
     };
     let first = encrypted_change(&state, state.genesis, &device, 1, None, vec![], &invalid);
     let first_hash = first.hash().unwrap();

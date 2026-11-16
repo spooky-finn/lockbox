@@ -25,6 +25,16 @@ Core replay has no network, filesystem, clock or UI dependency. Network timing,
 wall-clock time, listing order and random retry jitter never choose a record
 version, establish authority or remove known history.
 
+Transactions may carry optional `authored_at` Unix seconds supplied by the host
+clock. The timestamp is inside the encrypted, signed transaction and is displayed
+only as author-claimed time. It never affects membership, causal ordering,
+revocation, conflict resolution or recovery. Dates must be in 1970–9999 but are
+not compared with the reader's current clock. Rebases use the new author's time.
+Legacy transactions omit the field and retain their exact canonical bytes; their
+history time remains unknown. Old clients reject timestamped transactions, so all
+participants must update before new changes are exchanged. Reserved signing
+intents retain their original timestamp across crashes and retries.
+
 ## Local save and exchange
 
 ```mermaid

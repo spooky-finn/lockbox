@@ -211,6 +211,7 @@ impl Machine {
             &Transaction {
                 mutations: vec![],
                 rebased_from: None,
+                authored_at: None,
             },
             replay,
             true,
@@ -485,6 +486,17 @@ impl Machine {
         device: &DeviceSecret,
         excluded: Hash,
     ) -> Result<PreparedChange> {
+        Self::prepare_rebase_at(state, device, excluded, None)
+    }
+
+    /// Re-author with an optional advisory timestamp supplied by the host clock.
+    /// A rebase records the new author's time, never the excluded edit's time.
+    pub fn prepare_rebase_at(
+        state: &SyncState,
+        device: &DeviceSecret,
+        excluded: Hash,
+        authored_at: Option<u64>,
+    ) -> Result<PreparedChange> {
         use crate::sync::protocol::Action;
         use crate::sync::protocol::Mutation;
         let replay = Self::replay_state(state, device)?;
@@ -527,6 +539,7 @@ impl Machine {
             &Transaction {
                 mutations,
                 rebased_from: Some(excluded),
+                authored_at,
             },
             replay,
             false,

@@ -64,6 +64,7 @@ impl Screen {
         security.clipboard.clear_now();
 
         if let Self::Unlocked(unlocked) = self {
+            let save_error = unlocked.autosave_draft().err();
             let mut locked = Locked::new(Some(unlocked.vault.path().to_path_buf()))
                 .with_identity_path(settings.identity_path(), None)
                 .offer_touch_id(&settings.config, biometrics, false);
@@ -73,6 +74,12 @@ impl Screen {
                 .profile_summary()
                 .map(|profile| profile.space_name.to_owned());
             locked.notice = reason.map(|reason| format!("Vault locked: {reason}"));
+            if let Some(error) = save_error {
+                locked.notice = Some(format!(
+                    "Unsaved edits were discarded when locking ({reason}): {error}",
+                    reason = reason.unwrap_or("Lockbox")
+                ));
+            }
             *self = Self::Locked(Box::new(locked));
         }
     }

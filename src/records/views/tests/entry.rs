@@ -50,6 +50,8 @@ fn history_hides_secrets_and_trash_restores_record() {
     });
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("История записи"));
+    assert!(html.contains("Автор: Local user"));
+    assert!(html.contains("Сохранено (UTC):"));
     assert!(!html.contains("private-test-password"));
     assert!(!html.contains("new-history-secret"));
     assert!(!html.contains("JBSWY3DPEHPK3PXP"));

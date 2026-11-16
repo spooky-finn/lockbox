@@ -201,10 +201,22 @@ ownership and extension rules.
 
 Open a record and select **Record history** to compare changed fields before and
 after each revision. Passwords and TOTP secrets stay hidden until revealed.
-Shared history identifies the verified user and device by their full fingerprints;
-cloud events have causal ordering but no wall-clock timestamps. Local history
+Shared history identifies the verified user and device by their full fingerprints.
+New shared revisions include an encrypted, signed author-device timestamp, displayed
+in UTC and explicitly labelled as the author's clock. It is not trusted server time:
+offline devices and incorrect clocks can disagree. Revision order and conflict
+resolution remain causal, never timestamp-based. Older shared revisions without
+timestamps are labelled as having an unknown time; dates are not inferred. Local history
 records save times and labels the editor as “Local user”; it does not authenticate
 individual people sharing a master password.
+
+The record editor saves automatically after a short pause and preserves each saved
+revision, including changed fields, author and available time. Closing an unchanged
+editor or revealing a password does not create another revision.
+
+**Shared client compatibility:** update every participant before exchanging new
+timestamped revisions. Earlier clients reject the new transaction metadata; this
+version still reads the exact legacy transaction encoding.
 
 Deleting moves a record to **Trash** in the sidebar. Restore preserves the record
 ID, secrets and attachments. If its folder was removed, it returns to the root.

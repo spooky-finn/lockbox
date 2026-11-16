@@ -11,6 +11,57 @@ use dioxus::prelude::*;
 use std::time::{Instant, SystemTime};
 
 #[test]
+fn autosave_tick_debounces_edits_and_keeps_the_editor_open() {
+    use crate::desktop::context::{Session, edit_draft, set_field};
+    use crate::records::editor::Field;
+
+    let mut dom = mounted();
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| u.start_new());
+        set_field(state, Field::Title, "Autosaved".into());
+        set_field(state, Field::Password, "fictional-password".into());
+        runtime::tick();
+    });
+    dom.in_scope(ScopeId::APP, || {
+        let state = consume_context::<Session>();
+        let screen = state.peek();
+        let Screen::Unlocked(u) = &*screen else {
+            panic!("locked");
+        };
+        assert!(u.draft.as_ref().unwrap().save_after.is_some());
+        assert!(!u.vault.entries().iter().any(|e| e.title == "Autosaved"));
+    });
+    update(&mut dom, |state| {
+        edit_draft(state, |draft| draft.save_after = Some(Instant::now()));
+        runtime::tick();
+    });
+    dom.in_scope(ScopeId::APP, || {
+        let state = consume_context::<Session>();
+        let screen = state.peek();
+        let Screen::Unlocked(u) = &*screen else {
+            panic!("locked");
+        };
+        assert!(u.draft.as_ref().unwrap().save_after.is_none());
+        let reopened = crate::desktop::test_support::reopen(u);
+        let saved = reopened
+            .entries
+            .iter()
+            .find(|e| e.title == "Autosaved")
+            .unwrap();
+        assert_eq!(saved.password, "fictional-password");
+    });
+    update(&mut dom, |state| {
+        edit_draft(state, |draft| draft.show_password = true);
+        let screen = state.peek();
+        let Screen::Unlocked(u) = &*screen else {
+            panic!("locked");
+        };
+        assert!(u.draft.as_ref().unwrap().save_after.is_none());
+    });
+    assert!(dioxus_ssr::render(&dom).contains("id=\"entry-title\""));
+}
+
+#[test]
 fn worker_results_open_the_vault_and_report_task_or_worker_failure() {
     use crate::access::auth::Opened;
     use crate::platform::jobs::Worker;

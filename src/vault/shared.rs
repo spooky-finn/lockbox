@@ -15,6 +15,13 @@ use crate::{
 use secrecy::SecretString;
 use std::path::Path;
 
+fn authored_now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+}
+
 impl Vault {
     /// Creates a new independent device profile and owner space. Credentials and
     /// private keys are stored only inside this locally encrypted file.
@@ -72,8 +79,9 @@ impl Vault {
         self.recover_sync()?;
         let sync = self.profile.as_ref().unwrap().sync.as_ref().unwrap();
         let replay = Machine::replay_state(sync, &device)?;
-        let transaction =
+        let mut transaction =
             Transaction::diff(&replay.projection, &desired_entries, &desired_folders)?;
+        transaction.authored_at = Some(authored_now());
 
         if transaction.mutations.is_empty() {
             return self.save();
@@ -264,13 +272,16 @@ impl Vault {
     pub fn rebase_edit(&mut self, hash: crate::sync::protocol::Hash) -> Result<()> {
         self.ensure_exchange_committed()?;
         use crate::sync::protocol::Machine;
-        let prepared = self
-            .prepare_sync_command(|state, device| Machine::prepare_rebase(state, device, hash))?;
+        let at = authored_now();
+        let prepared = self.prepare_sync_command(|state, device| {
+            Machine::prepare_rebase_at(state, device, hash, Some(at))
+        })?;
         self.commit_prepared(prepared)
     }
 
-    fn commit_sync(&mut self, transaction: crate::sync::protocol::Transaction) -> Result<()> {
+    fn commit_sync(&mut self, mut transaction: crate::sync::protocol::Transaction) -> Result<()> {
         use crate::sync::protocol::Machine;
+        transaction.authored_at = Some(authored_now());
         let prepared = self.prepare_sync_command(|state, device| {
             Machine::prepare_borrowed(state, device, &transaction)
         })?;
@@ -387,7 +398,8 @@ impl Vault {
                     &self.salt,
                 )?,
             ));
-            let transaction = Transaction::diff(&Projection::default(), &entries, &folders)?;
+            let mut transaction = Transaction::diff(&Projection::default(), &entries, &folders)?;
+            transaction.authored_at = Some(authored_now());
 
             if transaction.mutations.is_empty() {
                 return self.save_inner(false);

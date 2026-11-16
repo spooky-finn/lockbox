@@ -146,23 +146,61 @@ impl Unlocked {
         self.directories.confirm_delete = false;
     }
 
-    /// Writes the draft to disk. On failure the vault is unchanged and the draft is kept.
-    pub(crate) fn save_draft(&mut self) -> Result<(), String> {
+    /// Persist a validated snapshot without closing the editor or resetting its controls.
+    pub(crate) fn autosave_draft(&mut self) -> Result<(), String> {
         let Some(draft) = &self.draft else {
             return Ok(());
         };
 
+        if draft.is_empty() {
+            return Ok(());
+        }
+
         let entry = draft.prepare_save()?;
-        let id = entry.id.clone();
+        if self.vault.entries().contains(&entry) {
+            if let Some(draft) = &mut self.draft {
+                draft.save_after = None;
+                draft.is_new = false;
+            }
+            return Ok(());
+        }
+
         self.vault
             .upsert_entry(entry)
             .map_err(|error| format!("Could not save: {error}"))?;
+        if let Some(draft) = &mut self.draft {
+            draft.save_after = None;
+            draft.is_new = false;
+        }
+        self.sync.saved();
+        Ok(())
+    }
+
+    /// Flush pending edits before closing. A failed save keeps the editor open.
+    pub(crate) fn save_draft(&mut self) -> Result<(), String> {
+        let Some(draft) = &self.draft else {
+            return Ok(());
+        };
+        // Explicit saves still validate new entries; closing an untouched empty
+        // editor is handled separately.
+        let entry = draft.prepare_save()?;
+        let id = entry.id.clone();
+        self.autosave_draft()?;
 
         self.draft = None;
         self.search.clear();
         self.select(id);
         self.sync.saved();
         Ok(())
+    }
+
+    pub(crate) fn close_draft(&mut self) -> Result<(), String> {
+        if self.draft.as_ref().is_some_and(Draft::is_empty) {
+            self.draft = None;
+            self.error = None;
+            return Ok(());
+        }
+        self.save_draft()
     }
 
     pub(crate) fn delete_selected(&mut self) -> Result<(), String> {

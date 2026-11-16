@@ -2,7 +2,7 @@
 
 - Cloud recovery: user wants access after total local loss using same root/12 words + Storj credentials/bucket. Derive recovery capability; keep device/epoch keys random. Encrypted controller-signed capsules, fresh recovered device, explicit cloud freshness trust, independent-anchor API. No silent empty recreation. See docs/cloud-recovery.txt.
 
-- Record history: local encrypted revisions; cloud verified signer fingerprints, causal order, no wall-clock times. Secrets hidden by default.
+- Record history: preserve encrypted before/after revisions during autosave; shared verified signer fingerprints and optional signed author-device UTC time. Clock time is advisory, never ordering/authority; legacy shared timestamps stay unknown. User accepts requiring all participants to update for timestamped transactions. Secrets hidden by default.
 - Trash: deletion retains values; restore same ID/files; missing folder restores root. No purge. Shared conflicts excluded from Trash.
 - File formats v6/v7; reads v1–v5. Old clients reject new files. Local history starts after upgrade; cloud history requires epoch keys.
 - Record fields: single click username/password/URL copies via guarded clipboard; successful copy shows green “Copied” beside text briefly. Keyboard activation supported; password stays masked.

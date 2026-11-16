@@ -509,7 +509,7 @@ fn materialize_history(
                 revision: format!("{hash}:{index}"),
                 actor: actor.clone(),
                 device: author.to_string(),
-                at: None,
+                at: change.transaction.authored_at,
                 action: format!("{:?}", mutation.action),
                 before,
                 after: match &mutation.value {

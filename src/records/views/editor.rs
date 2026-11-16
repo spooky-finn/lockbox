@@ -35,7 +35,7 @@ pub(crate) fn DraftView() -> Element {
     let icon = icons::catalog().for_entry(entry);
     let automatic_favicon = entry.icon.is_none() && icons::favicon_url(&entry.url).is_some();
     rsx! {
-        form { class: "draft stack", onsubmit: move |event| { event.prevent_default(); edit_unlocked(state, |u| u.error = u.save_draft().err()); },
+        form { class: "draft stack", onsubmit: move |event| { event.prevent_default(); edit_unlocked(state, |u| u.error = u.autosave_draft().err()); },
             div { class: "form-heading",
                 div { class: "form-icon", Symbol { icon: Icon::Key } }
                 div { p { class: "detail-kind", {language.text(Text::PasswordVault)} } h1 { if draft.is_new { {language.text(Text::NewEntry)} } else { {language.text(Text::EditEntry)} } } }
@@ -94,8 +94,8 @@ pub(crate) fn DraftView() -> Element {
             }
             TotpEditor {}
             div { class: "actions form-actions",
-                IconButton { class: "primary", kind: "submit", icon: Icon::Save, label: language.text(Text::Save) }
-                IconButton { icon: Icon::Close, label: language.text(Text::Cancel), onclick: move |_| edit_unlocked(state, |u| { u.draft = None; u.error = None; }) }
+                span { class: "muted", {language.text(Text::ChangesAreSavedAutomatically)} }
+                IconButton { icon: Icon::Close, label: language.text(Text::CloseEditor), onclick: move |_| edit_unlocked(state, |u| u.error = u.close_draft().err()) }
             }
         }
     }

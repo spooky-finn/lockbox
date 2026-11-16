@@ -1,6 +1,136 @@
 use crate::desktop::test_support::{add, reopen, unlocked};
 
 #[test]
+fn autosave_persists_changes_without_closing_or_resetting_the_editor() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut workspace = unlocked(&dir);
+    workspace.start_new();
+    let draft = workspace.draft.as_mut().unwrap();
+    let id = draft.entry.id.clone();
+    draft.entry.title = "Automatic".into();
+    draft.entry.password = "fictional-password".into();
+    draft.show_password = true;
+    draft.icon_picker_open = true;
+    draft.schedule_save();
+    workspace.autosave_draft().unwrap();
+
+    let draft = workspace.draft.as_ref().unwrap();
+    assert!(draft.show_password);
+    assert!(draft.icon_picker_open);
+    assert!(draft.save_after.is_none());
+    assert!(!draft.is_new);
+    assert_eq!(reopen(&workspace).entries[0].password, "fictional-password");
+
+    workspace.draft.as_mut().unwrap().entry.username = "fictional-user".into();
+    workspace.autosave_draft().unwrap();
+    let saved = reopen(&workspace);
+    assert_eq!(saved.entries.len(), 1);
+    assert_eq!(saved.entries[0].id, id);
+    assert_eq!(saved.entries[0].username, "fictional-user");
+    workspace.close_draft().unwrap();
+    assert!(workspace.draft.is_none());
+    assert_eq!(workspace.selected.as_deref(), Some(id.as_str()));
+}
+
+#[test]
+fn autosave_retains_version_snapshots_authorship_and_local_time_without_noop_revisions() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut workspace = unlocked(&dir);
+    workspace.start_new();
+    workspace.draft.as_mut().unwrap().entry.title = "Versioned".into();
+    workspace.draft.as_mut().unwrap().entry.password = "first-fictional-password".into();
+    workspace.autosave_draft().unwrap();
+    workspace.draft.as_mut().unwrap().entry.password = "second-fictional-password".into();
+    workspace.autosave_draft().unwrap();
+
+    let history = workspace.vault.record_history().unwrap();
+    assert_eq!(history.len(), 2);
+    assert!(history[0].before.is_empty());
+    assert_eq!(history[1].before[0].password, "first-fictional-password");
+    assert_eq!(
+        history[1].after.as_ref().unwrap().password,
+        "second-fictional-password"
+    );
+    assert_eq!(history[1].actor, "Local user");
+    assert_eq!(history[1].device, "Local vault");
+    assert!(history.iter().all(|revision| revision.at.is_some()));
+    assert!(history[0].at <= history[1].at);
+    assert_ne!(history[0].revision, history[1].revision);
+
+    workspace.draft.as_mut().unwrap().show_password = true;
+    workspace.autosave_draft().unwrap();
+    workspace.close_draft().unwrap();
+    assert_eq!(workspace.vault.record_history().unwrap().len(), 2);
+    let reopened = crate::vault::Vault::open(
+        workspace.vault.path(),
+        &secrecy::SecretString::from("master".to_owned()),
+    )
+    .unwrap();
+    let persisted = reopened.record_history().unwrap();
+    assert_eq!(
+        serde_json::to_vec(&persisted).unwrap(),
+        serde_json::to_vec(&history).unwrap()
+    );
+}
+
+#[test]
+fn closing_an_empty_editor_does_not_create_a_record() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut workspace = unlocked(&dir);
+    workspace.start_new();
+    workspace.close_draft().unwrap();
+    assert!(workspace.draft.is_none());
+    assert!(reopen(&workspace).entries.is_empty());
+}
+
+#[test]
+fn failed_autosave_preserves_edits_and_close_retries_them() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut workspace = unlocked(&dir);
+    add(&mut workspace, "Original", "", "");
+    workspace.start_edit();
+    workspace.draft.as_mut().unwrap().entry.password = "updated".into();
+    let tmp = workspace.vault.path().with_extension("lbx.tmp");
+    std::fs::create_dir(&tmp).unwrap();
+
+    assert!(workspace.autosave_draft().is_err());
+    assert!(workspace.close_draft().is_err());
+    assert_eq!(workspace.draft.as_ref().unwrap().entry.password, "updated");
+    assert_eq!(reopen(&workspace).entries[0].password, "");
+
+    std::fs::remove_dir(tmp).unwrap();
+    workspace.close_draft().unwrap();
+    assert_eq!(reopen(&workspace).entries[0].password, "updated");
+    assert!(workspace.draft.is_none());
+}
+
+#[test]
+fn invalid_autosave_keeps_the_last_valid_record_and_the_editor_open() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut workspace = unlocked(&dir);
+    add(&mut workspace, "Original", "", "");
+    workspace.start_edit();
+    workspace.draft.as_mut().unwrap().entry.title.clear();
+    assert!(workspace.autosave_draft().is_err());
+    assert!(workspace.close_draft().is_err());
+    assert_eq!(reopen(&workspace).entries[0].title, "Original");
+    assert!(workspace.draft.is_some());
+}
+
+#[test]
+fn clearing_an_autosaved_new_record_does_not_discard_the_invalid_edit_on_close() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut workspace = unlocked(&dir);
+    workspace.start_new();
+    workspace.draft.as_mut().unwrap().entry.title = "Created".into();
+    workspace.autosave_draft().unwrap();
+    workspace.draft.as_mut().unwrap().entry.title.clear();
+    assert!(workspace.close_draft().is_err());
+    assert!(workspace.draft.is_some());
+    assert_eq!(reopen(&workspace).entries[0].title, "Created");
+}
+
+#[test]
 fn new_and_edited_entries_are_written_to_disk() {
     let dir = tempfile::tempdir().unwrap();
     let mut unlocked = unlocked(&dir);

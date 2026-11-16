@@ -29,7 +29,9 @@ fn preparation_encrypts_exact_payload_without_mutating_reviewed_transaction() {
     account
         .add_attachment("payload.bin".into(), vec![0, 255, 42])
         .unwrap();
-    let transaction = Transaction::diff(&Projection::default(), &[account.clone()], &[]).unwrap();
+    let mut transaction =
+        Transaction::diff(&Projection::default(), &[account.clone()], &[]).unwrap();
+    transaction.authored_at = Some(1_700_000_000);
     let reviewed = canonical(&transaction).unwrap();
     let journal = canonical(&state).unwrap();
     let prepared = Machine::prepare_borrowed(&state, &device, &transaction).unwrap();

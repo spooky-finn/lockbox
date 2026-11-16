@@ -39,7 +39,8 @@ fn editor_renders_generator_icons_and_reactive_totp_link_fields() {
         "Генератор паролей",
         "Выбор иконки",
         "SHA256",
-        "Сохранить",
+        "Изменения сохраняются автоматически",
+        "Закрыть",
         "value=\"alice\"",
     ] {
         assert!(html.contains(text), "missing {text}");
@@ -61,7 +62,7 @@ fn editor_renders_generator_icons_and_reactive_totp_link_fields() {
 }
 
 #[test]
-fn submitting_the_dioxus_form_saves_and_prevents_browser_navigation() {
+fn submitting_the_dioxus_form_flushes_without_closing_or_browser_navigation() {
     use dioxus::dioxus_core::Mutation;
     use dioxus::html::{EventData, SerializedFormData, SerializedHtmlEventConverter};
     dioxus::html::set_event_converter(Box::new(SerializedHtmlEventConverter));
@@ -90,7 +91,8 @@ fn submitting_the_dioxus_form_saves_and_prevents_browser_navigation() {
     dom.render_immediate_to_vec();
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("From submit event"));
-    assert!(!html.contains("id=\"entry-title\""));
+    assert!(html.contains("id=\"entry-title\""));
+    assert!(!html.contains("type=\"submit\""));
     dom.in_scope(ScopeId::APP, || {
         let state = consume_context::<Session>();
         let screen = state.read();

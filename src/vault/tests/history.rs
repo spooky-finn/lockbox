@@ -32,6 +32,53 @@ fn deliver(from: &Vault, to: &mut Vault) {
 }
 
 #[test]
+fn shared_autosave_history_keeps_each_verified_author_and_signed_time_across_devices() {
+    use crate::desktop::workspace::Unlocked;
+
+    let directory = tempfile::tempdir().unwrap();
+    let store = ProfileStore::new(Arc::new(MemoryWitness::default()));
+    let mut owner = sharing_tests::create(&store, &directory.path().join("owner.lbx"));
+    let mut writer = sharing_tests::create(&store, &directory.path().join("writer.lbx"));
+    sharing_tests::share(&mut owner, &mut writer, Role::Editor);
+    let owner_certificate = owner.device_certificate().unwrap();
+    let writer_certificate = writer.device_certificate().unwrap();
+    let mut owner = Unlocked::new(owner);
+    owner.start_new();
+    let draft = owner.draft.as_mut().unwrap();
+    draft.entry.title = "Shared autosave".into();
+    draft.entry.password = "owner-fictional-password".into();
+    let id = draft.entry.id.clone();
+    owner.autosave_draft().unwrap();
+    deliver(&owner.vault, &mut writer);
+
+    let mut writer = Unlocked::new(writer);
+    writer.select(id.clone());
+    writer.start_edit();
+    writer.draft.as_mut().unwrap().entry.password = "writer-fictional-password".into();
+    writer.autosave_draft().unwrap();
+    deliver(&writer.vault, &mut owner.vault);
+
+    let history = owner.vault.record_history_for(Some(&id)).unwrap();
+    assert_eq!(history.len(), 2);
+    assert_eq!(history[0].actor, owner_certificate.body.user.to_string());
+    assert_eq!(history[1].actor, writer_certificate.body.user.to_string());
+    assert_eq!(
+        history[1].device,
+        writer_certificate.body.device.to_string()
+    );
+    assert!(history.iter().all(|revision| revision.at.is_some()));
+    assert_eq!(history[1].before[0].password, "owner-fictional-password");
+    assert_eq!(
+        history[1].after.as_ref().unwrap().password,
+        "writer-fictional-password"
+    );
+    assert_eq!(
+        canonical(&history).unwrap(),
+        canonical(&writer.vault.record_history_for(Some(&id)).unwrap()).unwrap()
+    );
+}
+
+#[test]
 fn local_trash_keeps_latest_deleted_values_sorted_by_id_without_live_records() {
     let directory = tempfile::tempdir().unwrap();
     let mut vault = Vault::create(

@@ -8,12 +8,12 @@ use crate::{
 };
 
 #[test]
-fn locking_wipes_clipboard_discards_the_draft_and_keeps_the_path() {
+fn locking_flushes_the_draft_wipes_clipboard_and_keeps_the_path() {
     let dir = tempfile::tempdir().unwrap();
     let mut workspace = unlocked(&dir);
     let path = workspace.vault.path().to_path_buf();
     workspace.start_new();
-    workspace.draft.as_mut().unwrap().entry.title = "Unsaved".into();
+    workspace.draft.as_mut().unwrap().entry.title = "Autosaved on lock".into();
     let mut screen = Screen::Unlocked(Box::new(workspace));
     let settings = Settings {
         config: Config::default(),
@@ -43,6 +43,38 @@ fn locking_wipes_clipboard_discards_the_draft_and_keeps_the_path() {
     assert!(form.password.is_empty());
     assert!(form.notice.as_deref().unwrap().contains("timeout"));
     assert!(!form.auto_touch_id);
+    let reopened =
+        crate::vault::Vault::open(&path, &secrecy::SecretString::from("master".to_owned()))
+            .unwrap();
+    assert_eq!(reopened.entries()[0].title, "Autosaved on lock");
+}
+
+#[test]
+fn failed_autosave_does_not_prevent_security_lock_and_reports_unsaved_edits() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut workspace = unlocked(&dir);
+    let path = workspace.vault.path().to_path_buf();
+    workspace.start_new();
+    workspace.draft.as_mut().unwrap().entry.title = "Cannot save".into();
+    std::fs::create_dir(path.with_extension("lbx.tmp")).unwrap();
+    let mut screen = Screen::Unlocked(Box::new(workspace));
+    let settings = Settings {
+        config: Config::default(),
+        path: None,
+    };
+    screen.lock(
+        &settings,
+        &FakeBiometrics::default(),
+        &mut security(),
+        Some("timeout"),
+    );
+    let Screen::Locked(form) = screen else {
+        panic!("security lock was blocked");
+    };
+    let notice = form.notice.unwrap();
+    assert!(notice.contains("timeout"));
+    assert!(notice.contains("Could not save"));
+    assert!(notice.contains("Unsaved edits"));
     let reopened =
         crate::vault::Vault::open(&path, &secrecy::SecretString::from("master".to_owned()))
             .unwrap();

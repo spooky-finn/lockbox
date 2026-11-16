@@ -11,7 +11,8 @@ fn reader_knowing_the_epoch_key_still_cannot_write() {
             &reader,
             Transaction {
                 mutations: vec![],
-                rebased_from: None
+                rebased_from: None,
+                authored_at: None,
             }
         ),
         Err(Error::InsufficientRole)
@@ -87,7 +88,8 @@ fn revocation_closes_frontier_and_preserves_late_offline_edits() {
             &bob_key,
             Transaction {
                 mutations: vec![],
-                rebased_from: None
+                rebased_from: None,
+                authored_at: None,
             }
         ),
         Err(Error::MissingDependency | Error::UnauthorizedDevice)
@@ -155,7 +157,10 @@ fn explicit_rebase_preserves_content_but_uses_new_epoch_and_author_signature() {
     let (bob, certificate) = identity(2);
     admit(&mut state, &alice, &bob, certificate, Role::Editor);
     let mut offline = state.clone();
-    let excluded = edit(&mut offline, &bob, vec![entry(1, "offline")]);
+    let mut transaction =
+        Transaction::diff(&Projection::default(), &[entry(1, "offline")], &[]).unwrap();
+    transaction.authored_at = Some(10);
+    let excluded = commit(&mut offline, &bob, transaction);
     let mut members = Machine::members(&state, &alice).unwrap();
     members
         .iter_mut()
@@ -168,6 +173,7 @@ fn explicit_rebase_preserves_content_but_uses_new_epoch_and_author_signature() {
     let edits = Machine::excluded_edits(&state, &bob).unwrap();
     assert_eq!(edits.len(), 1);
     assert_eq!(edits[0].author, bob.id());
+    assert_eq!(edits[0].transaction.authored_at, Some(10));
     assert!(matches!(
         Machine::prepare_rebase(&state, &bob, excluded),
         Err(Error::InsufficientRole)
@@ -186,13 +192,22 @@ fn explicit_rebase_preserves_content_but_uses_new_epoch_and_author_signature() {
     state.intent = None;
     // Alice explicitly re-authors Bob's proposed content; Bob is never credited
     // as signer of Alice's new event, and provenance remains advisory metadata.
-    state.intent = Some(Machine::prepare_rebase(&state, &alice, excluded).unwrap());
+    state.intent = Some(Machine::prepare_rebase_at(&state, &alice, excluded, Some(20)).unwrap());
     let rebased = Machine::complete_intent(&mut state, &alice).unwrap();
     let Object::Change(signed) = decode::<Object>(&state.objects[&rebased].0).unwrap() else {
         panic!()
     };
     assert_eq!(signed.body.header.author, alice.id());
     assert_eq!(signed.body.header.epoch.0, 2);
+    assert_eq!(
+        Machine::replay(&state, &alice)
+            .unwrap()
+            .history
+            .last()
+            .unwrap()
+            .at,
+        Some(20)
+    );
     assert_eq!(
         Machine::replay(&state, &alice)
             .unwrap()

@@ -164,6 +164,11 @@ pub struct Transaction {
     pub mutations: Vec<Mutation>,
     /// Advisory provenance only; authorship always belongs to this event's signer.
     pub rebased_from: Option<Hash>,
+    /// Author-device Unix seconds, authenticated with the encrypted transaction.
+    /// Display metadata only: never used for authority, ordering or conflict resolution.
+    /// Omission preserves the exact canonical encoding of legacy transactions.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub authored_at: Option<u64>,
 }
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -345,6 +350,11 @@ fn trim_whitespace(value: &str) -> &str {
 
 impl Transaction {
     pub(super) fn validate(&self, before: &Projection) -> Result<()> {
+        // Keep dates within 1970–9999 and safely representable in canonical JSON.
+        // Do not compare with the reader's clock: offline and skewed clocks are valid.
+        if self.authored_at.is_some_and(|at| at > 253_402_300_799) {
+            return Err(Error::InvalidTransaction);
+        }
         if self.mutations.len() > MAX_MUTATIONS {
             return Err(Error::ResourceBudgetExceeded);
         }
@@ -462,6 +472,7 @@ impl Transaction {
         Ok(Self {
             mutations,
             rebased_from: None,
+            authored_at: None,
         })
     }
 
@@ -474,6 +485,7 @@ impl Transaction {
                 value,
             }],
             rebased_from: None,
+            authored_at: None,
         }
     }
 }

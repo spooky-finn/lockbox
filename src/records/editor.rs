@@ -18,6 +18,7 @@ pub(crate) enum Field {
 
 pub(crate) struct Draft {
     pub(crate) entry: Entry,
+    pub(crate) save_after: Option<std::time::Instant>,
     pub(crate) is_new: bool,
     pub(crate) show_password: bool,
     pub(crate) show_totp: bool,
@@ -32,6 +33,7 @@ impl Draft {
     pub(crate) fn new(entry: Entry, is_new: bool) -> Self {
         Self {
             entry,
+            save_after: None,
             is_new,
             show_password: false,
             show_totp: false,
@@ -41,6 +43,17 @@ impl Draft {
             icon_picker_open: false,
             icon_query: String::new(),
         }
+    }
+
+    pub(crate) fn schedule_save(&mut self) {
+        self.save_after = Some(std::time::Instant::now() + std::time::Duration::from_millis(600));
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        let mut empty = Entry::default();
+        empty.id = self.entry.id.clone();
+        empty.folder_id = self.entry.folder_id.clone();
+        self.is_new && self.entry == empty
     }
 
     /// Validate a save snapshot without changing the draft or its revealed fields.

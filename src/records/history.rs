@@ -9,6 +9,8 @@ pub struct RecordChange {
     pub revision: String,
     pub actor: String,
     pub device: String,
+    /// Local save time or authenticated shared author-device time, never ordering authority.
+    /// Legacy shared events have no timestamp.
     pub at: Option<u64>,
     pub action: String,
     pub before: Vec<Entry>,

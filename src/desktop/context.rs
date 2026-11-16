@@ -74,7 +74,11 @@ pub(crate) fn edit_unlocked(mut state: Session, edit: impl FnOnce(&mut Unlocked)
 pub(crate) fn edit_draft(state: Session, edit: impl FnOnce(&mut Draft)) {
     edit_unlocked(state, |unlocked| {
         if let Some(draft) = &mut unlocked.draft {
+            let previous = draft.entry.clone();
             edit(draft);
+            if draft.entry != previous {
+                draft.schedule_save();
+            }
         }
     });
 }

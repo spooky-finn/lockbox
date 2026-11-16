@@ -93,6 +93,19 @@ pub(crate) fn tick() {
     }
     {
         let mut state = consume_context::<Session>();
+        let should_save = matches!(&*state.peek(), Screen::Unlocked(u)
+            if u.draft.as_ref().and_then(|draft| draft.save_after).is_some_and(|due| Instant::now() >= due));
+        if should_save {
+            state.with_mut(|screen| {
+                if let Screen::Unlocked(workspace) = screen {
+                    // Retry after another edit or an explicit close, not at 10 Hz.
+                    if let Some(draft) = &mut workspace.draft {
+                        draft.save_after = None;
+                    }
+                    workspace.error = workspace.autosave_draft().err();
+                }
+            });
+        }
         let pairing_tick = matches!(&*state.peek(), Screen::Unlocked(u) if u.sharing.links.needs_tick(&u.vault, u.is_editing()));
         if pairing_tick {
             state.with_mut(|screen| {
@@ -538,6 +551,9 @@ fn finish_add_attachment(
             .map_err(str::to_owned)
     })()
     .err();
+    if u.error.is_none() {
+        draft.schedule_save();
+    }
 }
 
 pub(crate) fn export_attachment(id: &str) {

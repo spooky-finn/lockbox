@@ -1,6 +1,29 @@
 use super::*;
 use crate::sync::protocol::canonical;
 
+#[test]
+fn optional_author_time_preserves_legacy_encoding_and_rejects_invalid_dates() {
+    use crate::sync::protocol::wire::decode;
+    let legacy = br#"{"mutations":[],"rebased_from":null}"#;
+    let mut transaction: Transaction = decode(legacy).unwrap();
+    assert_eq!(transaction.authored_at, None);
+    assert_eq!(canonical(&transaction).unwrap(), legacy);
+    transaction.authored_at = Some(1_700_000_000);
+    let encoded = canonical(&transaction).unwrap();
+    let decoded: Transaction = decode(&encoded).unwrap();
+    assert_eq!(decoded.authored_at, Some(1_700_000_000));
+    decoded.validate(&Projection::default()).unwrap();
+    transaction.authored_at = Some(253_402_300_800);
+    assert!(matches!(
+        transaction.validate(&Projection::default()),
+        Err(Error::InvalidTransaction)
+    ));
+    assert!(
+        decode::<Transaction>(br#"{"authored_at":null,"mutations":[],"rebased_from":null}"#)
+            .is_err()
+    );
+}
+
 fn entity(kind: EntityKind, id: u8) -> Entity {
     Entity {
         kind,
@@ -83,6 +106,7 @@ fn value_identity_requires_matching_entity_kind_and_id() {
                 value: Some(value.clone()),
             }],
             rebased_from: None,
+            authored_at: None,
         };
         transaction.validate(&Projection::default()).unwrap();
         let other_kind = match kind {
@@ -464,6 +488,7 @@ fn transaction_bases_require_every_head_in_exact_order() {
         })
         .collect(),
         rebased_from: None,
+        authored_at: None,
     };
     transaction.validate(&before).unwrap();
     for (index, mutation) in transaction.mutations.iter().enumerate() {

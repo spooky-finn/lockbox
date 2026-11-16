@@ -156,6 +156,13 @@ The UI owns rendering, native dialogs and session-bound result application.
 
 ## Maintenance notes
 
+Record editor: changes autosave to the encrypted local vault after 600 ms without
+input. Closing the editor flushes pending changes and keeps it open on validation
+or persistence failure. Locking also attempts a final save, but never prevents a
+security lock; failed or invalid unsaved edits are discarded with a notice. An
+untouched empty new record is not created. Password visibility and other editor
+controls do not create revisions.
+
 Sidebar: drag right divider; arrows resize 10 px, Shift+arrows 40 px.
 Home/End select limits; double-click restores default. Width stays within
 200–480 px, reserves 320 px for detail. Mobile hides divider.

@@ -153,6 +153,7 @@ fn recovery_proof_preserves_control_addresses_and_rejects_duplicate_or_noncontro
             crate::sync::protocol::Transaction {
                 mutations: vec![],
                 rebased_from: None,
+                authored_at: None,
             },
         )
         .unwrap(),
@@ -264,6 +265,7 @@ fn unacknowledged_capsule_retries_exact_bytes_and_acknowledged_snapshot_is_dedup
             crate::sync::protocol::Transaction {
                 mutations: vec![],
                 rebased_from: None,
+                authored_at: None,
             },
         )
         .unwrap(),

@@ -100,7 +100,7 @@ fn search_reacts_and_failed_save_preserves_the_form() {
     assert!(html.contains("Записей не найдено"));
     assert!(html.contains("value=\"Unsaved\""));
     assert!(html.contains("TOTP:"));
-    assert!(html.contains("Сохранить"));
+    assert!(html.contains("Изменения сохраняются автоматически"));
 }
 
 #[test]

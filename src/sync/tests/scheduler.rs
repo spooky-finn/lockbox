@@ -447,6 +447,7 @@ fn a_pending_receive_commit_cancels_old_work_and_resumes_after_storage_recovers(
             Transaction {
                 mutations: vec![],
                 rebased_from: None,
+                authored_at: None,
             },
         )
         .unwrap(),
