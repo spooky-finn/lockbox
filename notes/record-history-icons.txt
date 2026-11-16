@@ -1,4 +1,0 @@
-Record actions
-
-- History: clock icon. Shared IconButton supplies translated tooltip, accessible name.
-- Edit, delete already use shared icon buttons.
