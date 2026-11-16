@@ -38,20 +38,11 @@ pub(crate) fn nodes_ui(
                     let id = folder.id.clone();
                     let toggle = id.clone();
                     let select = id.clone();
-                    let keyboard = id.clone();
                     let expanded = !workspace.directories.collapsed.contains(&id) || !workspace.search.trim().is_empty();
                     let selected = workspace.page == crate::desktop::workspace::Page::Vault && workspace.selected.is_none() && workspace.directories.selected.as_ref() == Some(&id);
                     rsx! {
                         li { class: "tree-folder", key: "folder-{id}",
                             div { class: if selected { "folder-row selected" } else { "folder-row" },
-                                onkeydown: move |event| {
-                                    if editing { return; }
-                                    match event.key() {
-                                        Key::ArrowRight => { event.prevent_default(); edit_unlocked(state, |u| { u.directories.collapsed.remove(&keyboard); }); }
-                                        Key::ArrowLeft => { event.prevent_default(); edit_unlocked(state, |u| { u.directories.collapsed.insert(keyboard.clone()); }); }
-                                        _ => {}
-                                    }
-                                },
                                 button { class: if expanded { "tree-disclosure expanded" } else { "tree-disclosure" },
                                     r#type: "button", disabled: editing || searching,
                                     title: if expanded { language.text(Text::CollapseFolder) } else { language.text(Text::ExpandFolder) },

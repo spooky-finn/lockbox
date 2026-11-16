@@ -14,7 +14,40 @@ pub(crate) enum Node<'a> {
     Record(&'a Entry),
 }
 
+/// Equality key for tree presentation. It owns display metadata, never passwords,
+/// attachments, notes, usernames or URLs. Search retains only match decisions.
+#[derive(PartialEq)]
+pub(crate) struct PresentationKey {
+    entries: Vec<(String, String, Option<String>, bool)>,
+    folders: Vec<Folder>,
+    query: String,
+}
+
+impl PresentationKey {
+    pub(crate) fn new(vault: &Vault, query: &str) -> Self {
+        let query = query.trim().to_lowercase();
+        Self {
+            entries: vault
+                .entries()
+                .iter()
+                .map(|entry| {
+                    (
+                        entry.id.clone(),
+                        entry.title.clone(),
+                        entry.folder_id.clone(),
+                        entry_matches(entry, &query),
+                    )
+                })
+                .collect(),
+            folders: vault.folders().to_vec(),
+            query,
+        }
+    }
+}
+
 pub(crate) fn project<'a>(vault: &'a Vault, query: &str) -> Vec<Node<'a>> {
+    #[cfg(test)]
+    PROJECTIONS.set(PROJECTIONS.get() + 1);
     let query = query.trim().to_lowercase();
     let mut placed = Placed::default();
     let mut nodes = Hierarchy::new(vault).branch(None, &query, false, 0, &mut placed);
@@ -34,6 +67,11 @@ pub(crate) fn project<'a>(vault: &'a Vault, query: &str) -> Vec<Node<'a>> {
         }
     }
     nodes
+}
+
+#[cfg(test)]
+thread_local! {
+    pub(crate) static PROJECTIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 fn entry_matches(entry: &Entry, query: &str) -> bool {
