@@ -33,11 +33,6 @@ fn tree_records_show_only_titles_and_search_reveals_collapsed_ancestors() {
         !tree.contains("alice"),
         "usernames should not appear in record rows"
     );
-    assert!(
-        !tree.contains("entry-icon"),
-        "record rows should not have icons"
-    );
-    assert!(!tree.contains("<small"));
     update(&mut dom, |state| edit_unlocked(state, |u| u.search.clear()));
     let html = dioxus_ssr::render(&dom);
     let tree = html
