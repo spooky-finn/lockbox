@@ -35,7 +35,7 @@ Use English for new documentation and developer notes.
 GitHub Actions runs [CI](../.github/workflows/ci.yml) for pushes to `main`, pull
 requests, and merge queues. It also supports manual runs. Formatting, browser
 checks, and release-script tests run first; strict Clippy, all-target Rust tests,
-and doctests then run on Linux x86_64 and macOS Apple Silicon. Configure branch
+and doctests then run on Linux x86_64, macOS Apple Silicon, and Windows x64. Configure branch
 protection to require **CI passed**. Documentation changes still receive this
 check, so required checks cannot remain pending because of path filters.
 
@@ -55,20 +55,24 @@ To create a release:
    `Cargo.lock`, then `cargo check --locked`. Commit the version changes
    and merge them into the default branch. Browser ZIP filenames and the local
    macOS bundle use the manifest version automatically.
-2. Open **Actions → Release → Run workflow**, select the default branch, and enter
-   that version without a `v` prefix. Leave **Create an unpublished draft** enabled
-   for a draft, or disable it to publish when the workflow finishes. Optionally
-   mark the release as a prerelease.
+2. Push/merge to `main`. A version increase automatically starts the release
+   workflow and publishes the completed release (not a draft). Pushes with an
+   unchanged version only run CI; decreases fail validation. The initial push
+   also releases the current version if its tag does not exist.
 3. The workflow validates versions and requires an unused `vX.Y.Z` tag, reruns full
    CI at the selected commit, builds packages in parallel, smoke-tests each optimized
    browser host, verifies the complete asset set, and generates `SHA256SUMS`.
    The final job creates the tag/release at that exact commit, with generated
-   changelog notes. Existing tags and releases are never overwritten.
+   changelog notes listing every commit since the highest reachable `vX.Y.Z`
+   tag, including direct commits and merges. The first release includes all
+   history. Existing tags and releases are never overwritten; automatic runs
+   skip existing tags.
 
-The manual workflow can also be started with GitHub CLI:
+For recovery/retries or draft releases, use **Actions → Release → Run workflow**
+on the default branch, or GitHub CLI (replace `OWNER/REPO`):
 
 ```sh
-gh workflow run release.yml --repo spooky-finn/lockbox --ref main \
+gh workflow run release.yml --repo OWNER/REPO --ref main \
   -f version=0.1.0 -F draft=true -F prerelease=false
 ```
 
@@ -80,11 +84,13 @@ Release assets include:
 | `lockbox-X.Y.Z-x86_64-apple-darwin.zip` | Intel `Lockbox.app`, including native browser host |
 | `lockbox_X.Y.Z_amd64.deb` | Linux desktop app, host, runtime dependencies, menu and deep-link registration |
 | `lockbox-X.Y.Z-x86_64-unknown-linux-gnu.tar.gz` | Linux binaries, notices, and runtime dependency instructions |
+| `lockbox-X.Y.Z-x86_64-pc-windows-msvc.zip` | Windows x64 desktop executable and notices; requires WebView2 Evergreen Runtime |
 | `lockbox-chrome-X.Y.Z.zip`, `lockbox-firefox-X.Y.Z.zip` | Browser companions |
-| `SHA256SUMS` | SHA-256 hashes for all six packages |
+| `SHA256SUMS` | SHA-256 hashes for all seven packages |
 
 Linux builds use Ubuntu 22.04 to retain Linux Mint 21.1 compatibility. macOS builds
-are ad-hoc signed without Apple credentials and are not notarized. Firefox packages
+are ad-hoc signed without Apple credentials and are not notarized. Windows builds
+are unsigned and do not yet support native browser integration. Firefox packages
 are unsigned development ZIPs. Browser native-host registration remains a separate
 step described in [the browser guide](../ext/README.md): packaged hosts are at
 `/Applications/Lockbox.app/Contents/MacOS/lockbox-browser-host` on macOS and
@@ -93,9 +99,14 @@ step described in [the browser guide](../ext/README.md): packaged hosts are at
 Only the publication job receives `contents: write`; other jobs use read-only
 repository access. The automatic `GITHUB_TOKEN` is sufficient, with no extra
 secrets. Ensure repository Actions policy allows the pinned actions and release
-creation, including any applicable tag rules. There is no release on push or tag
-creation. Release runs queue instead of cancelling one another; intermediate
-artifacts expire after seven days and release assets remain attached to the release.
+creation, including any applicable tag rules. Push this repository to GitHub
+(a GitLab remote alone cannot run GitHub Actions). The workflows currently watch
+`main`, which must be the repository's default branch. Tag pushes do not trigger
+another release. Releases at different commits run independently, so a later
+unchanged-version push cannot cancel a queued version bump. Reruns at the same
+commit are serialized. Release validation is also isolated from cancellation by
+newer pushes. Intermediate artifacts expire after seven days and release assets
+remain attached to the release.
 
 ## Module boundaries
 

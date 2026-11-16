@@ -61,8 +61,10 @@ fn autosave_retains_version_snapshots_authorship_and_local_time_without_noop_rev
     workspace.autosave_draft().unwrap();
     workspace.close_draft().unwrap();
     assert_eq!(workspace.vault.record_history().unwrap().len(), 2);
+    let path = workspace.vault.path().to_path_buf();
+    drop(workspace);
     let reopened = crate::vault::Vault::open(
-        workspace.vault.path(),
+        &path,
         &secrecy::SecretString::from("master".to_owned()),
     )
     .unwrap();

@@ -12,6 +12,7 @@ def main():
     expected = {
         f"lockbox-{version}-aarch64-apple-darwin.zip",
         f"lockbox-{version}-x86_64-apple-darwin.zip",
+        f"lockbox-{version}-x86_64-pc-windows-msvc.zip",
         f"lockbox-{version}-x86_64-unknown-linux-gnu.tar.gz",
         f"lockbox_{version}_amd64.deb",
         f"lockbox-chrome-{version}.zip",
@@ -27,6 +28,8 @@ def main():
             with zipfile.ZipFile(path) as archive:
                 if archive.testzip() is not None:
                     raise SystemExit(f"Corrupt archive: {path.name}")
+                if path.name.endswith("-x86_64-pc-windows-msvc.zip") and "lockbox.exe" not in archive.namelist():
+                    raise SystemExit("Windows archive must include lockbox.exe.")
                 if path.name.startswith(("lockbox-chrome-", "lockbox-firefox-")):
                     manifest = json.loads(archive.read("manifest.json"))
                     if manifest["version"] != version:

@@ -134,6 +134,8 @@ fn private_file(path: &Path) -> io::Result<File> {
 
 /// Makes the rename itself durable, not only the file contents.
 pub(super) fn sync_dir(path: &Path) -> io::Result<()> {
+    #[cfg(not(unix))]
+    let _ = path;
     #[cfg(unix)]
     {
         let dir = path.parent().filter(|p| !p.as_os_str().is_empty());
