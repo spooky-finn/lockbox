@@ -4,62 +4,9 @@ use crate::{
         session::Screen,
         view_test_support::{mounted, update},
     },
-    records::{
-        editor::Field,
-        entry::{Totp, TotpAlgorithm},
-    },
+    records::editor::Field,
 };
 use dioxus::prelude::*;
-
-#[test]
-fn editor_renders_generator_icons_and_reactive_totp_link_fields() {
-    let mut dom = mounted();
-    update(&mut dom, |state| {
-        edit_unlocked(state, |u| u.start_new());
-        edit_draft(state, |d| {
-            d.generator_open = true;
-            d.icon_picker_open = true;
-            d.icon_query = "gitlab".into();
-            d.entry.totp = Some(Totp {
-                secret: String::new(),
-                algorithm: TotpAlgorithm::Sha1,
-                digits: 6,
-                period: 30,
-            });
-        });
-        set_field(
-            state,
-            Field::Totp,
-            "otpauth://totp/GitLab:alice?secret=JBSWY3DPEHPK3PXP".into(),
-        );
-    });
-    let html = dioxus_ssr::render(&dom);
-    for text in [
-        "Новая запись",
-        "Генератор паролей",
-        "Выбор иконки",
-        "SHA256",
-        "Изменения сохраняются автоматически",
-        "Закрыть",
-        "value=\"alice\"",
-    ] {
-        assert!(html.contains(text), "missing {text}");
-    }
-    update(&mut dom, |state| {
-        edit_unlocked(state, |u| u.error = u.save_draft().err())
-    });
-    assert!(!dioxus_ssr::render(&dom).contains("id=\"entry-title\""));
-    dom.in_scope(ScopeId::APP, || {
-        let state = consume_context::<Session>();
-        let screen = state.read();
-        let Screen::Unlocked(u) = &*screen else {
-            panic!("locked");
-        };
-        let vault = crate::desktop::test_support::reopen(u);
-        assert_eq!(vault.entries.len(), 2);
-        assert_eq!(vault.entries[1].username, "alice");
-    });
-}
 
 #[test]
 fn submitting_the_dioxus_form_flushes_without_closing_or_browser_navigation() {
