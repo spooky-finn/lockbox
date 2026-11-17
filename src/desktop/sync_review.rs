@@ -52,10 +52,6 @@ pub(super) fn SyncReview() -> Element {
         }
         rsx! {
             if let Ok(Some(replay)) = unlocked.vault.sync_replay_state() {
-                if !replay.history_verified {
-                    p { class: "notice", {language.text(Text::TheOwnerConfirmedTheInitialStateThisDeviceHasNotVerifiedEarlierChanges)} }
-                }
-
                 for record in replay.projection.conflicts() {
                     details { class: "notice",
                         summary { {language.format(Text::ConflictVersions, &[record.entity.id.as_str(), &record.versions.len().to_string()])} }
