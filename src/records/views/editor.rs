@@ -1,4 +1,5 @@
 use crate::desktop::i18n::Text;
+use crate::records::dialogs;
 
 use crate::{
     desktop::{
@@ -121,7 +122,7 @@ pub(crate) fn DraftView() -> Element {
                     }
                 }
                 IconButton { icon: Icon::Plus, label: language.text(Text::AddAttachment),
-                    onclick: move |_| crate::desktop::runtime::add_attachment(),
+                    onclick: move |_| dialogs::add_attachment(),
                 }
             }
             }

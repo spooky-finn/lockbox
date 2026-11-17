@@ -332,6 +332,28 @@ impl Unlocked {
         self.error = None;
     }
 
+    /// Advance link exchange and report a completed join. The desktop adapter
+    /// persists recent-profile metadata only after this transition succeeds.
+    pub(crate) fn tick_pairing(&mut self, now: u64) -> bool {
+        let editing = self.is_editing();
+        let was_joining = self.vault.pairing_waits_to_join();
+        if let Some(error) = self
+            .sharing
+            .links
+            .tick(&mut self.vault, &mut self.sync, editing, now)
+        {
+            self.error = Some(error);
+        }
+        let joined = was_joining
+            && !self.vault.pairing_waits_to_join()
+            && self.vault.joining_link().is_some_and(|link| link.joined);
+        if joined {
+            self.sharing.joining = false;
+            self.sync.saved();
+        }
+        joined
+    }
+
     pub fn poll_sharing(&mut self, now: u64) {
         if !self.sharing.needs_poll() {
             return;

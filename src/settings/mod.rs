@@ -1,5 +1,6 @@
 //! Preferences, their persistence and presentation.
 
+pub(crate) mod actions;
 pub mod appearance;
 pub mod config;
 pub mod language;

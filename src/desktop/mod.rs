@@ -4,6 +4,7 @@ pub mod browser;
 pub(crate) mod context;
 pub(crate) mod i18n;
 pub mod icons;
+pub(crate) mod profiles;
 mod root;
 pub(crate) mod runtime;
 pub(crate) mod security;

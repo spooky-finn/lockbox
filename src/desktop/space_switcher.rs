@@ -1,10 +1,10 @@
 //! In-app profile selection. Only local names and paths are shown before unlock.
 
+use crate::desktop::profiles;
 use crate::{
     desktop::{
         context::Session,
         i18n::Text,
-        runtime,
         session::Screen,
         widgets::symbol::{Icon, Symbol},
     },
@@ -129,7 +129,7 @@ pub(crate) fn SpaceSwitcher() -> Element {
                                         r#type: "button", disabled: !allowed || missing,
                                         aria_current: selected.then_some("true"), title: "{display_path}",
                                         onclick: move |_| {
-                                            if !selected { runtime::select_profile(path.clone()); }
+                                            if !selected { profiles::select_profile(path.clone()); }
                                             close(open);
                                         },
                                         span { class: "space-option-icon", Symbol { icon: if is_cloud { Icon::Cloud } else { Icon::Folder } } }
@@ -147,15 +147,15 @@ pub(crate) fn SpaceSwitcher() -> Element {
                     }
                     div { class: "space-switch-actions",
                         button { class: "quiet", r#type: "button", disabled: !allowed,
-                            onclick: move |_| { close(open); runtime::pick_vault(false); },
+                            onclick: move |_| { close(open); profiles::pick_vault(false); },
                             Symbol { icon: Icon::FolderOpen } {language.text(Text::OpenAnotherSpace)}
                         }
                         button { class: "quiet", r#type: "button", disabled: !allowed,
-                            onclick: move |_| { close(open); runtime::create_from_switcher(false); },
+                            onclick: move |_| { close(open); profiles::create_from_switcher(false); },
                             Symbol { icon: Icon::Plus } {language.text(Text::CreateAVault)}
                         }
                         button { class: "quiet", r#type: "button", disabled: !allowed,
-                            onclick: move |_| { close(open); runtime::create_from_switcher(true); },
+                            onclick: move |_| { close(open); profiles::create_from_switcher(true); },
                             Symbol { icon: Icon::Cloud } {language.text(Text::SharingConnect)}
                         }
                     }

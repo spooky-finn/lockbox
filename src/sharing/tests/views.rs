@@ -1,4 +1,5 @@
 use crate::desktop::runtime;
+use crate::settings::actions;
 use crate::{
     desktop::{
         view_test_support::{mounted, update},
@@ -26,7 +27,7 @@ fn short_link_copy_waits_for_upload_and_recipient_can_edit_a_pending_download() 
     let reference = ticket.reference().unwrap();
     let mut dom = mounted();
     update(&mut dom, |state| {
-        runtime::set_language(crate::settings::language::Language::English);
+        actions::set_language(crate::settings::language::Language::English);
         edit_unlocked(state, |u| {
             u.vault = owner;
             u.open_sharing();
@@ -128,7 +129,7 @@ fn sharing_page_renders_member_controls_without_record_or_provider_secrets() {
     shared.upsert_entry(entry).unwrap();
     let mut dom = mounted();
     update(&mut dom, |state| {
-        runtime::set_language(crate::settings::language::Language::English);
+        actions::set_language(crate::settings::language::Language::English);
         edit_unlocked(state, |u| {
             u.vault = shared;
             u.open_sharing();
@@ -157,7 +158,7 @@ fn recipient_enters_an_independent_code_and_navigation_saves_private_draft() {
     let code = offer.verification_code().unwrap().to_string();
     let mut dom = mounted();
     update(&mut dom, |state| {
-        runtime::set_language(crate::settings::language::Language::English);
+        actions::set_language(crate::settings::language::Language::English);
         edit_unlocked(state, |u| {
             u.vault = guest;
             u.start_new();
@@ -215,7 +216,7 @@ fn wizard_resumes_a_recipient_waiting_for_admission() {
         .unwrap();
     let mut dom = mounted();
     update(&mut dom, |state| {
-        runtime::set_language(crate::settings::language::Language::English);
+        actions::set_language(crate::settings::language::Language::English);
         edit_unlocked(state, |u| {
             u.vault = guest;
             u.open_sharing();
@@ -241,7 +242,7 @@ fn wizard_follows_file_outputs_through_a_complete_admission() {
     let code = invitation.verification_code().unwrap().to_string();
     let mut guest_dom = mounted();
     update(&mut guest_dom, |state| {
-        runtime::set_language(crate::settings::language::Language::English);
+        actions::set_language(crate::settings::language::Language::English);
         edit_unlocked(state, |u| {
             u.vault = guest;
             u.sharing.joining = true;
@@ -282,7 +283,7 @@ fn wizard_follows_file_outputs_through_a_complete_admission() {
     let mut owner_dom = mounted();
     let mut receipt = None;
     update(&mut owner_dom, |state| {
-        runtime::set_language(crate::settings::language::Language::English);
+        actions::set_language(crate::settings::language::Language::English);
         edit_unlocked(state, |u| {
             u.vault = owner;
             u.open_sharing();
@@ -327,7 +328,7 @@ fn next_step_requires_a_successfully_saved_file_and_an_explicit_handoff() {
     let guest = vault(&directory, "guest");
     let mut dom = mounted();
     update(&mut dom, |state| {
-        runtime::set_language(crate::settings::language::Language::English);
+        actions::set_language(crate::settings::language::Language::English);
         edit_unlocked(state, |u| {
             u.vault = guest;
             u.sharing.joining = true;
@@ -382,7 +383,7 @@ fn identity_copy_uses_current_full_ids_and_localized_username_without_secrets() 
     update(&mut dom, |state| {
         consume_context::<SecurityHandle>().borrow_mut().clipboard =
             Guard::new(Box::new(board.clone()));
-        runtime::set_language(Language::English);
+        actions::set_language(Language::English);
         edit_unlocked(state, |u| {
             u.vault = first;
             u.sharing.joining = true;
@@ -570,7 +571,7 @@ fn participant_names_are_rendered_and_saved_in_the_encrypted_profile() {
     assert!(legacy.participant_names.is_empty());
     let mut dom = mounted();
     update(&mut dom, |state| {
-        runtime::set_language(crate::settings::language::Language::English);
+        actions::set_language(crate::settings::language::Language::English);
         edit_unlocked(state, |u| {
             u.vault = owner;
             u.open_sharing();
@@ -622,7 +623,7 @@ fn admin_reviews_the_signed_name_and_exact_ids_before_approval() {
     let certificate = guest.device_certificate().unwrap();
     let mut dom = mounted();
     update(&mut dom, |state| {
-        runtime::set_language(crate::settings::language::Language::English);
+        actions::set_language(crate::settings::language::Language::English);
         edit_unlocked(state, |u| {
             u.vault = owner;
             u.open_sharing();

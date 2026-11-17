@@ -158,8 +158,9 @@ Use feature names as the first navigation step:
 | Exchange phases, retries and background scheduling | `src/sync/scheduler.rs` |
 | Transport contracts, discovery and Storj | `src/sync/transport/` |
 | Encrypted file formats, profile persistence, recovery and witnesses | `src/vault/` |
-| Preferences, config files, language selection and settings view | `src/settings/` |
+| Preferences, config files, settings actions and settings view | `src/settings/` |
 | Session/workspace coordination, root view, runtime and windows | `src/desktop/` |
+| Profile selection, creation entry points and tab coordination | `src/desktop/profiles.rs` |
 | Reusable widgets, icons and translations | `src/desktop/widgets/`, `icons.rs`, `i18n.rs` |
 | Clipboard, Touch ID, autolock and cancellable jobs | `src/platform/` |
 
@@ -169,9 +170,15 @@ Module dependencies preserve these boundaries; folders no longer represent
 architectural layers. `desktop/workspace.rs` coordinates record, sharing, settings
 and sync state. Record-specific operations remain in `records/`.
 
-Native file dialogs for record imports and invitation exchange live beside their
-features in `records/dialogs.rs` and `sharing/dialogs.rs`. Global runtime code owns
-session lifecycle and worker result application. New providers implement the
+Native file dialogs for record imports, attachments and invitation exchange live
+beside their features in `records/dialogs.rs` and `sharing/dialogs.rs`. Delayed
+attachment callbacks recheck the vault path and draft/entry identity before I/O.
+`settings/actions.rs` adapts Dioxus events to preference persistence and active
+security settings; `settings/state.rs` remains independent of UI and native handles.
+`desktop/profiles.rs` coordinates profile entry points with tabs and access forms.
+Global runtime code owns session lifecycle and worker result application. Pairing
+completion rules belong to the sharing workflow; runtime persists recent-profile
+metadata when that workflow reports a completed join. New providers implement the
 existing `Storage` / `StorageFactory` contracts; local and shared vault behavior
 continues through the `Vault` facade.
 

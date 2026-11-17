@@ -1,4 +1,5 @@
 use super::*;
+use crate::desktop::profiles;
 use crate::desktop::{context::Clock, runtime, security::Status};
 use crate::platform::touchid::tests::FakeBiometrics;
 use std::{
@@ -85,7 +86,7 @@ fn selecting_an_open_profile_focuses_its_tab_and_aliases_do_not_duplicate() {
             _ => unreachable!(),
         };
         new_tab();
-        runtime::select_profile(path.parent().unwrap().join(".").join("test.lbx"));
+        profiles::select_profile(path.parent().unwrap().join(".").join("test.lbx"));
         let tabs = consume_context::<Signal<Tabs>>();
         assert_eq!(tabs.peek().active, 0);
         assert_eq!(tabs.peek().sessions.len(), 2);
@@ -181,7 +182,7 @@ fn opening_another_profile_keeps_the_previous_space_unlocked() {
     let dom = mounted();
     dom.in_scope(ScopeId::APP, || {
         let state = consume_context::<Session>();
-        runtime::select_profile(std::path::PathBuf::from("another-space.lbx"));
+        profiles::select_profile(std::path::PathBuf::from("another-space.lbx"));
         let tabs = consume_context::<Signal<Tabs>>();
         assert_eq!(tabs.peek().sessions.len(), 2);
         assert!(matches!(&*tabs.peek().sessions[0].peek(), Screen::Unlocked(_)));

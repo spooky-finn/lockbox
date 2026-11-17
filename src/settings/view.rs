@@ -1,10 +1,11 @@
 use crate::desktop::i18n::Text;
+use crate::records::dialogs;
+use crate::settings::actions;
 
 use crate::{
     desktop::{
         context::{Session, edit_unlocked},
         i18n::use_language,
-        runtime,
         session::Screen,
         widgets::symbol::{Icon, Symbol},
         workspace::Page,
@@ -26,8 +27,8 @@ fn LanguageSelect(id: &'static str) -> Element {
     rsx! {
         select { id, aria_label: language.text(Text::InterfaceLanguage), value: language.code(),
             onchange: move |event| match event.value().as_str() {
-                "en" => runtime::set_language(Language::English),
-                "ru" => runtime::set_language(Language::Russian),
+                "en" => actions::set_language(Language::English),
+                "ru" => actions::set_language(Language::Russian),
                 _ => {},
             },
             option { value: "en", selected: language == Language::English, lang: "en", "English" }
@@ -73,7 +74,7 @@ pub(crate) fn SettingsView() -> Element {
                     }
                     input { id: "website-icons", class: "switch", r#type: "checkbox",
                         checked: preferences.config.website_icons, aria_describedby: "website-icons-description",
-                        onchange: move |event| runtime::set_website_icons(event.checked()),
+                        onchange: move |event| actions::set_website_icons(event.checked()),
                     }
                 }
                 div { class: "preference-row",
@@ -85,7 +86,7 @@ pub(crate) fn SettingsView() -> Element {
                         aria_describedby: "auto-lock-description",
                         value: "{preferences.config.auto_lock_minutes}",
                         onchange: move |event| {
-                            if let Ok(minutes) = event.value().parse() { runtime::set_auto_lock(minutes); }
+                            if let Ok(minutes) = event.value().parse() { actions::set_auto_lock(minutes); }
                         },
                         for minutes in autolock::CHOICES {
                             option { value: "{minutes}", selected: preferences.config.auto_lock_minutes == minutes,
@@ -103,7 +104,7 @@ pub(crate) fn SettingsView() -> Element {
                         input { id: "settings-touch-id", class: "switch", r#type: "checkbox", checked: unlocked.touch_id.enabled,
                             aria_describedby: "touch-id-description",
                             disabled: unlocked.touch_id.pending.is_some(),
-                            onchange: move |event| runtime::set_touch_id(event.checked()),
+                            onchange: move |event| actions::set_touch_id(event.checked()),
                         }
                     }
                 } else {
@@ -136,9 +137,9 @@ fn AppearanceSection() -> Element {
                 }
                 select { id: "settings-theme", value: appearance.theme.code(),
                     onchange: move |event| match event.value().as_str() {
-                        "system" => runtime::set_theme(ThemeMode::System),
-                        "light" => runtime::set_theme(ThemeMode::Light),
-                        "dark" => runtime::set_theme(ThemeMode::Dark),
+                        "system" => actions::set_theme(ThemeMode::System),
+                        "light" => actions::set_theme(ThemeMode::Light),
+                        "dark" => actions::set_theme(ThemeMode::Dark),
                         _ => {},
                     },
                     for (theme, label) in [
@@ -158,7 +159,7 @@ fn AppearanceSection() -> Element {
                 select { id: "settings-preset", value: if legacy_colors { "legacy" } else { appearance.preset.code() },
                     onchange: move |event| {
                         if let Some(preset) = ThemePreset::ALL.into_iter().find(|preset| preset.code() == event.value()) {
-                            runtime::set_theme_preset(preset);
+                            actions::set_theme_preset(preset);
                         }
                     },
                     if legacy_colors {
@@ -180,7 +181,7 @@ fn AppearanceSection() -> Element {
                 }
                 input { id: "settings-gradient", class: "switch", r#type: "checkbox",
                     checked: appearance.gradient,
-                    onchange: move |event| runtime::set_gradient(event.checked()),
+                    onchange: move |event| actions::set_gradient(event.checked()),
                 }
             }
         }
@@ -212,7 +213,7 @@ fn ImportSection() -> Element {
                     }
                 }
                 button { r#type: "button", disabled: busy,
-                    onclick: move |_| crate::records::dialogs::choose_import_file(),
+                    onclick: move |_| dialogs::choose_import_file(),
                     {language.text(Text::ChooseVaultFile)}
                 }
             }

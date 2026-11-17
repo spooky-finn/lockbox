@@ -1,7 +1,6 @@
-use crate::desktop::{
-    runtime,
-    view_test_support::{mounted, update},
-};
+use crate::desktop::profiles;
+use crate::desktop::view_test_support::{mounted, update};
+use crate::settings::actions;
 
 #[test]
 fn cloud_restore_requires_original_words_and_has_no_create_or_join_storage_choice() {
@@ -10,7 +9,7 @@ fn cloud_restore_requires_original_words_and_has_no_create_or_join_storage_choic
         desktop::context::edit_locked,
     };
     let mut dom = mounted();
-    update(&mut dom, |_| runtime::begin_cloud_restore());
+    update(&mut dom, |_| profiles::begin_cloud_restore());
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("id=\"recovery-words\"") || html.contains("recovery-word"));
     assert!(!html.contains("Сгенерировать"));
@@ -43,7 +42,7 @@ fn creation_requires_key_setup_before_storage_choice_and_cloud_fields() {
     };
     dioxus::html::set_event_converter(Box::new(SerializedHtmlEventConverter));
     let mut dom = mounted();
-    dom.in_scope(ScopeId::APP, runtime::begin_create);
+    dom.in_scope(ScopeId::APP, profiles::begin_create);
     let changes = dom.render_immediate_to_vec();
     let submit_id = changes
         .edits
@@ -88,7 +87,7 @@ fn creation_requires_key_setup_before_storage_choice_and_cloud_fields() {
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("id=\"cloud-secret\""));
     assert!(!html.contains("id=\"master-password\""));
-    update(&mut dom, |_| runtime::begin_create());
+    update(&mut dom, |_| profiles::begin_create());
     assert!(!dioxus_ssr::render(&dom).contains("id=\"cloud-secret\""));
 }
 
@@ -98,8 +97,8 @@ fn local_password_step_keeps_key_hidden_and_back_returns_to_sync_choice() {
     let mut dom = mounted();
     let dir = tempfile::tempdir().unwrap();
     update(&mut dom, |_| {
-        runtime::set_language(crate::settings::language::Language::English);
-        runtime::begin_create();
+        actions::set_language(crate::settings::language::Language::English);
+        profiles::begin_create();
     });
     update(&mut dom, |state| {
         edit_locked(state, |form| {
@@ -132,7 +131,7 @@ fn cloud_submit_validates_then_offers_identity_creation() {
     dioxus::html::set_event_converter(Box::new(SerializedHtmlEventConverter));
     let mut dom = mounted();
     dom.in_scope(ScopeId::APP, || {
-        runtime::begin_create();
+        profiles::begin_create();
         edit_locked(consume_context::<Session>(), |form| {
             form.words_saved = true;
             form.continue_key_setup();
@@ -189,8 +188,8 @@ fn joining_sets_up_key_before_connection_without_creating_a_named_space() {
 
     let mut dom = mounted();
     update(&mut dom, |_| {
-        runtime::set_language(crate::settings::language::Language::English);
-        runtime::begin_join();
+        actions::set_language(crate::settings::language::Language::English);
+        profiles::begin_join();
     });
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("Set up your mnemonic"));
@@ -223,7 +222,7 @@ fn joining_sets_up_key_before_connection_without_creating_a_named_space() {
     assert!(html.contains("id=\"master-password\""));
     assert!(html.contains("id=\"repeat-password\""));
     assert!(!html.contains("id=\"recovery-password\""));
-    update(&mut dom, |_| runtime::begin_create());
+    update(&mut dom, |_| profiles::begin_create());
     assert!(!dioxus_ssr::render(&dom).contains("storage-choices"));
     assert!(dioxus_ssr::render(&dom).contains("Set up your mnemonic"));
 }
@@ -234,8 +233,8 @@ fn recovery_words_are_hidden_after_key_setup_and_preserved_on_back() {
     let mut dom = mounted();
     let words = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
     update(&mut dom, |_| {
-        runtime::set_language(crate::settings::language::Language::English);
-        runtime::begin_create();
+        actions::set_language(crate::settings::language::Language::English);
+        profiles::begin_create();
     });
     update(&mut dom, |state| {
         edit_locked(state, |form| {
@@ -281,7 +280,7 @@ fn recovery_words_are_hidden_after_key_setup_and_preserved_on_back() {
     });
     let html = dioxus_ssr::render(&dom);
     assert!(!html.contains(">abandon</span>"));
-    update(&mut dom, |_| runtime::begin_create());
+    update(&mut dom, |_| profiles::begin_create());
     update(&mut dom, |state| {
         edit_locked(state, |form| {
             assert_eq!(form.recovery_words.as_str(), words);
@@ -299,7 +298,7 @@ fn forgot_password_shows_words_and_new_password_confirmation() {
     let path = dir.path().join("existing.lbx");
     std::fs::write(&path, []).unwrap();
     update(&mut dom, |_| {
-        runtime::set_language(crate::settings::language::Language::English)
+        actions::set_language(crate::settings::language::Language::English)
     });
     update(&mut dom, |mut state| {
         *state.write() = crate::desktop::session::Screen::Locked(Box::new(
@@ -345,10 +344,10 @@ fn saved_identity_requires_unlock_and_never_offers_key_generation() {
         .unwrap();
     let mut dom = mounted();
     update(&mut dom, |_| {
-        runtime::set_language(crate::settings::language::Language::English);
+        actions::set_language(crate::settings::language::Language::English);
         consume_context::<Signal<Settings>>().write().path =
             Some(directory.path().join("config.json"));
-        runtime::begin_join();
+        profiles::begin_join();
     });
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("Unlock your mnemonic"));
@@ -369,7 +368,7 @@ fn saved_identity_requires_unlock_and_never_offers_key_generation() {
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("Using your existing mnemonic"));
     assert!(!html.contains("Back to mnemonic"));
-    update(&mut dom, |_| runtime::begin_create());
+    update(&mut dom, |_| profiles::begin_create());
     dom.in_scope(ScopeId::APP, || {
         let state = consume_context::<Session>();
         let screen = state.peek();

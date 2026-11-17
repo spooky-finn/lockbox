@@ -1,3 +1,4 @@
+use crate::settings::actions;
 use crate::{
     desktop::{
         context::edit_unlocked,
@@ -45,9 +46,9 @@ fn website_icon_downloads_default_off_and_disabling_discards_session_cache() {
             Screen::Unlocked(u) => u.favicon_cache.clone(),
             _ => panic!(),
         };
-        runtime::set_website_icons(true);
+        actions::set_website_icons(true);
         assert!(settings.read().config.website_icons);
-        runtime::set_website_icons(false);
+        actions::set_website_icons(false);
         assert!(!settings.read().config.website_icons);
         let screen = state.read();
         let Screen::Unlocked(u) = &*screen else {
@@ -68,10 +69,10 @@ fn settings_saves_pending_edits_before_switching_preferences_and_returning() {
         })
     });
     update(&mut dom, |_| {
-        runtime::set_language(Language::English);
-        runtime::set_theme(ThemeMode::Dark);
-        runtime::set_accent_color(Some("#af52de"));
-        runtime::set_background_color(Some("#f3e8d2"));
+        actions::set_language(Language::English);
+        actions::set_theme(ThemeMode::Dark);
+        actions::set_accent_color(Some("#af52de"));
+        actions::set_background_color(Some("#f3e8d2"));
     });
     let html = dioxus_ssr::render(&dom);
     assert!(!html.contains("id=\"entry-title\""));
@@ -102,11 +103,11 @@ fn appearance_language_and_security_preferences_persist_and_remain_after_lock() 
     let mut dom = mounted();
     update(&mut dom, |_| {
         consume_context::<Signal<Settings>>().write().path = Some(path.clone());
-        runtime::set_auto_lock(15);
-        runtime::set_language(Language::English);
-        runtime::set_theme(ThemeMode::Dark);
-        runtime::set_accent_color(Some("#AF52DE"));
-        runtime::set_background_color(Some("#F3E8D2"));
+        actions::set_auto_lock(15);
+        actions::set_language(Language::English);
+        actions::set_theme(ThemeMode::Dark);
+        actions::set_accent_color(Some("#AF52DE"));
+        actions::set_background_color(Some("#F3E8D2"));
     });
     let saved = Config::load(&path);
     assert_eq!(saved.language, Language::English);
@@ -120,7 +121,7 @@ fn appearance_language_and_security_preferences_persist_and_remain_after_lock() 
     assert!(!html.contains("locked-language"));
     assert!(!html.contains("Interface language"));
     assert!(html.contains("Unlock"));
-    update(&mut dom, |_| runtime::set_language(Language::Russian));
+    update(&mut dom, |_| actions::set_language(Language::Russian));
     assert!(dioxus_ssr::render(&dom).contains("Хранилище заблокировано"));
     assert_eq!(Config::load(&path).language, Language::Russian);
     assert_eq!(Config::load(&path).appearance, saved.appearance);
@@ -130,9 +131,9 @@ fn appearance_language_and_security_preferences_persist_and_remain_after_lock() 
 fn invalid_accent_is_ignored_and_reset_preserves_other_preferences() {
     let mut dom = mounted();
     update(&mut dom, |_| {
-        runtime::set_theme(ThemeMode::Dark);
-        runtime::set_accent_color(Some("#af52de"));
-        runtime::set_accent_color(Some("#af52de;--canvas:red"));
+        actions::set_theme(ThemeMode::Dark);
+        actions::set_accent_color(Some("#af52de"));
+        actions::set_accent_color(Some("#af52de;--canvas:red"));
     });
     dom.in_scope(ScopeId::APP, || {
         let settings = consume_context::<Signal<Settings>>();
@@ -142,7 +143,7 @@ fn invalid_accent_is_ignored_and_reset_preserves_other_preferences() {
         );
     });
     update(&mut dom, |state| {
-        runtime::set_accent_color(None);
+        actions::set_accent_color(None);
         edit_unlocked(state, |u| u.open_settings());
     });
     dom.in_scope(ScopeId::APP, || {
@@ -160,10 +161,10 @@ fn invalid_accent_is_ignored_and_reset_preserves_other_preferences() {
 fn invalid_background_is_ignored_and_reset_keeps_accent_and_mode() {
     let mut dom = mounted();
     update(&mut dom, |_| {
-        runtime::set_theme(ThemeMode::System);
-        runtime::set_accent_color(Some("#af52de"));
-        runtime::set_background_color(Some("#182432"));
-        runtime::set_background_color(Some("#182432;--ink:red"));
+        actions::set_theme(ThemeMode::System);
+        actions::set_accent_color(Some("#af52de"));
+        actions::set_background_color(Some("#182432"));
+        actions::set_background_color(Some("#182432;--ink:red"));
     });
     dom.in_scope(ScopeId::APP, || {
         assert_eq!(
@@ -175,7 +176,7 @@ fn invalid_background_is_ignored_and_reset_keeps_accent_and_mode() {
             RgbColor::parse("#182432")
         );
     });
-    update(&mut dom, |_| runtime::set_background_color(None));
+    update(&mut dom, |_| actions::set_background_color(None));
     dom.in_scope(ScopeId::APP, || {
         let settings = consume_context::<Signal<Settings>>();
         let appearance = settings.read().config.appearance;
@@ -291,7 +292,7 @@ fn changing_language_preserves_user_data_and_existing_errors() {
             u.vault.test_entries_mut()[0].title = "Работа".into();
             u.error = Some("Could not save: incorrect master password".into());
         });
-        runtime::set_language(Language::English);
+        actions::set_language(Language::English);
     });
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("Работа"));

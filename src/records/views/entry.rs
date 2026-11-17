@@ -1,4 +1,5 @@
 use crate::desktop::i18n::Text;
+use crate::records::dialogs;
 
 use crate::{
     desktop::{
@@ -138,7 +139,7 @@ pub(crate) fn EntryView() -> Element {
                             span { class: "attachment-name", "{file.name}" }
                             span { class: "attachment-size", "{file.data.len()} B" }
                             IconButton { class: "quiet", icon: Icon::Save, label: language.text(Text::SaveAttachment),
-                                onclick: { let id = file.id.clone(); move |_| runtime::export_attachment(&id) },
+                                onclick: { let id = file.id.clone(); move |_| dialogs::export_attachment(&id) },
                             }
                         }
                     }

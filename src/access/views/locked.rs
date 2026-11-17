@@ -1,10 +1,10 @@
 use crate::desktop::i18n::Text;
+use crate::desktop::profiles;
 
 use crate::{
     access::auth::{CreationStep, MIN_PASSWORD_CHARS, Mode, StorageKind},
     desktop::{
         context::{BiometricProvider, Session, edit_locked},
-        runtime,
         session::Screen,
         widgets::{
             button::IconButton,
@@ -66,7 +66,7 @@ pub(crate) fn LockedView() -> Element {
         event.prevent_default();
 
         if cloud_password {
-            runtime::create_cloud_profile();
+            profiles::create_cloud_profile();
             return;
         }
         edit_locked(state, |locked| {
@@ -137,7 +137,7 @@ pub(crate) fn LockedView() -> Element {
                     }
                     if !locked.joining && !cloud_restore {
                         div { class: "storage-choices",
-                            button { r#type: "button", class: "storage-choice", onclick: move |_| runtime::pick_vault(true),
+                            button { r#type: "button", class: "storage-choice", onclick: move |_| profiles::pick_vault(true),
                                 strong { {language.text(Text::SingleUser)} }
                                 span { {language.text(Text::LocalVaultOnThisDevice)} }
                             }
@@ -257,21 +257,21 @@ pub(crate) fn LockedView() -> Element {
             }
             nav { class: "lock-actions", aria_label: language.text(Text::VaultActions),
                 button { r#type: "button", class: "quiet", disabled: busy,
-                    onclick: move |_| runtime::pick_vault(false),
+                    onclick: move |_| profiles::pick_vault(false),
                     Symbol { icon: Icon::FolderOpen }
                     span { {language.text(Text::OpenVault)} }
                 }
                 button { r#type: "button", class: "quiet", disabled: busy,
-                    onclick: move |_| runtime::begin_create(),
+                    onclick: move |_| profiles::begin_create(),
                     Symbol { icon: Icon::FolderPlus }
                     span { {language.text(Text::CreateVault2)} }
                 }
 
-                button { r#type: "button", class: "quiet", disabled: busy, onclick: move |_| runtime::begin_join(),
+                button { r#type: "button", class: "quiet", disabled: busy, onclick: move |_| profiles::begin_join(),
                     Symbol { icon: Icon::Cloud }
                     span { {language.text(Text::SharingConnect)} }
                 }
-                button { r#type: "button", class: "quiet", disabled: busy, onclick: move |_| runtime::begin_cloud_restore(),
+                button { r#type: "button", class: "quiet", disabled: busy, onclick: move |_| profiles::begin_cloud_restore(),
                     Symbol { icon: Icon::Reset }
                     span { {language.text(Text::CloudRestore)} }
                 }
