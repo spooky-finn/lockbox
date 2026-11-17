@@ -58,9 +58,11 @@ scan metadata, project/sort the tree, or rebuild folder options. They also verif
 that selecting and expanding reuse the hierarchy, saved changes refresh it, and
 clock ticks do not render the complete entry card.
 
-Native WebView navigation stays in `assets/tree-navigation.js`, with a workspace
-listener disposed on sidebar unmount. Up/Down and Home/End change the selected
-visible row without scrolling. Left/Right collapse, expand, or select a parent or
+Native WebView navigation stays in `assets/tree-navigation.js`, with a document
+listener disposed on sidebar unmount. It handles workspace events and body/HTML
+focus, which native WebViews can retain after pointer selection. Controls outside
+the workspace keep their own arrows; detached trees ignore queued input. Up/Down
+and Home/End change the selected visible row without scrolling. Left/Right collapse, expand, or select a parent or
 child. Tab focus alone does not select. Inputs, composition, modified keys, modal
 dialogs and controls with their own arrow behavior retain native handling.
 

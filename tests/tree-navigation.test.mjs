@@ -28,20 +28,30 @@ const control = () => ({ closest: selector => selector.startsWith("input,") ? {}
 
 function fixture(rows, options = {}) {
     let listener;
+    let listenerTarget;
     let finish;
     const messages = [];
+    const body = { ...background(), outsideWorkspace: true };
+    const documentElement = { ...background(), outsideWorkspace: true };
     const workspace = {
+        contains: target => !target.outsideWorkspace,
         querySelector: () => options.dialog ? {} : null,
-        addEventListener: (_, callback) => { listener = callback; },
+        addEventListener: (_, callback) => { listener = callback; listenerTarget = "workspace"; },
         removeEventListener: (_, callback) => { assert.equal(callback, listener); listener = null; },
     };
     const tree = {
+        isConnected: true,
         dataset: { navigateRecords: String(options.recordsPage !== false) },
         closest: () => workspace,
         querySelectorAll: () => rows.filter(item => !item.disabled),
     };
     const done = new AsyncFunction("document", "dioxus", source)(
-        { querySelector: () => tree },
+        {
+            body, documentElement,
+            querySelector: () => tree,
+            addEventListener: (_, callback) => { listener = callback; listenerTarget = "document"; },
+            removeEventListener: (_, callback) => { assert.equal(callback, listener); listener = null; },
+        },
         {
             recv: () => new Promise(resolve => { finish = resolve; }),
             send(message) {
@@ -54,13 +64,14 @@ function fixture(rows, options = {}) {
         },
     );
     return {
-        messages,
+        messages, body, documentElement, tree,
         key(target, key, modifiers = {}) {
             const event = { target, key, ...modifiers,
                 preventDefault() { this.prevented = true; },
                 stopPropagation() { this.stopped = true; },
             };
-            listener(event);
+            // Real events outside workspace never bubble through its listener.
+            if (listenerTarget === "document" || !target.outsideWorkspace) listener(event);
             return event;
         },
         async close() {
@@ -181,4 +192,31 @@ test("modal dialogs and non-record pages keep their own keyboard behavior", asyn
         assert.equal(app.messages.length, 0);
         await app.close();
     }
+});
+
+test("body and document focus navigate selected records without intercepting other app controls", async () => {
+    const rows = [row(), row(), row()];
+    rows[0].selected = true;
+    const app = fixture(rows);
+    assert.ok(app.key(app.body, "ArrowDown").prevented);
+    assert.ok(rows[1].selected);
+    assert.ok(app.key(app.documentElement, "ArrowDown").prevented);
+    assert.ok(rows[2].selected);
+    assert.ok(app.key(app.body, "ArrowUp").prevented);
+    assert.ok(rows[1].selected);
+    const before = app.messages.length;
+    const toolbarOrTab = { ...background(), outsideWorkspace: true };
+    assert.equal(app.key(toolbarOrTab, "ArrowDown").prevented, undefined);
+    assert.equal(app.messages.length, before);
+    await app.close();
+});
+
+test("detached trees stop navigating before evaluator cleanup", async () => {
+    const rows = [row(), row()];
+    rows[0].selected = true;
+    const app = fixture(rows);
+    app.tree.isConnected = false;
+    assert.equal(app.key(app.body, "ArrowDown").prevented, undefined);
+    assert.equal(app.messages.length, 0);
+    await app.close();
 });

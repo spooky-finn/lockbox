@@ -1,0 +1,22 @@
+Tree arrow navigation — 2026-11-17
+
+Cause
+- Listener attached only to workspace. Body/HTML keyboard events never reach it.
+- Native WebView can leave focus outside workspace after pointer selection.
+- Old Node fixture invoked handler directly; missed real propagation boundary.
+
+Fix
+- Listen on document for workspace + body/HTML targets.
+- Keep arrows with outside controls, tabs, toolbar, inputs and modal dialogs.
+- Reject detached trees before handling input; remove listener on sidebar unmount.
+- Retain Rust ID validation, activity recording and unsaved-draft navigation guard.
+
+Evidence
+- Temporary hidden native Dioxus/WKWebView probe, fictional rows only.
+- Before: body ArrowDown leaves first selected; row ArrowDown selects second.
+- After: body ArrowDown selects second; row ArrowDown selects third.
+- Probe used dispatched KeyboardEvents and actual JS/Rust eval channel;
+  physical OS key delivery not simulated. Temporary example removed after check.
+- Node fixture now models listener target and event propagation.
+- Regression failed before fix; nine navigation tests pass after fix.
+- Rust sidebar navigation tests: two pass. Diff whitespace check passes.

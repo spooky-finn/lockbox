@@ -11,7 +11,11 @@ const select = (row, current) => {
 };
 const navigationKeys = new Set(["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Home", "End"]);
 const keydown = (event) => {
-    if (!navigationKeys.has(event.key)) return;
+    if (!navigationKeys.has(event.key) || !tree.isConnected) return;
+    // Native WebViews can leave focus on body after a pointer selection.
+    // Handle that case without taking arrows from controls outside workspace.
+    if (event.target !== document.body && event.target !== document.documentElement
+        && !workspace.contains(event.target)) return;
     if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.isComposing) return;
     if (event.target.closest("input, textarea, select, [contenteditable]:not([contenteditable=false]), [role=textbox], [role=separator], [role=slider], summary, dialog, [role=dialog]")) return;
     if (workspace.querySelector("dialog[open]")) return;
@@ -49,9 +53,9 @@ const keydown = (event) => {
     event.stopPropagation();
     dioxus.send(action ?? { kind: "activity" });
 };
-workspace.addEventListener("keydown", keydown);
+document.addEventListener("keydown", keydown);
 try {
     await dioxus.recv();
 } finally {
-    workspace.removeEventListener("keydown", keydown);
+    document.removeEventListener("keydown", keydown);
 }
