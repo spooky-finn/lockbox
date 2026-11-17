@@ -18,6 +18,7 @@ use dioxus::desktop::{
 use dioxus::prelude::*;
 
 pub(crate) const NEW_TAB: &str = "lockbox-new-tab";
+pub(crate) const CLOSE_TAB: &str = "lockbox-close-tab";
 pub(crate) const NEW_WINDOW: &str = "lockbox-new-window";
 #[cfg(target_os = "macos")]
 const TABBING_ID: &str = "lockbox";
@@ -91,7 +92,12 @@ fn menu(language: Language) -> Menu {
                 shortcut(Code::KeyN),
             ),
             &PredefinedMenuItem::separator(),
-            &PredefinedMenuItem::close_window(Some(language.text(Text::MenuCloseTab))),
+            &MenuItem::with_id(
+                CLOSE_TAB,
+                language.text(Text::MenuCloseTab),
+                true,
+                shortcut(Code::KeyW),
+            ),
         ])?;
         // Without these items macOS WebViews lose copy, paste and undo shortcuts.
         edit.append_items(&[

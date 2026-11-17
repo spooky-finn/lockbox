@@ -667,3 +667,12 @@ button.copy-value.notes-value { width: 100%; white-space: pre-wrap; align-items:
 .draft.entry-detail .totp-editor h2 { display: none; }
 @media (max-width: 600px) { .draft.entry-detail .entry-icon.large { width: 32px; height: 32px; flex-basis: 32px; } }
 .copy-value-group button.copy-value { flex: 1; }
+
+/* Space sessions remain open while another tab is selected. */
+.space-tabs { display: flex; align-items: center; gap: 6px; padding: 5px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.space-tab-list { display: flex; gap: 4px; min-width: 0; overflow-x: auto; }
+.space-tab { display: flex; align-items: center; min-width: 120px; max-width: 240px; border-radius: var(--button-radius); border: 1px solid transparent; }
+.space-tab.active { background: var(--surface); border-color: var(--border); }
+.space-tab-select { min-width: 0; flex: 1; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; background: transparent; border: 0; box-shadow: none; }
+.space-tab-close { padding: 4px; min-height: 26px; margin-right: 3px; }
+.space-tab-close .symbol { width: 14px; height: 14px; flex-basis: 14px; }

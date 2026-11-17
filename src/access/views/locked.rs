@@ -13,7 +13,6 @@ use crate::{
         },
     },
     records::editor::replace_secret,
-    settings::state::Settings,
 };
 use dioxus::prelude::*;
 use std::borrow::Cow;
@@ -23,7 +22,6 @@ use zeroize::Zeroizing;
 pub(crate) fn LockedView() -> Element {
     let language = crate::desktop::i18n::use_language();
     let state = use_context::<Session>();
-    let settings = use_context::<Signal<Settings>>();
     let hardware = use_context::<BiometricProvider>();
     let screen = state.read();
     let Screen::Locked(locked) = &*screen else {
@@ -108,20 +106,20 @@ pub(crate) fn LockedView() -> Element {
                     else if ready { {language.text(Text::VaultIsLocked)} }
                     else { {language.text(Text::YourPasswordsLockedAway)} }
                 }
-                p { class: "unlock-description", title: "{path}",
-                    if cloud_restore && key_setup { {language.text(Text::CloudRestoreWordsHint)} }
-                    else if cloud_restore && sync_setup { {language.text(Text::CloudRestoreHint)} }
-                    else if recovering { {language.text(Text::RecoveryUnlockHint)} }
-                    else if key_setup { {language.text(Text::EncryptionKeySetupHint)} }
-                    else if identity_unlock { {language.text(Text::UnlockIdentityHint)} }
-                    else if identity_setup { {language.text(Text::ProtectIdentityHint)} }
-                    else if create && locked.joining && !cloud_password { {language.text(Text::SharingJoinSetup)} }
-                    else if cloud_password { {language.text(Text::ChooseAMasterPasswordToProtectYourLocalProfile)} }
-                    else if create && locked.path.is_none() { {language.text(Text::ChooseAVaultType)} }
-                    else if create { {language.format(Text::ChooseAMasterPasswordForTheNewVault, std::slice::from_ref(&filename))} }
-                    else if touch_id { {language.format(Text::UseTouchIDOrEnterTheMasterPasswordToOpen, std::slice::from_ref(&filename))} }
-                    else if ready { {language.format(Text::EnterTheMasterPasswordToOpenVault, std::slice::from_ref(&filename))} }
-                    else { {language.text(Text::OpenAVaultOrCreateOneToStoreYourPasswords)} }
+                if create || recovering || !ready {
+                    p { class: "unlock-description", title: "{path}",
+                        if cloud_restore && key_setup { {language.text(Text::CloudRestoreWordsHint)} }
+                        else if cloud_restore && sync_setup { {language.text(Text::CloudRestoreHint)} }
+                        else if recovering { {language.text(Text::RecoveryUnlockHint)} }
+                        else if key_setup { {language.text(Text::EncryptionKeySetupHint)} }
+                        else if identity_unlock { {language.text(Text::UnlockIdentityHint)} }
+                        else if identity_setup { {language.text(Text::ProtectIdentityHint)} }
+                        else if create && locked.joining && !cloud_password { {language.text(Text::SharingJoinSetup)} }
+                        else if cloud_password { {language.text(Text::ChooseAMasterPasswordToProtectYourLocalProfile)} }
+                        else if create && locked.path.is_none() { {language.text(Text::ChooseAVaultType)} }
+                        else if create { {language.format(Text::ChooseAMasterPasswordForTheNewVault, std::slice::from_ref(&filename))} }
+                        else { {language.text(Text::OpenAVaultOrCreateOneToStoreYourPasswords)} }
+                    }
                 }
 
                 if key_setup {
@@ -270,12 +268,6 @@ pub(crate) fn LockedView() -> Element {
                 }
                 button { class: "quiet", disabled: busy, onclick: move |_| runtime::begin_cloud_restore(),
                     {language.text(Text::CloudRestore)}
-                }
-
-                if settings.read().config.last_vault.is_some() {
-                    IconButton { class: "quiet", icon: Icon::FolderX, label: language.text(Text::ForgetPath), disabled: busy,
-                        onclick: move |_| runtime::forget_path(),
-                    }
                 }
             }
         }

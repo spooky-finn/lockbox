@@ -33,6 +33,8 @@ pub(crate) fn use_runtime() -> Session {
     use_context_provider(|| hardware.clone());
     use_context_provider(|| native.clone());
     use_context_provider(|| state);
+    let tabs = use_signal(|| crate::desktop::tabs::Tabs::new(state));
+    use_context_provider(|| tabs);
     use_context_provider(|| Clock(clock));
     use_context_provider(|| status);
 
@@ -58,7 +60,12 @@ pub(crate) fn use_runtime() -> Session {
         }
 
         match event.id().as_ref() {
-            crate::desktop::window::NEW_TAB => crate::desktop::window::open(true),
+            crate::desktop::window::NEW_TAB => crate::desktop::tabs::new_tab(),
+            crate::desktop::window::CLOSE_TAB => {
+                let tabs = consume_context::<Signal<crate::desktop::tabs::Tabs>>();
+                let active = tabs.peek().active;
+                crate::desktop::tabs::close(active);
+            }
             crate::desktop::window::NEW_WINDOW => crate::desktop::window::open(false),
             _ => {}
         }
@@ -79,7 +86,28 @@ pub(crate) fn tick() {
         .borrow_mut()
         .clipboard
         .tick(Instant::now());
-    let pending = match &*consume_context::<Session>().peek() {
+    tick_session(consume_context::<Session>());
+    if let Some(tabs) = try_consume_context::<Signal<crate::desktop::tabs::Tabs>>() {
+        let sessions: Vec<_> = tabs
+            .peek()
+            .sessions
+            .iter()
+            .enumerate()
+            .filter_map(|(i, s)| (i != tabs.peek().active).then_some(*s))
+            .collect();
+        for session in sessions {
+            tick_session(session);
+        }
+    }
+    publish_status();
+    let now = unix_now();
+    if *clock.peek() != now {
+        clock.set(now);
+    }
+}
+
+fn tick_session(mut state: Session) {
+    let pending = match &*state.peek() {
         Screen::Locked(form) => form.busy() || form.auto_touch_id,
         Screen::Unlocked(workspace) => {
             workspace.touch_id.pending.is_some()
@@ -89,10 +117,9 @@ pub(crate) fn tick() {
     };
 
     if pending {
-        poll_workers();
+        poll_session(state);
     }
     {
-        let mut state = consume_context::<Session>();
         let pairing_tick = matches!(&*state.peek(), Screen::Unlocked(u) if u.sharing.links.needs_tick(&u.vault, u.is_editing()));
         if pairing_tick {
             state.with_mut(|screen| {
@@ -146,12 +173,6 @@ pub(crate) fn tick() {
             });
         }
     }
-    publish_status();
-    let now = unix_now();
-
-    if *clock.peek() != now {
-        clock.set(now);
-    }
 }
 
 pub(crate) fn lock(reason: Option<&str>) {
@@ -165,6 +186,19 @@ pub(crate) fn lock(reason: Option<&str>) {
         &mut native.borrow_mut(),
         reason,
     );
+    if let Some(tabs) = try_consume_context::<Signal<crate::desktop::tabs::Tabs>>() {
+        for (index, session) in tabs.peek().sessions.iter().enumerate() {
+            if index != tabs.peek().active {
+                let mut session = *session;
+                session.write().lock(
+                    &settings.peek(),
+                    &*hardware.0,
+                    &mut native.borrow_mut(),
+                    reason,
+                );
+            }
+        }
+    }
     publish_status();
 }
 
@@ -173,9 +207,14 @@ fn check_lock() {
     let native = consume_context::<SecurityHandle>();
     let reason = native.borrow().lock_reason();
 
-    if matches!(&*state.peek(), Screen::Unlocked(_))
-        && let Some(reason) = reason
-    {
+    let any_unlocked = matches!(&*state.peek(), Screen::Unlocked(_))
+        || try_consume_context::<Signal<crate::desktop::tabs::Tabs>>().is_some_and(|tabs| {
+            tabs.peek()
+                .sessions
+                .iter()
+                .any(|s| matches!(&*s.peek(), Screen::Unlocked(_)))
+        });
+    if any_unlocked && let Some(reason) = reason {
         lock(Some(reason));
     }
 }
@@ -196,8 +235,12 @@ pub(crate) fn publish_status() {
     }
 }
 
+#[cfg(test)]
 pub(crate) fn poll_workers() {
-    let mut state = consume_context::<Session>();
+    poll_session(consume_context::<Session>());
+}
+
+fn poll_session(mut state: Session) {
     let mut settings = consume_context::<Signal<Settings>>();
     let hardware = consume_context::<BiometricProvider>();
     let native = consume_context::<SecurityHandle>();
@@ -234,6 +277,14 @@ pub(crate) fn begin_create() {
 }
 
 pub(crate) fn select_profile(path: std::path::PathBuf) {
+    if crate::desktop::tabs::focus_path(&path) {
+        return;
+    }
+    if try_consume_context::<Signal<crate::desktop::tabs::Tabs>>().is_some()
+        && matches!(&*consume_context::<Session>().peek(), Screen::Unlocked(_))
+    {
+        crate::desktop::tabs::new_tab();
+    }
     let mut state = consume_context::<Session>();
     let settings = consume_context::<Signal<Settings>>();
     let hardware = consume_context::<BiometricProvider>();
@@ -251,8 +302,32 @@ pub(crate) fn create_from_switcher(joining: bool) {
     if !consume_context::<Session>().peek().can_switch_profile() {
         return;
     }
-    lock(None);
+    let state = consume_context::<Session>();
+    let source = match &*state.peek() {
+        Screen::Unlocked(u) => u
+            .vault
+            .profile_summary()
+            .map(|_| u.vault.path().to_path_buf()),
+        Screen::Locked(f) => f.identity_source.clone(),
+    };
+    if try_consume_context::<Signal<crate::desktop::tabs::Tabs>>().is_some() {
+        crate::desktop::tabs::new_tab();
+    } else {
+        lock(None);
+    }
     begin_creation(joining);
+    if let Some(source) = source {
+        let mut state = state;
+        let settings = consume_context::<Signal<Settings>>();
+        if let Screen::Locked(form) = &mut *state.write() {
+            let replacement = if joining {
+                Locked::begin_join()
+            } else {
+                Locked::begin_create()
+            };
+            **form = replacement.with_identity_path(settings.peek().identity_path(), Some(source));
+        }
+    }
 }
 
 pub(crate) fn begin_join() {

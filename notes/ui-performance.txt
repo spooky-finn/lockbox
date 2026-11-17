@@ -94,3 +94,9 @@ Folder click
 - Label/icon click selects folder and toggles expansion. Arrow remains independent.
 - Changed draft prompts before navigation/toggle; cancel keeps folder state.
 - Search keeps matching branches revealed. Label exposes aria-expanded.
+
+Keyboard selection ownership
+- WebView computes visible neighbor; sends kind + row ID through scoped evaluator. No secrets cross bridge.
+- Rust validates ID, records activity, applies guarded navigation. Pending confirmation keeps destination.
+- Selection differs from folder disclosure; keyboard selection preserves branch state.
+- Workspace listener disposed on sidebar unmount. Browser focus uses preventScroll; no scrollIntoView.

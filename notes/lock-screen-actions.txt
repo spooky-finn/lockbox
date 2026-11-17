@@ -1,0 +1,7 @@
+Lock screen: remove Forget path button. Drop unused Settings context.
+Open, create, connect, cloud restore actions stay.
+Diff check pass. Locked-view tests blocked: existing sidebar.rs import
+crate::records::views::tree::RenderCache unresolved.
+Unlock: remove vault password prompt, including Touch ID variant.
+Creation, recovery, empty-state hints stay.
+Latest test run blocked: tree.rs derives Default for Element; trait unavailable.

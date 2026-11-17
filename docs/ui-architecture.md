@@ -41,10 +41,17 @@ scan metadata, project/sort the tree, or rebuild folder options. They also verif
 that selecting and expanding reuse the hierarchy, saved changes refresh it, and
 clock ticks do not render the complete entry card.
 
-Native WebView focus navigation stays in `assets/tree-navigation.js`, with a
-listener disposed on unmount. Arrows and Home/End move focus; Enter/Space activate.
-Moving focus alone must not select a record or reveal secrets. Keep default
-behavior for modified keys and input controls.
+Native WebView navigation stays in `assets/tree-navigation.js`, with a workspace
+listener disposed on sidebar unmount. Up/Down and Home/End change the selected
+visible row without scrolling. Left/Right collapse, expand, or select a parent or
+child. Tab focus alone does not select. Inputs, composition, modified keys, modal
+dialogs and controls with their own arrow behavior retain native handling.
+
+The WebView sends only row IDs and action kinds through its scoped evaluator.
+Rust validates IDs, records activity and routes selection through `navigate`, so
+unsaved edits retain Save/Discard/Cancel protection. Keyboard folder selection
+preserves its disclosure state; explicit folder clicks still toggle it. Ignore
+queued navigation while a confirmation is pending; never replace its destination.
 
 ## Appearance and feedback
 

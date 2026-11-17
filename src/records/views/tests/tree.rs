@@ -3,6 +3,9 @@ use crate::desktop::{
     view_test_support::{mounted, update},
 };
 
+#[path = "tree_performance.rs"]
+mod performance;
+
 #[test]
 fn draft_typing_does_not_reproject_the_tree() {
     let mut dom = mounted();
