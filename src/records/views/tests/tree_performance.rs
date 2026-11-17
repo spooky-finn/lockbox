@@ -69,6 +69,8 @@ fn synthetic_tree_latency() {
             })
         });
         let projections = tree::PROJECTIONS.get();
+        let cache_time = crate::records::views::tree::CACHE_MICROS.get();
+        let builds = crate::records::views::tree::ROW_BUILDS.get();
         let selection = (0..20)
             .map(|i| {
                 sample(&mut dom, |state| {
@@ -77,6 +79,14 @@ fn synthetic_tree_latency() {
             })
             .collect();
         report(size, "select", selection);
+        eprintln!(
+            "selection row builds={}",
+            crate::records::views::tree::ROW_BUILDS.get() - builds
+        );
+        eprintln!(
+            "selection cache total_us={}",
+            crate::records::views::tree::CACHE_MICROS.get() - cache_time
+        );
         let expansion = (0..20)
             .map(|_| {
                 sample(&mut dom, |state| {

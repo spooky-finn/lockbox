@@ -154,25 +154,28 @@ fn TreeContent() -> Element {
         Screen::Unlocked(u) => u.search.trim().to_lowercase(),
         Screen::Locked(_) => String::new(),
     });
-    // Scan metadata only when records or search change, never on draft input.
-    let presentation = use_memo(move || {
+    let topology = use_memo(move || {
         let version = version.read();
-        let query = query.read();
         version.as_ref()?;
         let screen = state.peek();
         let Screen::Unlocked(u) = &*screen else {
             return None;
         };
-        Some(tree::PresentationKey::new(&u.vault, &query))
+        Some(tree::SortedTopology::new(&u.vault))
     });
     let nodes = use_memo(move || {
-        let _presentation = presentation.read();
+        let _version = version.read();
+        let query = query.read();
+        let topology = topology.read();
+        let Some(topology) = &*topology else {
+            return std::rc::Rc::new(Vec::new());
+        };
         let screen = state.peek();
         let Screen::Unlocked(u) = &*screen else {
             return std::rc::Rc::new(Vec::new());
         };
         std::rc::Rc::new(
-            tree::project(&u.vault, &u.search)
+            tree::project_indexed(&u.vault, &query, topology)
                 .into_iter()
                 .map(tree::DisplayNode::from)
                 .collect::<Vec<_>>(),

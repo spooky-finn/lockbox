@@ -2,7 +2,7 @@ use crate::desktop::i18n::Text;
 
 use crate::{
     desktop::{
-        context::{Session, edit_unlocked},
+        context::{Session, edit_unlocked, use_records_version},
         session::Screen,
         widgets::{
             button::IconButton,
@@ -17,6 +17,45 @@ use dioxus::prelude::*;
 pub(crate) fn DirectoryView() -> Element {
     let language = crate::desktop::i18n::use_language();
     let state = use_context::<Session>();
+    let version = use_records_version();
+    let selection = use_memo(move || match &*state.read() {
+        Screen::Unlocked(u) => u.directories.selected.clone(),
+        _ => None,
+    });
+    let summary = use_memo(move || {
+        let _version = version.read();
+        let selection = selection.read();
+        let selected = selection.as_deref()?;
+        let screen = state.peek();
+        let Screen::Unlocked(workspace) = &*screen else {
+            return None;
+        };
+        let hierarchy = folder::Hierarchy::new(workspace.vault.folders());
+        let breadcrumbs = hierarchy
+            .ancestors(selected)
+            .into_iter()
+            .map(|f| (f.id.clone(), f.name.clone()))
+            .collect::<Vec<_>>();
+        let descendants = workspace
+            .vault
+            .folders()
+            .iter()
+            .filter(|f| hierarchy.contains(selected, &f.id))
+            .map(|f| f.id.as_str())
+            .collect::<std::collections::BTreeSet<_>>();
+        let records = workspace
+            .vault
+            .entries()
+            .iter()
+            .filter(|e| {
+                e.folder_id
+                    .as_deref()
+                    .is_some_and(|id| descendants.contains(id))
+            })
+            .count();
+        let folders = descendants.iter().filter(|&&id| id != selected).count();
+        Some((breadcrumbs, records, folders))
+    });
     let screen = state.read();
     let Screen::Unlocked(workspace) = &*screen else {
         return rsx! {};
@@ -35,35 +74,20 @@ pub(crate) fn DirectoryView() -> Element {
         return rsx! {};
     };
 
-    let hierarchy = folder::Hierarchy::new(workspace.vault.folders());
-    let breadcrumbs = hierarchy.ancestors(selected);
-    let records = workspace
-        .vault
-        .entries()
-        .iter()
-        .filter(|entry| {
-            entry
-                .folder_id
-                .as_deref()
-                .is_some_and(|id| hierarchy.contains(selected, id))
-        })
-        .count();
-    let folders = workspace
-        .vault
-        .folders()
-        .iter()
-        .filter(|folder| folder.id != selected && hierarchy.contains(selected, &folder.id))
-        .count();
+    let summary = summary.read();
+    let Some((breadcrumbs, records, folders)) = &*summary else {
+        return rsx! {};
+    };
     rsx! {
         article { class: "directory-detail",
             nav { class: "breadcrumbs", aria_label: language.text(Text::FolderLocation),
                 IconButton { class: "quiet", icon: Icon::Folder, label: language.text(Text::VaultRoot), onclick: move |_| edit_unlocked(state, |u| u.select_directory(None)) }
-                for folder in breadcrumbs {
+                for (id, name) in breadcrumbs {
                     {
-                        let id = folder.id.clone();
+                        let id = id.clone();
                         rsx! {
                             Symbol { icon: Icon::ChevronRight }
-                            button { class: "quiet breadcrumb", onclick: move |_| edit_unlocked(state, |u| u.select_directory(Some(id.clone()))), "{folder.name}" }
+                            button { class: "quiet breadcrumb", onclick: move |_| edit_unlocked(state, |u| u.select_directory(Some(id.clone()))), "{name}" }
                         }
                     }
                 }

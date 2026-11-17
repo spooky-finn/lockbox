@@ -7,21 +7,26 @@ use crate::{
 };
 
 #[test]
-fn presentation_key_ignores_secrets_but_tracks_display_and_search_changes() {
-    use crate::records::tree::PresentationKey;
+fn sorted_topology_reuses_order_while_search_reads_current_fields() {
+    use crate::records::tree::{SortedTopology, project_indexed};
     let dir = tempfile::tempdir().unwrap();
     let mut workspace = unlocked(&dir);
     add(&mut workspace, "Example", "alice", "https://example.com");
-    let key = PresentationKey::new(&workspace.vault, "");
+    let topology = SortedTopology::new(&workspace.vault);
     workspace.vault.test_entries_mut()[0].password = "fictional-new-password".into();
     workspace.vault.test_entries_mut()[0].notes = "fictional note".into();
-    assert!(key == PresentationKey::new(&workspace.vault, ""));
-    let search = PresentationKey::new(&workspace.vault, "alice");
+    assert!(topology == SortedTopology::new(&workspace.vault));
+    assert_eq!(
+        outline(&project_indexed(&workspace.vault, "alice", &topology)),
+        ["0:entry:Example"]
+    );
     workspace.vault.test_entries_mut()[0].username = "bob".into();
-    assert!(search != PresentationKey::new(&workspace.vault, "alice"));
-    assert!(key == PresentationKey::new(&workspace.vault, ""));
-    workspace.vault.test_entries_mut()[0].title = "Renamed".into();
-    assert!(key != PresentationKey::new(&workspace.vault, ""));
+    assert!(project_indexed(&workspace.vault, "alice", &topology).is_empty());
+    assert_eq!(
+        outline(&project_indexed(&workspace.vault, "bob", &topology)),
+        ["0:entry:Example"]
+    );
+    assert!(project_indexed(&workspace.vault, "fictional-new-password", &topology).is_empty());
 }
 
 fn outline(nodes: &[Node<'_>]) -> Vec<String> {

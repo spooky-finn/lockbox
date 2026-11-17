@@ -239,3 +239,89 @@ fn save_shortcuts_work_in_both_layouts_and_ignore_composition_and_repeats() {
         });
     }
 }
+
+#[test]
+fn shared_review_reuses_verification_until_journal_changes() {
+    use crate::{
+        desktop::{session::Screen, sync_review::REVIEW_REPLAYS, workspace::Unlocked},
+        vault::{
+            KdfParams, ProfileStore, ProviderConfiguration, SharedProfile, witness::MemoryWitness,
+        },
+    };
+    use dioxus::prelude::*;
+    use secrecy::SecretString;
+    use std::sync::Arc;
+    let directory = tempfile::tempdir().unwrap();
+    let store = ProfileStore::new(Arc::new(MemoryWitness::default()));
+    let vault = store
+        .create_shared(
+            directory.path().join("review.lbx"),
+            &SecretString::from("master".to_owned()),
+            &SecretString::from("recovery".to_owned()),
+            KdfParams {
+                memory_kib: 8192,
+                passes: 1,
+                lanes: 1,
+            },
+            SharedProfile {
+                username: "Fixture".into(),
+                space_name: "Review fixture".into(),
+                provider: ProviderConfiguration {
+                    base_url: "https://example.invalid".into(),
+                    bucket: "fixture".into(),
+                    access_key: "fictional".into(),
+                    secret_key: "fictional".into(),
+                },
+            },
+        )
+        .unwrap();
+    let mut dom = mounted();
+    update(&mut dom, |mut state| {
+        state.set(Screen::Unlocked(Box::new(Unlocked::new(vault))))
+    });
+    let before = REVIEW_REPLAYS.get();
+    assert!(before > 0);
+    for i in 0..5 {
+        update(&mut dom, |state| {
+            edit_unlocked(state, |u| u.search = format!("fixture {i}"))
+        });
+    }
+    assert_eq!(
+        REVIEW_REPLAYS.get(),
+        before,
+        "search must not verify/decrypt history again"
+    );
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| {
+            let revision = u.vault.records_revision();
+            let receipts = u
+                .vault
+                .sync_state()
+                .unwrap()
+                .outbox
+                .iter()
+                .copied()
+                .collect::<Vec<_>>();
+            u.vault.acknowledge_sync(&receipts, true).unwrap();
+            assert_eq!(u.vault.records_revision(), revision);
+        })
+    });
+    assert!(
+        REVIEW_REPLAYS.get() > before,
+        "non-record journal changes also invalidate review"
+    );
+    let before = REVIEW_REPLAYS.get();
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| {
+            let mut entry = crate::records::entry::Entry::new();
+            entry.title = "New shared record".into();
+            u.vault.upsert_entry(entry).unwrap();
+        })
+    });
+    assert!(
+        REVIEW_REPLAYS.get() > before,
+        "journal changes must refresh verified review"
+    );
+    update(&mut dom, |_| crate::desktop::runtime::lock(None));
+    assert!(!dioxus_ssr::render(&dom).contains("New shared record"));
+}

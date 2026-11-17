@@ -21,10 +21,27 @@ session edit. The sidebar first subscribes to the vault path and an in-memory
 records revision.
 Record commands, verified projection replacement and receive rollback invalidate
 that revision. It is never serialized or used for signing or durable ordering.
-Only record-version or normalized-query changes build the metadata equality key;
-draft input does not scan entries. A second memo caches the sorted display
-hierarchy, so selection and folder expansion do not repeat projection or sorting.
-Search separately invalidates expansion behavior even if its result rows are equal.
+Only record-version changes rebuild the sorted folder/entry position index.
+Normalized-query changes filter through that index without re-sorting siblings or
+cloning a second metadata equality key. The filtered display hierarchy is memoized,
+so identical result rows retain their identity. Empty/nonempty search transitions
+separately invalidate expansion behavior.
+
+A dedicated tree component shields its retained VNodes from unrelated session
+updates. Its render cache tracks previous/current selection and changed collapsed
+folders, rebuilding only affected rows and ancestor branches. Unchanged branches
+retain their VNode identity for Dioxus to skip. Collapse evicts descendant VNodes
+before unmount; reopening creates fresh component instances. Topology changes and
+lock clear the cache. Folder summaries cache counts and breadcrumbs by selection
+and record version; record counts use a descendant ID set rather than repeated
+ancestor walks for every entry.
+
+Shared-history review memoizes its rendered view using a fingerprint of the complete
+ciphertext journal and device certificate, plus path, record version, pending
+exchange and signing status. Ordinary selection/search still hashes replay inputs,
+but does not repeat journal verification or decryption when those inputs are equal.
+This is a display cache: signing and sync commands retain their own verification.
+Review reveal controls and language changes also refresh the rendered view.
 
 The caches retain IDs, titles, folder names and search-match decisions only, never
 passwords, notes, attachments, usernames or URLs. On lock they become empty. Folder

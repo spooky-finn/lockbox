@@ -9,7 +9,9 @@ const select = (row, current) => {
         return { kind: row.dataset.kind, id: row.dataset.id };
     }
 };
+const navigationKeys = new Set(["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Home", "End"]);
 const keydown = (event) => {
+    if (!navigationKeys.has(event.key)) return;
     if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.isComposing) return;
     if (event.target.closest("input, textarea, select, [contenteditable]:not([contenteditable=false]), [role=textbox], [role=separator], [role=slider], summary, dialog, [role=dialog]")) return;
     if (workspace.querySelector("dialog[open]")) return;

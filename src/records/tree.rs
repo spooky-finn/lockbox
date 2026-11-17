@@ -44,45 +44,22 @@ impl From<Node<'_>> for DisplayNode {
     }
 }
 
-/// Equality key for tree presentation. It owns display metadata, never passwords,
-/// attachments, notes, usernames or URLs. Search retains only match decisions.
-#[derive(PartialEq)]
-pub(crate) struct PresentationKey {
-    entries: Vec<(String, String, Option<String>, bool)>,
-    folders: Vec<Folder>,
-    query: String,
-}
-
-impl PresentationKey {
-    pub(crate) fn new(vault: &Vault, query: &str) -> Self {
-        #[cfg(test)]
-        METADATA_SCANS.set(METADATA_SCANS.get() + 1);
-        let query = query.trim().to_lowercase();
-        Self {
-            entries: vault
-                .entries()
-                .iter()
-                .map(|entry| {
-                    (
-                        entry.id.clone(),
-                        entry.title.clone(),
-                        entry.folder_id.clone(),
-                        entry_matches(entry, &query),
-                    )
-                })
-                .collect(),
-            folders: vault.folders().to_vec(),
-            query,
-        }
-    }
-}
-
+#[cfg(test)]
 pub(crate) fn project<'a>(vault: &'a Vault, query: &str) -> Vec<Node<'a>> {
+    project_indexed(vault, query, &SortedTopology::new(vault))
+}
+
+pub(crate) fn project_indexed<'a>(
+    vault: &'a Vault,
+    query: &str,
+    topology: &SortedTopology,
+) -> Vec<Node<'a>> {
     #[cfg(test)]
     PROJECTIONS.set(PROJECTIONS.get() + 1);
     let query = query.trim().to_lowercase();
     let mut placed = Placed::default();
-    let mut nodes = Hierarchy::new(vault).branch(None, &query, false, 0, &mut placed);
+    let mut nodes =
+        Hierarchy::from_index(vault, topology).branch(None, &query, false, 0, &mut placed);
     // Concurrent valid folder moves can create a cycle or dangling parent.
     // Keep every unreachable record and folder available for search and repair.
     for folder in vault.folders() {
@@ -125,30 +102,71 @@ struct Hierarchy<'a> {
     entries: BTreeMap<Option<&'a str>, Vec<&'a Entry>>,
 }
 
-impl<'a> Hierarchy<'a> {
-    fn new(vault: &'a Vault) -> Self {
+/// Sorted positions only. No secret fields or normalized usernames/URLs retained.
+#[derive(PartialEq)]
+pub(crate) struct SortedTopology {
+    folders: BTreeMap<Option<String>, Vec<usize>>,
+    entries: BTreeMap<Option<String>, Vec<usize>>,
+}
+
+impl SortedTopology {
+    pub(crate) fn new(vault: &Vault) -> Self {
+        #[cfg(test)]
+        METADATA_SCANS.set(METADATA_SCANS.get() + 1);
         let mut folders: BTreeMap<_, Vec<_>> = BTreeMap::new();
-        for folder in vault.folders() {
+        for (index, folder) in vault.folders().iter().enumerate() {
             folders
-                .entry(folder.parent_id.as_deref())
+                .entry(folder.parent_id.clone())
                 .or_default()
-                .push(folder);
+                .push(index);
         }
         for siblings in folders.values_mut() {
-            siblings.sort_by_cached_key(|folder| folder.name.to_lowercase());
+            siblings.sort_by_cached_key(|&index| vault.folders()[index].name.to_lowercase());
         }
-
         let mut entries: BTreeMap<_, Vec<_>> = BTreeMap::new();
-        for entry in vault.entries() {
+        for (index, entry) in vault.entries().iter().enumerate() {
             entries
-                .entry(entry.folder_id.as_deref())
+                .entry(entry.folder_id.clone())
                 .or_default()
-                .push(entry);
+                .push(index);
         }
         for siblings in entries.values_mut() {
-            siblings.sort_by_cached_key(|entry| entry.title.to_lowercase());
+            siblings.sort_by_cached_key(|&index| vault.entries()[index].title.to_lowercase());
         }
+        Self { folders, entries }
+    }
+}
 
+impl<'a> Hierarchy<'a> {
+    fn from_index(vault: &'a Vault, topology: &SortedTopology) -> Self {
+        let folders = topology
+            .folders
+            .values()
+            .map(|indices| {
+                let parent = vault.folders()[indices[0]].parent_id.as_deref();
+                (
+                    parent,
+                    indices
+                        .iter()
+                        .map(|&index| &vault.folders()[index])
+                        .collect(),
+                )
+            })
+            .collect();
+        let entries = topology
+            .entries
+            .values()
+            .map(|indices| {
+                let parent = vault.entries()[indices[0]].folder_id.as_deref();
+                (
+                    parent,
+                    indices
+                        .iter()
+                        .map(|&index| &vault.entries()[index])
+                        .collect(),
+                )
+            })
+            .collect();
         Self { folders, entries }
     }
 
