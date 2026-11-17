@@ -1,0 +1,20 @@
+Space tabs
+
+- Visible tab bar; + opens blank space picker. Cmd/Ctrl+T opens tab; Cmd/Ctrl+W closes tab.
+- Space picker opens additional space in new tab. Already-open paths focus existing tab; canonical aliases collapse.
+- Switching keeps vault, drafts, search, selection, folder state. Active view remount prevents stale editor controls.
+- Background tabs keep sync, pairing, import/biometric polling. Shared inactivity timer; manual/screen/idle lock covers every tab.
+- Lock cancels pending unlock results. Switch clears guarded clipboard. Close drops vault and releases file lease.
+- Drafts/import/unlock protect close or switch where needed. Last close leaves blank locked tab.
+- English/Russian labels; tab roles, active panel linkage, arrow/Home/End navigation; horizontal overflow on narrow windows.
+- Eight tab tests cover state retention, duplicate focus, close/lease release, draft guard, background workers, global lock, pending unlock cancellation.
+- Validation: 529 unit, 5 integration, 2 doc tests pass; 3 OS probes ignored. Desktop subset: 72 pass. Build, Clippy, format, diff checks pass; existing dead-code warnings remain.
+
+Compact tab refresh
+
+- macOS title + tabs share 38px strip; removes separate 28/36px drag row. Other desktops: 34px strip.
+- Short space names; 13px cloud/folder/lock icons. Full name, storage kind, path stay in tooltips.
+- Tabs shrink to 88px; long labels truncate. Horizontal scroll keeps many spaces accessible; active tab scrolls into view.
+- Subtle surfaces, 2px accent marker. Close appears on active/hover/focus; fixed hit area prevents label shift.
+- Native traffic-light clearance, leading/trailing drag regions. Touch keeps visible close buttons; reduced-motion respected.
+- Browser previews inspected: light/dark, 1040px/360px layouts. Tab tests: 8 pass; build pass.

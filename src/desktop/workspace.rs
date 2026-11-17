@@ -112,7 +112,17 @@ impl Unlocked {
             Destination::NewEntry => self.start_new(),
             Destination::NewDirectory => self.start_directory(),
             Destination::Entry(id) => self.select(id),
-            Destination::Directory(id) => self.select_directory(id),
+            Destination::Directory(id) => {
+                let collapsed = id
+                    .as_ref()
+                    .filter(|id| self.directories.collapsed.contains(*id))
+                    .cloned();
+                self.select_directory(id);
+                // Keyboard selection leaves the selected branch's disclosure unchanged.
+                if let Some(id) = collapsed {
+                    self.directories.collapsed.insert(id);
+                }
+            }
             Destination::ToggleDirectory(id) => {
                 let collapse =
                     self.search.trim().is_empty() && !self.directories.collapsed.contains(&id);

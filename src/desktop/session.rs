@@ -63,6 +63,19 @@ impl Screen {
     ) {
         security.clipboard.clear_now();
 
+        // A lock event also cancels an unlock already in flight. Otherwise its
+        // eventual worker result could reopen a space after the screen locked.
+        if let Self::Locked(form) = self {
+            if form.busy() || form.auto_touch_id {
+                *self = Self::Locked(Box::new(
+                    Locked::new(form.path.clone())
+                        .with_identity_path(settings.identity_path(), None)
+                        .offer_touch_id(&settings.config, biometrics, false),
+                ));
+            }
+            return;
+        }
+
         if let Self::Unlocked(unlocked) = self {
             let save_error = unlocked.autosave_draft().err();
             let mut locked = Locked::new(Some(unlocked.vault.path().to_path_buf()))

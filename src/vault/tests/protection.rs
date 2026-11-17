@@ -1,6 +1,6 @@
 //! Exercise the real encrypted file boundaries with an independently held witness.
 
-use crate::vault::{file::sibling, format::cipher, sharing_tests::share, *};
+use crate::vault::{format::cipher, sharing_tests::share, *};
 use chacha20poly1305::{
     XNonce,
     aead::{Aead, Payload},
@@ -602,6 +602,8 @@ fn backup_recovery_creates_a_fresh_certified_device_and_requires_new_admission()
 #[cfg(unix)]
 #[test]
 fn temporary_and_backup_sidecars_never_truncate_symlink_targets() {
+    use crate::vault::file::sibling;
+
     let directory = tempfile::tempdir().unwrap();
     let store = ProfileStore::new(Arc::new(MemoryWitness::default()));
     let path = directory.path().join("profile.lbx");

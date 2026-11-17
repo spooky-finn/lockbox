@@ -1,0 +1,47 @@
+Tree optimization — 2026-11-17
+
+Changed
+- Tree component shields retained VNodes from unrelated Session writes.
+- Cache tracks selected rows, changed disclosure IDs and ancestor paths.
+- Reuse unaffected VNodes; selection rebuilds two leaves plus affected ancestors.
+- Collapse evicts descendants before unmount; reopening creates fresh components.
+- Sorted position index rebuilds only on records revision. Queries filter index;
+  no per-query sibling sorting or cloned PresentationKey metadata.
+- Same-result queries preserve rendered rows. Empty/nonempty transitions still
+  refresh disclosure state. Caches retain display metadata only; clear on lock.
+- Folder summaries cache by selection/revision; count entries via descendant set.
+- SyncReview fingerprints complete ciphertext journal + certificate and checks
+  pending exchange/signing state. Equal inputs skip verification/decryption.
+  Record revision alone would miss non-record journal changes; never use alone.
+- Fingerprint uses existing streaming canonical digest; retains no serialized
+  ciphertext buffer, decrypted Replay or extra credential snapshot.
+- Keyboard listener rejects unrelated keys before scanning DOM.
+
+Measurement
+- Same fictional fixture and debug profile as investigation; 20 samples.
+- 10,000 records, 1,000 open folders. Median Rust rendering:
+  selection ~115 ms before, ~45 ms after;
+  folder toggle ~119 ms before, ~46 ms after;
+  same-result filtering ~159 ms before, ~16 ms after;
+  unrelated Session notification ~42 ms before, ~0.3 ms after.
+- Selection across 20 inputs rebuilds 76 rows total: two leaves + two parent
+  folders per changed selection; first input selects already-current record.
+- Cache work ~2.5 ms per selection; remaining time mainly outside cache builder.
+  Native renderer and release profiling still needed for precise attribution.
+- Remove/restore-all filtering remains ~139 ms; every restored row still mounts.
+  No virtualization introduced. No native input-to-paint speedup claim.
+- Shared-vault regression proves equal-input search skips replay and saved journal
+  changes refresh it. Large-journal fingerprint cost still scales with bytes.
+
+Checks
+- New regressions: bounded row rebuilds, unchanged-result filtering without sort,
+  nested collapse/reopen + lock, shared-review invalidation.
+- Node navigation suite: seven pass.
+- Clippy all targets passes with only dead_code allowed. Standard strict command
+  blocked by existing unused forget_path, FolderX and Settings::remember in
+  concurrent workspace changes; unrelated definitions left untouched.
+- Existing full unit suite: 529 pass, three ignored (two OS probes + timing probe).
+- Added three regressions pass separately; updated topology tests: eight pass.
+- Integration: five pass. Doctests: two pass. Format + diff checks pass.
+- Shared-review regression additionally verifies acknowledgement invalidation
+  without changing records_revision. No stale review after non-record updates.

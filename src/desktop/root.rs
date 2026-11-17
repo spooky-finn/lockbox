@@ -8,6 +8,8 @@ const CSS: &str = include_str!("../../assets/app.css");
 #[component]
 pub fn App() -> Element {
     let state = runtime::use_runtime();
+    let tabs = use_context::<Signal<crate::desktop::tabs::Tabs>>();
+    let active_tab = tabs.read().active;
     let theme = theme::use_theme();
     let settings = use_context::<Signal<crate::settings::state::Settings>>();
     let appearance_style =
@@ -44,8 +46,11 @@ pub fn App() -> Element {
                     runtime::record_activity();
                 }
             },
+            crate::desktop::tabs::TabBar {}
             crate::desktop::browser::BrowserConsent {}
-            if locked() { LockedView {} } else { UnlockedView {} }
+            div { id: "space-tab-content", class: "space-tab-content", role: "tabpanel", aria_labelledby: "space-tab-{active_tab}",
+                if locked() { LockedView { key: "{active_tab}" } } else { UnlockedView { key: "{active_tab}" } }
+            }
         }
     }
 }

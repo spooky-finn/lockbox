@@ -4,7 +4,11 @@ use crate::desktop::{
     context::{Session, edit_unlocked},
     runtime,
     session::Screen,
-    widgets::{button::IconButton, status::StatusBar, symbol::Icon},
+    widgets::{
+        button::IconButton,
+        status::StatusBar,
+        symbol::{Icon, Symbol},
+    },
 };
 use dioxus::prelude::*;
 
@@ -22,11 +26,21 @@ pub(crate) fn Toolbar() -> Element {
             crate::desktop::space_switcher::SpaceSwitcher {}
             div { class: "toolbar-status",
                 if let Some(sync) = unlocked.vault.sync_state() {
-                    div { class: if matches!(unlocked.sync.status, crate::sync::scheduler::Status::Saved | crate::sync::scheduler::Status::Syncing | crate::sync::scheduler::Status::Synced) { "sync-status" } else { "sync-status notice" },
-                        p { aria_live: "polite", {language.format(Text::PendingUpload, &[language.sync_status(unlocked.sync.status).to_owned(), sync.outbox.len().to_string()])} }
-                        button { class: "quiet", onclick: move |_| edit_unlocked(state, |u| {
-                            u.retry_sync();
-                        }), {language.text(Text::RetrySync)} }
+                    {
+                        let routine = matches!(unlocked.sync.status, crate::sync::scheduler::Status::Saved | crate::sync::scheduler::Status::Syncing | crate::sync::scheduler::Status::Synced);
+                        let summary = language.format(Text::PendingUpload, &[language.sync_status(unlocked.sync.status).to_owned(), sync.outbox.len().to_string()]);
+                        rsx! {
+                            div { class: if routine { "sync-status sync-compact" } else { "sync-status notice" },
+                                p { class: if routine { "sr-only" } else { "sync-message" }, aria_live: "polite", "{summary}" }
+                                button { class: "quiet sync-control", r#type: "button", title: "{summary}", aria_label: format!("{}: {summary}", language.text(Text::RetrySync)),
+                                    onclick: move |_| edit_unlocked(state, |u| u.retry_sync()),
+                                    if routine {
+                                        Symbol { icon: if unlocked.sync.status == crate::sync::scheduler::Status::Synced { Icon::Check } else { Icon::Cloud } }
+                                        if !sync.outbox.is_empty() { span { class: "sync-count", "{sync.outbox.len()}" } }
+                                    } else { {language.text(Text::RetrySync)} }
+                                }
+                            }
+                        }
                     }
                 }
                 StatusBar {}

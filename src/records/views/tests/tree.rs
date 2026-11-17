@@ -3,6 +3,9 @@ use crate::desktop::{
     view_test_support::{mounted, update},
 };
 
+#[path = "tree_performance.rs"]
+mod performance;
+
 #[test]
 fn draft_typing_does_not_reproject_the_tree() {
     let mut dom = mounted();
@@ -138,4 +141,86 @@ fn large_vault_typing_and_navigation_reuse_metadata_and_hierarchy() {
     assert!(tree::METADATA_SCANS.get() > before.0);
     assert!(tree::PROJECTIONS.get() > before.1);
     assert!(dioxus_ssr::render(&dom).contains("Renamed saved entry"));
+}
+
+#[test]
+fn selection_only_rebuilds_changed_rows_and_search_reuses_sorted_topology() {
+    use crate::records::{entry::Entry, views::tree::ROW_BUILDS};
+    let mut dom = mounted();
+    let mut other = String::new();
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| {
+            let entries = (0..1_000)
+                .map(|i| {
+                    let mut entry = Entry::new();
+                    entry.title = format!("Cache fixture {i}");
+                    entry
+                })
+                .collect::<Vec<_>>();
+            other = entries[500].id.clone();
+            u.vault.test_entries_mut().extend(entries);
+        })
+    });
+    let before = ROW_BUILDS.get();
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| u.select(other.clone()))
+    });
+    assert_eq!(
+        ROW_BUILDS.get() - before,
+        2,
+        "only previous/current selection markup changes"
+    );
+    let before = ROW_BUILDS.get();
+    update(&mut dom, |state| edit_unlocked(state, |_| {}));
+    assert_eq!(ROW_BUILDS.get(), before);
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| u.search = "Cache".into())
+    });
+    let before = (ROW_BUILDS.get(), crate::records::tree::METADATA_SCANS.get());
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| u.search = "fixture".into())
+    });
+    assert_eq!(
+        (ROW_BUILDS.get(), crate::records::tree::METADATA_SCANS.get()),
+        before,
+        "identical search results reuse rows; query changes never sort topology"
+    );
+    assert!(dioxus_ssr::render(&dom).contains("Cache fixture 500"));
+}
+
+#[test]
+fn nested_cached_branches_survive_repeated_collapse_reopen_and_lock() {
+    use crate::records::folder::Folder;
+    let mut dom = mounted();
+    let mut parent_id = String::new();
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| {
+            let parent = Folder::new("Cache parent".into(), None);
+            let child = Folder::new("Cache child".into(), Some(parent.id.clone()));
+            parent_id = parent.id.clone();
+            u.vault.test_entries_mut()[0].folder_id = Some(child.id.clone());
+            *u.vault.test_folders_mut() = vec![parent, child];
+            u.directories.collapsed.clear();
+        })
+    });
+    for _ in 0..3 {
+        update(&mut dom, |state| {
+            edit_unlocked(state, |u| u.directories.toggle(parent_id.clone()))
+        });
+        let html = dioxus_ssr::render(&dom);
+        let sidebar = html
+            .split("id=\"vault-tree\"")
+            .nth(1)
+            .unwrap()
+            .split("</nav>")
+            .next()
+            .unwrap();
+        assert!(!sidebar.contains("Cache child"));
+        update(&mut dom, |state| {
+            edit_unlocked(state, |u| u.directories.toggle(parent_id.clone()))
+        });
+        assert!(dioxus_ssr::render(&dom).contains("Cache child"));
+    }
+    update(&mut dom, |_| crate::desktop::runtime::lock(None));
+    assert!(!dioxus_ssr::render(&dom).contains("Cache parent"));
 }

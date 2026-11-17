@@ -1,48 +1,61 @@
-// Focus stays inside the visible list. Enter/Space activate native buttons;
-// arrows never select a record or expose a secret merely by moving focus.
+// Browser chooses visible neighbors; Rust owns selection and unsaved-draft guards.
 const tree = document.querySelector("#vault-tree");
+const workspace = tree.closest(".workspace");
 const rows = () => [...tree.querySelectorAll(".entry-row:not(:disabled), .folder-label:not(:disabled)")];
-const focus = (row) => {
+const select = (row, current) => {
     if (!row) return;
     row.focus({ preventScroll: true });
-    row.scrollIntoView({ block: "nearest", inline: "nearest" });
+    if (row !== current) {
+        return { kind: row.dataset.kind, id: row.dataset.id };
+    }
 };
+const navigationKeys = new Set(["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Home", "End"]);
 const keydown = (event) => {
-    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    if (!navigationKeys.has(event.key) || !tree.isConnected) return;
+    // Native WebViews can leave focus on body after a pointer selection.
+    // Handle that case without taking arrows from controls outside workspace.
+    if (event.target !== document.body && event.target !== document.documentElement
+        && !workspace.contains(event.target)) return;
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.isComposing) return;
+    if (event.target.closest("input, textarea, select, [contenteditable]:not([contenteditable=false]), [role=textbox], [role=separator], [role=slider], summary, dialog, [role=dialog]")) return;
+    if (workspace.querySelector("dialog[open]")) return;
     const row = event.target.closest(".entry-row, .folder-label, .tree-disclosure");
-    if (!row || row.disabled) return;
-    const current = row.classList.contains("tree-disclosure")
-        ? row.parentElement.querySelector(".folder-label") : row;
+    if (row?.disabled || (!row && tree.dataset.navigateRecords !== "true")) return;
     const visible = rows();
+    if (!visible.length) return;
+    const focused = row?.classList.contains("tree-disclosure")
+        ? row.parentElement.querySelector(".folder-label") : row;
+    const current = visible.find(item => item.getAttribute("aria-current") === "true") ?? focused;
     const index = visible.indexOf(current);
-    if (index < 0) return;
-    const folder = current.closest(".tree-folder");
-    const toggle = current.classList.contains("folder-label")
+    const folder = current?.closest(".tree-folder");
+    const toggle = current?.classList.contains("folder-label")
         ? current.parentElement.querySelector(".tree-disclosure") : null;
+    let action;
     switch (event.key) {
-        case "ArrowDown": focus(visible[Math.min(index + 1, visible.length - 1)]); break;
-        case "ArrowUp": focus(visible[Math.max(index - 1, 0)]); break;
-        case "Home": focus(visible[0]); break;
-        case "End": focus(visible.at(-1)); break;
+        case "ArrowDown": action = select(visible[Math.min(index + 1, visible.length - 1)], current); break;
+        case "ArrowUp": action = select(visible[index < 0 ? visible.length - 1 : Math.max(index - 1, 0)], current); break;
+        case "Home": action = select(visible[0], current); break;
+        case "End": action = select(visible.at(-1), current); break;
         case "ArrowRight":
-            if (toggle?.getAttribute("aria-expanded") === "false" && !toggle.disabled) toggle.click();
-            else if (toggle) focus(folder?.querySelector(".tree-branch .entry-row:not(:disabled), .tree-branch .folder-label:not(:disabled)"));
+            if (toggle?.getAttribute("aria-expanded") === "false" && !toggle.disabled) action = { kind: "toggle", id: current.dataset.id };
+            else if (toggle) action = select(folder?.querySelector(".tree-branch .entry-row:not(:disabled), .tree-branch .folder-label:not(:disabled)"), current);
             break;
         case "ArrowLeft":
-            if (toggle?.getAttribute("aria-expanded") === "true" && !toggle.disabled) toggle.click();
+            if (toggle?.getAttribute("aria-expanded") === "true" && !toggle.disabled) action = { kind: "toggle", id: current.dataset.id };
             else {
-                const parent = current.closest("li")?.parentElement?.closest(".tree-folder");
-                focus(parent?.querySelector(".folder-label"));
+                const parent = current?.closest("li")?.parentElement?.closest(".tree-folder");
+                action = select(parent?.querySelector(".folder-label"), current);
             }
             break;
         default: return;
     }
     event.preventDefault();
     event.stopPropagation();
+    dioxus.send(action ?? { kind: "activity" });
 };
-tree.addEventListener("keydown", keydown);
+document.addEventListener("keydown", keydown);
 try {
     await dioxus.recv();
 } finally {
-    tree.removeEventListener("keydown", keydown);
+    document.removeEventListener("keydown", keydown);
 }
