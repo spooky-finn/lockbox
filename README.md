@@ -2,6 +2,8 @@
 
 **Local-first, serverless password manager for teams, powered by S3-compatible storage.**
 
+![Lockbox desktop app showing folders and a saved login in dark mode](docs/images/lockbox-screenshot.png)
+
 Keep passwords, TOTP codes, and attachments in encrypted vaults on your own devices. Share access with your team through an object storage bucket, with local edits available offline and encrypted changes exchanged in the background.
 
 Lockbox runs as a Rust desktop application built with Dioxus. Team synchronization uses object storage directly, so there is no dedicated Lockbox application server to deploy or maintain. The current storage integration targets Storj through its S3-compatible API; compatibility with other S3 providers has not been established.
