@@ -369,7 +369,7 @@ progress::-webkit-progress-value { background: var(--accent); border-radius: 99p
 progress::-moz-progress-bar { background: var(--accent); border-radius: 99px; }
 .notes-row { align-items: start; }
 .notes-row dt { padding-top: 2px; }
-.notes { white-space: pre-wrap; line-height: 1.5; font-size: 12px; }
+.notes { align-items: flex-start; white-space: pre-wrap; line-height: 1.5; font-size: 12px; }
 .entry-actions { flex-wrap: nowrap; gap: 2px; margin-left: auto; }
 .entry-actions .icon-button { color: var(--muted); border-radius: var(--button-radius); }
 .entry-actions .danger:hover { color: var(--error); }
@@ -630,13 +630,13 @@ button.copy-value:disabled { opacity: 1; }
 /* Record fields keep the same geometry in reading and editing modes. */
 .record-save { flex-shrink: 0; gap: 7px; }
 button.copy-value.title-value { display: block; font: inherit; line-height: 1.2; letter-spacing: inherit; width: 100%; min-height: 26px; padding: 0; margin: 0; }
-button.copy-value.notes-value { width: 100%; white-space: pre-wrap; align-items: flex-start; }
+.notes-value { -webkit-user-select: text; user-select: text; cursor: text; }
 .copy-value-group { position: relative; }
 .copy-value-group .copy-indicator { position: absolute; right: 0; padding: 3px 6px; border-radius: 5px; background: var(--surface); pointer-events: none; }
 .entry-detail .detail-title { position: relative; }
 .entry-detail .detail-title > .copy-indicator { position: absolute; top: 100%; }
 .entry-detail .notes { position: relative; }
-.entry-detail .notes > .copy-indicator { position: absolute; right: 0; bottom: 0; padding: 3px 6px; border-radius: 5px; background: var(--surface); }
+.entry-detail .notes > .copy-indicator { position: absolute; right: 32px; top: 0; padding: 3px 6px; border-radius: 5px; background: var(--surface); pointer-events: none; -webkit-user-select: none; user-select: none; }
 .entry-detail button.copy-value:hover:not(:disabled) { background: var(--control); }
 .entry-detail button.copy-value:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
 .draft.entry-detail { width: 100%; max-width: none; padding: 0; border-radius: 0; background: transparent; }

@@ -113,7 +113,21 @@ pub(crate) fn EntryView() -> Element {
                 }
                 if entry.totp.is_some() { TotpField {} }
 
-                div { class: "field-row notes-row", dt { {language.text(Text::Note)} } dd { class: "notes", onclick: move |_| queue_copy(state, copied, pending_copy, CopyField::Notes), ondoubleclick: move |_| { cancel_copy(pending_copy); edit_unlocked(state, |u| u.edit_field(Field::Notes)); }, button { class: "quiet copy-value notes-value", aria_label: language.text(Text::CopyNotes), if entry.notes.is_empty() { span { class: "muted", "—" } } else { "{entry.notes}" } } if notes_copied { span { class: "copy-indicator", role: "status", {language.text(Text::Copied)} } } } }
+                div { class: "field-row notes-row",
+                    dt { {language.text(Text::Note)} }
+                    dd { class: "notes",
+                        span { class: "field-value notes-value",
+                            if entry.notes.is_empty() { span { class: "muted", "—" } }
+                            else { "{entry.notes}" }
+                        }
+                        if !entry.notes.is_empty() {
+                            IconButton { class: "quiet field-copy", label: language.text(Text::CopyNotes), icon: Icon::Copy,
+                                onclick: move |_| copy_value(state, copied, CopyField::Notes),
+                            }
+                        }
+                        if notes_copied { span { class: "copy-indicator", role: "status", {language.text(Text::Copied)} } }
+                    }
+                }
             }
 
             if !entry.attachments.is_empty() {

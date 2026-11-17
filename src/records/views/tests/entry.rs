@@ -197,6 +197,81 @@ fn double_click_edits_and_escape_asks_before_closing_changed_record() {
 }
 
 #[test]
+fn notes_render_as_plain_text_and_explicit_copy_preserves_the_full_text() {
+    use crate::{
+        desktop::{context::SecurityHandle, i18n::Text},
+        platform::clipboard::{Guard, tests::FakeBoard},
+        settings::language::Language,
+    };
+    use dioxus::{
+        dioxus_core::{AttributeValue, Mutation},
+        html::{EventData, SerializedHtmlEventConverter, SerializedMouseData},
+        prelude::*,
+    };
+    use kuchikiki::traits::TendrilSink;
+
+    let executor = tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .unwrap();
+    let _executor_guard = executor.enter();
+    dioxus::html::set_event_converter(Box::new(SerializedHtmlEventConverter));
+    let mut dom = VirtualDom::new(crate::desktop::view_test_support::fixture);
+    dom.rebuild_in_place();
+    let text = "First <line>\nSelected part\nLast line";
+    let board = FakeBoard::default();
+    *board.0.borrow_mut() = Some("earlier selection".into());
+    dom.in_scope(ScopeId::APP, || {
+        edit_unlocked(consume_context(), |u| {
+            u.vault.test_entries_mut()[0].notes = text.into()
+        });
+        consume_context::<SecurityHandle>().borrow_mut().clipboard =
+            Guard::new(Box::new(board.clone()));
+    });
+    let changes = dom.render_immediate_to_vec();
+    let copy_label = Language::Russian.text(Text::CopyNotes);
+    let copy = changes
+        .edits
+        .iter()
+        .find_map(|edit| match edit {
+            Mutation::SetAttribute {
+                name: "aria-label",
+                value: AttributeValue::Text(label),
+                id,
+                ..
+            } if label == copy_label => Some(*id),
+            _ => None,
+        })
+        .unwrap();
+    let mouse = || {
+        Event::new(
+            EventData::Mouse(SerializedMouseData::default()).into_any(),
+            true,
+        )
+    };
+
+    let document = kuchikiki::parse_html()
+        .one(dioxus_ssr::render(&dom))
+        .document_node;
+    let note = document.select_first(".notes-value").unwrap();
+    assert_eq!(
+        note.name.local.as_ref(),
+        "span",
+        "note text must support native selection"
+    );
+    assert_eq!(note.text_contents(), text);
+    assert_eq!(board.0.borrow().as_deref(), Some("earlier selection"));
+
+    dom.runtime().handle_event("click", mouse(), copy);
+    dom.render_immediate_to_vec();
+    assert_eq!(board.0.borrow().as_deref(), Some(text));
+    assert!(dioxus_ssr::render(&dom).contains(Language::Russian.text(Text::Copied)));
+    update(&mut dom, |_| runtime::lock(None));
+    assert!(board.0.borrow().is_none());
+    assert!(!dioxus_ssr::render(&dom).contains("Selected part"));
+}
+
+#[test]
 fn clock_ticks_update_totp_without_rerendering_the_record_card() {
     use crate::desktop::context::Clock;
     use dioxus::prelude::*;
