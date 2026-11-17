@@ -602,7 +602,7 @@ button.copy-value:disabled { opacity: 1; }
 /* Space selection stays available both before and after unlocking. */
 .space-switcher { position: relative; min-width: 0; max-width: 100%; }
 .space-switch-trigger { position: relative; justify-content: flex-start; max-width: 100%; gap: 9px; padding: 4px 8px 4px 4px; border-color: transparent; background: transparent; box-shadow: none; text-align: left; }
-.space-trigger-label { display: flex; min-width: 0; }
+.space-trigger-label { display: flex; gap: 6px; min-width: 0; }
 .toolbar .space-trigger-label small { display: none; }
 .toolbar .space-switch-trigger { min-height: 28px; padding: 0 4px; gap: 6px; }
 .toolbar .brand-icon { width: 22px; height: 22px; flex-basis: 22px; border: 0; border-radius: 5px; background: transparent; box-shadow: none; }
