@@ -37,11 +37,8 @@ pub(crate) fn DraftView() -> Element {
     let automatic_favicon = entry.icon.is_none() && icons::favicon_url(&entry.url).is_some();
     rsx! {
         form { class: "draft entry-detail", onsubmit: move |event| { event.prevent_default(); edit_unlocked(state, |u| u.error = u.autosave_draft().err()); },
-            div { class: "entry-close",
-                IconButton { class: "quiet", icon: Icon::Close, label: language.text(Text::CloseEditor), onclick: move |_| edit_unlocked(state, |u| u.navigate(crate::desktop::workspace::Destination::Close)) }
-                span { class: "record-hint", {language.text(Text::RecordEditHint)} }
-            }
-            div { class: "detail-heading",
+            div { class: "detail-heading", title: language.text(Text::RecordEditHint),
+                span { class: "sr-only", {language.text(Text::RecordEditHint)} }
                 EntryIcon { title: entry.title.clone(), slug: entry.icon.clone(), url: entry.url.clone(), large: true }
                 div { class: "detail-title",
                     p { class: "detail-kind", {language.text(Text::Password)} }
@@ -52,6 +49,7 @@ pub(crate) fn DraftView() -> Element {
                     onclick: move |_| edit_unlocked(state, |u| u.error = u.save_draft().err()),
                     Symbol { icon: Icon::Save } {language.text(Text::Save)}
                 }
+                IconButton { class: "quiet entry-dismiss", icon: Icon::Close, label: language.text(Text::CloseEditor), onclick: move |_| edit_unlocked(state, |u| u.navigate(crate::desktop::workspace::Destination::Close)) }
             }
             dl { class: "fields",
                 div { class: "field-row", dt { label { r#for: "entry-username", {language.text(Text::Username2)} } }

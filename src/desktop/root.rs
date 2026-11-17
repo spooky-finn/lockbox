@@ -46,15 +46,11 @@ pub fn App() -> Element {
                     runtime::record_activity();
                 }
             },
-            if cfg!(target_os = "macos") {
-                div { class: "window-drag-region", aria_hidden: "true",
-                    onmousedown: move |_| dioxus::desktop::window().drag(),
-                }
-            }
-
             crate::desktop::tabs::TabBar {}
             crate::desktop::browser::BrowserConsent {}
-            if locked() { LockedView { key: "{active_tab}" } } else { UnlockedView { key: "{active_tab}" } }
+            div { id: "space-tab-content", class: "space-tab-content", role: "tabpanel", aria_labelledby: "space-tab-{active_tab}",
+                if locked() { LockedView { key: "{active_tab}" } } else { UnlockedView { key: "{active_tab}" } }
+            }
         }
     }
 }

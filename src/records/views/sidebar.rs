@@ -134,7 +134,7 @@ pub(crate) fn Sidebar() -> Element {
                 aria_label: language.text(Text::ResizeSidebar),
                 title: language.text(Text::ResizeSidebar),
                 aria_orientation: "vertical", aria_controls: "vault-sidebar",
-                aria_valuemin: "200", aria_valuemax: "480", aria_valuenow: "240",
+                aria_valuemin: "200", aria_valuemax: "480", aria_valuenow: "224",
             }
         }
     }

@@ -51,6 +51,9 @@ pub(crate) fn activate(index: usize) {
         .clipboard
         .clear_now();
     tabs.write().activate(index);
+    let _ = document::eval(
+        "requestAnimationFrame(() => document.querySelector('.space-tab.active')?.scrollIntoView({block: 'nearest', inline: 'nearest'}))",
+    );
     crate::desktop::runtime::publish_status();
 }
 
@@ -142,8 +145,16 @@ pub(crate) fn TabBar() -> Element {
     let tabs = use_context::<Signal<Tabs>>();
     let settings = use_context::<Signal<Settings>>();
     let tabs = tabs.read();
+    let active = tabs.sessions[tabs.active].read();
+    let busy = matches!(&*active, Screen::Locked(f) if f.busy())
+        || matches!(&*active, Screen::Unlocked(u) if u.import.busy());
     rsx! {
         nav { class: "space-tabs", aria_label: language.text(Text::YourSpaces),
+            if cfg!(target_os = "macos") {
+                div { class: "space-tabs-window-controls", aria_hidden: "true",
+                    onmousedown: move |_| dioxus::desktop::window().drag(),
+                }
+            }
             div { class: "space-tab-list", role: "tablist",
                 onkeydown: move |event: KeyboardEvent| {
                     let tabs = consume_context::<Signal<Tabs>>();
@@ -156,23 +167,35 @@ pub(crate) fn TabBar() -> Element {
                     };
                     if let Some(next) = next {
                         event.prevent_default(); event.stop_propagation(); activate(next);
-                        let _ = document::eval("document.querySelector('[role=tab][aria-selected=true]')?.focus()");
+                        let _ = document::eval("requestAnimationFrame(() => document.querySelector('[role=tab][aria-selected=true]')?.focus())");
                     }
                 },
                 for (index, session) in tabs.sessions.iter().enumerate() {
                     { let screen = session.read();
                       let label = match &*screen {
-                        Screen::Unlocked(_) => crate::desktop::window::title(&screen, settings.read().config.language),
+                        Screen::Unlocked(u) => u.vault.profile_summary().map(|p| p.space_name.to_owned())
+                            .unwrap_or_else(|| u.vault.path().file_stem().unwrap_or_default().to_string_lossy().into_owned()),
                         Screen::Locked(f) => f.space_name.clone().or_else(|| f.path.as_ref().map(|p| settings.read().config.space_names.get(p).cloned().unwrap_or_else(|| p.file_stem().unwrap_or_default().to_string_lossy().into_owned()))).unwrap_or_else(|| language.text(Text::ChooseSpace).to_owned()),
                       };
+                      let (icon, tooltip) = match &*screen {
+                        Screen::Unlocked(u) => (if u.vault.profile_summary().is_some() { Icon::Cloud } else { Icon::Folder },
+                            format!("{}\n{}", crate::desktop::window::title(&screen, settings.read().config.language), u.vault.path().display())),
+                        Screen::Locked(f) => (Icon::Lock, f.path.as_ref().map(|p| format!("{label}\n{}", p.display())).unwrap_or_else(|| label.clone())),
+                      };
                       rsx! { div { key: "{index}", class: if index == tabs.active { "space-tab active" } else { "space-tab" },
-                        button { class: "space-tab-select", r#type: "button", role: "tab", aria_selected: (index == tabs.active).to_string(), title: "{label}", onclick: move |_| activate(index), "{label}" }
-                        button { class: "space-tab-close quiet", r#type: "button", aria_label: format!("{}: {label}", language.text(Text::MenuCloseTab)), disabled: !screen.can_switch_profile(), onclick: move |_| close(index), Symbol { icon: Icon::Close } }
+                        button { id: "space-tab-{index}", class: "space-tab-select", r#type: "button", role: "tab", aria_label: "{label}", aria_controls: "space-tab-content", tabindex: if index == tabs.active { "0" } else { "-1" }, disabled: busy, aria_selected: (index == tabs.active).to_string(), title: "{tooltip}", onclick: move |_| activate(index),
+                            span { class: "space-tab-icon", aria_hidden: "true", Symbol { icon } }
+                            span { class: "space-tab-label", "{label}" }
+                        }
+                        button { class: "space-tab-close quiet", r#type: "button", aria_label: format!("{}: {label}", language.text(Text::MenuCloseTab)), title: format!("{}: {label}", language.text(Text::MenuCloseTab)), disabled: !screen.can_switch_profile(), onclick: move |_| close(index), Symbol { icon: Icon::Close } }
                       } }
                     }
                 }
             }
-            button { class: "quiet icon-button", r#type: "button", aria_label: language.text(Text::MenuNewTab), title: language.text(Text::MenuNewTab), onclick: move |_| new_tab(), Symbol { icon: Icon::Plus } }
+            button { class: "space-tab-add quiet icon-button", r#type: "button", disabled: busy, aria_label: language.text(Text::MenuNewTab), title: language.text(Text::MenuNewTab), onclick: move |_| new_tab(), Symbol { icon: Icon::Plus } }
+            div { class: "space-tabs-drag", aria_hidden: "true",
+                onmousedown: move |_| { if cfg!(target_os = "macos") { dioxus::desktop::window().drag(); } },
+            }
         }
     }
 }

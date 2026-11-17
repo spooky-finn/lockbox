@@ -1,0 +1,12 @@
+Native layout refresh
+
+- Compact macOS direction: shared title/tab bar, 36px workspace toolbar, single-line space identity.
+- Sidebar default 224px; resize range stays 200–480px. Denser tree rows, search, footer; labels stay readable.
+- Record title, edit/history/delete/close share header. Instruction text moves to tooltip + screen-reader text.
+- Detail/editor/directory/settings panes use available width; removes 720px record cap.
+- Fields use 104px label column, 44px minimum row, 8px vertical padding. Read/edit controls align at 28px.
+- TOTP + countdown share line; notes wrap at full pane width. Copy actions reveal on row hover/focus; touch keeps them visible.
+- Routine sync shows icon + pending count; tooltip retains full status. Warnings and retry remain visible; live announcements stay available.
+- Light/dark desktop + 360px narrow browser previews inspected with synthetic data.
+- Validation: 73 desktop tests + 15 record-view tests pass; 1 performance probe ignored. Format/diff checks pass.
+- Build and all-target Clippy pass; existing dead-code warnings remain. Restart running app to load compiled layout.
