@@ -1,9 +1,7 @@
 name: Release
-run-name: ${{ github.event_name == 'push' && github.event.head_commit.message || format('Release {0}', inputs.version) }}
+run-name: Release ${{ inputs.version }}
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       version:
@@ -23,7 +21,7 @@ permissions:
   contents: read
 
 concurrency:
-  # An unchanged-version push must not replace a pending version-bump run.
+  # Keep manual releases tied to their selected commit.
   group: release-${{ github.sha }}
   cancel-in-progress: false
 
