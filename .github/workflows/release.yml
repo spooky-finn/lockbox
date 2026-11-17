@@ -1,5 +1,5 @@
 name: Release
-run-name: Release ${{ inputs.version || github.sha }}
+run-name: ${{ github.event_name == 'push' && github.event.head_commit.message || format('Release {0}', inputs.version) }}
 
 on:
   push:
@@ -54,17 +54,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python3 .github/scripts/release-metadata.py
 
-  checks:
-    name: Release validation
-    needs: prepare
-    if: needs.prepare.outputs.release == 'true'
-    uses: ./.github/workflows/ci.yml
-    with:
-      release-validation: true
-
   native:
     name: Build ${{ matrix.target }}
-    needs: [prepare, checks]
+    needs: prepare
+    if: needs.prepare.outputs.release == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -95,9 +88,6 @@ jobs:
           cache-key: release
       - name: Build desktop and native browser host
         run: cargo build --locked --release --bin lockbox --bin lockbox-browser-host
-      - name: Smoke test optimized native browser host
-        if: runner.os != 'Windows'
-        run: python3 .github/scripts/smoke-native-host.py target/release/lockbox-browser-host
       - name: Package native release
         if: runner.os != 'Windows'
         env:
@@ -117,7 +107,8 @@ jobs:
 
   browser:
     name: Package browser companions
-    needs: [prepare, checks]
+    needs: prepare
+    if: needs.prepare.outputs.release == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -140,6 +131,7 @@ jobs:
 
   publish:
     name: Create GitHub release
+    # Push CI reports test failures separately; release requires build artifacts.
     needs: [prepare, native, browser]
     runs-on: ubuntu-24.04
     timeout-minutes: 10

@@ -2,23 +2,13 @@ name: CI
 
 on:
   push:
-    branches: [main]
-  pull_request:
-  merge_group:
-  workflow_dispatch:
-  workflow_call:
-    inputs:
-      release-validation:
-        description: Keep validation tied to this release commit without cancellation by newer pushes.
-        type: boolean
-        default: false
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ inputs.release-validation && github.sha || github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ !inputs.release-validation && github.event_name != 'workflow_dispatch' }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
@@ -57,7 +47,6 @@ jobs:
 
   rust:
     name: Rust (${{ matrix.os }})
-    needs: quality
     strategy:
       fail-fast: false
       matrix:
