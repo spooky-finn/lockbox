@@ -448,14 +448,6 @@ pub(crate) fn pick_vault(create: bool) {
     });
 }
 
-pub(crate) fn forget_path() {
-    let mut settings = consume_context::<Signal<Settings>>();
-    let mut state = consume_context::<Session>();
-    let mut form = Locked::new(None);
-    form.error = settings.write().remember(None).err();
-    *state.write() = Screen::Locked(Box::new(form));
-}
-
 pub(crate) fn set_touch_id(wanted: bool) {
     let mut state = consume_context::<Session>();
     let mut settings = consume_context::<Signal<Settings>>();

@@ -40,18 +40,6 @@ impl Settings {
         self.save()
     }
 
-    pub fn remember(&mut self, path: Option<PathBuf>) -> Result<(), String> {
-        self.update(|config| {
-            if path.is_none()
-                && let Some(previous) = &config.last_vault
-            {
-                config.space_names.remove(previous);
-                config.recent_vaults.retain(|path| path != previous);
-            }
-            config.last_vault = path;
-        })
-    }
-
     pub fn remember_profile(
         &mut self,
         path: PathBuf,

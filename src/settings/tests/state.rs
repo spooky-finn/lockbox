@@ -49,10 +49,6 @@ fn tabs_keep_each_others_changes() {
             .map(String::as_str),
         Some("Семья")
     );
-    first.remember(None).unwrap();
-    let forgotten = Config::load(&path);
-    assert!(forgotten.last_vault.is_none());
-    assert!(forgotten.space_names.is_empty());
 }
 
 #[test]
@@ -85,6 +81,4 @@ fn profiles_survive_restart_include_legacy_cloud_names_and_do_not_duplicate() {
         restarted.config.recent_vaults,
         vec![local.clone(), cloud.clone()]
     );
-    first.remember(None).unwrap();
-    assert_eq!(at(&path).known_profiles(), vec![cloud, legacy]);
 }
