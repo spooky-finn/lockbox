@@ -128,27 +128,27 @@ h2 { font-size: 15px; font-weight: 600; letter-spacing: -.2px; }
 .is-locked .window-drag-region { height: 36px; }
 .sidebar { background: var(--subtle); border-right: 1px solid var(--border); }
 
-/* A quiet, native-style lock screen; the vault controls stay in a discreet dock. */
+/* Lock screen with labeled actions at the bottom right. */
 .app.is-locked { color: var(--lock-ink); background: var(--lock-canvas); }
 .app.is-locked { background-image: var(--canvas-image, none); }
 .app.is-locked::before { display: none; }
-.lock-screen { position: relative; flex: 1; min-height: 0; display: grid; place-items: center; padding: 56px 24px; overflow: auto; }
-.unlock-content { width: 100%; max-width: 420px; display: flex; flex-direction: column; align-items: center; margin: auto; text-align: center; }
-.lock-emblem { position: relative; width: 96px; height: 96px; flex: 0 0 96px; margin: 0 0 32px; }
-.lock-mark { filter: drop-shadow(0 3px 3px rgb(0 0 0 / 10%)); }
-.lock-mark > svg { display: block; width: 96px; height: 96px; }
-.lock-emblem .lock-badge { position: absolute; right: -12px; bottom: -12px; display: grid; place-items: center; width: 42px; height: 42px; min-height: 42px; padding: 9px; border-radius: 50%; border: 1px solid rgb(255 255 255 / 5%); color: #c0c3c7; background: #292b2d; box-shadow: 0 3px 9px rgb(0 0 0 / 16%); }
-.lock-badge > .symbol { width: 23px; height: 23px; }
+.lock-screen { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 32px; padding: 80px 24px 20px; overflow: auto; }
+.unlock-content { width: 100%; max-width: 420px; flex: 1 0 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; margin: auto; text-align: center; }
+.lock-emblem { position: relative; width: 64px; height: 64px; flex: 0 0 64px; margin: 0 0 24px; }
+.lock-mark { width: 100%; height: 100%; filter: drop-shadow(0 3px 3px rgb(0 0 0 / 10%)); }
+.lock-mark > svg { display: block; width: 100%; height: 100%; }
+.lock-emblem .lock-badge { position: absolute; right: -8px; bottom: -8px; display: grid; place-items: center; width: 32px; height: 32px; min-height: 32px; padding: 6px; border-radius: 50%; border: 1px solid rgb(255 255 255 / 5%); color: #c0c3c7; background: #292b2d; box-shadow: 0 3px 9px rgb(0 0 0 / 16%); }
+.lock-badge > .symbol { width: 18px; height: 18px; }
 .lock-emblem button.lock-badge { border-radius: var(--button-radius); }
 .lock-emblem .touch-id { color: #ff536f; }
-.lock-emblem .touch-id > .symbol { width: 29px; height: 29px; }
+.lock-emblem .touch-id > .symbol { width: 22px; height: 22px; }
 .lock-emblem button.lock-badge:hover:not(:disabled) { background: #36383b; box-shadow: 0 3px 9px rgb(0 0 0 / 20%); }
 .unlock-title { font-size: 20px; font-weight: 650; line-height: 1.25; letter-spacing: -.5px; }
 .unlock-description { max-width: 320px; margin-top: 12px; color: var(--lock-secondary); font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
 .unlock-form { display: flex; flex-direction: column; gap: 12px; width: 240px; max-width: 100%; margin-top: 28px; }
 .lock-screen.recovery-screen { display: flex; flex-direction: column; gap: 24px; }
 .recovery-screen .unlock-content { flex: 0 0 auto; }
-.recovery-screen .lock-actions { position: static; transform: none; }
+.recovery-screen .lock-actions { margin-top: auto; }
 .recovery-screen .unlock-form { width: 100%; }
 .recovery-screen .unlock-content > .notice { margin: 12px 0; font-size: 12px; }
 .recovery-label { margin-top: 6px; font-weight: 600; text-align: left; }
@@ -187,10 +187,11 @@ h2 { font-size: 15px; font-weight: 600; letter-spacing: -.2px; }
 .unlock-input > .unlock-submit:hover:not(:disabled) { color: var(--lock-ink); background: var(--control); }
 .unlock-feedback { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 340px; margin-top: 18px; font-size: 12px; }
 .unlock-feedback .muted { color: var(--lock-secondary); }
-.lock-actions { position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); display: flex; align-items: center; justify-content: center; gap: 8px; }
-.lock-actions > .icon-button { color: var(--lock-secondary); opacity: .65; }
-.lock-actions > .icon-button:hover, .lock-actions > .icon-button:focus-visible { opacity: 1; }
-.lock-actions > .icon-button:hover:not(:disabled) { color: var(--lock-ink); background: var(--control); }
+.lock-actions { align-self: flex-end; flex: 0 0 auto; display: flex; flex-direction: column; align-items: stretch; gap: 4px; max-width: 100%; }
+.lock-actions > button { justify-content: flex-start; padding: 8px 12px; color: var(--lock-secondary); text-align: left; font-size: 13px; }
+.lock-actions > button > .symbol { width: 18px; height: 18px; flex: 0 0 18px; }
+.lock-actions > button > span { overflow-wrap: anywhere; }
+.lock-actions > button:hover:not(:disabled), .lock-actions > button:focus-visible { color: var(--lock-ink); background: var(--control); }
 .lock-screen :focus-visible { outline-color: var(--lock-focus); }
 
 /* Toolbar and preferences */
@@ -508,7 +509,7 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 99px; }
     .entry-icon.large { width: 32px; height: 32px; flex-basis: 32px; border-radius: 8px; }
     .field-row { grid-template-columns: 1fr; gap: 6px; padding: 13px 0; }
     .field-row dd { min-height: 30px; }
-    .lock-screen { padding: 40px 24px 64px; }
+    .lock-screen { padding: 80px 24px 20px; }
     .unlock-title { font-size: 19px; }
     .unlock-description { font-size: 13px; }
     .draft { padding: 14px 12px; }
@@ -528,7 +529,7 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 99px; }
     .sidebar, .toolbar > .actions { border-color: var(--muted); background: var(--glass-solid); }
     .entry-row.selected, .folder-row.selected { outline: 2px solid var(--accent); outline-offset: -2px; }
     .unlock-input { border-color: var(--lock-ink); }
-    .lock-actions > .icon-button { opacity: 1; }
+    .lock-actions > button { color: var(--lock-ink); }
 }
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
@@ -536,9 +537,9 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 99px; }
 }
 
 @media (max-height: 620px) {
-    .lock-screen { display: flex; flex-direction: column; gap: 32px; padding: 28px 24px 16px; }
+    .lock-screen { padding-bottom: 16px; }
     .unlock-content { flex: 0 0 auto; }
-    .lock-actions { position: static; transform: none; flex: 0 0 auto; margin: 0 auto; }
+    .lock-actions { margin-top: auto; }
 }
 
 .storage-choices { display: flex; flex-direction: column; gap: 12px; width: 100%; margin-top: 24px; }
@@ -548,7 +549,7 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 99px; }
 .cloud-setup { display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 20px; text-align: left; }
 .cloud-setup input { width: 100%; padding: 10px 12px; border: 1px solid var(--lock-secondary); border-radius: 8px; background: var(--control); color: var(--lock-ink); }
 .lock-screen:has(.cloud-setup) { overflow-y: auto; }
-.lock-screen:has(.cloud-setup) .lock-actions { position: static; transform: none; margin-top: 24px; }
+.lock-screen:has(.cloud-setup) .lock-actions { margin-top: 24px; }
 .setup-button { padding: 10px 14px; border: 1px solid var(--lock-secondary); border-radius: var(--button-radius); color: var(--lock-ink); background: var(--control); cursor: pointer; }
 .setup-button:focus-visible { outline: 2px solid var(--lock-ink); outline-offset: 2px; }
 .storj-guide { white-space: pre-wrap; font: inherit; line-height: 1.5; }

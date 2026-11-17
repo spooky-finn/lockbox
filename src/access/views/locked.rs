@@ -256,18 +256,24 @@ pub(crate) fn LockedView() -> Element {
                 }
             }
             nav { class: "lock-actions", aria_label: language.text(Text::VaultActions),
-                IconButton { class: "quiet", icon: Icon::Folder, label: language.text(Text::OpenVault), disabled: busy,
+                button { r#type: "button", class: "quiet", disabled: busy,
                     onclick: move |_| runtime::pick_vault(false),
+                    Symbol { icon: Icon::FolderOpen }
+                    span { {language.text(Text::OpenVault)} }
                 }
-                IconButton { class: "quiet", icon: Icon::FolderPlus, label: language.text(Text::CreateVault2), disabled: busy,
+                button { r#type: "button", class: "quiet", disabled: busy,
                     onclick: move |_| runtime::begin_create(),
+                    Symbol { icon: Icon::FolderPlus }
+                    span { {language.text(Text::CreateVault2)} }
                 }
 
-                button { class: "quiet", disabled: busy, onclick: move |_| runtime::begin_join(),
-                    {language.text(Text::SharingConnect)}
+                button { r#type: "button", class: "quiet", disabled: busy, onclick: move |_| runtime::begin_join(),
+                    Symbol { icon: Icon::Cloud }
+                    span { {language.text(Text::SharingConnect)} }
                 }
-                button { class: "quiet", disabled: busy, onclick: move |_| runtime::begin_cloud_restore(),
-                    {language.text(Text::CloudRestore)}
+                button { r#type: "button", class: "quiet", disabled: busy, onclick: move |_| runtime::begin_cloud_restore(),
+                    Symbol { icon: Icon::Reset }
+                    span { {language.text(Text::CloudRestore)} }
                 }
             }
         }
