@@ -456,3 +456,64 @@ fn dependency_hints_keep_order_duplicates_and_variant_limits() {
     signed.body.closed_frontier.clear();
     assert!(hints(&control).is_empty());
 }
+
+#[test]
+fn pairing_slots_preserve_profile_encoding_and_mailbox_addresses() {
+    use crate::sync::protocol::pairing::Slot;
+    use serde_json::json;
+
+    let request = Hash([8; 32]);
+    let session = Hash([7; 32]);
+    let hash = "08".repeat(32);
+    // These names and limits are shared by persisted deliveries and provider keys.
+    for (slot, kind, key, budget, addressed) in [
+        (Slot::Ticket(request), "ticket", "ticket", 8192, true),
+        (
+            Slot::Bootstrap,
+            "bootstrap",
+            "bootstrap",
+            100_663_296,
+            false,
+        ),
+        (Slot::Request(request), "request", "requests", 65536, true),
+        (Slot::Offer(request), "offer", "offers", 134_221_824, true),
+        (Slot::Consent(request), "consent", "consents", 65536, true),
+        (
+            Slot::Receipt(request),
+            "receipt",
+            "receipts",
+            134_221_824,
+            true,
+        ),
+        (Slot::Joined(request), "joined", "joined", 65536, true),
+        (Slot::Rejected(request), "rejected", "rejected", 65536, true),
+        (Slot::Status, "status", "status", 65536, false),
+    ] {
+        let fixture = if addressed {
+            json!({"kind": kind, "request": hash})
+        } else {
+            json!({"kind": kind})
+        };
+        assert_eq!(serde_json::to_value(slot).unwrap(), fixture);
+        assert_eq!(serde_json::from_value::<Slot>(fixture).unwrap(), slot);
+        assert_eq!(slot.budget(), budget);
+        let key = if addressed && kind != "ticket" {
+            format!("{key}/{hash}")
+        } else {
+            key.to_owned()
+        };
+        assert_eq!(slot.key(), key);
+        assert_eq!(
+            slot.address(session),
+            if kind == "ticket" { request } else { session }
+        );
+    }
+    for invalid in [
+        json!({"kind": "unknown"}),
+        json!({"kind": "request"}),
+        json!({"kind": "request", "request": "08"}),
+        json!({"kind": "status", "extra": true}),
+    ] {
+        assert!(serde_json::from_value::<Slot>(invalid).is_err());
+    }
+}

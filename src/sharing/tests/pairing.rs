@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    sharing::transport::Mailbox,
+    sync::transport::pairing::Mailbox,
     sync::{
         protocol::Role,
         transport::{Cancellation, Page},

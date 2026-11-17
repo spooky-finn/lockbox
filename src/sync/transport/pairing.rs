@@ -1,11 +1,11 @@
 //! Bounded contact mailbox. Credentials are provisioned independently; links grant no storage rights.
 
-use crate::{
-    sync::{
-        protocol::{Hash, pairing::MAX_CONTACT_BYTES},
-        transport::{Cancellation, Page, Result},
+use crate::sync::{
+    protocol::{
+        Hash,
+        pairing::{MAX_CONTACT_BYTES, Slot},
     },
-    vault::profile::pairing::Slot,
+    transport::{Cancellation, Page, Result},
 };
 
 pub(crate) trait Mailbox: Send {

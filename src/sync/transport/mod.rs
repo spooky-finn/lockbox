@@ -202,6 +202,7 @@ pub fn upload(
 #[cfg(test)]
 mod tests;
 
+pub(crate) mod pairing;
 pub(crate) mod provider;
 /// Storj S3 provider adapter.
 pub mod storj;

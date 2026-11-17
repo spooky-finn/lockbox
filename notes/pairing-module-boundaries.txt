@@ -1,0 +1,19 @@
+Pairing module boundaries
+
+Protocol owns Slot: serialized tags, mailbox keys, ticket/session addressing,
+per-slot byte budgets. Profile deliveries reuse protocol schema unchanged.
+Transport owns Mailbox/MailboxFactory plus chunk manifest contract.
+Storj adapter depends on transport/protocol; no sharing or vault type imports.
+Vault remains default provider composition point, matching existing StorageFactory.
+
+Vault pairing root owns commands, approval policy, local progression.
+receive owns bounded untrusted input, authentication, admission transitions.
+delivery owns durable outbox, probe plans, acknowledgements, retries, save gate.
+Helpers shared only within pairing subtree. Public Vault facade unchanged.
+
+Publication plans require pending-save reconciliation before worker handoff.
+Retries retain exact ciphertext. Signature, consent, expiry, admission checks
+preserve existing order. No storage schema or remote key migration.
+
+Tradeoff: split by trust/durability boundaries; keep commands together.
+No generic state-machine wrapper or new provider interface: existing ports suffice.

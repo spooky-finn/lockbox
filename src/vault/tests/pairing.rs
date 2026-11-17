@@ -1,6 +1,7 @@
 use super::*;
 use crate::{
     records::entry::Entry,
+    sync::protocol::Invitation,
     vault::{ProfileStore, witness::MemoryWitness},
 };
 use secrecy::SecretString;

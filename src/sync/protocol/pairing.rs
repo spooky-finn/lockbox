@@ -18,6 +18,59 @@ const REQUEST_DOMAIN: &[u8] = b"lockbox.pairing.request\0";
 const STATUS_DOMAIN: &[u8] = b"lockbox.pairing.status\0";
 const ACK_DOMAIN: &[u8] = b"lockbox.pairing.joined\0";
 
+/// Mailbox address contract shared by transport keys and persisted deliveries.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    content = "request",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
+pub(crate) enum Slot {
+    Ticket(Hash),
+    Bootstrap,
+    Request(Hash),
+    Offer(Hash),
+    Consent(Hash),
+    Receipt(Hash),
+    Joined(Hash),
+    Rejected(Hash),
+    Status,
+}
+
+impl Slot {
+    pub fn key(self) -> String {
+        match self {
+            Self::Ticket(_) => "ticket".into(),
+            Self::Bootstrap => "bootstrap".into(),
+            Self::Status => "status".into(),
+            Self::Request(id) => format!("requests/{id}"),
+            Self::Offer(id) => format!("offers/{id}"),
+            Self::Consent(id) => format!("consents/{id}"),
+            Self::Receipt(id) => format!("receipts/{id}"),
+            Self::Joined(id) => format!("joined/{id}"),
+            Self::Rejected(id) => format!("rejected/{id}"),
+        }
+    }
+
+    /// Ticket lookup precedes discovery of the random pairing session ID.
+    pub fn address(self, session: Hash) -> Hash {
+        match self {
+            Self::Ticket(hash) => hash,
+            _ => session,
+        }
+    }
+
+    pub fn budget(self) -> usize {
+        match self {
+            Self::Ticket(_) => crate::sync::protocol::pairing::MAX_TICKET_BYTES,
+            Self::Bootstrap => crate::sync::protocol::MAX_INVITATION_BYTES,
+            Self::Offer(_) | Self::Receipt(_) => crate::sync::protocol::pairing::MAX_MESSAGE_BYTES,
+            _ => crate::sync::protocol::pairing::MAX_CONTACT_BYTES,
+        }
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct TicketBody {

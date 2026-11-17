@@ -41,6 +41,7 @@ flowchart TD
 | `sync/protocol/machine/membership.rs` | Owner authority, certificates, rosters, grants and epoch checkpoints | Provider permissions or discovery |
 | `sync/protocol/machine/authority/` | Exact controller handoff consent and root-approved recovery | Root password handling or publication |
 | `sync/protocol/machine/relay.rs` | Signature and ancestry checks for relayed closed ciphertext | Claims about unavailable old plaintext |
+| `sync/protocol/pairing.rs` | Link tickets, envelopes and mailbox slot schema, addresses and size limits | Local profile persistence or provider access |
 | `sync/protocol/invitation.rs` | Canonical public invitation, consent and receipt artifacts | Local cancellation policy or persistence |
 | `sync/protocol/machine/invitations.rs` | Addressed signature proofs, consent-bound admission and receipt verification | Clock-based expiry or artifact export |
 | `sync/protocol/machine/replay.rs` | Verified history, epoch closure, causal validation and projection | Disk writes or timestamp winners |
@@ -59,14 +60,28 @@ flowchart TD
 | `vault/root_journal.rs` | Exclusive root-claim reservation through the independent CAS store | Global freshness or automatic fork selection |
 | `vault/lease.rs` | Explicit lifetime of exclusive file locks | Cryptographic authority |
 | `vault/sharing.rs` | Durable artifact export, local issuance policy and join installation | Independent protocol authority |
+| `vault/pairing.rs` | Link commands, approval policy and invitation progression | Provider I/O or alternate admission authority |
+| `vault/pairing/receive.rs` | Bounded input authentication and addressed invitation transitions | Publication scheduling or provider construction |
+| `vault/pairing/delivery.rs` | Durable mailbox outbox, probe plans, publication acknowledgements and retries | Network I/O or alternate commit ordering |
+| `vault/profile/pairing.rs` | Persisted pairing state and validation | Mailbox address definitions or transport implementation |
 | `vault/profile/sharing.rs` | Bounded encrypted ledger and invitation status | Provider access or replicated event authority |
 | `vault/exchange.rs` | Candidate receive commits, acknowledgement rollback and retained pending commits | Signing new local mutations |
 | `sync/transport/mod.rs` | Bounded discovery, publication order and provider contracts | Which decrypted mutation is authorized |
+| `sync/transport/pairing.rs` | Mailbox/factory contracts and chunk manifest format | Vault state, membership authority or application workflows |
+| `sync/transport/storj/pairing.rs` | S3 mailbox keys, bounded chunk transfer and manifest verification | Invitation consent or local persistence |
 | `sync/transport/discovery.rs` | Ciphertext-only discovery requests, recursive reference GETs and paginated scans | Admission, signatures or plaintext validation |
 | `platform/jobs.rs` | Thread lifetime, cancellation and one result mailbox | Session status, retries or vault access |
 | `sync/transport/storj/mod.rs` | S3 request signing, HTTPS, provider configuration and client construction | User identity or space membership |
 | `sync/scheduler.rs` | Exchange phases, draft deferral, retry scheduling and status | HTTP construction, signing keys or cryptographic replay |
 | `sync/scheduler/schedule.rs` | Monotonic deadlines and backoff from explicit clock/jitter inputs | Provider errors or protocol authority |
+
+Pairing follows the same dependency direction: the mailbox adapter depends on
+`sync/transport/pairing.rs` and the slot schema in `sync/protocol/pairing.rs`.
+It does not import sharing workflows or vault persistence types. Encrypted
+profiles serialize the same slot schema used for provider addressing; moving its
+Rust definition does not migrate stored data. Incoming validation and durable
+publication planning remain separate private parts of the vault facade. A
+publication plan is exposed only after pending pairing saves are reconciled.
 
 The smaller modules are private implementation details. Existing callers still
 use `sync::protocol::Machine`, `sync::protocol::SyncState`, `vault::Vault`, and the

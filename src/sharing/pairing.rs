@@ -2,13 +2,12 @@
 
 use crate::{
     platform::jobs::Worker,
-    sharing::transport::MailboxFactory,
     sync::{
-        protocol::Hash,
+        protocol::{Hash, pairing::Slot},
         scheduler::SpaceSync,
-        transport::{Result as NetworkResult, TransportError},
+        transport::{Result as NetworkResult, TransportError, pairing::MailboxFactory},
     },
-    vault::{Vault, profile::pairing::Slot},
+    vault::Vault,
 };
 use std::{
     collections::{BTreeMap, BTreeSet},

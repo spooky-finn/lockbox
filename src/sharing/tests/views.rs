@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 #[test]
 fn short_link_copy_waits_for_upload_and_recipient_can_edit_a_pending_download() {
-    use crate::vault::profile::pairing::Slot;
+    use crate::sync::protocol::pairing::Slot;
     let directory = tempfile::tempdir().unwrap();
     let mut owner = vault(&directory, "owner");
     let guest = vault(&directory, "guest");
@@ -585,8 +585,8 @@ fn participant_names_are_rendered_and_saved_in_the_encrypted_profile() {
 
 #[test]
 fn admin_reviews_the_signed_name_and_exact_ids_before_approval() {
+    use crate::sync::protocol::pairing::Slot;
     use crate::sync::protocol::pairing::Ticket;
-    use crate::vault::profile::pairing::Slot;
     let directory = tempfile::tempdir().unwrap();
     let mut owner = vault(&directory, "owner");
     let mut guest = vault(&directory, "Alice <Device>");

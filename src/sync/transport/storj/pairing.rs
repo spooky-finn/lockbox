@@ -1,15 +1,15 @@
 //! Pairing documents use their own prefix; immutable sync object validation stays unchanged.
 
 use super::{Storj, StorjFactory};
-use crate::{
-    sharing::transport::{
-        CHUNK_BYTES, Document, MANIFEST_BYTES, Mailbox, MailboxFactory, chunk_hash, document_hash,
+use crate::sync::{
+    protocol::{Hash, canonical, decode, pairing::Slot},
+    transport::{
+        Cancellation, Page, Result, TransportError,
+        pairing::{
+            CHUNK_BYTES, Document, MANIFEST_BYTES, Mailbox, MailboxFactory, chunk_hash,
+            document_hash,
+        },
     },
-    sync::{
-        protocol::{Hash, canonical, decode},
-        transport::{Cancellation, Page, Result, TransportError},
-    },
-    vault::profile::pairing::Slot,
 };
 
 pub(crate) struct Factory(StorjFactory);
