@@ -10,6 +10,15 @@ use crate::{
 use std::collections::BTreeSet;
 
 impl Vault {
+    /// Cheap invalidation token for derived UI metadata. Not a durable revision.
+    pub(crate) fn records_revision(&self) -> u64 {
+        self.records_revision
+    }
+
+    pub(super) fn records_changed(&mut self) {
+        self.records_revision = self.records_revision.wrapping_add(1);
+    }
+
     pub fn entries(&self) -> &[Entry] {
         &self.entries
     }
@@ -32,6 +41,7 @@ impl Vault {
         shared: Option<Records>,
         undo_local: impl FnOnce(&mut Self),
     ) -> Result<()> {
+        self.records_changed();
         let result = self.save_changes();
         if result.is_err() {
             if let Some(previous) = shared {
@@ -170,10 +180,12 @@ impl Vault {
 #[cfg(test)]
 impl Vault {
     pub(crate) fn test_entries_mut(&mut self) -> &mut Vec<Entry> {
+        self.records_changed();
         &mut self.entries
     }
 
     pub(crate) fn test_folders_mut(&mut self) -> &mut Vec<Folder> {
+        self.records_changed();
         &mut self.folders
     }
 }

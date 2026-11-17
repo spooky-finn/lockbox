@@ -16,7 +16,19 @@ pub(crate) enum Page {
     Trash,
 }
 
+#[derive(Clone, PartialEq, Eq)]
+pub(crate) enum Destination {
+    Close,
+    NewEntry,
+    NewDirectory,
+    Entry(String),
+    Directory(Option<String>),
+    ToggleDirectory(String),
+    Page(Page),
+}
+
 pub(crate) struct Unlocked {
+    pub(crate) pending_navigation: Option<Destination>,
     pub(crate) favicon_cache: crate::records::favicon::Cache,
     pub(crate) page: Page,
     pub(crate) sync: crate::sync::scheduler::SpaceSync,
@@ -49,6 +61,7 @@ impl Unlocked {
             ..Directories::default()
         };
         Self {
+            pending_navigation: None,
             favicon_cache: Default::default(),
             page: Page::Vault,
             sync: crate::sync::scheduler::SpaceSync::default(),
@@ -66,6 +79,73 @@ impl Unlocked {
             error: None,
             record_created: 0,
             generator: generator::Options::default(),
+        }
+    }
+
+    pub(crate) fn draft_changed(&self) -> bool {
+        self.draft
+            .as_ref()
+            .is_some_and(|draft| !draft.is_empty() && !self.vault.entries().contains(&draft.entry))
+    }
+
+    pub(crate) fn navigate(&mut self, destination: Destination) {
+        if self.directories.draft.is_some() {
+            return;
+        }
+        if self.draft_changed() {
+            self.pending_navigation = Some(destination);
+        } else {
+            self.finish_navigation(destination);
+        }
+    }
+
+    fn finish_navigation(&mut self, destination: Destination) {
+        self.draft = None;
+        self.pending_navigation = None;
+        self.show_password = false;
+        self.error = None;
+        match destination {
+            Destination::Close => {
+                self.selected = None;
+                self.confirm_delete = false;
+            }
+            Destination::NewEntry => self.start_new(),
+            Destination::NewDirectory => self.start_directory(),
+            Destination::Entry(id) => self.select(id),
+            Destination::Directory(id) => self.select_directory(id),
+            Destination::ToggleDirectory(id) => {
+                let collapse =
+                    self.search.trim().is_empty() && !self.directories.collapsed.contains(&id);
+                self.select_directory(Some(id.clone()));
+                // Selection reveals ancestors; restore the requested closed state.
+                if collapse {
+                    self.directories.collapsed.insert(id);
+                }
+            }
+            Destination::Page(Page::Settings) => self.open_settings(),
+            Destination::Page(Page::Sharing) => self.open_sharing(),
+            Destination::Page(page) => self.open_records_page(page),
+        }
+    }
+
+    pub(crate) fn resolve_navigation(&mut self, save: bool) {
+        let Some(destination) = self.pending_navigation.clone() else {
+            return;
+        };
+        if save && let Err(error) = self.close_draft() {
+            self.error = Some(error);
+            return;
+        }
+        self.finish_navigation(destination);
+    }
+
+    pub(crate) fn edit_field(&mut self, field: crate::records::editor::Field) {
+        if self.vault.signing_error().is_some() {
+            return;
+        }
+        self.start_edit();
+        if let Some(draft) = &mut self.draft {
+            draft.focus_field = Some(field);
         }
     }
 
@@ -170,7 +250,6 @@ impl Unlocked {
         let entry = draft.prepare_save()?;
         if self.vault.entries().contains(&entry) {
             if let Some(draft) = &mut self.draft {
-                draft.save_after = None;
                 draft.is_new = false;
             }
             return Ok(());
@@ -181,7 +260,6 @@ impl Unlocked {
             .upsert_entry(entry)
             .map_err(|error| format!("Could not save: {error}"))?;
         if let Some(draft) = &mut self.draft {
-            draft.save_after = None;
             draft.is_new = false;
         }
         self.sync.saved();
@@ -198,8 +276,8 @@ impl Unlocked {
         };
         // Explicit saves still validate new entries; closing an untouched empty
         // editor is handled separately.
-        let entry = draft.prepare_save()?;
-        let id = entry.id.clone();
+        draft.validate()?;
+        let id = draft.entry.id.clone();
         self.autosave_draft()?;
 
         self.draft = None;

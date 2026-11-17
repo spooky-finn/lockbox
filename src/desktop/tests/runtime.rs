@@ -11,14 +11,13 @@ use dioxus::prelude::*;
 use std::time::{Instant, SystemTime};
 
 #[test]
-fn autosave_tick_debounces_edits_and_keeps_the_editor_open() {
-    use crate::desktop::context::{Session, edit_draft, set_field};
+fn typing_and_runtime_ticks_do_not_persist_drafts() {
+    use crate::desktop::context::{Session, set_field};
     use crate::records::editor::Field;
-
     let mut dom = mounted();
     update(&mut dom, |state| {
         edit_unlocked(state, |u| u.start_new());
-        set_field(state, Field::Title, "Autosaved".into());
+        set_field(state, Field::Title, "Manual save".into());
         set_field(state, Field::Password, "fictional-password".into());
         runtime::tick();
     });
@@ -28,35 +27,13 @@ fn autosave_tick_debounces_edits_and_keeps_the_editor_open() {
         let Screen::Unlocked(u) = &*screen else {
             panic!("locked");
         };
-        assert!(u.draft.as_ref().unwrap().save_after.is_some());
-        assert!(!u.vault.entries().iter().any(|e| e.title == "Autosaved"));
-    });
-    update(&mut dom, |state| {
-        edit_draft(state, |draft| draft.save_after = Some(Instant::now()));
-        runtime::tick();
-    });
-    dom.in_scope(ScopeId::APP, || {
-        let state = consume_context::<Session>();
-        let screen = state.peek();
-        let Screen::Unlocked(u) = &*screen else {
-            panic!("locked");
-        };
-        assert!(u.draft.as_ref().unwrap().save_after.is_none());
-        let reopened = crate::desktop::test_support::reopen(u);
-        let saved = reopened
-            .entries
-            .iter()
-            .find(|e| e.title == "Autosaved")
-            .unwrap();
-        assert_eq!(saved.password, "fictional-password");
-    });
-    update(&mut dom, |state| {
-        edit_draft(state, |draft| draft.show_password = true);
-        let screen = state.peek();
-        let Screen::Unlocked(u) = &*screen else {
-            panic!("locked");
-        };
-        assert!(u.draft.as_ref().unwrap().save_after.is_none());
+        assert!(u.draft.is_some());
+        assert!(
+            !crate::desktop::test_support::reopen(u)
+                .entries
+                .iter()
+                .any(|e| e.title == "Manual save")
+        );
     });
     assert!(dioxus_ssr::render(&dom).contains("id=\"entry-title\""));
 }
@@ -299,4 +276,16 @@ fn record_fields_copy_actual_values_and_report_success() {
         assert!(!runtime::copy(CopyField::Password));
     });
     assert!(!dioxus_ssr::render(&dom).contains("private-test-password"));
+}
+
+#[test]
+fn copying_a_record_does_not_rerender_session_subscribers() {
+    let mut dom = mounted();
+    let counts = dom.in_scope(ScopeId::APP, consume_context::<RenderCounts>);
+    let before = counts.0.get();
+    update(&mut dom, |_| {
+        assert!(runtime::copy(crate::desktop::security::CopyField::Password));
+    });
+    assert_eq!(counts.0.get(), before);
+    assert!(dioxus_ssr::render(&dom).contains("буфер очистится через"));
 }

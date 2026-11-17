@@ -93,19 +93,6 @@ pub(crate) fn tick() {
     }
     {
         let mut state = consume_context::<Session>();
-        let should_save = matches!(&*state.peek(), Screen::Unlocked(u)
-            if u.draft.as_ref().and_then(|draft| draft.save_after).is_some_and(|due| Instant::now() >= due));
-        if should_save {
-            state.with_mut(|screen| {
-                if let Screen::Unlocked(workspace) = screen {
-                    // Retry after another edit or an explicit close, not at 10 Hz.
-                    if let Some(draft) = &mut workspace.draft {
-                        draft.save_after = None;
-                    }
-                    workspace.error = workspace.autosave_draft().err();
-                }
-            });
-        }
         let pairing_tick = matches!(&*state.peek(), Screen::Unlocked(u) if u.sharing.links.needs_tick(&u.vault, u.is_editing()));
         if pairing_tick {
             state.with_mut(|screen| {
@@ -506,13 +493,21 @@ fn update_preferences(change: impl FnOnce(&mut crate::settings::config::Config))
 pub(crate) fn copy(field: CopyField) -> bool {
     let mut state = consume_context::<Session>();
     let native = consume_context::<SecurityHandle>();
-
-    let mut copied = false;
-    if let Screen::Unlocked(workspace) = &mut *state.write()
-        && let Some(entry) = workspace.selected_entry()
-    {
-        workspace.error = native.borrow_mut().copy(entry, field).err();
-        copied = workspace.error.is_none();
+    let error = {
+        let screen = state.peek();
+        let Screen::Unlocked(workspace) = &*screen else {
+            return false;
+        };
+        let Some(entry) = workspace.selected_entry() else {
+            return false;
+        };
+        native.borrow_mut().copy(entry, field).err()
+    };
+    let copied = error.is_none();
+    // Successful copies normally change only clipboard status, not the session.
+    let changed = matches!(&*state.peek(), Screen::Unlocked(u) if u.error != error);
+    if changed && let Screen::Unlocked(u) = &mut *state.write() {
+        u.error = error;
     }
     publish_status();
     copied
@@ -566,9 +561,6 @@ fn finish_add_attachment(
             .map_err(str::to_owned)
     })()
     .err();
-    if u.error.is_none() {
-        draft.schedule_save();
-    }
 }
 
 pub(crate) fn export_attachment(id: &str) {

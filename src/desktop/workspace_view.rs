@@ -45,14 +45,28 @@ pub(crate) fn UnlockedView() -> Element {
             CreationCelebration { key: "{unlocked.record_created}" }
         }
         div { class: if has_detail { "workspace has-detail" } else { "workspace" },
+            onkeydown: move |event| handle_record_shortcut(state, event),
             Sidebar {}
+            if unlocked.pending_navigation.is_some() {
+                dialog { id: "record-save-dialog", class: "record-dialog stack", aria_labelledby: "save-entry-question",
+                    onmounted: move |_| { document::eval("document.getElementById('record-save-dialog')?.showModal();"); },
+                    oncancel: move |event| { event.prevent_default(); edit_unlocked(state, |u| u.pending_navigation = None); },
+                        h2 { id: "save-entry-question", {language.text(Text::SaveEntryChanges)} }
+                        if let Some(error) = &unlocked.error { p { class: "error", role: "alert", {language.message(error)} } }
+                        div { class: "actions",
+                            button { r#type: "button", class: "primary", autofocus: true, onclick: move |_| edit_unlocked(state, |u| u.resolve_navigation(true)), {language.text(Text::Save)} }
+                            button { r#type: "button", class: "danger quiet", onclick: move |_| edit_unlocked(state, |u| u.resolve_navigation(false)), {language.text(Text::DiscardChanges)} }
+                            button { r#type: "button", class: "quiet", onclick: move |_| edit_unlocked(state, |u| u.pending_navigation = None), {language.text(Text::Cancel)} }
+                        }
+                }
+            }
             section { class: "detail",
                 if !records_open && (settings_open || sharing_open || (!editing && has_detail)) {
                     IconButton { class: "mobile-back quiet", icon: Icon::ArrowLeft,
                         label: if settings_open || sharing_open { language.text(Text::BackToVault) } else { language.text(Text::BackToList) },
                         onclick: move |_| edit_unlocked(state, |u| {
                             if u.page != crate::desktop::workspace::Page::Vault { u.page = crate::desktop::workspace::Page::Vault; }
-                            else { u.select_directory(None); }
+                            else { u.navigate(crate::desktop::workspace::Destination::Directory(None)); }
                         }),
                     }
                 }
@@ -66,6 +80,36 @@ pub(crate) fn UnlockedView() -> Element {
             }
         }
     }
+}
+
+/// Keep composition and held keys from closing or saving a record accidentally.
+pub(crate) fn handle_record_shortcut(state: Session, event: KeyboardEvent) {
+    if event.is_composing() || event.is_auto_repeating() {
+        return;
+    }
+    let modifiers = event.modifiers();
+    let save = event.code() == Code::KeyS
+        && modifiers.intersects(Modifiers::CONTROL | Modifiers::META)
+        && !modifiers.intersects(Modifiers::ALT | Modifiers::SHIFT);
+    let close = event.key() == Key::Escape && modifiers.is_empty();
+    let active = matches!(&*state.peek(), Screen::Unlocked(u) if
+        (save && u.draft.is_some() && u.pending_navigation.is_none()) ||
+        (close && (u.pending_navigation.is_some() || u.draft.is_some() || u.selected.is_some())));
+    if !active {
+        return;
+    }
+    event.prevent_default();
+    event.stop_propagation();
+    crate::desktop::runtime::record_activity();
+    edit_unlocked(state, |u| {
+        if save {
+            u.error = u.save_draft().err();
+        } else if u.pending_navigation.is_some() {
+            u.pending_navigation = None;
+        } else {
+            u.navigate(crate::desktop::workspace::Destination::Close);
+        }
+    });
 }
 
 /// A bounded, non-interactive burst, removed on animation completion or lock.

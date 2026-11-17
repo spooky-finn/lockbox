@@ -33,7 +33,10 @@ pub fn App() -> Element {
             "data-theme": theme.name(),
             style: appearance_style,
             onpointerdown: move |_| runtime::record_activity(),
-            onkeydown: move |_| runtime::record_activity(),
+            onkeydown: move |event| {
+                runtime::record_activity();
+                crate::desktop::workspace_view::handle_record_shortcut(state, event);
+            },
             onwheel: move |_| runtime::record_activity(),
             onpointermove: move |_| {
                 if last_motion.get().elapsed() >= std::time::Duration::from_secs(1) {

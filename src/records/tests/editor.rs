@@ -75,13 +75,10 @@ fn totp_secret_is_saved_normalized() {
     );
 }
 #[test]
-fn unchanged_fields_report_no_change_and_preserve_save_deadline() {
+fn unchanged_fields_report_no_change() {
     let mut draft = super::Draft::new(super::Entry::new(), true);
     assert!(draft.set_field(super::Field::Title, "Example".into()));
-    draft.schedule_save();
-    let due = draft.save_after;
     assert!(!draft.set_field(super::Field::Title, "Example".into()));
-    assert_eq!(draft.save_after, due);
     assert!(draft.set_field(super::Field::Password, "fictional".into()));
     assert_eq!(draft.entry.title, "Example");
 }
@@ -101,6 +98,5 @@ fn transient_controls_never_schedule_persistence_or_modify_record_data() {
     ] {
         draft.control(control);
         assert_eq!(draft.entry, original);
-        assert!(draft.save_after.is_none());
     }
 }

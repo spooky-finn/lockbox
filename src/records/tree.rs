@@ -14,6 +14,36 @@ pub(crate) enum Node<'a> {
     Record(&'a Entry),
 }
 
+/// Cached hierarchy contains only the labels and IDs needed by sidebar rows.
+#[derive(PartialEq)]
+pub(crate) enum DisplayNode {
+    Folder {
+        id: String,
+        name: String,
+        children: Vec<DisplayNode>,
+    },
+    Record {
+        id: String,
+        title: String,
+    },
+}
+
+impl From<Node<'_>> for DisplayNode {
+    fn from(node: Node<'_>) -> Self {
+        match node {
+            Node::Folder(folder, children) => Self::Folder {
+                id: folder.id.clone(),
+                name: folder.name.clone(),
+                children: children.into_iter().map(Self::from).collect(),
+            },
+            Node::Record(entry) => Self::Record {
+                id: entry.id.clone(),
+                title: entry.title.clone(),
+            },
+        }
+    }
+}
+
 /// Equality key for tree presentation. It owns display metadata, never passwords,
 /// attachments, notes, usernames or URLs. Search retains only match decisions.
 #[derive(PartialEq)]
@@ -25,6 +55,8 @@ pub(crate) struct PresentationKey {
 
 impl PresentationKey {
     pub(crate) fn new(vault: &Vault, query: &str) -> Self {
+        #[cfg(test)]
+        METADATA_SCANS.set(METADATA_SCANS.get() + 1);
         let query = query.trim().to_lowercase();
         Self {
             entries: vault
@@ -72,6 +104,7 @@ pub(crate) fn project<'a>(vault: &'a Vault, query: &str) -> Vec<Node<'a>> {
 #[cfg(test)]
 thread_local! {
     pub(crate) static PROJECTIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub(crate) static METADATA_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 fn entry_matches(entry: &Entry, query: &str) -> bool {

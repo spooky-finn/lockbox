@@ -238,7 +238,7 @@ input.switch:disabled { opacity: .45; cursor: default; }
 .tree-branch { margin: 1px 0 2px 8px; padding-left: 9px; border-left: 1px solid var(--separator); }
 .tree-folder, .tree-leaf { min-width: 0; }
 .entry-row { display: block; width: 100%; min-height: 25px; border: 1px solid transparent; background: transparent; text-align: left; padding: 6px 10px 6px 18px; margin: 1px 0; border-radius: var(--button-radius); box-shadow: none; font-size: 12px; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.entry-row:hover:not(:disabled), .folder-row:hover { background: var(--control); box-shadow: inset 0 1px 0 var(--glass-edge); }
+.entry-row:hover:not(:disabled), .folder-row:hover { background: var(--control); box-shadow: none; }
 .entry-row.selected, .folder-row.selected { background: var(--active-item); border-color: transparent; color: var(--active-item-text); box-shadow: none; font-weight: 600; }
 .entry-row.selected:hover:not(:disabled), .folder-row.selected:hover { background: var(--active-item); box-shadow: none; }
 .folder-row.selected .tree-disclosure, .folder-row.selected .folder-label > .symbol { color: var(--active-item-text); }
@@ -264,7 +264,7 @@ input.switch:disabled { opacity: .45; cursor: default; }
 .sidebar-footer { border-top: 1px solid var(--separator); margin: 8px 3px 0; padding-top: 6px; }
 .sidebar-settings { width: 100%; min-height: 34px; justify-content: flex-start; gap: 9px; border-radius: var(--button-radius); padding: 7px 9px; font-size: 12px; color: var(--muted); }
 .sidebar-settings .symbol { width: 15px; height: 15px; flex-basis: 15px; }
-button.sidebar-settings[aria-current="page"], button.sidebar-settings[aria-current="page"]:hover:not(:disabled) { background: var(--active-item); color: var(--active-item-text); font-weight: 600; }
+button.sidebar-settings[aria-current="page"], button.sidebar-settings[aria-current="page"]:hover:not(:disabled) { border: 0; background: var(--active-item); color: var(--active-item-text); font-weight: 600; }
 button.sidebar-settings[aria-current="page"]:focus-visible { outline-color: var(--active-item-text); outline-offset: -3px; }
 
 /* Preferences use a full page, with the same surfaces as vault details. */
@@ -621,3 +621,44 @@ button.copy-value:disabled { opacity: 1; }
 .space-switch-actions { display: flex; flex-direction: column; flex-shrink: 0; gap: 2px; padding-top: 7px; margin-top: 7px; border-top: 1px solid var(--border); }
 .space-switch-actions > button { justify-content: flex-start; font-size: 12px; }
 .locked-space-switcher { position: absolute; top: 16px; left: 20px; max-width: calc(100% - 40px); z-index: 3; }
+
+/* Record fields keep the same geometry in reading and editing modes. */
+.entry-close { display: flex; align-items: center; gap: 12px; margin: 0 0 16px; }
+.entry-detail .entry-close .icon-button { width: 32px; height: 32px; min-height: 32px; flex-basis: 32px; padding: 7px; }
+.record-hint { color: var(--muted); font-size: 11px; line-height: 1.5; }
+.record-save { flex-shrink: 0; gap: 7px; }
+button.copy-value.title-value { display: block; font: inherit; line-height: 1.2; letter-spacing: inherit; width: 100%; min-height: 34px; padding: 0; margin: 0; }
+button.copy-value.notes-value { width: 100%; white-space: pre-wrap; align-items: flex-start; }
+.copy-value-group { position: relative; }
+.copy-value-group .copy-indicator { position: absolute; right: 0; padding: 3px 6px; border-radius: 5px; background: var(--surface); pointer-events: none; }
+.entry-detail .detail-title { position: relative; }
+.entry-detail .detail-title > .copy-indicator { position: absolute; top: 100%; }
+.entry-detail .notes { position: relative; }
+.entry-detail .notes > .copy-indicator { position: absolute; right: 0; bottom: 0; padding: 3px 6px; border-radius: 5px; background: var(--surface); }
+.entry-detail button.copy-value:hover:not(:disabled) { background: var(--control); }
+.entry-detail button.copy-value:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
+.draft.entry-detail { max-width: 720px; padding: 0; border-radius: 0; background: transparent; }
+.draft.entry-detail .entry-icon.large { width: 36px; height: 36px; flex-basis: 36px; font-size: 20px; border-radius: 8px; }
+.draft.entry-detail .fields input:not([type=checkbox]):not([type=range]), .draft.entry-detail .fields textarea,
+.draft.entry-detail input.entry-title-input { width: 100%; min-width: 0; margin: 0; padding: 4px 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; font: inherit; }
+.draft.entry-detail input.entry-title-input { height: auto; min-height: 34px; padding: 0; font-size: 26px; line-height: 1.2; font-weight: 650; letter-spacing: -.6px; }
+.draft.entry-detail .fields textarea { min-height: 34px; line-height: 1.7; }
+.draft.entry-detail .fields input:focus, .draft.entry-detail .fields textarea:focus,
+.draft.entry-detail .entry-title-input:focus { outline: 2px solid var(--accent-ink); outline-offset: 3px; }
+.entry-options { margin-top: 24px; }
+.record-dialog::backdrop { background: #0006; }
+.record-dialog:not([open]) { display: none; }
+.record-dialog { width: min(480px, calc(100% - 32px)); max-height: calc(100% - 32px); overflow: auto; padding: 24px; border: 1px solid var(--separator); border-radius: 16px; background: var(--surface); box-shadow: 0 16px 64px #0004; }
+.record-dialog .actions { flex-wrap: wrap; }
+
+.record-dialog { color: var(--ink); margin: auto; }
+.draft.entry-detail .totp-editor { flex: 1; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; border: 0; padding: 0; margin: 0; }
+.draft.entry-detail .totp-editor > .input-actions { grid-column: 1; grid-row: 1; flex-wrap: nowrap; min-width: 0; }
+.draft.entry-detail .totp-editor > details { grid-column: 2; grid-row: 1; }
+.draft.entry-detail .totp-editor > details[open] { grid-column: 1 / -1; grid-row: 2; }
+.draft.entry-detail .totp-editor > button { grid-column: 3; grid-row: 1; align-self: center; }
+.draft.entry-detail .totp-editor.is-empty > button { grid-column: 1 / -1; justify-self: start; }
+.draft.entry-detail .totp-editor > .error { grid-column: 1 / -1; }
+.draft.entry-detail .totp-editor h2 { display: none; }
+@media (max-width: 600px) { .draft.entry-detail .entry-icon.large { width: 32px; height: 32px; flex-basis: 32px; } }
+.copy-value-group button.copy-value { flex: 1; }

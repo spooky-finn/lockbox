@@ -134,6 +134,8 @@ impl KdfParams {
 
 /// An unlocked vault. The derived key and all entries are wiped when it is dropped.
 pub struct Vault {
+    // In-memory invalidation only; never serialized or used for commit ordering.
+    records_revision: u64,
     journal_check: JournalCheck,
     path: PathBuf,
     kdf: KdfParams,
@@ -246,6 +248,7 @@ impl Vault {
             None
         };
         let vault = Self {
+            records_revision: 0,
             journal_check: Default::default(),
             path,
             kdf,
@@ -341,6 +344,7 @@ impl Vault {
         };
 
         let vault = Self {
+            records_revision: 0,
             journal_check: Default::default(),
             path,
             kdf,
@@ -655,6 +659,7 @@ impl Header {
         witnesses: Arc<dyn WitnessStore>,
     ) -> Vault {
         Vault {
+            records_revision: 0,
             journal_check: Default::default(),
             path,
             kdf: self.kdf,

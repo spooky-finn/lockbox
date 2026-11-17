@@ -48,7 +48,7 @@ fn ClockProbe() -> Element {
     rsx! {}
 }
 
-fn fixture() -> Element {
+pub(crate) fn fixture() -> Element {
     let dir = use_hook(|| std::rc::Rc::new(tempfile::tempdir().unwrap()));
     let counts = use_hook(RenderCounts::default);
     use_context_provider(|| counts.clone());

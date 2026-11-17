@@ -116,3 +116,97 @@ fn history_follows_selection_and_keeps_other_record_contents_hidden() {
         );
     }
 }
+
+#[test]
+fn double_click_edits_and_escape_asks_before_closing_changed_record() {
+    use crate::desktop::{context::Session, context::set_field, session::Screen};
+    use crate::records::editor::Field;
+    use dioxus::html::{
+        EventData, SerializedHtmlEventConverter, SerializedKeyboardData, SerializedMouseData,
+    };
+    use dioxus::{dioxus_core::Mutation, prelude::*};
+    dioxus::html::set_event_converter(Box::new(SerializedHtmlEventConverter));
+    let mut dom = VirtualDom::new(crate::desktop::view_test_support::fixture);
+    let initial = dom.rebuild_to_vec();
+    let double_click = initial
+        .edits
+        .iter()
+        .find_map(|edit| match edit {
+            Mutation::NewEventListener { name, id } if name == "dblclick" => Some(*id),
+            _ => None,
+        })
+        .unwrap();
+    let escape_target = initial
+        .edits
+        .iter()
+        .find_map(|edit| match edit {
+            Mutation::SetAttribute {
+                name: "class",
+                value: dioxus::dioxus_core::AttributeValue::Text(class),
+                id,
+                ..
+            } if class.starts_with("workspace") => Some(*id),
+            _ => None,
+        })
+        .unwrap();
+    dom.runtime().handle_event(
+        "dblclick",
+        Event::new(
+            EventData::Mouse(SerializedMouseData::default()).into_any(),
+            true,
+        ),
+        double_click,
+    );
+    dom.render_immediate_to_vec();
+    assert!(dioxus_ssr::render(&dom).contains("id=\"entry-title\""));
+    dom.in_scope(ScopeId::APP, || {
+        set_field(consume_context::<Session>(), Field::Title, "Changed".into());
+    });
+    dom.render_immediate_to_vec();
+    let escape = || {
+        Event::new(
+            EventData::Keyboard(SerializedKeyboardData::new(
+                Key::Escape,
+                Code::Escape,
+                Location::Standard,
+                false,
+                Modifiers::empty(),
+                false,
+            ))
+            .into_any(),
+            true,
+        )
+    };
+    dom.runtime()
+        .handle_event("keydown", escape(), escape_target);
+    dom.render_immediate_to_vec();
+    assert!(dioxus_ssr::render(&dom).contains("Сохранить изменения записи?"));
+    dom.runtime()
+        .handle_event("keydown", escape(), escape_target);
+    dom.render_immediate_to_vec();
+    assert!(!dioxus_ssr::render(&dom).contains("Сохранить изменения записи?"));
+    dom.in_scope(ScopeId::APP, || {
+        let state = consume_context::<Session>();
+        let screen = state.peek();
+        let Screen::Unlocked(u) = &*screen else {
+            panic!("locked");
+        };
+        assert_eq!(u.draft.as_ref().unwrap().entry.title, "Changed");
+        assert_eq!(u.vault.entries()[0].title, "GitLab");
+    });
+}
+
+#[test]
+fn clock_ticks_update_totp_without_rerendering_the_record_card() {
+    use crate::desktop::context::Clock;
+    use dioxus::prelude::*;
+    let mut dom = mounted();
+    let before = super::ENTRY_RENDERS.get();
+    update(&mut dom, |_| {
+        let mut clock = consume_context::<Clock>().0;
+        clock.set(59);
+    });
+    assert_eq!(super::ENTRY_RENDERS.get(), before);
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("max=\"30\" value=\"1\""));
+}

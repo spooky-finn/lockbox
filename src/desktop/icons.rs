@@ -16,7 +16,7 @@ const TWO_LEVEL: &[&str] = &[
     "com.ua", "co.nz",
 ];
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct Icon {
     pub slug: String,
     pub title: String,

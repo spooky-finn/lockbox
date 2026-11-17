@@ -2,6 +2,12 @@
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Text {
+    RecordReadHint,
+    RecordEditHint,
+    CopyTitle,
+    CopyNotes,
+    SaveEntryChanges,
+    DiscardChanges,
     ThemePreset,
     LegacyTheme,
     ThemePresetDescription,
@@ -575,6 +581,12 @@ pub(crate) enum Text {
 impl Text {
     pub(super) fn translations(self) -> (&'static str, &'static str) {
         match self {
+            Self::RecordReadHint => ("Клик — копировать · Двойной клик — изменить", "Click to copy · Double-click to edit"),
+            Self::RecordEditHint => ("Редактирование · Esc — закрыть", "Editing · Esc to close"),
+            Self::CopyTitle => ("Копировать название", "Copy title"),
+            Self::CopyNotes => ("Копировать заметку", "Copy note"),
+            Self::SaveEntryChanges => ("Сохранить изменения записи?", "Save changes to this entry?"),
+            Self::DiscardChanges => ("Не сохранять", "Discard changes"),
             Self::ThemePreset => ("Готовая тема", "Theme preset"),
             Self::LegacyTheme => ("Сохранённые пользовательские цвета", "Previous custom colors"),
             Self::ThemePresetDescription => ("Согласованные цвета с читаемым контрастом.", "Coordinated colors with readable contrast."),
@@ -1148,6 +1160,12 @@ impl Text {
 }
 
 pub(super) const CATALOG: &[Text] = &[
+    Text::RecordReadHint,
+    Text::RecordEditHint,
+    Text::CopyTitle,
+    Text::CopyNotes,
+    Text::SaveEntryChanges,
+    Text::DiscardChanges,
     Text::ThemePreset,
     Text::LegacyTheme,
     Text::ThemePresetDescription,

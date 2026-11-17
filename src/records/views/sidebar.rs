@@ -2,7 +2,7 @@ use crate::desktop::i18n::Text;
 
 use crate::{
     desktop::{
-        context::{Session, edit_unlocked},
+        context::{Session, edit_unlocked, use_records_version},
         session::Screen,
         widgets::{
             button::IconButton,
@@ -31,27 +31,55 @@ pub(crate) fn Sidebar() -> Element {
     let language = crate::desktop::i18n::use_language();
     let state = use_context::<Session>();
     let settings = use_context::<Signal<crate::settings::state::Settings>>();
-    // Dioxus compares this metadata before rebuilding/sorting the tree. A draft
-    // keystroke or sync progress notification leaves the cached VNode untouched.
+    let version = use_records_version();
+    let query = use_memo(move || match &*state.read() {
+        Screen::Unlocked(u) => u.search.trim().to_lowercase(),
+        Screen::Locked(_) => String::new(),
+    });
+    // Scan metadata only when records or search change, never on draft input.
+    let presentation = use_memo(move || {
+        let version = version.read();
+        let query = query.read();
+        version.as_ref()?;
+        let screen = state.peek();
+        let Screen::Unlocked(u) = &*screen else {
+            return None;
+        };
+        Some(tree::PresentationKey::new(&u.vault, &query))
+    });
+    let nodes = use_memo(move || {
+        let _presentation = presentation.read();
+        let screen = state.peek();
+        let Screen::Unlocked(u) = &*screen else {
+            return Vec::new();
+        };
+        tree::project(&u.vault, &u.search)
+            .into_iter()
+            .map(tree::DisplayNode::from)
+            .collect::<Vec<_>>()
+    });
     let tree_key = use_memo(move || {
         let language = settings.read().config.language;
         let screen = state.read();
         match &*screen {
             Screen::Unlocked(u) => Some((
-                tree::PresentationKey::new(&u.vault, &u.search),
                 u.directories.collapsed.clone(),
                 u.selected.clone(),
                 u.directories.selected.clone(),
                 u.page,
-                u.is_editing(),
+                u.directories.draft.is_some(),
                 language,
             )),
             _ => None,
         }
     });
     let tree_view = use_memo(move || {
+        let nodes = nodes.read();
+        // Search also changes expansion and empty-state behavior when the
+        // resulting hierarchy happens to contain exactly the same rows.
+        let _query = query.read();
         let key = tree_key.read();
-        let Some((_, _, _, _, _, _, language)) = &*key else {
+        let Some((_, _, _, _, _, language)) = &*key else {
             return rsx! {};
         };
         let language = *language;
@@ -59,7 +87,6 @@ pub(crate) fn Sidebar() -> Element {
         let Screen::Unlocked(workspace) = &*screen else {
             return rsx! {};
         };
-        let nodes = tree::project(&workspace.vault, &workspace.search);
         rsx! {
             {nodes_ui(&nodes, workspace, state, language)}
             if nodes.is_empty() {
@@ -82,10 +109,10 @@ pub(crate) fn Sidebar() -> Element {
                 h2 { {language.text(Text::Vault)} }
                 span { class: "count", "{workspace.vault.entries().len()}" }
                 IconButton { class: "primary", icon: Icon::Plus, label: language.text(Text::NewEntry),
-                    disabled: workspace.is_editing() || workspace.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.start_new()),
+                    disabled: workspace.directories.draft.is_some() || workspace.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.navigate(crate::desktop::workspace::Destination::NewEntry)),
                 }
                 IconButton { class: "quiet", icon: Icon::FolderPlus, label: language.text(Text::NewFolder),
-                    disabled: workspace.is_editing() || workspace.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.start_directory()),
+                    disabled: workspace.directories.draft.is_some() || workspace.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.navigate(crate::desktop::workspace::Destination::NewDirectory)),
                 }
             }
             label { class: "sr-only", r#for: "search", {language.text(Text::SearchEntriesAndFolders)} }
@@ -102,22 +129,22 @@ pub(crate) fn Sidebar() -> Element {
                 }
             }
             div { class: "sidebar-footer",
-                button { class: "quiet sidebar-settings", disabled: workspace.is_editing(),
+                button { class: "quiet sidebar-settings", disabled: workspace.directories.draft.is_some(),
                     aria_current: (workspace.page == crate::desktop::workspace::Page::Trash).then_some("page"),
-                    onclick: move |_| edit_unlocked(state, |u| u.open_records_page(crate::desktop::workspace::Page::Trash)),
+                    onclick: move |_| edit_unlocked(state, |u| u.navigate(crate::desktop::workspace::Destination::Page(crate::desktop::workspace::Page::Trash))),
                     Symbol { icon: Icon::Trash } {language.text(Text::Trash)}
                 }
                 if workspace.vault.device_certificate().is_some() {
                     button { class: "quiet sidebar-settings", r#type: "button",
                         aria_current: (workspace.page == crate::desktop::workspace::Page::Sharing).then_some("page"),
-                        onclick: move |_| edit_unlocked(state, |u| u.open_sharing()),
+                        onclick: move |_| edit_unlocked(state, |u| u.navigate(crate::desktop::workspace::Destination::Page(crate::desktop::workspace::Page::Sharing))),
                         Symbol { icon: Icon::Fingerprint }
                         {language.text(Text::SharingParticipants)}
                     }
                 }
                 button { class: "quiet sidebar-settings", r#type: "button",
                     aria_current: (workspace.page == crate::desktop::workspace::Page::Settings).then_some("page"),
-                    onclick: move |_| edit_unlocked(state, |u| u.open_settings()),
+                    onclick: move |_| edit_unlocked(state, |u| u.navigate(crate::desktop::workspace::Destination::Page(crate::desktop::workspace::Page::Settings))),
                     Symbol { icon: Icon::Settings }
                     {language.text(Text::Settings)}
                 }

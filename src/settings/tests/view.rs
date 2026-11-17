@@ -83,7 +83,7 @@ fn settings_preserves_unsaved_drafts_when_switching_preferences_and_returning() 
 }
 
 #[test]
-fn add_entry_is_disabled_during_editing() {
+fn add_entry_stays_available_during_record_editing() {
     let mut dom = mounted();
     update(&mut dom, |state| edit_unlocked(state, |u| u.start_new()));
     let html = dioxus_ssr::render(&dom);
@@ -92,7 +92,7 @@ fn add_entry_is_disabled_during_editing() {
         .map(|part| part.split('>').next().unwrap())
         .find(|opening| opening.contains("title=\"Новая запись\""))
         .unwrap();
-    assert!(add_button.contains("disabled"));
+    assert!(!add_button.contains("disabled"));
 }
 
 #[test]

@@ -41,3 +41,56 @@ Validation and limits
 - Encrypted autosave/close still writes synchronously; safe worker migration and
   large-tree virtualization are documented follow-up work, not claimed fixed.
 - This session is a bounded implementation pass, not a completed 12-hour run.
+
+UI performance — 2026-11-17
+
+Found
+- Draft keystrokes notified shared Session.
+- Sidebar metadata key cloned/scanned all records on each notification.
+- Selection/expansion repeated hierarchy projection and sorting.
+- Folder selector rebuilt paths/sorted options during draft typing.
+- Entry card subscribed to one-second clock; TOTP repainted whole card.
+- Clipboard success wrote Session; pending click token also triggered render.
+- Explicit save cloned validated draft twice, including attachments.
+
+Changed
+- Vault-local records revision invalidates metadata on commands, verified projection install, rollback.
+- Revision never serialized; no signing, persistence or encryption semantics changed.
+- Metadata scans only on record/query changes. Cache display hierarchy: IDs/names only.
+- Selection/expansion reuse hierarchy. Search independently updates expansion even when rows equal.
+- Folder options cached by revision/excluded folder. Icon search cached by query.
+- TOTP owns clock subscription. Copy indicator expiry uses scoped timer.
+- Clipboard success publishes status only; errors update Session when changed.
+- Pending click cancellation uses nonreactive token. Explicit save validates without second snapshot.
+- Visible Save button; Cmd/Ctrl+S uses physical KeyS for non-Latin layouts.
+- Repeated/composing keystrokes ignored; Escape preserves existing save/discard/cancel flow.
+- Reading/editing hints, keyboard-accessible title/notes, empty value targets, copy feedback.
+- Match heading/field geometry; inline TOTP controls; compact notes; narrow-screen dialog bounds.
+
+Evidence
+- 1,000 records + 100 folders: 20 inputs trigger zero metadata scans, projections, option builds.
+- Selection/expansion trigger zero projections; saved rename refreshes cached tree.
+- Clock regression: countdown changes; entry-card render count unchanged.
+- Clipboard regression: copy succeeds; Session subscriber render count unchanged.
+- Shortcut regression: Control/Meta + physical KeyS saves on Russian layout; composition/repeat ignored.
+- Static fictional fixtures inspected in headless Firefox at 1100x850 and 390x780.
+
+Limits
+- Static browser snapshots, not interactive native WKWebView measurement.
+- No native release-build median/p95 latency measured; no speedup percentage claimed.
+- Session notifications and very large visible trees remain measurement targets.
+- Explicit encrypted save remains synchronous; no background writer introduced.
+
+Final checks
+- cargo test --locked: 518 unit tests, 5 integration tests, 2 doctests pass; 2 OS probes ignored.
+- Final record-view suite: 11 pass after shortcut/helper and layout polish.
+- Node tree-navigation: 4 pass. Strict all-target Clippy pass.
+- cargo fmt --all -- --check and git diff --check pass.
+
+Hover polish
+- Remove inset top highlight from sidebar record/folder hover. Keep background feedback.
+
+Folder click
+- Label/icon click selects folder and toggles expansion. Arrow remains independent.
+- Changed draft prompts before navigation/toggle; cancel keeps folder state.
+- Search keeps matching branches revealed. Label exposes aria-expanded.

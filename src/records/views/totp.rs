@@ -33,7 +33,7 @@ pub(crate) fn TotpEditor() -> Element {
         section { class: if draft.entry.totp.is_some() { "totp-editor stack" } else { "totp-editor stack is-empty" },
             h2 { "TOTP" }
             if let Some(settings) = &draft.entry.totp {
-                label { r#for: "totp-secret", {language.text(Text::SecretOrOtpauthURL)} }
+                label { class: "sr-only", r#for: "totp-secret", {language.text(Text::SecretOrOtpauthURL)} }
                 div { class: "input-actions",
                     input { id: "totp-secret", r#type: if draft.show_totp { "text" } else { "password" }, autocomplete: "off",
                         value: "{settings.secret}", oninput: move |e| set_field(state, Field::Totp, e.value()) }

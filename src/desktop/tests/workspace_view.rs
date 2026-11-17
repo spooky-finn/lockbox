@@ -124,7 +124,7 @@ fn search_reacts_and_failed_save_preserves_the_form() {
     assert!(html.contains("Записей не найдено"));
     assert!(html.contains("value=\"Unsaved\""));
     assert!(html.contains("TOTP:"));
-    assert!(html.contains("Изменения сохраняются автоматически"));
+    assert!(!html.contains("Изменения сохраняются автоматически"));
 }
 
 #[test]
@@ -184,4 +184,58 @@ fn profile_shows_full_public_fingerprints_and_lock_removes_identity() {
     assert!(!html.contains(&fingerprint));
     assert!(!html.contains(&device));
     assert!(!html.contains("Alice Profile"));
+}
+
+#[test]
+fn save_shortcuts_work_in_both_layouts_and_ignore_composition_and_repeats() {
+    use crate::desktop::{session::Screen, workspace_view::handle_record_shortcut};
+    use dioxus::html::SerializedKeyboardData;
+    use dioxus::prelude::*;
+    let mut dom = mounted();
+    for modifier in [Modifiers::CONTROL, Modifiers::META] {
+        update(&mut dom, |state| {
+            edit_unlocked(state, |u| u.start_edit());
+            set_field(state, Field::Title, format!("Saved using {modifier:?}"));
+            // Use physical KeyS with a non-Latin key value, as on Russian layouts.
+            for (repeat, composing) in [(true, false), (false, true)] {
+                let event = Event::new(
+                    KeyboardData::new(SerializedKeyboardData::new(
+                        Key::Character("ы".into()),
+                        Code::KeyS,
+                        Location::Standard,
+                        repeat,
+                        modifier,
+                        composing,
+                    ))
+                    .into(),
+                    true,
+                );
+                handle_record_shortcut(state, event.clone());
+                assert!(event.default_action_enabled());
+                assert!(matches!(&*state.peek(), Screen::Unlocked(u) if u.draft.is_some()));
+            }
+            let event = Event::new(
+                KeyboardData::new(SerializedKeyboardData::new(
+                    Key::Character("ы".into()),
+                    Code::KeyS,
+                    Location::Standard,
+                    false,
+                    modifier,
+                    false,
+                ))
+                .into(),
+                true,
+            );
+            handle_record_shortcut(state, event.clone());
+            assert!(!event.default_action_enabled());
+            assert!(matches!(&*state.peek(), Screen::Unlocked(u) if u.draft.is_none()));
+            let Screen::Unlocked(u) = &*state.peek() else {
+                panic!("locked");
+            };
+            assert_eq!(
+                crate::desktop::test_support::reopen(u).entries[0].title,
+                format!("Saved using {modifier:?}")
+            );
+        });
+    }
 }

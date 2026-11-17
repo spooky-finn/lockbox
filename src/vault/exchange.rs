@@ -21,6 +21,7 @@ struct ReceivedView {
 
 impl ReceivedView {
     fn install(self, vault: &mut Vault) -> Self {
+        vault.records_changed();
         Self {
             entries: std::mem::replace(&mut vault.entries, self.entries),
             folders: std::mem::replace(&mut vault.folders, self.folders),

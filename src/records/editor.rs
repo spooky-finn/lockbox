@@ -6,7 +6,7 @@ use crate::records::{
 };
 use zeroize::{Zeroize, Zeroizing};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Field {
     Title,
     Username,
@@ -29,8 +29,8 @@ pub(crate) enum Control {
 
 pub(crate) struct Draft {
     pub(crate) entry: Entry,
-    pub(crate) save_after: Option<std::time::Instant>,
     pub(crate) is_new: bool,
+    pub(crate) focus_field: Option<Field>,
     pub(crate) show_password: bool,
     pub(crate) show_totp: bool,
     pub(crate) totp_error: Option<String>,
@@ -56,8 +56,8 @@ impl Draft {
     pub(crate) fn new(entry: Entry, is_new: bool) -> Self {
         Self {
             entry,
-            save_after: None,
             is_new,
+            focus_field: None,
             show_password: false,
             show_totp: false,
             totp_error: None,
@@ -68,10 +68,6 @@ impl Draft {
         }
     }
 
-    pub(crate) fn schedule_save(&mut self) {
-        self.save_after = Some(std::time::Instant::now() + std::time::Duration::from_millis(600));
-    }
-
     pub(crate) fn is_empty(&self) -> bool {
         let mut empty = Entry::default();
         empty.id = self.entry.id.clone();
@@ -79,8 +75,7 @@ impl Draft {
         self.is_new && self.entry == empty
     }
 
-    /// Validate a save snapshot without changing the draft or its revealed fields.
-    pub(crate) fn prepare_save(&self) -> Result<Entry, String> {
+    pub(crate) fn validate(&self) -> Result<(), String> {
         if self.entry.title.trim().is_empty() {
             return Err("Enter an entry name".into());
         }
@@ -88,7 +83,12 @@ impl Draft {
         if let Some(totp) = &self.entry.totp {
             totp::validate(totp).map_err(|error| format!("TOTP: {error}"))?;
         }
+        Ok(())
+    }
 
+    /// Validate a save snapshot without changing the draft or its revealed fields.
+    pub(crate) fn prepare_save(&self) -> Result<Entry, String> {
+        self.validate()?;
         let mut entry = self.entry.clone();
         if let Some(totp) = &mut entry.totp {
             totp.secret = totp::normalize_secret(&totp.secret);

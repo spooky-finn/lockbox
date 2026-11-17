@@ -373,6 +373,7 @@ impl Vault {
         }
         let replay = Machine::replay_state(&state, &device)?;
         let space_name = record.invitation.space_name().map(str::to_owned);
+        self.records_changed();
         self.entries = replay.projection.entries();
         self.folders = replay.projection.folders();
         let profile = self.profile.as_mut().unwrap();

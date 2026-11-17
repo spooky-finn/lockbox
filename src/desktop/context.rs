@@ -61,6 +61,15 @@ impl Biometrics for LocalizedBiometrics {
 #[derive(Clone, Copy)]
 pub(crate) struct Clock(pub Signal<u64>);
 
+/// Subscribe to committed record changes without scanning the vault on input.
+pub(crate) fn use_records_version() -> Memo<Option<(std::path::PathBuf, u64)>> {
+    let state = use_context::<Session>();
+    use_memo(move || match &*state.read() {
+        Screen::Unlocked(u) => Some((u.vault.path().to_path_buf(), u.vault.records_revision())),
+        Screen::Locked(_) => None,
+    })
+}
+
 pub(crate) fn edit_locked(mut state: Session, edit: impl FnOnce(&mut Locked)) {
     if let Screen::Locked(locked) = &mut *state.write() {
         edit(locked);
@@ -74,11 +83,7 @@ pub(crate) fn edit_unlocked(mut state: Session, edit: impl FnOnce(&mut Unlocked)
 pub(crate) fn edit_draft(state: Session, edit: impl FnOnce(&mut Draft)) {
     edit_unlocked(state, |unlocked| {
         if let Some(draft) = &mut unlocked.draft {
-            let previous = draft.entry.clone();
             edit(draft);
-            if draft.entry != previous {
-                draft.schedule_save();
-            }
         }
     });
 }
@@ -86,10 +91,8 @@ pub(crate) fn set_field(state: Session, field: Field, value: String) {
     // Late WebView input may arrive after lock removed the draft.
     let mut value = zeroize::Zeroizing::new(value);
     edit_unlocked(state, |unlocked| {
-        if let Some(draft) = &mut unlocked.draft
-            && draft.set_field(field, std::mem::take(&mut *value))
-        {
-            draft.schedule_save();
+        if let Some(draft) = &mut unlocked.draft {
+            draft.set_field(field, std::mem::take(&mut *value));
         }
     });
 }
