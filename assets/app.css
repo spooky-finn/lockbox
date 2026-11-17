@@ -669,18 +669,18 @@ button.copy-value.notes-value { width: 100%; white-space: pre-wrap; align-items:
 .space-tabs { position: relative; display: flex; align-items: center; gap: 4px; height: 34px; padding: 3px 8px; border-bottom: 1px solid var(--separator); flex-shrink: 0; background: var(--subtle); user-select: none; }
 .app.macos .space-tabs { height: 38px; padding-left: 80px; }
 .space-tabs-window-controls { display: none; }
-.space-tab-list { display: flex; align-items: center; gap: 2px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.space-tab-list { display: flex; align-items: center; gap: 0; min-width: 0; overflow-x: auto; scrollbar-width: none; }
 .space-tab-list::-webkit-scrollbar { display: none; }
-.space-tab { position: relative; display: flex; align-items: center; flex: 0 1 auto; min-width: 88px; max-width: 184px; height: 28px; padding: 0 3px 0 2px; border: 1px solid transparent; border-radius: 6px; color: var(--muted); transition: background 120ms, color 120ms; }
-.space-tab:hover { background: var(--control); color: var(--ink); }
-.space-tab.active { color: var(--ink); background: var(--surface); border-color: var(--border); box-shadow: 0 1px 2px rgb(0 0 0 / 4%); }
-.space-tab.active::after { content: ""; position: absolute; bottom: -1px; left: 10px; right: 10px; height: 2px; border-radius: 2px; background: var(--accent); }
+.space-tab { position: relative; display: flex; align-items: center; flex: 0 1 auto; min-width: 88px; max-width: 184px; height: 28px; padding: 0 4px; color: var(--muted); transition: color 120ms; }
+.space-tab + .space-tab::before { content: ""; position: absolute; top: 6px; bottom: 6px; left: 0; width: 1px; background: var(--border); pointer-events: none; }
+.space-tab:hover, .space-tab.active { color: var(--ink); }
 .space-tabs .space-tab-select { display: flex; justify-content: flex-start; flex: 1; min-width: 0; min-height: 0; height: 26px; gap: 6px; padding: 0 5px; border: 0; border-radius: 4px; background: transparent; box-shadow: none; font-size: 11px; font-weight: 500; line-height: 1; text-align: left; }
+.space-tabs .space-tab.active .space-tab-select { font-weight: 600; }
 .space-tabs .space-tab-select:hover:not(:disabled) { background: transparent; box-shadow: none; }
 .space-tab-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .space-tab-icon { display: flex; flex: 0 0 13px; color: var(--muted); }
 .space-tab-icon .symbol { width: 13px; height: 13px; flex-basis: 13px; }
-.space-tab.active .space-tab-icon { color: var(--accent-ink); }
+.space-tab.active .space-tab-icon { color: inherit; }
 .space-tabs .space-tab-close { flex: 0 0 20px; width: 20px; height: 20px; min-height: 0; margin: 0; padding: 4px; border: 0; border-radius: 4px; color: var(--muted); opacity: 0; pointer-events: none; transition: opacity 100ms, background 100ms; }
 .space-tab.active .space-tab-close, .space-tab:hover .space-tab-close, .space-tab:focus-within .space-tab-close { opacity: 1; pointer-events: auto; }
 .space-tabs .space-tab-close:hover:not(:disabled) { color: var(--ink); background: var(--selected); }
