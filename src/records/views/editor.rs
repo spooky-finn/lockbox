@@ -70,7 +70,7 @@ pub(crate) fn DraftView() -> Element {
                         }
                     }
                 }
-                div { class: "field-row", dt { label { r#for: "entry-url", {language.text(Text::Website)} } }
+                div { class: "field-row", dt { label { r#for: "entry-url", {language.text(Text::Url)} } }
                     dd { input { id: "entry-url", class: "field-value", onmounted: move |event| async move { if focus_field == Some(Field::Url) { let _ = event.data.set_focus(true).await; } }, value: "{entry.url}", oninput: move |e| set_field(state, Field::Url, e.value()) } }
                 }
                 div { class: "field-row totp-field", dt { "TOTP" } dd { TotpEditor {} } }

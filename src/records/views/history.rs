@@ -126,7 +126,7 @@ fn snapshot(
             true,
         ),
         (
-            Text::Website,
+            Text::Url,
             entry.url.as_str(),
             other.map(|e| e.url.as_str()),
             false,
