@@ -74,3 +74,29 @@ fn totp_secret_is_saved_normalized() {
         "JBSWY3DPEHPK3PXP"
     );
 }
+#[test]
+fn unchanged_fields_report_no_change() {
+    let mut draft = super::Draft::new(super::Entry::new(), true);
+    assert!(draft.set_field(super::Field::Title, "Example".into()));
+    assert!(!draft.set_field(super::Field::Title, "Example".into()));
+    assert!(draft.set_field(super::Field::Password, "fictional".into()));
+    assert_eq!(draft.entry.title, "Example");
+}
+#[test]
+fn transient_controls_never_schedule_persistence_or_modify_record_data() {
+    use super::Control;
+    let mut draft = super::Draft::new(super::Entry::new(), true);
+    let original = draft.entry.clone();
+    for control in [
+        Control::TogglePassword,
+        Control::ToggleTotp,
+        Control::ToggleGenerator,
+        Control::CloseGenerator,
+        Control::ToggleIconPicker,
+        Control::IconQuery("example".into()),
+        Control::CloseIconPicker,
+    ] {
+        draft.control(control);
+        assert_eq!(draft.entry, original);
+    }
+}

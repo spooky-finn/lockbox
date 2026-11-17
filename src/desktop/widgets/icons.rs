@@ -1,7 +1,7 @@
 use crate::desktop::i18n::Text;
 
 use crate::desktop::{
-    context::{Session, edit_draft},
+    context::{Session, draft_control, edit_draft},
     icons,
     session::Screen,
     widgets::{button::IconButton, symbol::Icon},
@@ -18,10 +18,14 @@ pub(crate) fn EntryIcon(
     let mut failed_favicon = use_signal(|| None::<String>);
     let enabled = try_use_context::<Signal<crate::settings::state::Settings>>()
         .is_some_and(|settings| settings.read().config.website_icons);
-    let cache = try_use_context::<Session>().and_then(|state| match &*state.read() {
-        Screen::Unlocked(workspace) => Some(workspace.favicon_cache.clone()),
-        _ => None,
+    let session = try_use_context::<Session>();
+    let cache = use_memo(move || {
+        session.and_then(|state| match &*state.read() {
+            Screen::Unlocked(workspace) => Some(workspace.favicon_cache.clone()),
+            _ => None,
+        })
     });
+    let cache = cache();
     let website = (enabled && slug.is_none())
         .then(|| icons::favicon_url(&url))
         .flatten();
@@ -87,6 +91,15 @@ pub(crate) fn EntryIcon(
 pub(crate) fn IconPicker() -> Element {
     let language = crate::desktop::i18n::use_language();
     let state = use_context::<Session>();
+    let query = use_memo(move || match &*state.read() {
+        Screen::Unlocked(u) => u
+            .draft
+            .as_ref()
+            .map(|d| d.icon_query.clone())
+            .unwrap_or_default(),
+        _ => String::new(),
+    });
+    let found = use_memo(move || icons::catalog().search(&query.read(), 60));
     let screen = state.read();
     let Screen::Unlocked(unlocked) = &*screen else {
         return rsx! {};
@@ -96,18 +109,17 @@ pub(crate) fn IconPicker() -> Element {
         return rsx! {};
     };
 
-    let found = icons::catalog().search(&draft.icon_query, 60);
     rsx! {
         section { class: "subpanel stack", aria_label: language.text(Text::ChooseIcon2),
             div { class: "input-actions",
-                input { aria_label: language.text(Text::ServiceName), placeholder: language.text(Text::ServiceName), value: "{draft.icon_query}", oninput: move |e| edit_draft(state, |d| d.icon_query = e.value()) }
-                IconButton { icon: Icon::Close, label: language.text(Text::CloseIconPicker), onclick: move |_| edit_draft(state, |d| d.icon_picker_open = false) }
+                input { aria_label: language.text(Text::ServiceName), placeholder: language.text(Text::ServiceName), value: "{draft.icon_query}", oninput: move |e| draft_control(state, crate::records::editor::Control::IconQuery(e.value())) }
+                IconButton { icon: Icon::Close, label: language.text(Text::CloseIconPicker), onclick: move |_| draft_control(state, crate::records::editor::Control::CloseIconPicker) }
             }
 
             if draft.icon_query.trim().is_empty() { p { class: "muted", {language.format(Text::StartTypingANameIconsAvailable, &[icons::catalog().len().to_string()])} } }
-            else if found.is_empty() { p { class: "muted", {language.text(Text::NoResults)} } }
+            else if found.read().is_empty() { p { class: "muted", {language.text(Text::NoResults)} } }
             div { class: "icon-grid",
-                for icon in found {
+                for icon in found.read().iter().copied() {
                     {
                         let slug = icon.slug.clone();
                         rsx! { button { key: "{slug}", r#type: "button", title: "{icon.title}", aria_label: "{icon.title}",

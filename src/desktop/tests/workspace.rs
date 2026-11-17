@@ -1,6 +1,29 @@
 use crate::desktop::test_support::{add, reopen, unlocked};
 
 #[test]
+fn creation_event_requires_a_successful_first_save() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut workspace = unlocked(&dir);
+    workspace.start_new();
+    workspace.autosave_draft().unwrap();
+    assert_eq!(workspace.record_created, 0);
+    workspace.draft.as_mut().unwrap().entry.password = "fictional".into();
+    assert!(workspace.autosave_draft().is_err());
+    assert_eq!(workspace.record_created, 0);
+    workspace.draft.as_mut().unwrap().entry.title = "Example".into();
+    let tmp = workspace.vault.path().with_extension("lbx.tmp");
+    std::fs::create_dir(&tmp).unwrap();
+    assert!(workspace.autosave_draft().is_err());
+    assert_eq!(workspace.record_created, 0);
+    std::fs::remove_dir(tmp).unwrap();
+    workspace.autosave_draft().unwrap();
+    assert_eq!(workspace.record_created, 1);
+    workspace.autosave_draft().unwrap();
+    workspace.close_draft().unwrap();
+    assert_eq!(workspace.record_created, 1);
+}
+
+#[test]
 fn autosave_persists_changes_without_closing_or_resetting_the_editor() {
     let dir = tempfile::tempdir().unwrap();
     let mut workspace = unlocked(&dir);
@@ -11,18 +34,21 @@ fn autosave_persists_changes_without_closing_or_resetting_the_editor() {
     draft.entry.password = "fictional-password".into();
     draft.show_password = true;
     draft.icon_picker_open = true;
-    draft.schedule_save();
     workspace.autosave_draft().unwrap();
+    assert_eq!(workspace.record_created, 1);
 
     let draft = workspace.draft.as_ref().unwrap();
     assert!(draft.show_password);
     assert!(draft.icon_picker_open);
-    assert!(draft.save_after.is_none());
     assert!(!draft.is_new);
     assert_eq!(reopen(&workspace).entries[0].password, "fictional-password");
 
     workspace.draft.as_mut().unwrap().entry.username = "fictional-user".into();
     workspace.autosave_draft().unwrap();
+    assert_eq!(
+        workspace.record_created, 1,
+        "edits must not celebrate again"
+    );
     let saved = reopen(&workspace);
     assert_eq!(saved.entries.len(), 1);
     assert_eq!(saved.entries[0].id, id);
@@ -348,6 +374,62 @@ fn attachment_drafts_cancel_save_and_rollback_with_the_entry() {
 }
 
 #[test]
+fn navigation_prompts_only_for_changed_drafts_and_respects_each_choice() {
+    use crate::desktop::workspace::Destination;
+    let dir = tempfile::tempdir().unwrap();
+    let mut u = unlocked(&dir);
+    let first = add(&mut u, "First", "original", "");
+    let second = add(&mut u, "Second", "", "");
+    u.select(first.clone());
+    u.start_edit();
+    u.navigate(Destination::Entry(second.clone()));
+    assert!(u.draft.is_none());
+    assert!(u.pending_navigation.is_none());
+    u.select(first.clone());
+    u.start_edit();
+    u.draft.as_mut().unwrap().entry.username = "changed".into();
+    u.navigate(Destination::Directory(None));
+    assert!(u.pending_navigation.is_some());
+    assert_eq!(u.selected.as_ref(), Some(&first));
+    assert_eq!(reopen(&u).entries[0].username, "original");
+    u.pending_navigation = None; // Cancel keeps the edit and selection.
+    assert_eq!(u.draft.as_ref().unwrap().entry.username, "changed");
+    u.navigate(Destination::Entry(second.clone()));
+    u.resolve_navigation(false);
+    assert_eq!(u.selected.as_ref(), Some(&second));
+    assert_eq!(reopen(&u).entries[0].username, "original");
+    u.select(first);
+    u.start_edit();
+    u.draft.as_mut().unwrap().entry.username = "saved".into();
+    u.navigate(Destination::Close);
+    u.resolve_navigation(true);
+    assert!(u.selected.is_none());
+    assert!(u.draft.is_none());
+    assert_eq!(reopen(&u).entries[0].username, "saved");
+}
+
+#[test]
+fn failed_navigation_save_retains_the_destination_and_draft() {
+    use crate::desktop::workspace::Destination;
+    let dir = tempfile::tempdir().unwrap();
+    let mut u = unlocked(&dir);
+    add(&mut u, "First", "", "");
+    u.start_edit();
+    u.draft.as_mut().unwrap().entry.title.clear();
+    u.navigate(Destination::Close);
+    u.resolve_navigation(true);
+    assert!(u.pending_navigation.is_some());
+    assert!(u.draft.is_some());
+    assert!(u.error.is_some());
+    u.draft.as_mut().unwrap().entry.title = "Valid".into();
+    std::fs::remove_dir_all(dir.path()).unwrap();
+    u.resolve_navigation(true);
+    assert!(u.pending_navigation.is_some());
+    assert!(u.draft.is_some());
+    assert!(u.error.is_some());
+}
+
+#[test]
 fn navigation_flushes_pending_edits_before_leaving_the_editor() {
     use crate::desktop::workspace::Page;
     let dir = tempfile::tempdir().unwrap();
@@ -358,7 +440,6 @@ fn navigation_flushes_pending_edits_before_leaving_the_editor() {
         let draft = workspace.draft.as_mut().unwrap();
         let title = format!("Pending {destination}");
         draft.entry.title = title.clone();
-        draft.schedule_save();
         match destination {
             0 => workspace.select(other.clone()),
             1 => workspace.select_directory(None),

@@ -1,6 +1,49 @@
 use super::*;
 
 #[test]
+fn presets_have_readable_text_and_fills_in_both_modes() {
+    use crate::settings::appearance::ThemePreset;
+    for preset in ThemePreset::ALL {
+        for dark in [false, true] {
+            let appearance = Appearance {
+                preset,
+                gradient: true,
+                ..Appearance::default()
+            };
+            let style = appearance_style(appearance, dark);
+            assert!(style.contains("--canvas-image:linear-gradient("));
+            if preset == ThemePreset::Classic {
+                continue;
+            }
+            for text in [
+                "--ink",
+                "--muted",
+                "--accent-ink",
+                "--error",
+                "--notice",
+                "--success",
+            ] {
+                for surface in ["--canvas", "--subtle", "--control"] {
+                    assert!(
+                        contrast(
+                            color_variable(&style, text),
+                            color_variable(&style, surface)
+                        ) >= 4.5,
+                        "{preset:?}: {text} on {surface}"
+                    );
+                }
+            }
+            assert!(
+                contrast(
+                    color_variable(&style, "--accent"),
+                    color_variable(&style, "--accent-text")
+                ) >= 4.5
+            );
+        }
+    }
+}
+
+#[test]
 fn explicit_appearance_overrides_system_and_system_mode_tracks_it() {
     for system_dark in [false, true] {
         assert!(!ThemeMode::Light.is_dark(system_dark));
@@ -149,6 +192,7 @@ fn background_reset_restores_the_preferred_mode_and_keeps_accent() {
             theme: mode,
             accent: RgbColor::parse("#af52de"),
             background: RgbColor::parse("#ffffff"),
+            ..Appearance::default()
         };
         assert!(!effective_dark(appearance, true));
         appearance.background = RgbColor::parse("#000000");

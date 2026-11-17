@@ -90,6 +90,7 @@ impl Vault {
         let prepared = self.prepare_sync_command(|sync, device| {
             Machine::prepare_borrowed(sync, device, &transaction)
         })?;
+        self.records_changed();
         self.entries = replay.projection.entries();
         self.folders = replay.projection.folders();
         self.commit_prepared(prepared)
@@ -166,6 +167,7 @@ impl Vault {
             return Ok(());
         }
 
+        self.records_changed();
         self.entries = replay.projection.entries();
         self.folders = replay.projection.folders();
 
@@ -429,6 +431,7 @@ impl Vault {
                 self.protection = None;
             }
 
+            self.records_changed();
             self.entries = entries;
             self.folders = folders;
         }

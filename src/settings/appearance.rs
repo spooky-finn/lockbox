@@ -34,10 +34,57 @@ impl ThemeMode {
 #[serde(default)]
 pub struct Appearance {
     pub theme: ThemeMode,
+    pub preset: ThemePreset,
+    pub gradient: bool,
     #[serde(deserialize_with = "deserialize_color")]
     pub accent: Option<RgbColor>,
     #[serde(deserialize_with = "deserialize_color")]
     pub background: Option<RgbColor>,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ThemePreset {
+    Ocean,
+    Forest,
+    Plum,
+    #[default]
+    #[serde(other)]
+    Classic,
+}
+
+impl ThemePreset {
+    pub const ALL: [Self; 4] = [Self::Classic, Self::Ocean, Self::Forest, Self::Plum];
+
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::Classic => "classic",
+            Self::Ocean => "ocean",
+            Self::Forest => "forest",
+            Self::Plum => "plum",
+        }
+    }
+
+    pub fn colors(self, dark: bool) -> (Option<RgbColor>, Option<RgbColor>) {
+        let (accent, background) = match (self, dark) {
+            (Self::Classic, _) => return (None, None),
+            (Self::Ocean, false) => ([0, 99, 170], [239, 246, 252]),
+            (Self::Ocean, true) => ([83, 185, 245], [18, 30, 43]),
+            (Self::Forest, false) => ([25, 112, 68], [240, 247, 241]),
+            (Self::Forest, true) => ([100, 210, 147], [20, 34, 27]),
+            (Self::Plum, false) => ([132, 56, 157], [249, 242, 250]),
+            (Self::Plum, true) => ([215, 155, 240], [35, 24, 40]),
+        };
+        (Some(RgbColor(accent)), Some(RgbColor(background)))
+    }
+}
+
+impl Appearance {
+    /// Legacy custom colors remain readable until a preset is explicitly chosen.
+    pub fn colors(self, dark: bool) -> (Option<RgbColor>, Option<RgbColor>) {
+        let (accent, background) = self.preset.colors(dark);
+        (self.accent.or(accent), self.background.or(background))
+    }
 }
 
 /// A validated RGB color; arbitrary preference strings never become CSS.

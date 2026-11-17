@@ -83,50 +83,32 @@ fn attachment_controls_render_names_and_sizes_without_file_contents() {
 }
 
 #[test]
-fn footer_offers_delete_only_for_saved_entries() {
+fn editor_keeps_shared_field_layout_and_top_close_and_save_controls() {
     use kuchikiki::traits::TendrilSink;
     let mut dom = mounted();
-    update(&mut dom, |state| {
-        edit_unlocked(state, |u| u.start_edit());
-    });
-    let html = dioxus_ssr::render(&dom);
-    let document = kuchikiki::parse_html().one(html.clone()).document_node;
+    update(&mut dom, |state| edit_unlocked(state, |u| u.start_edit()));
+    let document = kuchikiki::parse_html()
+        .one(dioxus_ssr::render(&dom))
+        .document_node;
+    assert!(document.select_first(".draft.entry-detail").is_ok());
     assert_eq!(
         document
-            .select(".draft-fields > .draft-field")
+            .select(".draft .fields > .field-row")
             .unwrap()
             .count(),
-        6
+        5
     );
-    assert!(document.select_first(".draft-field .draft-field").is_err());
-
     assert!(
         document
-            .select_first(".draft > .draft-fields > .totp-editor")
+            .select_first(".draft > .entry-close button[title='Закрыть']")
             .is_ok()
     );
     assert!(
         document
-            .select_first(".draft > footer.draft-footer")
+            .select_first(".draft .detail-heading button.record-save")
             .is_ok()
     );
-    assert!(
-        document
-            .select_first(".draft-fields .draft-footer")
-            .is_err()
-    );
-    let footer = html.split("<footer").nth(1).expect("action footer");
-    assert!(footer.contains("draft-footer"));
-    assert!(footer.contains("draft-delete"));
-    update(&mut dom, |state| {
-        edit_unlocked(state, |u| {
-            u.draft = None;
-            u.start_new();
-        });
-    });
-    let html = dioxus_ssr::render(&dom);
-    assert!(html.contains("draft-footer"));
-    assert!(!html.contains("draft-delete"));
+    assert!(document.select_first(".draft > footer").is_err());
 }
 
 #[test]
@@ -210,7 +192,7 @@ fn keyboard_finishes_inputs_and_keeps_notes_newlines_and_composition() {
 }
 
 #[test]
-fn editing_an_entry_keeps_sidebar_navigation_available_without_close_button() {
+fn editing_an_entry_keeps_sidebar_navigation_and_top_close_available() {
     use kuchikiki::traits::TendrilSink;
     let mut dom = mounted();
     update(&mut dom, |state| edit_unlocked(state, |u| u.start_edit()));
@@ -230,7 +212,7 @@ fn editing_an_entry_keeps_sidebar_navigation_available_without_close_button() {
     );
     assert!(
         document
-            .select_first(".draft-footer button[title='Закрыть']")
-            .is_err()
+            .select_first(".draft > .entry-close button[title='Закрыть']")
+            .is_ok()
     );
 }

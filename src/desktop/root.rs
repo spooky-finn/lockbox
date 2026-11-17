@@ -15,23 +15,28 @@ pub fn App() -> Element {
     let language = crate::desktop::i18n::use_language();
     let last_motion =
         use_hook(|| std::rc::Rc::new(std::cell::Cell::new(std::time::Instant::now())));
-    let locked = matches!(&*state.read(), Screen::Locked(_));
-    let title = crate::desktop::window::title(&state.read(), language);
+    let locked = use_memo(move || matches!(&*state.read(), Screen::Locked(_)));
+    let title = use_memo(move || {
+        crate::desktop::window::title(&state.read(), settings.read().config.language)
+    });
     let shown_title = use_hook(|| std::rc::Rc::new(std::cell::RefCell::new(String::new())));
 
-    if *shown_title.borrow() != title {
-        dioxus::desktop::window().set_title(&title);
-        *shown_title.borrow_mut() = title;
+    if *shown_title.borrow() != *title.read() {
+        dioxus::desktop::window().set_title(&title.read());
+        *shown_title.borrow_mut() = title();
     }
     rsx! {
         style { "{CSS}" }
         main {
             lang: language.code(),
-            class: if locked { "app is-locked" } else { "app" },
+            class: if locked() { "app is-locked" } else { "app" },
             "data-theme": theme.name(),
             style: appearance_style,
             onpointerdown: move |_| runtime::record_activity(),
-            onkeydown: move |_| runtime::record_activity(),
+            onkeydown: move |event| {
+                runtime::record_activity();
+                crate::desktop::workspace_view::handle_record_shortcut(state, event);
+            },
             onwheel: move |_| runtime::record_activity(),
             onpointermove: move |_| {
                 if last_motion.get().elapsed() >= std::time::Duration::from_secs(1) {
@@ -40,7 +45,7 @@ pub fn App() -> Element {
                 }
             },
             crate::desktop::browser::BrowserConsent {}
-            if locked { LockedView {} } else { UnlockedView {} }
+            if locked() { LockedView {} } else { UnlockedView {} }
         }
     }
 }

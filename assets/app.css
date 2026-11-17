@@ -120,11 +120,13 @@ h2 { font-size: 15px; font-weight: 600; letter-spacing: -.2px; }
     overflow: hidden;
     background: var(--canvas);
 }
+.app { background-image: var(--canvas-image, none); }
 .app::before { display: none; }
 .sidebar { background: var(--subtle); border-right: 1px solid var(--border); }
 
 /* A quiet, native-style lock screen; the vault controls stay in a discreet dock. */
 .app.is-locked { color: var(--lock-ink); background: var(--lock-canvas); }
+.app.is-locked { background-image: var(--canvas-image, none); }
 .app.is-locked::before { display: none; }
 .lock-screen { position: relative; flex: 1; min-height: 0; display: grid; place-items: center; padding: 56px 24px; overflow: auto; }
 .unlock-content { width: 100%; max-width: 420px; display: flex; flex-direction: column; align-items: center; margin: auto; text-align: center; }
@@ -232,7 +234,7 @@ input.switch:disabled { opacity: .45; cursor: default; }
 .tree-branch { margin: 1px 0 2px 8px; padding-left: 9px; border-left: 1px solid var(--separator); }
 .tree-folder, .tree-leaf { min-width: 0; }
 .entry-row { display: block; width: 100%; min-height: 25px; border: 1px solid transparent; background: transparent; text-align: left; padding: 6px 10px 6px 18px; margin: 1px 0; border-radius: var(--button-radius); box-shadow: none; font-size: 12px; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.entry-row:hover:not(:disabled), .folder-row:hover { background: var(--control); box-shadow: inset 0 1px 0 var(--glass-edge); }
+.entry-row:hover:not(:disabled), .folder-row:hover { background: var(--control); box-shadow: none; }
 .entry-row.selected, .folder-row.selected { background: var(--active-item); border-color: transparent; color: var(--active-item-text); box-shadow: none; font-weight: 600; }
 .entry-row.selected:hover:not(:disabled), .folder-row.selected:hover { background: var(--active-item); box-shadow: none; }
 .folder-row.selected .tree-disclosure, .folder-row.selected .folder-label > .symbol { color: var(--active-item-text); }
@@ -258,7 +260,7 @@ input.switch:disabled { opacity: .45; cursor: default; }
 .sidebar-footer { border-top: 1px solid var(--separator); margin: 8px 3px 0; padding-top: 6px; }
 .sidebar-settings { width: 100%; min-height: 34px; justify-content: flex-start; gap: 9px; border-radius: var(--button-radius); padding: 7px 9px; font-size: 12px; color: var(--muted); }
 .sidebar-settings .symbol { width: 15px; height: 15px; flex-basis: 15px; }
-button.sidebar-settings[aria-current="page"], button.sidebar-settings[aria-current="page"]:hover:not(:disabled) { background: var(--active-item); color: var(--active-item-text); font-weight: 600; }
+button.sidebar-settings[aria-current="page"], button.sidebar-settings[aria-current="page"]:hover:not(:disabled) { border: 0; background: var(--active-item); color: var(--active-item-text); font-weight: 600; }
 button.sidebar-settings[aria-current="page"]:focus-visible { outline-color: var(--active-item-text); outline-offset: -3px; }
 
 /* Preferences use a full page, with the same surfaces as vault details. */
@@ -318,8 +320,7 @@ button.sidebar-settings[aria-current="page"]:focus-visible { outline-color: var(
 
 /* Credentials */
 .detail { min-width: 0; min-height: 0; overflow: auto; padding: 24px 32px 32px; background: var(--surface); }
-.detail:has(> .draft) { display: flex; flex-direction: column; overflow: hidden; padding: 12px 16px 8px; }
-.detail:has(> .draft) > :not(.draft) { flex-shrink: 0; }
+.detail { background-image: var(--canvas-image, none); }
 .detail > .error { margin-bottom: 18px; }
 .entry-detail { max-width: 720px; margin: 0 auto; }
 .directory-detail { max-width: 720px; margin: 0 auto; }
@@ -388,27 +389,22 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 99px; }
 .empty-state p { color: var(--muted); max-width: 250px; margin: 10px 0 22px; line-height: 1.7; }
 
 /* Editor, generator and icon picker */
-.draft { container-type: inline-size; flex: 1; min-height: 0; width: 100%; overflow: hidden; margin: 0; padding: 0; border: 0; border-radius: 18px; background: var(--surface); box-shadow: none; gap: 4px; }
+.draft { max-width: 800px; margin: 0 auto; padding: 18px; border: 0; border-radius: 18px; background: var(--surface); box-shadow: none; gap: 4px; }
 .form-heading { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
 .form-heading h1 { font-size: 21px; }
 .form-heading .detail-kind { font-size: 10px; line-height: 1.25; margin-bottom: 3px; }
 .form-icon { width: 36px; height: 36px; flex: 0 0 36px; margin: 0; border-radius: 11px; background: var(--selected); box-shadow: none; }
 .form-icon .symbol { width: 19px; height: 19px; }
-.draft-fields { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; align-items: start; overflow-y: auto; padding: 4px; gap: 10px 12px; scroll-padding-block: 8px; }
-.draft-fields > *, .draft-field { min-width: 0; }
-@container (max-width: 560px) { .draft-fields { grid-template-columns: minmax(0, 1fr); } }
-.draft-field { gap: 4px; }
-.draft-field > label { font-size: 11px; line-height: 1.3; margin-top: 0; }
-.draft-wide, .draft-fields > .subpanel { grid-column: 1 / -1; }
+.draft.stack > label { font-size: 11px; line-height: 1.3; margin-top: 6px; }
 .draft input:not([type=checkbox]):not([type=range]), .draft select, .draft textarea { background: var(--subtle); border-color: transparent; border-radius: 8px; box-shadow: none; }
-.draft input:not([type=checkbox]):not([type=range]), .draft select { height: 40px; min-height: 40px; padding: 9px 12px; font-size: 14px; line-height: 20px; }
+.draft input:not([type=checkbox]):not([type=range]), .draft select { height: 32px; min-height: 32px; padding: 5px 10px; line-height: 20px; }
 .draft .select-field > select { padding-right: 32px; }
-.draft textarea { min-height: 80px; padding: 9px 12px; font-size: 14px; line-height: 20px; }
+.draft textarea { min-height: 64px; padding: 6px 10px; line-height: 18px; }
 .draft .icon-button { width: 30px; height: 30px; min-height: 30px; flex-basis: 30px; padding: 6px; }
 .draft .icon-button { border-color: transparent; background: transparent; box-shadow: none; }
 .draft .icon-button.primary { color: var(--accent-ink); }
 .draft .icon-button:hover:not(:disabled) { background: var(--control); }
-.draft fieldset { min-width: 0; margin: 4px 0; padding: 6px 0; border: 0; }
+.draft fieldset { min-width: 0; margin: 8px 0; padding: 12px 0; border: 0; }
 .draft fieldset legend { padding: 0; }
 .draft .form-icon { border: 0; }
 .draft .entry-icon { width: 24px; height: 24px; flex-basis: 24px; border-radius: 6px; font-size: 14px; }
@@ -430,10 +426,6 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 99px; }
 .totp-options { display: flex; flex-wrap: wrap; gap: 12px; margin: 12px 0 4px; }
 .totp-options label { display: flex; flex-direction: column; gap: 7px; flex: 1; min-width: 80px; font-size: 11px; }
 .form-actions { border-top: 1px solid var(--separator); padding-top: 10px; margin-top: 6px; }
-.draft-footer { flex-wrap: wrap; flex-shrink: 0; gap: 4px; margin-top: 0; padding: 4px 0; background: var(--surface); }
-.draft-delete-confirm { flex-basis: 100%; padding: 4px 0; }
-.draft-delete-confirm p { margin-bottom: 4px; }
-.draft-footer .draft-delete { margin-left: auto; }
 .delete-confirm { padding: 18px; border: 1px solid var(--error); border-radius: 16px; background: var(--surface); margin-top: 20px; }
 .delete-confirm p { margin-bottom: 14px; }
 .status { color: var(--muted); font-size: 10px; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 4px 12px; }
@@ -623,3 +615,44 @@ button.copy-value:disabled { opacity: 1; }
 .space-switch-actions { display: flex; flex-direction: column; flex-shrink: 0; gap: 2px; padding-top: 7px; margin-top: 7px; border-top: 1px solid var(--border); }
 .space-switch-actions > button { justify-content: flex-start; font-size: 12px; }
 .locked-space-switcher { position: absolute; top: 16px; left: 20px; max-width: calc(100% - 40px); z-index: 3; }
+
+/* Record fields keep the same geometry in reading and editing modes. */
+.entry-close { display: flex; align-items: center; gap: 12px; margin: 0 0 16px; }
+.entry-detail .entry-close .icon-button { width: 32px; height: 32px; min-height: 32px; flex-basis: 32px; padding: 7px; }
+.record-hint { color: var(--muted); font-size: 11px; line-height: 1.5; }
+.record-save { flex-shrink: 0; gap: 7px; }
+button.copy-value.title-value { display: block; font: inherit; line-height: 1.2; letter-spacing: inherit; width: 100%; min-height: 34px; padding: 0; margin: 0; }
+button.copy-value.notes-value { width: 100%; white-space: pre-wrap; align-items: flex-start; }
+.copy-value-group { position: relative; }
+.copy-value-group .copy-indicator { position: absolute; right: 0; padding: 3px 6px; border-radius: 5px; background: var(--surface); pointer-events: none; }
+.entry-detail .detail-title { position: relative; }
+.entry-detail .detail-title > .copy-indicator { position: absolute; top: 100%; }
+.entry-detail .notes { position: relative; }
+.entry-detail .notes > .copy-indicator { position: absolute; right: 0; bottom: 0; padding: 3px 6px; border-radius: 5px; background: var(--surface); }
+.entry-detail button.copy-value:hover:not(:disabled) { background: var(--control); }
+.entry-detail button.copy-value:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
+.draft.entry-detail { max-width: 720px; padding: 0; border-radius: 0; background: transparent; }
+.draft.entry-detail .entry-icon.large { width: 36px; height: 36px; flex-basis: 36px; font-size: 20px; border-radius: 8px; }
+.draft.entry-detail .fields input:not([type=checkbox]):not([type=range]), .draft.entry-detail .fields textarea,
+.draft.entry-detail input.entry-title-input { width: 100%; min-width: 0; margin: 0; padding: 4px 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; font: inherit; }
+.draft.entry-detail input.entry-title-input { height: auto; min-height: 34px; padding: 0; font-size: 26px; line-height: 1.2; font-weight: 650; letter-spacing: -.6px; }
+.draft.entry-detail .fields textarea { min-height: 34px; line-height: 1.7; }
+.draft.entry-detail .fields input:focus, .draft.entry-detail .fields textarea:focus,
+.draft.entry-detail .entry-title-input:focus { outline: 2px solid var(--accent-ink); outline-offset: 3px; }
+.entry-options { margin-top: 24px; }
+.record-dialog::backdrop { background: #0006; }
+.record-dialog:not([open]) { display: none; }
+.record-dialog { width: min(480px, calc(100% - 32px)); max-height: calc(100% - 32px); overflow: auto; padding: 24px; border: 1px solid var(--separator); border-radius: 16px; background: var(--surface); box-shadow: 0 16px 64px #0004; }
+.record-dialog .actions { flex-wrap: wrap; }
+
+.record-dialog { color: var(--ink); margin: auto; }
+.draft.entry-detail .totp-editor { flex: 1; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; border: 0; padding: 0; margin: 0; }
+.draft.entry-detail .totp-editor > .input-actions { grid-column: 1; grid-row: 1; flex-wrap: nowrap; min-width: 0; }
+.draft.entry-detail .totp-editor > details { grid-column: 2; grid-row: 1; }
+.draft.entry-detail .totp-editor > details[open] { grid-column: 1 / -1; grid-row: 2; }
+.draft.entry-detail .totp-editor > button { grid-column: 3; grid-row: 1; align-self: center; }
+.draft.entry-detail .totp-editor.is-empty > button { grid-column: 1 / -1; justify-self: start; }
+.draft.entry-detail .totp-editor > .error { grid-column: 1 / -1; }
+.draft.entry-detail .totp-editor h2 { display: none; }
+@media (max-width: 600px) { .draft.entry-detail .entry-icon.large { width: 32px; height: 32px; flex-basis: 32px; } }
+.copy-value-group button.copy-value { flex: 1; }

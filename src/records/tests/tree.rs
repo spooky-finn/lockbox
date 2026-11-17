@@ -6,6 +6,24 @@ use crate::{
     records::tree::{Node, project},
 };
 
+#[test]
+fn presentation_key_ignores_secrets_but_tracks_display_and_search_changes() {
+    use crate::records::tree::PresentationKey;
+    let dir = tempfile::tempdir().unwrap();
+    let mut workspace = unlocked(&dir);
+    add(&mut workspace, "Example", "alice", "https://example.com");
+    let key = PresentationKey::new(&workspace.vault, "");
+    workspace.vault.test_entries_mut()[0].password = "fictional-new-password".into();
+    workspace.vault.test_entries_mut()[0].notes = "fictional note".into();
+    assert!(key == PresentationKey::new(&workspace.vault, ""));
+    let search = PresentationKey::new(&workspace.vault, "alice");
+    workspace.vault.test_entries_mut()[0].username = "bob".into();
+    assert!(search != PresentationKey::new(&workspace.vault, "alice"));
+    assert!(key == PresentationKey::new(&workspace.vault, ""));
+    workspace.vault.test_entries_mut()[0].title = "Renamed".into();
+    assert!(key != PresentationKey::new(&workspace.vault, ""));
+}
+
 fn outline(nodes: &[Node<'_>]) -> Vec<String> {
     fn visit(nodes: &[Node<'_>], depth: usize, lines: &mut Vec<String>) {
         for node in nodes {

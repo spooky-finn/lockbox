@@ -2,7 +2,7 @@ use crate::desktop::i18n::Text;
 
 use crate::{
     desktop::{
-        context::{Session, edit_draft, edit_unlocked},
+        context::{Session, draft_control, edit_unlocked},
         session::Screen,
         widgets::{button::IconButton, symbol::Icon},
     },
@@ -49,7 +49,7 @@ pub(crate) fn GeneratorView() -> Element {
                 IconButton { class: "primary", icon: Icon::Check, label: language.text(Text::UsePassword), onclick: move |_| edit_unlocked(state, |u| {
                     if let Some(draft) = &mut u.draft { draft.generate(&u.generator); }
                 }) }
-                IconButton { icon: Icon::Close, label: language.text(Text::CloseGenerator), onclick: move |_| edit_draft(state, |d| d.generator_open = false) }
+                IconButton { icon: Icon::Close, label: language.text(Text::CloseGenerator), onclick: move |_| draft_control(state, crate::records::editor::Control::CloseGenerator) }
             }
 
             if let Some(error) = &draft.generator_error { p { class: "error", role: "alert", {language.message(error)} } }

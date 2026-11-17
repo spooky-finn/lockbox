@@ -83,7 +83,7 @@ fn settings_saves_pending_edits_before_switching_preferences_and_returning() {
 }
 
 #[test]
-fn add_entry_stays_available_during_entry_editing() {
+fn add_entry_stays_available_during_record_editing() {
     let mut dom = mounted();
     update(&mut dom, |state| edit_unlocked(state, |u| u.start_new()));
     let html = dioxus_ssr::render(&dom);
@@ -152,15 +152,8 @@ fn invalid_accent_is_ignored_and_reset_preserves_other_preferences() {
         assert_eq!(settings.read().config.language, Language::Russian);
     });
     let html = dioxus_ssr::render(&dom);
-    assert!(html.contains("value=\"#409cff\""));
-    let reset = html
-        .split("Сбросить цвет")
-        .next()
-        .unwrap()
-        .rsplit("<button")
-        .next()
-        .unwrap();
-    assert!(reset.contains("disabled"));
+    assert!(html.contains("settings-preset"));
+    assert!(!html.contains("type=\"color\""));
 }
 
 #[test]
@@ -193,10 +186,10 @@ fn invalid_background_is_ignored_and_reset_keeps_accent_and_mode() {
 }
 
 #[test]
-fn appearance_controls_handle_theme_color_and_reset_events() {
+fn appearance_controls_handle_theme_preset_and_gradient_events() {
     use dioxus::{
         dioxus_core::Mutation,
-        html::{EventData, SerializedFormData, SerializedHtmlEventConverter, SerializedMouseData},
+        html::{EventData, SerializedFormData, SerializedHtmlEventConverter},
     };
 
     fn fixture() -> Element {
@@ -230,7 +223,7 @@ fn appearance_controls_handle_theme_color_and_reset_events() {
         })
         .collect::<Vec<_>>();
     assert_eq!(controls.len(), 3);
-    assert_eq!(resets.len(), 2);
+    assert!(resets.is_empty());
     for mode in ["dark", "light", "system"] {
         dom.runtime().handle_event(
             "change",
@@ -256,47 +249,10 @@ fn appearance_controls_handle_theme_color_and_reset_events() {
     dom.runtime().handle_event(
         "change",
         Event::new(
-            EventData::Form(SerializedFormData::new("#af52de".into(), vec![])).into_any(),
+            EventData::Form(SerializedFormData::new("ocean".into(), vec![])).into_any(),
             true,
         ),
         controls[1],
-    );
-    dom.render_immediate_to_vec();
-    assert!(dioxus_ssr::render(&dom).contains("value=\"#af52de\""));
-    dom.runtime().handle_event(
-        "change",
-        Event::new(
-            EventData::Form(SerializedFormData::new("#f3e8d2".into(), vec![])).into_any(),
-            true,
-        ),
-        controls[2],
-    );
-    dom.render_immediate_to_vec();
-    assert!(dioxus_ssr::render(&dom).contains("value=\"#f3e8d2\""));
-    dom.runtime().handle_event(
-        "click",
-        Event::new(
-            EventData::Mouse(SerializedMouseData::default()).into_any(),
-            true,
-        ),
-        resets[1],
-    );
-    dom.render_immediate_to_vec();
-    dom.in_scope(ScopeId::APP, || {
-        let settings = consume_context::<Signal<Settings>>();
-        assert_eq!(settings.read().config.appearance.background, None);
-        assert_eq!(
-            settings.read().config.appearance.accent,
-            RgbColor::parse("#af52de")
-        );
-    });
-    dom.runtime().handle_event(
-        "click",
-        Event::new(
-            EventData::Mouse(SerializedMouseData::default()).into_any(),
-            true,
-        ),
-        resets[0],
     );
     dom.render_immediate_to_vec();
     dom.in_scope(ScopeId::APP, || {
@@ -305,9 +261,25 @@ fn appearance_controls_handle_theme_color_and_reset_events() {
                 .read()
                 .config
                 .appearance
-                .accent,
-            None
+                .preset
+                .code(),
+            "ocean"
         );
+    });
+    dom.runtime().handle_event(
+        "change",
+        Event::new(
+            EventData::Form(SerializedFormData::new("true".into(), vec![])).into_any(),
+            true,
+        ),
+        controls[2],
+    );
+    dom.render_immediate_to_vec();
+    dom.in_scope(ScopeId::APP, || {
+        let settings = consume_context::<Signal<Settings>>();
+        assert!(settings.read().config.appearance.gradient);
+        assert_eq!(settings.read().config.appearance.background, None);
+        assert_eq!(settings.read().config.appearance.accent, None);
     });
 }
 

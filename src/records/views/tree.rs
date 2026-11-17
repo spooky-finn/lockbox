@@ -6,12 +6,12 @@ use crate::{
         widgets::symbol::{Icon, Symbol},
         workspace::Unlocked,
     },
-    records::tree::Node,
+    records::tree::DisplayNode,
 };
 use dioxus::prelude::*;
 
 pub(crate) fn nodes_ui(
-    nodes: &[Node<'_>],
+    nodes: &[DisplayNode],
     workspace: &Unlocked,
     state: Session,
     language: crate::settings::language::Language,
@@ -21,50 +21,42 @@ pub(crate) fn nodes_ui(
     rsx! {
         for node in nodes {
             {match node {
-                Node::Record(entry) => {
-                    let id = entry.id.clone();
+                DisplayNode::Record { id, title } => {
+                    let id = id.clone();
                     let selected = workspace.page == crate::desktop::workspace::Page::Vault && workspace.selected.as_ref() == Some(&id);
                     rsx! {
                         li { class: "tree-leaf", key: "entry-{id}",
                             button { class: if selected { "entry-row selected" } else { "entry-row" },
-                                r#type: "button", title: "{entry.title}", aria_current: "{selected}", disabled: editing,
-                                onclick: move |_| edit_unlocked(state, |u| u.select(id.clone())),
-                                "{entry.title}"
+                                r#type: "button", title: "{title}", aria_current: "{selected}", disabled: editing,
+                                onclick: move |_| edit_unlocked(state, |u| u.navigate(crate::desktop::workspace::Destination::Entry(id.clone()))),
+                                "{title}"
                             }
                         }
                     }
                 }
-                Node::Folder(folder, children) => {
-                    let id = folder.id.clone();
+                DisplayNode::Folder { id, name, children } => {
+                    let id = id.clone();
                     let toggle = id.clone();
                     let select = id.clone();
-                    let keyboard = id.clone();
                     let expanded = !workspace.directories.collapsed.contains(&id) || !workspace.search.trim().is_empty();
                     let selected = workspace.page == crate::desktop::workspace::Page::Vault && workspace.selected.is_none() && workspace.directories.selected.as_ref() == Some(&id);
                     rsx! {
                         li { class: "tree-folder", key: "folder-{id}",
                             div { class: if selected { "folder-row selected" } else { "folder-row" },
-                                onkeydown: move |event| {
-                                    if editing { return; }
-                                    match event.key() {
-                                        Key::ArrowRight => { event.prevent_default(); edit_unlocked(state, |u| { u.directories.collapsed.remove(&keyboard); }); }
-                                        Key::ArrowLeft => { event.prevent_default(); edit_unlocked(state, |u| { u.directories.collapsed.insert(keyboard.clone()); }); }
-                                        _ => {}
-                                    }
-                                },
                                 button { class: if expanded { "tree-disclosure expanded" } else { "tree-disclosure" },
                                     r#type: "button", disabled: editing || searching,
                                     title: if expanded { language.text(Text::CollapseFolder) } else { language.text(Text::ExpandFolder) },
-                                    aria_label: if expanded { language.format(Text::CollapseFolder2, std::slice::from_ref(&folder.name)) } else { language.format(Text::ExpandFolder2, std::slice::from_ref(&folder.name)) },
+                                    aria_label: if expanded { language.format(Text::CollapseFolder2, std::slice::from_ref(name)) } else { language.format(Text::ExpandFolder2, std::slice::from_ref(name)) },
                                     aria_expanded: "{expanded}", aria_controls: "folder-{id}",
                                     onclick: move |_| edit_unlocked(state, |u| u.directories.toggle(toggle.clone())),
                                     Symbol { icon: Icon::ChevronRight }
                                 }
-                                button { class: "folder-label", r#type: "button", title: "{folder.name}",
+                                button { class: "folder-label", r#type: "button", title: "{name}",
                                     disabled: editing, aria_current: "{selected}",
-                                    onclick: move |_| edit_unlocked(state, |u| u.select_directory(Some(select.clone()))),
+                                    aria_expanded: "{expanded}", aria_controls: "folder-{id}",
+                                    onclick: move |_| edit_unlocked(state, |u| u.navigate(crate::desktop::workspace::Destination::ToggleDirectory(select.clone()))),
                                     Symbol { icon: if expanded { Icon::FolderOpen } else { Icon::Folder } }
-                                    span { "{folder.name}" }
+                                    span { "{name}" }
                                 }
                             }
 

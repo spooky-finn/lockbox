@@ -1,0 +1,3 @@
+- Removed real Chromium document-binding/form-filling test; profile cleanup failed CI with ENOTEMPTY.
+- Removed CHROME_BIN verification command from extension README. Firefox probe retained.
+- Validation: npm --prefix ext run check passes; 25 tests pass, 1 Firefox probe skipped; Chrome/Firefox builds pass.

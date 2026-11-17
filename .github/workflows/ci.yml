@@ -52,6 +52,8 @@ jobs:
       # The companion has no npm dependencies or lockfile; no install is needed.
       - name: Check and test browser companion
         run: npm --prefix ext run check
+      - name: Test desktop keyboard navigation
+        run: node --test tests/tree-navigation.test.mjs
 
   rust:
     name: Rust (${{ matrix.os }})

@@ -42,6 +42,18 @@ fn nested_folders_and_record_locations_survive_password_and_key_reopen() {
     let biometric = Vault::open_with_key(path, &key).unwrap();
     assert_eq!(biometric.folders(), saved.folders);
     assert_eq!(biometric.entries(), saved.entries);
+    let mut workspace = Unlocked::new(biometric);
+    let collapsed = BTreeSet::from([parent.clone(), child]);
+    assert_eq!(workspace.directories.collapsed, collapsed);
+    workspace.directories.toggle(parent.clone());
+    assert!(!workspace.directories.collapsed.contains(&parent));
+
+    let path = workspace.vault.path().to_path_buf();
+    drop(workspace);
+    let password = secrecy::SecretString::from("master".to_owned());
+    let workspace = Unlocked::new(Vault::open(path, &password).unwrap());
+    assert_eq!(workspace.directories.collapsed, collapsed);
+    assert!(workspace.directories.selected.is_none());
 }
 
 #[test]
@@ -229,4 +241,47 @@ fn search_keeps_ancestors_and_matches_folder_names_and_hidden_record_fields() {
         assert!(matches!(&children[0], Node::Record(entry) if entry.title == "GitLab"));
     }
     assert!(tree::project(&workspace.vault, "missing").is_empty());
+}
+
+#[test]
+fn folder_label_navigation_toggles_and_defers_changes_until_draft_is_resolved() {
+    use crate::desktop::workspace::Destination;
+    let dir = tempfile::tempdir().unwrap();
+    let mut workspace = unlocked(&dir);
+    let folder = add_folder(&mut workspace, "Providers", None);
+    add_record(&mut workspace, "ManyPay Akira");
+    workspace.directories.collapsed.insert(folder.clone());
+
+    workspace.navigate(Destination::ToggleDirectory(folder.clone()));
+    assert_eq!(
+        workspace.directories.selected.as_deref(),
+        Some(folder.as_str())
+    );
+    assert!(!workspace.directories.collapsed.contains(&folder));
+    workspace.navigate(Destination::ToggleDirectory(folder.clone()));
+    assert!(workspace.directories.collapsed.contains(&folder));
+    workspace.navigate(Destination::ToggleDirectory(folder.clone()));
+    assert!(!workspace.directories.collapsed.contains(&folder));
+
+    workspace.start_new();
+    workspace.draft.as_mut().unwrap().entry.title = "Unsaved draft".into();
+    workspace.navigate(Destination::ToggleDirectory(folder.clone()));
+    assert!(workspace.pending_navigation.is_some());
+    assert!(!workspace.directories.collapsed.contains(&folder));
+    workspace.pending_navigation = None; // Cancel navigation.
+    assert!(workspace.draft.is_some());
+    assert!(!workspace.directories.collapsed.contains(&folder));
+    workspace.navigate(Destination::ToggleDirectory(folder.clone()));
+    workspace.resolve_navigation(false);
+    assert!(workspace.draft.is_none());
+    assert!(workspace.directories.collapsed.contains(&folder));
+
+    workspace.search = "ManyPay".into();
+    workspace.navigate(Destination::ToggleDirectory(folder.clone()));
+    assert!(!workspace.directories.collapsed.contains(&folder));
+    workspace.navigate(Destination::ToggleDirectory(folder.clone()));
+    assert!(
+        !workspace.directories.collapsed.contains(&folder),
+        "search keeps matching branches visible"
+    );
 }

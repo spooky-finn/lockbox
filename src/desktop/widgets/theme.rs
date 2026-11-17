@@ -89,7 +89,7 @@ pub(crate) fn use_theme() -> ResolvedTheme {
     use_effect(move || {
         // Match --canvas in app.css, including the transparent title bar's backdrop.
         let [red, green, blue] =
-            backgrounds(settings.read().config.appearance.background, dark())[0];
+            backgrounds(settings.read().config.appearance.colors(dark()).1, dark())[0];
         window.set_background_color(Some((red, green, blue, 255)));
     });
 
@@ -110,20 +110,23 @@ fn system_theme(window: &DesktopContext) -> Theme {
 }
 
 pub(crate) fn appearance_style(appearance: Appearance, dark: bool) -> String {
-    let mut style = appearance
-        .background
-        .map_or_else(String::new, |color| background_style(color, dark));
+    let (accent, background) = appearance.colors(dark);
+    let mut style = background.map_or_else(String::new, |color| background_style(color, dark));
     // Default accents also need readable text when the background is customized.
-    let accent = appearance.accent.or_else(|| {
-        appearance
-            .background
-            .and_then(|_| RgbColor::parse(if dark { "#409cff" } else { "#007aff" }))
+    let accent = accent.or_else(|| {
+        background.and_then(|_| RgbColor::parse(if dark { "#409cff" } else { "#007aff" }))
     });
-    style.push_str(&accent_style(
-        accent,
-        dark,
-        &backgrounds(appearance.background, dark),
-    ));
+    style.push_str(&accent_style(accent, dark, &backgrounds(background, dark)));
+    if appearance.gradient {
+        let surfaces = backgrounds(background, dark);
+        // Interpolate only between already contrast-checked surfaces, never
+        // beneath text using an arbitrary saturated accent.
+        style.push_str(&format!(
+            "--canvas-image:linear-gradient(135deg,{},{});",
+            hex(surfaces[0]),
+            hex(surfaces[2])
+        ));
+    }
     style
 }
 

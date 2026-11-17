@@ -2,7 +2,7 @@ use crate::desktop::i18n::Text;
 
 use crate::{
     desktop::{
-        context::{Session, edit_draft, set_field},
+        context::{Session, draft_control, edit_draft, set_field},
         session::Screen,
         widgets::{
             button::IconButton,
@@ -33,13 +33,13 @@ pub(crate) fn TotpEditor() -> Element {
         section { class: if draft.entry.totp.is_some() { "totp-editor stack" } else { "totp-editor stack is-empty" },
             h2 { "TOTP" }
             if let Some(settings) = &draft.entry.totp {
-                label { r#for: "totp-secret", {language.text(Text::SecretOrOtpauthURL)} }
+                label { class: "sr-only", r#for: "totp-secret", {language.text(Text::SecretOrOtpauthURL)} }
                 div { class: "input-actions",
                     input { onkeydown: move |event| super::editor::finish_on_enter(state, event), id: "totp-secret", r#type: if draft.show_totp { "text" } else { "password" }, autocomplete: "off",
                         value: "{settings.secret}", oninput: move |e| set_field(state, Field::Totp, e.value()) }
                     IconButton { icon: if draft.show_totp { Icon::EyeOff } else { Icon::Eye },
                         label: if draft.show_totp { language.text(Text::HideTOTPSecret) } else { language.text(Text::ShowTOTPSecret) }, pressed: Some(draft.show_totp),
-                        onclick: move |_| edit_draft(state, |d| d.show_totp = !d.show_totp),
+                        onclick: move |_| draft_control(state, crate::records::editor::Control::ToggleTotp),
                     }
                 }
                 details { summary { class: "icon-button", title: language.text(Text::TOTPSettings), aria_label: language.text(Text::TOTPSettings), Symbol { icon: Icon::Settings } }

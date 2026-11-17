@@ -149,10 +149,9 @@ cargo test --locked --test browser_host
 npm --prefix ext run check
 ```
 
-Optional real browser tests use disposable profiles and fictional credentials:
+Optional real Firefox test uses a disposable profile:
 
 ```sh
-CHROME_BIN="/path/to/chrome" npm --prefix ext test
 FIREFOX_BIN="/path/to/firefox" npm --prefix ext test
 ```
 

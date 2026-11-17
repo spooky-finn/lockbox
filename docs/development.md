@@ -30,6 +30,9 @@ separate distinct stages of work. Comments should explain constraints and reason
 use `///` for public contracts and `//!` for module responsibilities.
 Use English for new documentation and developer notes.
 
+Follow the [responsive UI architecture](ui-architecture.md) for input paths,
+reactive subscriptions, contrast, keyboard behavior and performance measurements.
+
 ## GitHub CI and releases
 
 Development uses GitLab remote `origin`; GitHub remote `github` hosts releases.
@@ -198,10 +201,11 @@ The UI owns rendering, native dialogs and session-bound result application.
 
 ## Maintenance notes
 
-Record editor: changes autosave to the encrypted local vault after 600 ms without
-input. Closing the editor flushes pending changes and keeps it open on validation
-or persistence failure. Locking also attempts a final save, but never prevents a
-security lock; failed or invalid unsaved edits are discarded with a notice. An
+Record editor: entries open in reading mode. Click a field to copy; double-click
+to edit it. Typing only changes the draft. Save with the visible Save button or
+Cmd/Ctrl+S (also on non-Latin layouts), or choose Save, Discard or Cancel when closing with Escape/the top-left close button or navigating away.
+Validation or persistence failure retains the editor and pending destination.
+Locking also attempts a final save, but never prevents a security lock; failed or invalid unsaved edits are discarded with a notice. An
 untouched empty new record is not created. Password visibility and other editor
 controls do not create revisions.
 
