@@ -40,6 +40,14 @@ pub(crate) struct Unlocked {
 
 impl Unlocked {
     pub(crate) fn new(vault: Vault) -> Self {
+        let directories = Directories {
+            collapsed: vault
+                .folders()
+                .iter()
+                .map(|folder| folder.id.clone())
+                .collect(),
+            ..Directories::default()
+        };
         Self {
             favicon_cache: Default::default(),
             page: Page::Vault,
@@ -52,7 +60,7 @@ impl Unlocked {
             search: String::new(),
             selected: None,
             draft: None,
-            directories: Directories::default(),
+            directories,
             show_password: false,
             confirm_delete: false,
             error: None,

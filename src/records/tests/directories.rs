@@ -42,6 +42,18 @@ fn nested_folders_and_record_locations_survive_password_and_key_reopen() {
     let biometric = Vault::open_with_key(path, &key).unwrap();
     assert_eq!(biometric.folders(), saved.folders);
     assert_eq!(biometric.entries(), saved.entries);
+    let mut workspace = Unlocked::new(biometric);
+    let collapsed = BTreeSet::from([parent.clone(), child]);
+    assert_eq!(workspace.directories.collapsed, collapsed);
+    workspace.directories.toggle(parent.clone());
+    assert!(!workspace.directories.collapsed.contains(&parent));
+
+    let path = workspace.vault.path().to_path_buf();
+    drop(workspace);
+    let password = secrecy::SecretString::from("master".to_owned());
+    let workspace = Unlocked::new(Vault::open(path, &password).unwrap());
+    assert_eq!(workspace.directories.collapsed, collapsed);
+    assert!(workspace.directories.selected.is_none());
 }
 
 #[test]
