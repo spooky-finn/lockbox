@@ -1,0 +1,219 @@
+use super::*;
+use base64::{Engine, engine::general_purpose::STANDARD};
+use std::fs;
+use store::MAX_CACHE_BYTES;
+
+fn image() -> Option<String> {
+    Some("data:image/png;base64,aWNvbg==".into())
+}
+
+const CACHE_FILE: &str = "d3d39abc88b126ca1df72306e7d15dba35623cc2197ad321867ca4b200d98b02.json";
+const WEBSITE: &str = "https://example.com/favicon.ico";
+
+#[test]
+fn disk_cache_survives_session_changes_and_keeps_original_expiry() {
+    let root = tempfile::tempdir().unwrap();
+    let directory = root.path().join("icons");
+    {
+        let first = Cache::new(Some(directory.clone()));
+        assert_eq!(first.cached_fetch(WEBSITE, 100, image), image());
+    }
+    let second = Cache::new(Some(directory.clone()));
+    assert_eq!(
+        second.cached_fetch(WEBSITE, 101, || panic!("disk hit must not download")),
+        image()
+    );
+    let entry: CachedIcon =
+        serde_json::from_slice(&fs::read(directory.join(CACHE_FILE)).unwrap()).unwrap();
+    assert_eq!(entry.fetched_at, 100);
+    let mut downloads = 0;
+    assert_eq!(
+        second.cached_fetch(WEBSITE, 100 + IMAGE_TTL.as_secs(), || {
+            downloads += 1;
+            image()
+        }),
+        image()
+    );
+    assert_eq!(downloads, 1);
+}
+
+#[test]
+fn negative_cache_survives_sessions_and_retries_after_five_minutes() {
+    let root = tempfile::tempdir().unwrap();
+    let first = Cache::new(Some(root.path().to_owned()));
+    assert_eq!(first.cached_fetch(WEBSITE, 100, || None), None);
+    let second = Cache::new(Some(root.path().to_owned()));
+    assert_eq!(
+        second.cached_fetch(WEBSITE, 101, || panic!("failure cached")),
+        None
+    );
+    assert_eq!(
+        second.cached_fetch(WEBSITE, 100 + FAILURE_TTL.as_secs(), image),
+        image()
+    );
+}
+
+#[test]
+fn cache_io_failures_keep_downloaded_icons_usable_in_memory() {
+    let root = tempfile::tempdir().unwrap();
+    let blocked = root.path().join("blocked");
+    fs::write(&blocked, "keep").unwrap();
+    let cache = Cache::new(Some(blocked.clone()));
+    assert_eq!(cache.cached_fetch(WEBSITE, 100, image), image());
+    assert_eq!(
+        cache.cached_fetch(WEBSITE, 101, || panic!(
+            "memory cache must survive disk failure"
+        )),
+        image()
+    );
+    assert_eq!(fs::read(&blocked).unwrap(), b"keep");
+    // A failed atomic replacement cleans its temporary file too.
+    let directory = root.path().join("icons");
+    fs::create_dir(&directory).unwrap();
+    fs::create_dir(directory.join(CACHE_FILE)).unwrap();
+    assert_eq!(
+        Cache::new(Some(directory.clone())).cached_fetch(WEBSITE, 100, image),
+        image()
+    );
+    assert_eq!(fs::read_dir(&directory).unwrap().count(), 1);
+}
+
+#[test]
+fn corrupt_active_oversized_and_future_cache_entries_are_replaced() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join(CACHE_FILE);
+    for content in [
+        "not json".to_owned(),
+        serde_json::json!({"image":"https://attacker.test/icon.png","fetched_at":100}).to_string(),
+        serde_json::json!({"image":"data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=","fetched_at":100})
+            .to_string(),
+        serde_json::json!({"image":"data:image/png;base64,invalid!","fetched_at":100}).to_string(),
+        serde_json::json!({"image":image(),"fetched_at":u64::MAX}).to_string(),
+    ] {
+        fs::write(&path, content).unwrap();
+        assert_eq!(
+            Cache::new(Some(root.path().to_owned())).cached_fetch(WEBSITE, 101, image),
+            image()
+        );
+        assert_eq!(store::load(&path, 101).unwrap().image, image());
+    }
+    fs::File::create(&path)
+        .unwrap()
+        .set_len(MAX_CACHE_BYTES + 1)
+        .unwrap();
+    assert_eq!(
+        Cache::new(Some(root.path().to_owned())).cached_fetch(WEBSITE, 101, image),
+        image()
+    );
+    let payload = STANDARD.encode(vec![0u8; 1024 * 1024 + 1]);
+    fs::write(
+        &path,
+        serde_json::json!({"image":format!("data:image/png;base64,{payload}"),"fetched_at":100})
+            .to_string(),
+    )
+    .unwrap();
+    assert_eq!(
+        Cache::new(Some(root.path().to_owned())).cached_fetch(WEBSITE, 101, image),
+        image()
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn cache_permissions_are_private_and_symlinks_are_never_followed() {
+    use std::os::unix::{
+        ffi::OsStrExt,
+        fs::{PermissionsExt, symlink},
+    };
+    let root = tempfile::tempdir().unwrap();
+    let directory = root.path().join("icons");
+    fs::create_dir(&directory).unwrap();
+    fs::set_permissions(&directory, fs::Permissions::from_mode(0o755)).unwrap();
+    let path = directory.join(CACHE_FILE);
+    let outside = root.path().join("outside.json");
+    let other = serde_json::json!({"image":"data:image/png;base64,b3V0c2lkZQ==","fetched_at":100})
+        .to_string();
+    fs::write(&outside, &other).unwrap();
+    symlink(&outside, &path).unwrap();
+    assert_eq!(
+        Cache::new(Some(directory.clone())).cached_fetch(WEBSITE, 101, image),
+        image()
+    );
+    assert_eq!(fs::read_to_string(&outside).unwrap(), other);
+    assert!(
+        !fs::symlink_metadata(&path)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert_eq!(
+        fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+        0o600
+    );
+    assert_eq!(
+        fs::metadata(&directory).unwrap().permissions().mode() & 0o777,
+        0o700
+    );
+    let linked = root.path().join("linked");
+    symlink(&directory, &linked).unwrap();
+    let before = fs::read(&path).unwrap();
+    assert_eq!(
+        Cache::new(Some(linked)).cached_fetch(WEBSITE, 102, image),
+        image()
+    );
+    assert_eq!(fs::read(&path).unwrap(), before);
+    // A pre-existing FIFO cannot block the cache reader.
+    fs::remove_file(&path).unwrap();
+    let name = std::ffi::CString::new(path.as_os_str().as_bytes()).unwrap();
+    assert_eq!(unsafe { libc::mkfifo(name.as_ptr(), 0o600) }, 0);
+    assert_eq!(
+        Cache::new(Some(directory)).cached_fetch(WEBSITE, 101, image),
+        image()
+    );
+    assert!(fs::metadata(&path).unwrap().is_file());
+}
+
+#[test]
+fn concurrent_requests_share_one_download_and_disk_entry() {
+    let root = tempfile::tempdir().unwrap();
+    let cache = Cache::new(Some(root.path().to_owned()));
+    let count = std::sync::atomic::AtomicUsize::new(0);
+    std::thread::scope(|scope| {
+        for _ in 0..8 {
+            let cache = cache.clone();
+            let count = &count;
+            scope.spawn(move || {
+                assert_eq!(
+                    cache.cached_fetch(WEBSITE, 100, || {
+                        count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                        image()
+                    }),
+                    image()
+                );
+            });
+        }
+    });
+    assert_eq!(count.load(std::sync::atomic::Ordering::SeqCst), 1);
+    assert_eq!(fs::read_dir(root.path()).unwrap().count(), 1);
+}
+
+#[test]
+fn invalid_websites_never_reach_disk_or_download() {
+    let root = tempfile::tempdir().unwrap();
+    let directory = root.path().join("icons");
+    let cache = Cache::new(Some(directory.clone()));
+    for website in [
+        "not a URL".to_owned(),
+        "http://example.com/favicon.ico".to_owned(),
+        "https://user:secret@example.com/favicon.ico".to_owned(),
+        format!("https://example.com/{}", "a".repeat(MAX_URL_BYTES)),
+    ] {
+        assert_eq!(
+            cache.cached_fetch(&website, 100, || panic!(
+                "invalid website must not download"
+            )),
+            None
+        );
+    }
+    assert!(!directory.exists());
+}

@@ -202,9 +202,12 @@ recovery retries. `profile_summary`, `participant_name` and `participant_alias`
 expose display metadata without handing components the private profile container.
 Typed sync status is translated in `desktop/i18n.rs`.
 
-Generic cancellable jobs live in `platform/jobs.rs`. Favicon HTTP/cache behavior
-lives in `records/favicon.rs`, and default profile path policy in `vault/paths.rs`.
-The UI owns rendering, native dialogs and session-bound result application.
+Generic cancellable jobs live in `platform/jobs.rs`. Favicon cache coordination,
+expiry and shared input limits live in `records/favicon.rs`. Its `download`
+module owns HTTPS discovery and pinned public-address connections; `store` owns
+bounded plaintext persistence, private permissions and atomic replacement.
+Default profile path policy lives in `vault/paths.rs`. The UI owns rendering,
+native dialogs and session-bound result application.
 
 ## Maintenance notes
 

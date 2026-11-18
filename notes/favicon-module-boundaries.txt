@@ -1,0 +1,20 @@
+Favicon module boundaries
+
+favicon root owns Cache API, memory state, expiry, per-website request sharing.
+Shared HTTPS-origin policy, raster MIME allowlist, image/URL limits stay root.
+download owns HTML discovery, public-address checks, pinned DNS, HTTP bounds.
+store owns hashed paths, private directories, bounded reads, cache validation,
+atomic replacement. Exclusive private file creation reuses platform helper.
+
+Data flow: validate URL; lock website slot; check memory then disk; download;
+attempt disk write; retain memory entry. Slot lock spans I/O: cloned caches
+share one in-flight download. Disk failures leave memory result usable.
+
+Security contracts unchanged: HTTPS same origin, no credentials, redirects or
+proxies; pinned public IPs, verified TLS; bounded raster images only.
+Plaintext cache remains accepted: same v1 path, SHA-256 filenames, JSON schema.
+Success TTL 30 days; failure TTL five minutes. Unix directories 0700, files 0600;
+symlink/FIFO protections retained. UI/session owns opt-in and result application.
+
+Tradeoff: separate network and filesystem trust boundaries; keep cache policy
+together. Concrete internal functions suffice; no new provider traits or wrappers.
