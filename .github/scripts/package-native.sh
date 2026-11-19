@@ -20,7 +20,7 @@ case "$target" in
     app="$stage/Lockbox.app"
     mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
     install -m 755 target/release/lockbox target/release/lockbox-browser-host "$app/Contents/MacOS/"
-    install -m 644 assets/LICENSE-simple-icons.md assets/DISCLAIMER-simple-icons.md \
+    install -m 644 assets/lockbox.icns assets/LICENSE-simple-icons.md assets/DISCLAIMER-simple-icons.md \
       "$app/Contents/Resources/"
     python3 - "$app/Contents/Info.plist" "$version" <<'PY'
 import plistlib
@@ -31,6 +31,7 @@ with open(sys.argv[1], "wb") as output:
         "CFBundleIdentifier": "app.lockbox.desktop",
         "CFBundleName": "Lockbox",
         "CFBundleExecutable": "lockbox",
+        "CFBundleIconFile": "lockbox.icns",
         "CFBundlePackageType": "APPL",
         "CFBundleVersion": sys.argv[2],
         "CFBundleShortVersionString": sys.argv[2],

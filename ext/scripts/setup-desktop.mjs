@@ -10,7 +10,10 @@ const executable = path.join(root, "target/release/lockbox");
 await stat(executable);
 const bundle = path.join(root, "target/Lockbox.app");
 const contents = path.join(bundle, "Contents");
+const resources = path.join(contents, "Resources");
 await mkdir(path.join(contents, "MacOS"), { recursive: true });
+await mkdir(resources, { recursive: true });
+await copyFile(path.join(root, "assets/lockbox.icns"), path.join(resources, "lockbox.icns"));
 const stagedExecutable = path.join(contents, "MacOS", `lockbox-${process.pid}.tmp`);
 await copyFile(executable, stagedExecutable);
 await rename(stagedExecutable, path.join(contents, "MacOS/lockbox"));
@@ -20,6 +23,7 @@ await writeFile(path.join(contents, "Info.plist"), `<?xml version="1.0" encoding
 <key>CFBundleIdentifier</key><string>app.lockbox.desktop</string>
 <key>CFBundleName</key><string>Lockbox</string>
 <key>CFBundleExecutable</key><string>lockbox</string>
+<key>CFBundleIconFile</key><string>lockbox.icns</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleVersion</key><string>${version}</string>
 <key>CFBundleShortVersionString</key><string>${version}</string>
