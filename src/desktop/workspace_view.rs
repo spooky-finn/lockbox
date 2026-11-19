@@ -199,13 +199,6 @@ fn VaultContent() -> Element {
                     }
                 }
             } else { h2 { {language.text(Text::EverythingImportantLockedAway)} } }
-            p { {language.text(Text::SelectAnEntryOnTheLeftOrCreateOne)} }
-            div { class: "actions",
-                button { r#type: "button", class: "welcome-create", disabled: unlocked.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.start_directory()),
-                    Symbol { icon: Icon::FolderPlus }
-                    {language.text(Text::NewFolder)}
-                }
-            }
         } }
     }
 }

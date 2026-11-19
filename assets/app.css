@@ -796,8 +796,6 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 99px; }
 .vault-welcome summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 3px; }
 .vault-welcome details p { margin: 14px 0 4px; font-size: 11px; }
 .vault-welcome details code { font-size: 11px; line-height: 1.6; }
-.vault-welcome > .actions { justify-content: center; }
-.welcome-create { gap: 8px; min-height: 34px; padding: 7px 14px; }
 
 .history-change { border-top: 1px solid var(--border); padding: 12px 0; }
 .history-diff { display: grid; gap: 12px; margin-top: 12px; min-width: 0; }
