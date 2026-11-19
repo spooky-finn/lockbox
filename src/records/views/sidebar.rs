@@ -115,24 +115,19 @@ pub(crate) fn Sidebar() -> Element {
                 }
             }
             div { class: "sidebar-footer",
-                button { class: "quiet sidebar-settings", disabled: editing_folder,
-                    aria_current: (page == Page::Trash).then_some("page"),
+                IconButton { class: "quiet", icon: Icon::Trash, label: language.text(Text::Trash),
+                    disabled: editing_folder, current: (page == Page::Trash).then_some("page"),
                     onclick: move |_| navigate(state, Destination::Page(Page::Trash)),
-                    Symbol { icon: Icon::Trash } {language.text(Text::Trash)}
                 }
                 if shared {
-                    button { class: "quiet sidebar-settings", r#type: "button",
-                        aria_current: (page == Page::Sharing).then_some("page"),
+                    IconButton { class: "quiet", icon: Icon::Fingerprint, label: language.text(Text::SharingParticipants),
+                        current: (page == Page::Sharing).then_some("page"),
                         onclick: move |_| navigate(state, Destination::Page(Page::Sharing)),
-                        Symbol { icon: Icon::Fingerprint }
-                        {language.text(Text::SharingParticipants)}
                     }
                 }
-                button { class: "quiet sidebar-settings", r#type: "button",
-                    aria_current: (page == Page::Settings).then_some("page"),
+                IconButton { class: "quiet", icon: Icon::Settings, label: language.text(Text::Settings),
+                    current: (page == Page::Settings).then_some("page"),
                     onclick: move |_| navigate(state, Destination::Page(Page::Settings)),
-                    Symbol { icon: Icon::Settings }
-                    {language.text(Text::Settings)}
                 }
             }
             div { id: "sidebar-resizer", class: "sidebar-resizer", role: "separator", tabindex: "0",

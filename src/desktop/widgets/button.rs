@@ -11,6 +11,7 @@ pub(crate) fn IconButton(
     #[props(default = false)] disabled: bool,
     pressed: Option<bool>,
     expanded: Option<bool>,
+    current: Option<&'static str>,
     onclick: Option<EventHandler<MouseEvent>>,
 ) -> Element {
     rsx! {
@@ -19,6 +20,7 @@ pub(crate) fn IconButton(
             title: "{label}", aria_label: "{label}", disabled,
             aria_pressed: pressed.map(|value| value.to_string()),
             aria_expanded: expanded.map(|value| value.to_string()),
+            aria_current: current,
             onclick: move |event| {
                 if let Some(handler) = onclick { handler.call(event); }
             },

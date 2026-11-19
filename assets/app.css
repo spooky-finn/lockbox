@@ -432,11 +432,10 @@ input.switch:disabled { opacity: .45; cursor: default; }
 .empty-list { padding: 22px 10px; font-size: 12px; text-align: center; }
 
 .sidebar-heading .icon-button.primary { color: var(--accent-text); }
-.sidebar-footer { border-top: 1px solid var(--separator); margin: 8px 3px 0; padding-top: 6px; }
-.sidebar-settings { width: 100%; min-height: 28px; justify-content: flex-start; gap: 8px; border-radius: var(--button-radius); padding: 4px 8px; font-size: 12px; color: var(--muted); }
-.sidebar-settings .symbol { width: 15px; height: 15px; flex-basis: 15px; }
-button.sidebar-settings[aria-current="page"], button.sidebar-settings[aria-current="page"]:hover:not(:disabled) { border: 0; background: var(--active-item); color: var(--active-item-text); font-weight: 600; }
-button.sidebar-settings[aria-current="page"]:focus-visible { outline-color: var(--active-item-text); outline-offset: -3px; }
+.sidebar-footer { display: flex; align-items: center; gap: 6px; border-top: 1px solid var(--separator); margin: 8px 3px 0; padding-top: 6px; }
+.sidebar-footer .icon-button { color: var(--muted); }
+.sidebar-footer button.quiet[aria-current="page"] { background: var(--active-item); color: var(--active-item-text); }
+.sidebar-footer button[aria-current="page"]:focus-visible { outline-color: var(--active-item-text); outline-offset: -3px; }
 
 /* Preferences use a full page, with the same surfaces as vault details. */
 .settings-page { width: 100%; max-width: none; margin: 0; padding: 0 0 16px; gap: 10px; }
@@ -949,7 +948,7 @@ button.copy-value.title-value { display: block; font: inherit; line-height: 1.2;
 .sync-count { font-size: 10px; font-variant-numeric: tabular-nums; }
 .settings-page > p, .settings-section > p { max-width: 70ch; }
 @media (pointer: coarse) {
-    .entry-row, .folder-row, .sidebar-settings { min-height: 32px; }
+    .entry-row, .folder-row { min-height: 32px; }
     .field-row { min-height: 48px; }
-    .entry-detail .field-row .icon-button, .entry-detail .detail-heading .icon-button { width: 32px; height: 32px; min-height: 32px; flex-basis: 32px; }
+    .sidebar-footer .icon-button, .entry-detail .field-row .icon-button, .entry-detail .detail-heading .icon-button { width: 32px; height: 32px; min-height: 32px; flex-basis: 32px; }
 }
