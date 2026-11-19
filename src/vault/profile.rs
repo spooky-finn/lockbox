@@ -17,6 +17,45 @@ mod sharing;
 pub(crate) use sharing::{AcceptedInvitation, IssuedInvitation, SharingState};
 pub use sharing::{AcceptedInvitationInfo, InvitationStatus, IssuedInvitationInfo};
 
+/// Mutable access invalidates profile-derived display caches, including when a
+/// durable write fails or a journal change leaves the record projection intact.
+pub(super) struct VersionedProfile {
+    value: Option<BootstrapProfile>,
+    revision: u64,
+}
+
+impl VersionedProfile {
+    fn next_revision() -> u64 {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    }
+
+    pub(super) fn as_ref(&self) -> Option<&BootstrapProfile> {
+        self.value.as_ref()
+    }
+
+    pub(super) fn as_mut(&mut self) -> Option<&mut BootstrapProfile> {
+        let value = self.value.as_mut()?;
+        self.revision = Self::next_revision();
+        Some(value)
+    }
+
+    pub(super) fn revision(&self) -> u64 {
+        self.revision
+    }
+}
+
+impl From<Option<BootstrapProfile>> for VersionedProfile {
+    fn from(value: Option<BootstrapProfile>) -> Self {
+        Self {
+            value,
+            // Force refresh even when a new session opens the same file.
+            revision: Self::next_revision(),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 pub struct ProviderConfiguration {
     pub base_url: String,

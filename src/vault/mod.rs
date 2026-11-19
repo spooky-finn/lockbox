@@ -35,8 +35,8 @@ use serde::{Deserialize, Serialize};
 use subtle::ConstantTimeEq;
 use zeroize::Zeroizing;
 
-use crate::vault::profile::BootstrapProfile;
 pub use crate::vault::profile::ProviderConfiguration;
+use crate::vault::profile::{BootstrapProfile, VersionedProfile};
 
 use crate::{
     records::{
@@ -147,7 +147,7 @@ pub struct Vault {
     history: RefCell<Vec<crate::records::history::RecordChange>>,
     saved_entries: RefCell<Vec<Entry>>,
     pub(in crate::vault) folders: Vec<Folder>,
-    pub(in crate::vault) profile: Option<BootstrapProfile>,
+    profile: VersionedProfile,
     pending_exchange: Option<exchange::PendingExchange>,
     _profile_lock: Option<crate::vault::lease::ExclusiveFile>,
     witnesses: Arc<dyn WitnessStore>,
@@ -260,7 +260,7 @@ impl Vault {
             history: RefCell::default(),
             saved_entries: RefCell::default(),
             folders: Vec::new(),
-            profile: None,
+            profile: None.into(),
             pending_exchange: None,
             _profile_lock: Some(file_lock),
             witnesses: witness::system(),
@@ -356,7 +356,7 @@ impl Vault {
             saved_entries: RefCell::new(snapshot.0.clone()),
             entries: snapshot.0,
             folders: snapshot.1,
-            profile: Some(profile),
+            profile: Some(profile).into(),
             pending_exchange: None,
             _profile_lock: Some(profile_lock),
             witnesses,
@@ -551,7 +551,7 @@ impl Vault {
             self.kdf,
             &self.salt,
             &self.check,
-            self.profile.is_some(),
+            self.profile.as_ref().is_some(),
             &nonce,
         )
         .to_vec();
@@ -671,7 +671,7 @@ impl Header {
             saved_entries: RefCell::new(contents.entries.clone()),
             entries: contents.entries,
             folders: contents.folders,
-            profile: contents.profile,
+            profile: contents.profile.into(),
             pending_exchange: None,
             _profile_lock: profile_lock,
             witnesses,

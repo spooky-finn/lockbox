@@ -15,8 +15,13 @@ pub fn App() -> Element {
     let appearance_style =
         theme::appearance_style(settings.read().config.appearance, theme.is_dark());
     let language = crate::desktop::i18n::use_language();
-    let last_motion =
-        use_hook(|| std::rc::Rc::new(std::cell::Cell::new(std::time::Instant::now())));
+    let activity = use_hook(|| std::rc::Rc::new(std::cell::Cell::new(None::<document::Eval>)));
+    let cleanup = activity.clone();
+    use_drop(move || {
+        if let Some(eval) = cleanup.take() {
+            let _ = eval.send(());
+        }
+    });
     let locked = use_memo(move || matches!(&*state.read(), Screen::Locked(_)));
     let title = use_memo(move || {
         crate::desktop::window::title(&state.read(), settings.read().config.language)
@@ -34,17 +39,21 @@ pub fn App() -> Element {
             class: if locked() { "app is-locked" } else { "app" },
             "data-theme": theme.name(),
             style: appearance_style,
+            onmounted: move |_| {
+                if activity.get().is_none() {
+                    let mut eval = document::eval(include_str!("../../assets/continuous-activity.js"));
+                    activity.set(Some(eval));
+                    spawn(async move {
+                        while let Ok(()) = eval.recv::<()>().await {
+                            runtime::record_activity();
+                        }
+                    });
+                }
+            },
             onpointerdown: move |_| runtime::record_activity(),
             onkeydown: move |event| {
                 runtime::record_activity();
                 crate::desktop::workspace_view::handle_record_shortcut(state, event);
-            },
-            onwheel: move |_| runtime::record_activity(),
-            onpointermove: move |_| {
-                if last_motion.get().elapsed() >= std::time::Duration::from_secs(1) {
-                    last_motion.set(std::time::Instant::now());
-                    runtime::record_activity();
-                }
             },
             crate::desktop::tabs::TabBar {}
             crate::desktop::browser::BrowserConsent {}

@@ -385,7 +385,7 @@ impl Vault {
     }
 
     pub(crate) fn cloud_backup_current(&self) -> Result<bool> {
-        let Some(profile) = &self.profile else {
+        let Some(profile) = self.profile.as_ref() else {
             return Ok(true);
         };
         let Some(backup) = &profile.cloud_backup else {

@@ -2,13 +2,14 @@ use crate::desktop::i18n::Text;
 
 use crate::{
     desktop::{
-        context::{Session, edit_unlocked},
+        context::{Session, edit_unlocked, use_unlocked_selector},
         session::Screen,
         sync_review::SyncReview,
         widgets::{
             button::IconButton,
             symbol::{Icon, Symbol},
         },
+        workspace::Page,
     },
     records::views::{
         directories::DirectoryView, directory_editor::DirectoryEditor, editor::DraftView,
@@ -17,32 +18,49 @@ use crate::{
 };
 use dioxus::prelude::*;
 
+#[derive(PartialEq)]
+struct WorkspaceLayout {
+    page: Page,
+    selected: Option<String>,
+    has_directory: bool,
+    editing: bool,
+    record_created: u64,
+    error: Option<String>,
+    protection_error: Option<crate::vault::anchor::Error>,
+}
+
 #[component]
 pub(crate) fn UnlockedView() -> Element {
     let language = crate::desktop::i18n::use_language();
     let state = use_context::<Session>();
-    let screen = state.read();
-    let Screen::Unlocked(unlocked) = &*screen else {
+    let layout = use_unlocked_selector(|u| WorkspaceLayout {
+        page: u.page,
+        selected: u.selected.clone(),
+        has_directory: u.directories.selected.is_some(),
+        editing: u.is_editing(),
+        record_created: u.record_created,
+        error: u.error.clone(),
+        protection_error: u.vault.signing_error(),
+    });
+    let layout = layout.read();
+    let Some(layout) = &*layout else {
         return rsx! {};
     };
 
-    let records_open = matches!(
-        unlocked.page,
-        crate::desktop::workspace::Page::History | crate::desktop::workspace::Page::Trash
-    );
-    let settings_open = unlocked.page == crate::desktop::workspace::Page::Settings;
-    let sharing_open = unlocked.page == crate::desktop::workspace::Page::Sharing;
-    let editing = unlocked.is_editing();
+    let records_open = matches!(layout.page, Page::History | Page::Trash);
+    let settings_open = layout.page == Page::Settings;
+    let sharing_open = layout.page == Page::Sharing;
+    let editing = layout.editing;
     let has_detail = records_open
         || settings_open
         || sharing_open
-        || unlocked.selected.is_some()
-        || unlocked.directories.selected.is_some()
+        || layout.selected.is_some()
+        || layout.has_directory
         || editing;
     rsx! {
         Toolbar {}
-        if unlocked.record_created > 0 {
-            CreationCelebration { key: "{unlocked.record_created}" }
+        if layout.record_created > 0 {
+            CreationCelebration { key: "{layout.record_created}" }
         }
         div { class: if has_detail { "workspace has-detail" } else { "workspace" },
             onkeydown: move |event| handle_record_shortcut(state, event),
@@ -58,11 +76,11 @@ pub(crate) fn UnlockedView() -> Element {
                     }
                 }
 
-                if let Some(error) = &unlocked.error { p { class: "error", role: "alert", {language.message(error)} } }
-                if let Some(error) = unlocked.vault.signing_error() { ProtectionNotice { error } }
+                if let Some(error) = &layout.error { p { class: "error", role: "alert", {language.message(error)} } }
+                if let Some(error) = layout.protection_error { ProtectionNotice { error } }
                 if settings_open { crate::settings::view::SettingsView {} }
                 else if sharing_open { crate::sharing::views::SharingView {} }
-                else if records_open { crate::records::views::history::RecordsView { key: "{records_open}:{unlocked.selected:?}:{unlocked.page == crate::desktop::workspace::Page::Trash}" } }
+                else if records_open { crate::records::views::history::RecordsView { key: "{layout.selected:?}:{layout.page == Page::Trash}" } }
                 else { VaultContent {} }
             }
         }

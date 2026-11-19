@@ -80,7 +80,8 @@ impl Vault {
         now: u64,
     ) -> impl Iterator<Item = crate::vault::IssuedInvitationInfo> + '_ {
         self.profile
-            .iter()
+            .as_ref()
+            .into_iter()
             .flat_map(|profile| profile.sharing.issued.values())
             .map(move |record| crate::vault::IssuedInvitationInfo {
                 id: record.invitation.id(),
@@ -99,7 +100,8 @@ impl Vault {
         &self,
     ) -> impl Iterator<Item = crate::vault::AcceptedInvitationInfo> + '_ {
         self.profile
-            .iter()
+            .as_ref()
+            .into_iter()
             .flat_map(|profile| profile.sharing.accepted.values())
             .map(|record| crate::vault::AcceptedInvitationInfo {
                 id: record.invitation.id(),

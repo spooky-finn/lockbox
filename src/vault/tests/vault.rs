@@ -74,7 +74,7 @@ fn vaults_written_before_folders_open_without_migration() {
         vault.kdf,
         &vault.salt,
         &vault.check,
-        vault.profile.is_some(),
+        vault.profile.as_ref().is_some(),
         &nonce,
     );
     header[4..6].copy_from_slice(&1u16.to_le_bytes());

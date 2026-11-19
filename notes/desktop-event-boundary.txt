@@ -1,0 +1,12 @@
+Desktop events and review invalidation
+
+- WebView coalesces trusted pointer motion and wheel input before IPC. One
+  asynchronous pulse per second, no trailing timer or input payload.
+- Rust owns inactivity clocks and locking. Check expiry and screen lock before
+  recording a pulse. Pointer presses and keyboard shortcuts stay synchronous.
+- Tree navigation consumes handled keys during DOM capture. Rust validates
+  selected IDs and applies navigation and save guards.
+- Shared review invalidates on any mutable profile borrow, even failed writes.
+  Process-local revision replaces per-render journal hashing. Review also
+  observes pending exchange and signing restrictions. No revision on disk or
+  wire. Signing and replay own verification.

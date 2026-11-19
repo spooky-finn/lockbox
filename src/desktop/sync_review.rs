@@ -1,7 +1,7 @@
 //! Shared-history review and the visibility of its decrypted contents.
 
 use crate::desktop::{
-    context::{Session, edit_unlocked},
+    context::{Session, edit_unlocked, use_unlocked_selector},
     i18n::Text,
     session::Screen,
 };
@@ -16,28 +16,13 @@ pub(super) fn SyncReview() -> Element {
     let mut revealed_drafts =
         use_signal(std::collections::BTreeSet::<crate::sync::protocol::Hash>::new);
     let state = use_context::<Session>();
-    // Hash complete replay inputs, including ciphertext bytes, rather than only
-    // record revisions: pending exchanges and integrity faults also affect review.
-    // Hashing does no signature verification or decryption and retains no secrets.
-    let input = use_memo(move || {
-        let screen = state.read();
-        let Screen::Unlocked(u) = &*screen else {
-            return None;
-        };
-        let fingerprint = u.vault.sync_state().and_then(|sync| {
-            crate::sync::protocol::Hash::digest_canonical(
-                b"lockbox.ui.review\0",
-                &(sync, u.vault.device_certificate()),
-            )
-            .ok()
-        });
-        Some((
-            u.vault.path().to_path_buf(),
+    let input = use_unlocked_selector(|u| {
+        (
+            u.vault.review_revision(),
             u.vault.records_revision(),
             u.vault.has_pending_exchange(),
             u.vault.signing_error(),
-            fingerprint,
-        ))
+        )
     });
     let view = use_memo(move || {
         let _input = input.read();

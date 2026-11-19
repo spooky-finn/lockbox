@@ -29,6 +29,7 @@ const control = () => ({ closest: selector => selector.startsWith("input,") ? {}
 function fixture(rows, options = {}) {
     let listener;
     let listenerTarget;
+    let capture;
     let finish;
     const messages = [];
     const body = { ...background(), outsideWorkspace: true };
@@ -49,8 +50,16 @@ function fixture(rows, options = {}) {
         {
             body, documentElement,
             querySelector: () => tree,
-            addEventListener: (_, callback) => { listener = callback; listenerTarget = "document"; },
-            removeEventListener: (_, callback) => { assert.equal(callback, listener); listener = null; },
+            addEventListener: (_, callback, useCapture) => {
+                listener = callback;
+                listenerTarget = "document";
+                capture = useCapture;
+            },
+            removeEventListener: (_, callback, useCapture) => {
+                assert.equal(callback, listener);
+                assert.equal(useCapture, capture);
+                listener = null;
+            },
         },
         {
             recv: () => new Promise(resolve => { finish = resolve; }),
@@ -71,7 +80,11 @@ function fixture(rows, options = {}) {
                 stopPropagation() { this.stopped = true; },
             };
             // Real events outside workspace never bubble through its listener.
-            if (listenerTarget === "document" || !target.outsideWorkspace) listener(event);
+            if (listenerTarget === "document" && capture) listener(event);
+            if (!event.stopped) {
+                event.reachedDelegatedListener = true;
+                if (!capture && (listenerTarget === "document" || !target.outsideWorkspace)) listener(event);
+            }
             return event;
         },
         async close() {
@@ -95,7 +108,18 @@ test("arrows and Home/End change selection without scrolling; boundaries keep se
         assert.deepEqual(app.messages.at(-1), expected === start ? { kind: "activity" }
             : { kind: "entry", id: rows[expected].dataset.id });
         assert.ok(event.prevented && event.stopped);
+        assert.equal(event.reachedDelegatedListener, undefined);
     }
+    await app.close();
+});
+
+test("preempted events and shortcuts still reach their existing handlers", async () => {
+    const rows = [row(), row()];
+    const app = fixture(rows);
+    assert.equal(app.key(rows[0], "ArrowDown", { defaultPrevented: true }).reachedDelegatedListener, true);
+    assert.equal(app.key(rows[0], "Escape").reachedDelegatedListener, true);
+    assert.equal(app.key(rows[0], "s", { ctrlKey: true }).reachedDelegatedListener, true);
+    assert.equal(app.messages.length, 0);
     await app.close();
 });
 

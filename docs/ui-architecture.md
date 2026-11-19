@@ -8,17 +8,19 @@
 - `Control` commands change only transient editor controls, never persisted data.
 - Multi-field edits use `edit_draft` without cloning a comparison snapshot.
   Dirty checks compare the draft with the saved record only when leaving it.
-- Typing never schedules persistence. Save explicitly, or confirm saving when
-  closing or navigating away. Lock still attempts to flush the draft before
-  clearing secrets. Failed navigation saves retain the draft and destination.
+- Record edits schedule autosave after 600 ms of inactivity. Explicit save,
+  navigation and lock can flush earlier. Lock still clears secrets if saving
+  fails. Failed navigation saves retain the draft.
 - Vault saves remain transactional. Do not bypass durable writes or weaken KDF
   parameters to make interaction appear faster.
 
 ## Reactive work
 
-The app shell subscribes to memoized lock state and window title, rather than every
-session edit. The sidebar first subscribes to the vault path and an in-memory
-records revision.
+The app shell subscribes to memoized lock state and window title. Workspace layout,
+toolbar status, sidebar controls and search input subscribe to separate comparable
+values. A session edit recomputes these selectors, but equal values leave their
+components idle. The tree sidebar also subscribes to the vault path and an
+in-memory records revision.
 Record commands, verified projection replacement and receive rollback invalidate
 that revision. It is never serialized or used for signing or durable ordering.
 Only record-version changes rebuild the sorted folder/entry position index.
@@ -36,12 +38,12 @@ lock clear the cache. Folder summaries cache counts and breadcrumbs by selection
 and record version; record counts use a descendant ID set rather than repeated
 ancestor walks for every entry.
 
-Shared-history review memoizes its rendered view using a fingerprint of the complete
-ciphertext journal and device certificate, plus path, record version, pending
-exchange and signing status. Ordinary selection/search still hashes replay inputs,
-but does not repeat journal verification or decryption when those inputs are equal.
-This is a display cache: signing and sync commands retain their own verification.
-Review reveal controls and language changes also refresh the rendered view.
+Shared-history review keys its rendered view by a process-local profile revision,
+record version, pending exchange and signing status. Every mutable borrow of the
+profile changes its revision, even if the final write fails. Typing and selection
+compare these small values without hashing the journal. Signing and sync commands
+retain their own verification. Review reveal controls and language changes also
+refresh the rendered view.
 
 The caches retain IDs, titles, folder names and search-match decisions only, never
 passwords, notes, attachments, usernames or URLs. On lock they become empty. Folder
@@ -59,7 +61,8 @@ that selecting and expanding reuse the hierarchy, saved changes refresh it, and
 clock ticks do not render the complete entry card.
 
 Native WebView navigation stays in `assets/tree-navigation.js`, with a document
-listener disposed on sidebar unmount. It handles workspace events and body/HTML
+capture listener disposed on sidebar unmount. Consumed navigation keys never reach
+Dioxus's delegated synchronous listener. The script handles workspace events and body/HTML
 focus, which native WebViews can retain after pointer selection. Controls outside
 the workspace keep their own arrows; detached trees ignore queued input. Up/Down
 and Home/End change the selected visible row without scrolling. Left/Right collapse, expand, or select a parent or
@@ -71,6 +74,11 @@ Rust validates IDs, records activity and routes selection through `navigate`, so
 unsaved edits retain Save/Discard/Cancel protection. Keyboard folder selection
 preserves its disclosure state; explicit folder clicks still toggle it. Ignore
 queued navigation while a confirmation is pending; never replace its destination.
+
+Passive WebView listeners combine trusted pointer movement and wheel input into
+at most one asynchronous activity notification per second. Rust checks expiry
+and the native screen lock before resetting inactivity. Pointer presses and
+keyboard shortcuts retain synchronous handling.
 
 ## Appearance and feedback
 
@@ -90,7 +98,7 @@ no input blocking, and honor reduced motion with a static status message.
 cargo fmt --all -- --check
 cargo test --locked
 cargo clippy --locked --all-targets -- -D warnings
-node --test tests/tree-navigation.test.mjs
+node --test tests/*.test.mjs
 ```
 
 Use a fictional vault on each supported WebView for interactive validation.

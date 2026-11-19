@@ -32,7 +32,8 @@ mod tests;
 impl Vault {
     pub(crate) fn issued_links(&self) -> impl Iterator<Item = &IssuedLink> {
         self.profile
-            .iter()
+            .as_ref()
+            .into_iter()
             .flat_map(|profile| profile.pairing.issued.values())
     }
 

@@ -695,7 +695,7 @@ fn schema_seven_links_gain_short_delivery_without_changing_the_signed_invitation
         .retain(|delivery| !matches!(delivery.slot, Slot::Ticket(_)));
     let mut legacy = serde_json::to_value(owner.profile.as_ref().unwrap()).unwrap();
     legacy["schema_version"] = 7.into();
-    owner.profile = Some(serde_json::from_value(legacy).unwrap());
+    owner.profile = Some(serde_json::from_value(legacy).unwrap()).into();
     assert!(owner.profile.as_ref().unwrap().validate());
     owner.save().unwrap();
     assert!(!owner.link_ready(session));

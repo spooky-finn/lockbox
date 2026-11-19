@@ -416,7 +416,7 @@ fn authenticated_reencryption_and_unexplained_generation_gaps_are_detected() {
             vault.kdf,
             &vault.salt,
             &vault.check,
-            vault.profile.is_some(),
+            vault.profile.as_ref().is_some(),
             &[0x71; NONCE_LEN],
         );
         let plaintext = Zeroizing::new(serde_json::to_vec(&contents).unwrap());
@@ -459,7 +459,7 @@ fn legacy_shared_profiles_open_read_only_without_creating_witnesses() {
         vault.kdf,
         &vault.salt,
         &vault.check,
-        vault.profile.is_some(),
+        vault.profile.as_ref().is_some(),
         &[0x72; NONCE_LEN],
     );
     let plaintext = Zeroizing::new(serde_json::to_vec(&legacy).unwrap());

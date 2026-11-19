@@ -2,12 +2,13 @@ use crate::desktop::i18n::Text;
 
 use crate::{
     desktop::{
-        context::{Session, edit_unlocked, use_records_version},
+        context::{Session, edit_unlocked, use_records_version, use_unlocked_selector},
         session::Screen,
         widgets::{
             button::IconButton,
             symbol::{Icon, Symbol},
         },
+        workspace::{Destination, Page},
     },
     records::{tree, views::tree::RenderCache},
 };
@@ -25,6 +26,9 @@ enum TreeAction {
 fn select_tree_row(state: Session, selection: TreeAction) {
     crate::desktop::runtime::record_activity();
     if matches!(selection, TreeAction::Activity) {
+        return;
+    }
+    if !matches!(&*state.peek(), Screen::Unlocked(_)) {
         return;
     }
     edit_unlocked(state, |u| {
@@ -66,8 +70,16 @@ pub(crate) fn Sidebar() -> Element {
     });
     let language = crate::desktop::i18n::use_language();
     let state = use_context::<Session>();
-    let screen = state.read();
-    let Screen::Unlocked(workspace) = &*screen else {
+    let summary = use_unlocked_selector(|u| {
+        (
+            u.vault.entries().len(),
+            u.directories.draft.is_some(),
+            u.vault.signing_error().is_some(),
+            u.vault.device_certificate().is_some(),
+            u.page,
+        )
+    });
+    let Some((count, editing_folder, read_only, shared, page)) = summary() else {
         return rsx! {};
     };
 
@@ -76,24 +88,18 @@ pub(crate) fn Sidebar() -> Element {
             onmounted: move |_| resize.set(Some(document::eval(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/sidebar-resize.js"))))),
             div { class: "sidebar-heading",
                 h2 { {language.text(Text::Vault)} }
-                span { class: "count", "{workspace.vault.entries().len()}" }
+                span { class: "count", "{count}" }
                 IconButton { class: "primary", icon: Icon::Plus, label: language.text(Text::NewEntry),
-                    disabled: workspace.directories.draft.is_some() || workspace.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.navigate(crate::desktop::workspace::Destination::NewEntry)),
+                    disabled: editing_folder || read_only, onclick: move |_| edit_unlocked(state, |u| u.navigate(Destination::NewEntry)),
                 }
                 IconButton { class: "quiet", icon: Icon::FolderPlus, label: language.text(Text::NewFolder),
-                    disabled: workspace.directories.draft.is_some() || workspace.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.navigate(crate::desktop::workspace::Destination::NewDirectory)),
+                    disabled: editing_folder || read_only, onclick: move |_| edit_unlocked(state, |u| u.navigate(Destination::NewDirectory)),
                 }
             }
-            label { class: "sr-only", r#for: "search", {language.text(Text::SearchEntriesAndFolders)} }
-            div { class: "search-field",
-                Symbol { icon: Icon::Search }
-                input { id: "search", r#type: "search", placeholder: language.text(Text::Search), value: "{workspace.search}",
-                    oninput: move |event| edit_unlocked(state, |u| u.search = event.value()),
-                }
-            }
+            SearchBox {}
             nav { class: "tree-scroll", aria_label: language.text(Text::EntriesAndFolders),
                 ul { id: "vault-tree", class: "vault-tree",
-                    "data-navigate-records": "{workspace.page == crate::desktop::workspace::Page::Vault}",
+                    "data-navigate-records": "{page == Page::Vault}",
                     onmounted: move |_| {
                         let mut eval = document::eval(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/tree-navigation.js")));
                         navigation.set(Some(eval));
@@ -107,22 +113,22 @@ pub(crate) fn Sidebar() -> Element {
                 }
             }
             div { class: "sidebar-footer",
-                button { class: "quiet sidebar-settings", disabled: workspace.directories.draft.is_some(),
-                    aria_current: (workspace.page == crate::desktop::workspace::Page::Trash).then_some("page"),
-                    onclick: move |_| edit_unlocked(state, |u| u.navigate(crate::desktop::workspace::Destination::Page(crate::desktop::workspace::Page::Trash))),
+                button { class: "quiet sidebar-settings", disabled: editing_folder,
+                    aria_current: (page == Page::Trash).then_some("page"),
+                    onclick: move |_| edit_unlocked(state, |u| u.navigate(Destination::Page(Page::Trash))),
                     Symbol { icon: Icon::Trash } {language.text(Text::Trash)}
                 }
-                if workspace.vault.device_certificate().is_some() {
+                if shared {
                     button { class: "quiet sidebar-settings", r#type: "button",
-                        aria_current: (workspace.page == crate::desktop::workspace::Page::Sharing).then_some("page"),
-                        onclick: move |_| edit_unlocked(state, |u| u.navigate(crate::desktop::workspace::Destination::Page(crate::desktop::workspace::Page::Sharing))),
+                        aria_current: (page == Page::Sharing).then_some("page"),
+                        onclick: move |_| edit_unlocked(state, |u| u.navigate(Destination::Page(Page::Sharing))),
                         Symbol { icon: Icon::Fingerprint }
                         {language.text(Text::SharingParticipants)}
                     }
                 }
                 button { class: "quiet sidebar-settings", r#type: "button",
-                    aria_current: (workspace.page == crate::desktop::workspace::Page::Settings).then_some("page"),
-                    onclick: move |_| edit_unlocked(state, |u| u.navigate(crate::desktop::workspace::Destination::Page(crate::desktop::workspace::Page::Settings))),
+                    aria_current: (page == Page::Settings).then_some("page"),
+                    onclick: move |_| edit_unlocked(state, |u| u.navigate(Destination::Page(Page::Settings))),
                     Symbol { icon: Icon::Settings }
                     {language.text(Text::Settings)}
                 }
@@ -132,6 +138,26 @@ pub(crate) fn Sidebar() -> Element {
                 title: language.text(Text::ResizeSidebar),
                 aria_orientation: "vertical", aria_controls: "vault-sidebar",
                 aria_valuemin: "200", aria_valuemax: "480", aria_valuenow: "224",
+            }
+        }
+    }
+}
+
+#[component]
+fn SearchBox() -> Element {
+    let language = crate::desktop::i18n::use_language();
+    let state = use_context::<Session>();
+    let query = use_unlocked_selector(|u| u.search.clone());
+    let query = query.read();
+    let Some(query) = &*query else {
+        return rsx! {};
+    };
+    rsx! {
+        label { class: "sr-only", r#for: "search", {language.text(Text::SearchEntriesAndFolders)} }
+        div { class: "search-field",
+            Symbol { icon: Icon::Search }
+            input { id: "search", r#type: "search", placeholder: language.text(Text::Search), value: "{query}",
+                oninput: move |event| edit_unlocked(state, |u| u.search = event.value()),
             }
         }
     }

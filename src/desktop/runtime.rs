@@ -198,10 +198,12 @@ pub(crate) fn lock(reason: Option<&str>) {
 }
 
 fn check_lock() {
-    let state = consume_context::<Session>();
     let native = consume_context::<SecurityHandle>();
-    let reason = native.borrow().lock_reason();
+    let Some(reason) = native.borrow().lock_reason() else {
+        return;
+    };
 
+    let state = consume_context::<Session>();
     let any_unlocked = matches!(&*state.peek(), Screen::Unlocked(_))
         || try_consume_context::<Signal<crate::desktop::tabs::Tabs>>().is_some_and(|tabs| {
             tabs.peek()
@@ -209,7 +211,7 @@ fn check_lock() {
                 .iter()
                 .any(|s| matches!(&*s.peek(), Screen::Unlocked(_)))
         });
-    if any_unlocked && let Some(reason) = reason {
+    if any_unlocked {
         lock(Some(reason));
     }
 }
@@ -257,9 +259,10 @@ fn poll_session(mut state: Session) {
         Screen::Unlocked(workspace) => {
             workspace.poll_sharing(unix_now());
             workspace.poll_import();
-            if let Some(result) = workspace
-                .touch_id
-                .poll(&workspace.vault, &mut settings.write())
+            if workspace.touch_id.pending.is_some()
+                && let Some(result) = workspace
+                    .touch_id
+                    .poll(&workspace.vault, &mut settings.write())
             {
                 workspace.error = result.err();
             }

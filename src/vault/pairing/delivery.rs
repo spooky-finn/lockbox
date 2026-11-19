@@ -30,7 +30,7 @@ impl Vault {
         {
             self.save_pairing()?;
         }
-        let Some(profile) = &self.profile else {
+        let Some(profile) = self.profile.as_ref() else {
             return Ok(Vec::new());
         };
         let mut plans = Vec::new();

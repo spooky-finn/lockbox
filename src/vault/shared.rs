@@ -42,7 +42,7 @@ impl Vault {
     pub(super) fn ensure_sync_projection(&self) -> Result<()> {
         self.ensure_exchange_committed()?;
 
-        if let Some(profile) = &self.profile
+        if let Some(profile) = self.profile.as_ref()
             && let Some(sync) = &profile.sync
         {
             if let Some(error) = sync.fault {
@@ -181,7 +181,7 @@ impl Vault {
     /// Rebuild a verified view without changing the journal or writing files.
     /// Inspect `Replay::ready` before using it to replace a readable snapshot.
     pub fn sync_replay(&self) -> Result<Option<Replay>> {
-        if let Some(profile) = &self.profile
+        if let Some(profile) = self.profile.as_ref()
             && let Some(backup) = &profile.cloud_backup
             && !backup.archive.is_empty()
         {
@@ -204,7 +204,7 @@ impl Vault {
     }
 
     pub(super) fn sync_replay_record(&self, record: Option<&str>) -> Result<Option<Replay>> {
-        if let Some(profile) = &self.profile
+        if let Some(profile) = self.profile.as_ref()
             && let Some(backup) = &profile.cloud_backup
             && !backup.archive.is_empty()
         {
@@ -504,5 +504,10 @@ impl Vault {
     /// Ciphertext, discovery metadata and pinned anchors; no device secrets.
     pub(crate) fn sync_state(&self) -> Option<&SyncState> {
         self.profile.as_ref()?.sync.as_ref()
+    }
+
+    /// Process-local cache key only. Replay and signing still verify the journal.
+    pub(crate) fn review_revision(&self) -> Option<u64> {
+        self.sync_state().map(|_| self.profile.revision())
     }
 }

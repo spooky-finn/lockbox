@@ -11,7 +11,7 @@ const select = (row, current) => {
 };
 const navigationKeys = new Set(["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Home", "End"]);
 const keydown = (event) => {
-    if (!navigationKeys.has(event.key) || !tree.isConnected) return;
+    if (!navigationKeys.has(event.key) || event.defaultPrevented || !tree.isConnected) return;
     // Native WebViews can leave focus on body after a pointer selection.
     // Handle that case without taking arrows from controls outside workspace.
     if (event.target !== document.body && event.target !== document.documentElement
@@ -53,9 +53,10 @@ const keydown = (event) => {
     event.stopPropagation();
     dioxus.send(action ?? { kind: "activity" });
 };
-document.addEventListener("keydown", keydown);
+// Consume tree navigation before Dioxus's delegated synchronous DOM listener.
+document.addEventListener("keydown", keydown, true);
 try {
     await dioxus.recv();
 } finally {
-    document.removeEventListener("keydown", keydown);
+    document.removeEventListener("keydown", keydown, true);
 }

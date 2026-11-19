@@ -61,6 +61,17 @@ impl Biometrics for LocalizedBiometrics {
 #[derive(Clone, Copy)]
 pub(crate) struct Clock(pub Signal<u64>);
 
+/// A small, comparable view of the session. Equal values leave subscribers idle.
+pub(crate) fn use_unlocked_selector<T: PartialEq + 'static>(
+    select: impl Fn(&Unlocked) -> T + 'static,
+) -> Memo<Option<T>> {
+    let state = use_context::<Session>();
+    use_memo(move || match &*state.read() {
+        Screen::Unlocked(workspace) => Some(select(workspace)),
+        Screen::Locked(_) => None,
+    })
+}
+
 /// Subscribe to committed record changes without scanning the vault on input.
 pub(crate) fn use_records_version() -> Memo<Option<(std::path::PathBuf, u64)>> {
     let state = use_context::<Session>();

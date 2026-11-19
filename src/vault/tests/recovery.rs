@@ -70,7 +70,7 @@ fn twelve_words_recover_records_and_reset_password_without_old_password() {
     // Check decrypted profile too; scanning ciphertext cannot catch an
     // accidental phrase field inside the encrypted payload.
     let opened = store.open(&path, &password("original password")).unwrap();
-    let profile_json = serde_json::to_vec(&opened.profile).unwrap();
+    let profile_json = serde_json::to_vec(&opened.profile.as_ref()).unwrap();
     drop(opened);
     assert!(
         !profile_json
@@ -138,7 +138,7 @@ fn local_vault_words_recover_records_history_and_reset_password_without_sync() {
     assert!(history_len > 0);
     let key = vault.export_key();
     let id = vault.id();
-    assert!(vault.profile.is_none());
+    assert!(vault.profile.as_ref().is_none());
     drop(vault);
     let original = fs::read(&path).unwrap();
     assert_eq!(u16::from_le_bytes(original[4..6].try_into().unwrap()), 8);
@@ -164,7 +164,7 @@ fn local_vault_words_recover_records_history_and_reset_password_without_sync() {
     let recovered = recovered
         .reset_password_with_phrase(&phrase, &password("new master password"))
         .unwrap();
-    assert!(recovered.profile.is_none());
+    assert!(recovered.profile.as_ref().is_none());
     assert_eq!(recovered.id(), id);
     assert_eq!(*recovered.export_key(), *key);
     drop(recovered);
