@@ -81,17 +81,18 @@ pub(crate) fn set_gradient(enabled: bool) {
     update_preferences(|config| config.appearance.gradient = enabled);
 }
 
-#[cfg(test)]
+pub(crate) fn set_corner_style(corners: crate::settings::appearance::CornerStyle) {
+    update_preferences(|config| config.appearance.corners = corners);
+}
+
 pub(crate) fn set_accent_color(value: Option<&str>) {
     set_color(value, |config, color| config.appearance.accent = color);
 }
 
-#[cfg(test)]
 pub(crate) fn set_background_color(value: Option<&str>) {
     set_color(value, |config, color| config.appearance.background = color);
 }
 
-#[cfg(test)]
 fn set_color(
     value: Option<&str>,
     change: impl FnOnce(

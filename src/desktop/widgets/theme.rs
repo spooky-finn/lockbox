@@ -113,9 +113,7 @@ pub(crate) fn appearance_style(appearance: Appearance, dark: bool) -> String {
     let (accent, background) = appearance.colors(dark);
     let mut style = background.map_or_else(String::new, |color| background_style(color, dark));
     // Default accents also need readable text when the background is customized.
-    let accent = accent.or_else(|| {
-        background.and_then(|_| RgbColor::parse(if dark { "#409cff" } else { "#007aff" }))
-    });
+    let accent = accent.or_else(|| background.and_then(|_| RgbColor::parse(default_accent(dark))));
     style.push_str(&accent_style(accent, dark, &backgrounds(background, dark)));
     if appearance.gradient {
         let surfaces = backgrounds(background, dark);
@@ -128,6 +126,18 @@ pub(crate) fn appearance_style(appearance: Appearance, dark: bool) -> String {
         ));
     }
     style
+}
+
+pub(crate) fn color_swatches(appearance: Appearance, dark: bool) -> (String, String) {
+    let (accent, background) = appearance.colors(dark);
+    (
+        accent.map_or_else(|| default_accent(dark).into(), RgbColor::hex),
+        hex(backgrounds(background, dark)[0]),
+    )
+}
+
+fn default_accent(dark: bool) -> &'static str {
+    if dark { "#409cff" } else { "#007aff" }
 }
 
 fn backgrounds(background: Option<RgbColor>, dark: bool) -> [[u8; 3]; 3] {

@@ -13,8 +13,8 @@ pub fn App() -> Element {
     let active_tab = tabs.read().active;
     let theme = theme::use_theme();
     let settings = use_context::<Signal<crate::settings::state::Settings>>();
-    let appearance_style =
-        theme::appearance_style(settings.read().config.appearance, theme.is_dark());
+    let appearance = settings.read().config.appearance;
+    let appearance_style = theme::appearance_style(appearance, theme.is_dark());
     let language = crate::desktop::i18n::use_language();
     let activity = use_hook(|| std::rc::Rc::new(std::cell::Cell::new(None::<document::Eval>)));
     let cleanup = activity.clone();
@@ -39,6 +39,8 @@ pub fn App() -> Element {
             lang: language.code(),
             class: if locked() { "app is-locked" } else { "app" },
             "data-theme": theme.name(),
+            "data-preset": appearance.preset.code(),
+            "data-corners": appearance.corners.code(),
             style: appearance_style,
             onmounted: move |_| {
                 if activity.get().is_none() {

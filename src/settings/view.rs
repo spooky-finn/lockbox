@@ -7,13 +7,16 @@ use crate::{
         context::{Session, edit_unlocked},
         i18n::use_language,
         session::Screen,
-        widgets::symbol::{Icon, Symbol},
+        widgets::{
+            symbol::{Icon, Symbol},
+            theme::{ResolvedTheme, color_swatches, effective_dark},
+        },
         workspace::Page,
     },
     platform::autolock,
     records::editor::replace_secret,
     settings::{
-        appearance::{ThemeMode, ThemePreset},
+        appearance::{CornerStyle, ThemeMode, ThemePreset},
         language::Language,
         state::Settings,
     },
@@ -126,7 +129,9 @@ fn AppearanceSection() -> Element {
     let language = use_language();
     let settings = use_context::<Signal<Settings>>();
     let appearance = settings.read().config.appearance;
-    let legacy_colors = appearance.accent.is_some() || appearance.background.is_some();
+    let dark = try_use_context::<ResolvedTheme>()
+        .map_or_else(|| effective_dark(appearance, false), ResolvedTheme::is_dark);
+    let (accent, background) = color_swatches(appearance, dark);
     rsx! {
         section { class: "settings-section stack",
             h2 { {language.text(Text::Appearance)} }
@@ -156,22 +161,60 @@ fn AppearanceSection() -> Element {
                     label { r#for: "settings-preset", {language.text(Text::ThemePreset)} }
                     p { class: "muted", {language.text(Text::ThemePresetDescription)} }
                 }
-                select { id: "settings-preset", value: if legacy_colors { "legacy" } else { appearance.preset.code() },
+                select { id: "settings-preset", value: appearance.preset.code(),
                     onchange: move |event| {
-                        if let Some(preset) = ThemePreset::ALL.into_iter().find(|preset| preset.code() == event.value()) {
+                        let selected = event.value();
+                        if let Some(preset) = ThemePreset::ALL.into_iter().find(|preset| preset.code() == selected) {
                             actions::set_theme_preset(preset);
                         }
                     },
-                    if legacy_colors {
-                        option { value: "legacy", selected: true, disabled: true, {language.text(Text::LegacyTheme)} }
+                    for preset in ThemePreset::ALL {
+                        option { value: preset.code(), selected: appearance.preset == preset,
+                            {language.text(match preset {
+                                ThemePreset::Classic => Text::ThemeClassic,
+                                ThemePreset::Ocean => Text::ThemeOcean,
+                                ThemePreset::Forest => Text::ThemeForest,
+                                ThemePreset::Plum => Text::ThemePlum,
+                                ThemePreset::Amber => Text::ThemeAmber,
+                                ThemePreset::Rose => Text::ThemeRose,
+                                ThemePreset::Teal => Text::ThemeTeal,
+                                ThemePreset::Indigo => Text::ThemeIndigo,
+                                ThemePreset::Slate => Text::ThemeSlate,
+                                ThemePreset::Paper => Text::ThemePaper,
+                            })}
+                        }
                     }
-                    for (preset, label) in [
-                        (ThemePreset::Classic, Text::ThemeClassic),
-                        (ThemePreset::Ocean, Text::ThemeOcean),
-                        (ThemePreset::Forest, Text::ThemeForest),
-                        (ThemePreset::Plum, Text::ThemePlum),
-                    ] {
-                        option { value: preset.code(), selected: !legacy_colors && appearance.preset == preset, {language.text(label)} }
+                }
+            }
+            div { class: "preference-row",
+                div { class: "preference-copy",
+                    label { r#for: "settings-accent", {language.text(Text::AccentColor)} }
+                    p { id: "accent-description", class: "muted", {language.text(Text::AccentColorDescription)} }
+                }
+                div { class: "color-controls",
+                    input { id: "settings-accent", r#type: "color", value: "{accent}",
+                        aria_describedby: "accent-description",
+                        onchange: move |event| actions::set_accent_color(Some(&event.value())),
+                    }
+                    button { class: "quiet", r#type: "button", disabled: appearance.accent.is_none(),
+                        onclick: move |_| actions::set_accent_color(None),
+                        {language.text(Text::ResetAccentColor)}
+                    }
+                }
+            }
+            div { class: "preference-row",
+                div { class: "preference-copy",
+                    label { r#for: "settings-background", {language.text(Text::BackgroundColor)} }
+                    p { id: "background-description", class: "muted", {language.text(Text::BackgroundColorDescription)} }
+                }
+                div { class: "color-controls",
+                    input { id: "settings-background", r#type: "color", value: "{background}",
+                        aria_describedby: "background-description",
+                        onchange: move |event| actions::set_background_color(Some(&event.value())),
+                    }
+                    button { class: "quiet", r#type: "button", disabled: appearance.background.is_none(),
+                        onclick: move |_| actions::set_background_color(None),
+                        {language.text(Text::ResetBackgroundColor)}
                     }
                 }
             }
@@ -182,6 +225,26 @@ fn AppearanceSection() -> Element {
                 input { id: "settings-gradient", class: "switch", r#type: "checkbox",
                     checked: appearance.gradient,
                     onchange: move |event| actions::set_gradient(event.checked()),
+                }
+            }
+            div { class: "preference-row",
+                label { r#for: "settings-corners", {language.text(Text::CornerStyle)} }
+                select { id: "settings-corners", value: appearance.corners.code(),
+                    onchange: move |event| {
+                        let selected = event.value();
+                        if let Some(corners) = CornerStyle::ALL.into_iter().find(|corners| corners.code() == selected) {
+                            actions::set_corner_style(corners);
+                        }
+                    },
+                    for corners in CornerStyle::ALL {
+                        option { value: corners.code(), selected: appearance.corners == corners,
+                            {language.text(match corners {
+                                CornerStyle::Standard => Text::CornersStandard,
+                                CornerStyle::Square => Text::CornersSquare,
+                                CornerStyle::Rounded => Text::CornersRounded,
+                            })}
+                        }
+                    }
                 }
             }
         }

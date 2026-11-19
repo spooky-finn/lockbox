@@ -133,21 +133,25 @@ fn accent_only_preferences_load_without_a_background() {
 }
 #[test]
 fn presets_and_gradient_roundtrip_and_unknown_presets_fall_back() {
-    use crate::settings::appearance::{Appearance, ThemePreset};
+    use crate::settings::appearance::{Appearance, CornerStyle, ThemePreset};
     for preset in ThemePreset::ALL {
         let appearance = Appearance {
             preset,
             gradient: true,
+            corners: CornerStyle::Square,
             ..Appearance::default()
         };
-        let json = serde_json::to_string(&appearance).unwrap();
+        let json = serde_json::to_value(appearance).unwrap();
+        assert_eq!(json["preset"], preset.code());
+        assert_eq!(json["corners"], "square");
         assert_eq!(
-            serde_json::from_str::<Appearance>(&json).unwrap(),
+            serde_json::from_value::<Appearance>(json).unwrap(),
             appearance
         );
     }
     let unknown: Appearance =
         serde_json::from_str(r#"{"preset":"future","gradient":true}"#).unwrap();
     assert_eq!(unknown.preset, ThemePreset::Classic);
+    assert_eq!(unknown.corners, CornerStyle::Standard);
     assert!(unknown.gradient);
 }
