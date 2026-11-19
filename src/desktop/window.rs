@@ -127,6 +127,30 @@ fn menu(language: Language) -> Menu {
     menu
 }
 
+pub(crate) fn use_interface_zoom() {
+    let window = dioxus::desktop::use_window();
+    let shortcuts = dioxus_core::use_hook_with_cleanup(
+        || document::eval(include_str!("../../assets/interface-zoom.js")),
+        |shortcuts| {
+            let _ = shortcuts.send(());
+        },
+    );
+    use_future(move || {
+        let window = window.clone();
+        let mut shortcuts = shortcuts;
+        async move {
+            let mut current_scale = 1.0;
+            while let Ok(scale) = shortcuts.recv::<f64>().await {
+                crate::desktop::runtime::record_activity();
+                if current_scale != scale {
+                    window.set_zoom_level(scale);
+                    current_scale = scale;
+                }
+            }
+        }
+    });
+}
+
 /// Opens an empty locked window; as a tab of the current one when `tab` is set.
 pub(crate) fn open(tab: bool) {
     let current = dioxus::desktop::window();
