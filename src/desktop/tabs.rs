@@ -7,6 +7,7 @@ use crate::{
         session::Screen,
         widgets::{
             button::IconButton,
+            status::HeaderStatus,
             symbol::{Icon, Symbol},
         },
     },
@@ -201,9 +202,12 @@ pub(crate) fn TabBar() -> Element {
                 onmousedown: move |_| { if cfg!(target_os = "macos") { dioxus::desktop::window().drag(); } },
             }
             if matches!(&*active, Screen::Unlocked(_)) {
-                crate::desktop::space_switcher::SpaceSwitcher { key: "{active_index}" }
-                IconButton { class: "quiet", icon: Icon::Lock, label: language.text(Text::LockVault),
-                    onclick: move |_| crate::desktop::runtime::lock(None),
+                div { class: "space-tab-actions",
+                    HeaderStatus {}
+                    crate::desktop::space_switcher::SpaceSwitcher { key: "{active_index}" }
+                    IconButton { class: "quiet", icon: Icon::Lock, label: language.text(Text::LockVault),
+                        onclick: move |_| crate::desktop::runtime::lock(None),
+                    }
                 }
             }
         }

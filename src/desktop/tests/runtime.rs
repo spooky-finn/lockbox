@@ -3,7 +3,7 @@ use crate::{
         context::{Clock, edit_unlocked},
         runtime,
         session::Screen,
-        view_test_support::{RenderCounts, mounted, update},
+        view_test_support::{RenderCounts, mounted, mounted_with_header, update},
     },
     platform::autolock::AutoLock,
 };
@@ -290,7 +290,7 @@ fn first_input_after_sleep_locks_before_resetting_activity() {
 #[test]
 fn clock_status_and_activity_do_not_rerender_session_subscribers() {
     use crate::desktop::context::SecurityHandle;
-    let mut dom = mounted();
+    let mut dom = mounted_with_header();
     let counts = dom.in_scope(ScopeId::APP, consume_context::<RenderCounts>);
     let before = (counts.0.get(), counts.1.get());
     dom.in_scope(ScopeId::APP, || {
@@ -355,7 +355,7 @@ fn record_fields_copy_actual_values_and_report_success() {
 
 #[test]
 fn copying_a_record_does_not_rerender_session_subscribers() {
-    let mut dom = mounted();
+    let mut dom = mounted_with_header();
     let counts = dom.in_scope(ScopeId::APP, consume_context::<RenderCounts>);
     let before = counts.0.get();
     update(&mut dom, |_| {

@@ -163,6 +163,7 @@ fn search_reacts_and_failed_save_preserves_the_form() {
 #[test]
 fn profile_shows_full_public_fingerprints_and_lock_removes_identity() {
     use crate::desktop::session::Screen;
+    use crate::desktop::view_test_support::mounted_with_header;
     use crate::desktop::workspace::Unlocked;
     use crate::sync::identity::hex;
     use crate::vault::KdfParams;
@@ -199,11 +200,13 @@ fn profile_shows_full_public_fingerprints_and_lock_removes_identity() {
         profile,
     )
     .unwrap();
-    let mut dom = mounted();
+    let mut dom = mounted_with_header();
     update(&mut dom, |mut state| {
         state.set(Screen::Unlocked(Box::new(Unlocked::new(vault))))
     });
     let html = dioxus_ssr::render(&dom);
+    let (header, _) = html.split_once("</nav>").unwrap();
+    assert!(header.contains("class=\"sync-status sync-compact\""));
     for value in ["Alice Profile", "Team Profile", &fingerprint, &device] {
         assert!(html.contains(value));
     }

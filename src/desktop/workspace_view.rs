@@ -14,7 +14,7 @@ use crate::{
     },
     records::views::{
         directories::DirectoryView, directory_editor::DirectoryEditor, editor::DraftView,
-        entry::EntryView, sidebar::Sidebar, toolbar::Toolbar,
+        entry::EntryView, sidebar::Sidebar,
     },
 };
 use dioxus::prelude::*;
@@ -66,7 +66,6 @@ pub(crate) fn UnlockedView() -> Element {
         || layout.has_directory
         || editing;
     rsx! {
-        Toolbar {}
         if play_unlock_spell {
             UnlockSpell {}
         }

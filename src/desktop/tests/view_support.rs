@@ -6,6 +6,7 @@ use crate::{
         context::{BiometricProvider, Clock, Session},
         security::{Security, Status},
         session::Screen,
+        tabs::{TabBar, Tabs},
         time::unix_now,
         workspace_view::UnlockedView,
     },
@@ -103,6 +104,20 @@ pub(crate) fn fixture() -> Element {
 
 pub(crate) fn mounted() -> VirtualDom {
     let mut dom = VirtualDom::new(fixture);
+    dom.rebuild_in_place();
+    dom
+}
+
+pub(crate) fn mounted_with_header() -> VirtualDom {
+    fn with_header() -> Element {
+        let workspace = fixture();
+        let state = use_context::<Session>();
+        let tabs = use_signal(|| Tabs::new(state));
+        use_context_provider(|| tabs);
+        rsx! { TabBar {} {workspace} }
+    }
+
+    let mut dom = VirtualDom::new(with_header);
     dom.rebuild_in_place();
     dom
 }
