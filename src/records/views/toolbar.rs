@@ -1,4 +1,5 @@
 use crate::desktop::i18n::Text;
+use crate::sync::scheduler::Status as SyncStatus;
 
 use crate::desktop::{
     context::{Session, edit_unlocked, use_unlocked_selector},
@@ -31,15 +32,17 @@ pub(crate) fn Toolbar() -> Element {
             div { class: "toolbar-status",
                 if let Some((status, pending)) = sync {
                     {
-                        let routine = matches!(status, crate::sync::scheduler::Status::Saved | crate::sync::scheduler::Status::Syncing | crate::sync::scheduler::Status::Synced);
+                        let routine = matches!(status, SyncStatus::Saved | SyncStatus::Syncing | SyncStatus::Synced);
                         let summary = language.format(Text::PendingUpload, &[language.sync_status(status).to_owned(), pending.to_string()]);
                         rsx! {
                             div { class: if routine { "sync-status sync-compact" } else { "sync-status notice" },
                                 p { class: if routine { "sr-only" } else { "sync-message" }, aria_live: "polite", "{summary}" }
-                                button { class: "quiet sync-control", r#type: "button", title: "{summary}", aria_label: format!("{}: {summary}", language.text(Text::RetrySync)),
+                                button {
+                                    class: if status == SyncStatus::Syncing { "quiet sync-control is-syncing" } else { "quiet sync-control" },
+                                    r#type: "button", title: "{summary}", aria_label: format!("{}: {summary}", language.text(Text::RetrySync)),
                                     onclick: move |_| edit_unlocked(state, |u| u.retry_sync()),
                                     if routine {
-                                        Symbol { icon: if status == crate::sync::scheduler::Status::Synced { Icon::Check } else { Icon::Cloud } }
+                                        Symbol { icon: if status == SyncStatus::Synced { Icon::Check } else { Icon::Cloud } }
                                         if pending > 0 { span { class: "sync-count", "{pending}" } }
                                     } else { {language.text(Text::RetrySync)} }
                                 }
