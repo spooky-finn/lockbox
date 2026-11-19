@@ -106,6 +106,20 @@ pub(crate) fn tick() {
 }
 
 fn tick_session(mut state: Session) {
+    let autosave_due = matches!(&*state.peek(), Screen::Unlocked(u) if
+        u.draft.as_ref().and_then(|d| d.autosave_at).is_some_and(|at| Instant::now() >= at));
+    if autosave_due {
+        state.with_mut(|screen| {
+            if let Screen::Unlocked(workspace) = screen {
+                // One attempt per edit. Navigation or another edit retries failures.
+                if let Some(draft) = &mut workspace.draft {
+                    draft.autosave_at = None;
+                }
+                workspace.error = workspace.autosave_draft().err();
+            }
+        });
+    }
+
     let pending = match &*state.peek() {
         Screen::Locked(form) => form.busy() || form.auto_touch_id,
         Screen::Unlocked(workspace) => {

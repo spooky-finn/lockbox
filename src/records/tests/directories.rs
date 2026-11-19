@@ -244,7 +244,7 @@ fn search_keeps_ancestors_and_matches_folder_names_and_hidden_record_fields() {
 }
 
 #[test]
-fn folder_label_navigation_toggles_and_defers_changes_until_draft_is_resolved() {
+fn folder_label_navigation_toggles_and_saves_pending_edits() {
     use crate::desktop::workspace::Destination;
     let dir = tempfile::tempdir().unwrap();
     let mut workspace = unlocked(&dir);
@@ -266,13 +266,6 @@ fn folder_label_navigation_toggles_and_defers_changes_until_draft_is_resolved() 
     workspace.start_new();
     workspace.draft.as_mut().unwrap().entry.title = "Unsaved draft".into();
     workspace.navigate(Destination::ToggleDirectory(folder.clone()));
-    assert!(workspace.pending_navigation.is_some());
-    assert!(!workspace.directories.collapsed.contains(&folder));
-    workspace.pending_navigation = None; // Cancel navigation.
-    assert!(workspace.draft.is_some());
-    assert!(!workspace.directories.collapsed.contains(&folder));
-    workspace.navigate(Destination::ToggleDirectory(folder.clone()));
-    workspace.resolve_navigation(false);
     assert!(workspace.draft.is_none());
     assert!(workspace.directories.collapsed.contains(&folder));
 

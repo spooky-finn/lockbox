@@ -83,7 +83,7 @@ fn attachment_controls_render_names_and_sizes_without_file_contents() {
 }
 
 #[test]
-fn editor_keeps_shared_field_layout_and_top_close_and_save_controls() {
+fn editor_keeps_shared_field_layout_without_manual_save_or_edit_banner() {
     use kuchikiki::traits::TendrilSink;
     let mut dom = mounted();
     update(&mut dom, |state| edit_unlocked(state, |u| u.start_edit()));
@@ -98,15 +98,11 @@ fn editor_keeps_shared_field_layout_and_top_close_and_save_controls() {
             .count(),
         5
     );
-    assert!(
-        document
-            .select_first(".draft > .entry-close button[title='Закрыть']")
-            .is_ok()
-    );
+    assert!(document.select_first(".draft > .entry-close").is_err());
     assert!(
         document
             .select_first(".draft .detail-heading button.record-save")
-            .is_ok()
+            .is_err()
     );
     assert!(document.select_first(".draft > footer").is_err());
 }
@@ -192,7 +188,7 @@ fn keyboard_finishes_inputs_and_keeps_notes_newlines_and_composition() {
 }
 
 #[test]
-fn editing_an_entry_keeps_sidebar_navigation_and_top_close_available() {
+fn editing_an_entry_keeps_sidebar_navigation_available() {
     use kuchikiki::traits::TendrilSink;
     let mut dom = mounted();
     update(&mut dom, |state| edit_unlocked(state, |u| u.start_edit()));
@@ -210,9 +206,5 @@ fn editing_an_entry_keeps_sidebar_navigation_and_top_close_available() {
             .select_first(".sidebar-heading button[disabled]")
             .is_err()
     );
-    assert!(
-        document
-            .select_first(".draft > .entry-close button[title='Закрыть']")
-            .is_ok()
-    );
+    assert!(document.select_first(".draft > .entry-close").is_err());
 }

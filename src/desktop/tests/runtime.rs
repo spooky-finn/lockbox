@@ -11,13 +11,13 @@ use dioxus::prelude::*;
 use std::time::{Instant, SystemTime};
 
 #[test]
-fn typing_and_runtime_ticks_do_not_persist_drafts() {
+fn autosave_waits_for_idle_then_persists_without_closing_the_editor() {
     use crate::desktop::context::{Session, set_field};
     use crate::records::editor::Field;
     let mut dom = mounted();
     update(&mut dom, |state| {
         edit_unlocked(state, |u| u.start_new());
-        set_field(state, Field::Title, "Manual save".into());
+        set_field(state, Field::Title, "Automatic save".into());
         set_field(state, Field::Password, "fictional-password".into());
         runtime::tick();
     });
@@ -32,10 +32,110 @@ fn typing_and_runtime_ticks_do_not_persist_drafts() {
             !crate::desktop::test_support::reopen(u)
                 .entries
                 .iter()
-                .any(|e| e.title == "Manual save")
+                .any(|e| e.title == "Automatic save")
         );
     });
     assert!(dioxus_ssr::render(&dom).contains("id=\"entry-title\""));
+    update(&mut dom, |state| {
+        // Make the deadline due without a wall-clock sleep.
+        edit_unlocked(state, |u| {
+            u.draft.as_mut().unwrap().autosave_at = Some(Instant::now())
+        });
+        runtime::tick();
+        let Screen::Unlocked(u) = &*state.peek() else {
+            panic!("locked");
+        };
+        assert!(u.draft.is_some());
+        assert_eq!(
+            crate::desktop::test_support::reopen(u).entries[1].password,
+            "fictional-password"
+        );
+        assert!(u.draft.as_ref().unwrap().autosave_at.is_none());
+    });
+}
+
+#[test]
+fn autosave_coalesces_edits_and_ignores_transient_controls() {
+    use crate::desktop::context::{draft_control, edit_draft, set_field};
+    use crate::records::editor::{Control, Field};
+    let mut dom = mounted();
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| u.start_edit());
+        draft_control(state, Control::TogglePassword);
+        let Screen::Unlocked(u) = &*state.peek() else {
+            panic!("locked");
+        };
+        assert!(u.draft.as_ref().unwrap().autosave_at.is_none());
+    });
+    update(&mut dom, |state| {
+        set_field(state, Field::Username, "updated-user".into());
+        edit_unlocked(state, |u| {
+            u.draft.as_mut().unwrap().autosave_at = Some(Instant::now())
+        });
+        set_field(state, Field::Notes, "latest edit".into());
+        runtime::tick();
+        let Screen::Unlocked(u) = &*state.peek() else {
+            panic!("locked");
+        };
+        assert!(crate::desktop::test_support::reopen(u).entries.is_empty());
+    });
+    update(&mut dom, |state| {
+        edit_draft(state, |d| d.entry.icon = Some("github".into()));
+        edit_unlocked(state, |u| {
+            u.draft.as_mut().unwrap().autosave_at = Some(Instant::now())
+        });
+        runtime::tick();
+        let Screen::Unlocked(u) = &*state.peek() else {
+            panic!("locked");
+        };
+        let saved = crate::desktop::test_support::reopen(u);
+        assert_eq!(saved.entries[0].username, "updated-user");
+        assert_eq!(saved.entries[0].notes, "latest edit");
+        assert_eq!(saved.entries[0].icon.as_deref(), Some("github"));
+        assert!(u.draft.as_ref().unwrap().show_password);
+        assert_eq!(u.vault.record_history().unwrap().len(), 1);
+    });
+}
+
+#[test]
+fn failed_timed_save_retains_draft_and_next_edit_retries() {
+    use crate::desktop::context::set_field;
+    use crate::records::editor::Field;
+    let mut dom = mounted();
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| {
+            u.start_edit();
+            std::fs::create_dir(u.vault.path().with_extension("lbx.tmp")).unwrap();
+        });
+        set_field(state, Field::Notes, "pending note".into());
+        edit_unlocked(state, |u| {
+            u.draft.as_mut().unwrap().autosave_at = Some(Instant::now())
+        });
+        runtime::tick();
+        let Screen::Unlocked(u) = &*state.peek() else {
+            panic!("locked");
+        };
+        assert!(u.error.is_some());
+        assert_eq!(u.draft.as_ref().unwrap().entry.notes, "pending note");
+        assert!(u.draft.as_ref().unwrap().autosave_at.is_none());
+        assert!(crate::desktop::test_support::reopen(u).entries.is_empty());
+        std::fs::remove_dir(u.vault.path().with_extension("lbx.tmp")).unwrap();
+    });
+    update(&mut dom, |state| {
+        set_field(state, Field::Notes, "retry note".into());
+        edit_unlocked(state, |u| {
+            u.draft.as_mut().unwrap().autosave_at = Some(Instant::now())
+        });
+        runtime::tick();
+        let Screen::Unlocked(u) = &*state.peek() else {
+            panic!("locked");
+        };
+        assert!(u.error.is_none());
+        assert_eq!(
+            crate::desktop::test_support::reopen(u).entries[0].notes,
+            "retry note"
+        );
+    });
 }
 
 #[test]

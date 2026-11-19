@@ -28,9 +28,6 @@ fn select_tree_row(state: Session, selection: TreeAction) {
         return;
     }
     edit_unlocked(state, |u| {
-        if u.pending_navigation.is_some() {
-            return;
-        }
         let destination = match selection {
             TreeAction::Entry(id) if u.vault.entries().iter().any(|e| e.id == id) => {
                 crate::desktop::workspace::Destination::Entry(id)

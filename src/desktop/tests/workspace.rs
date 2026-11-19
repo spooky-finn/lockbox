@@ -374,59 +374,38 @@ fn attachment_drafts_cancel_save_and_rollback_with_the_entry() {
 }
 
 #[test]
-fn navigation_prompts_only_for_changed_drafts_and_respects_each_choice() {
+fn navigation_saves_changed_drafts_without_confirmation() {
     use crate::desktop::workspace::Destination;
     let dir = tempfile::tempdir().unwrap();
     let mut u = unlocked(&dir);
     let first = add(&mut u, "First", "original", "");
     let second = add(&mut u, "Second", "", "");
-    u.select(first.clone());
-    u.start_edit();
-    u.navigate(Destination::Entry(second.clone()));
-    assert!(u.draft.is_none());
-    assert!(u.pending_navigation.is_none());
-    u.select(first.clone());
-    u.start_edit();
-    u.draft.as_mut().unwrap().entry.username = "changed".into();
-    u.navigate(Destination::Directory(None));
-    assert!(u.pending_navigation.is_some());
-    assert_eq!(u.selected.as_ref(), Some(&first));
-    assert_eq!(reopen(&u).entries[0].username, "original");
-    u.pending_navigation = None; // Cancel keeps the edit and selection.
-    assert_eq!(u.draft.as_ref().unwrap().entry.username, "changed");
-    u.navigate(Destination::Entry(second.clone()));
-    u.resolve_navigation(false);
-    assert_eq!(u.selected.as_ref(), Some(&second));
-    assert_eq!(reopen(&u).entries[0].username, "original");
     u.select(first);
     u.start_edit();
-    u.draft.as_mut().unwrap().entry.username = "saved".into();
-    u.navigate(Destination::Close);
-    u.resolve_navigation(true);
-    assert!(u.selected.is_none());
+    u.draft.as_mut().unwrap().entry.username = "changed".into();
+    u.navigate(Destination::Entry(second.clone()));
+    assert_eq!(u.selected.as_ref(), Some(&second));
     assert!(u.draft.is_none());
-    assert_eq!(reopen(&u).entries[0].username, "saved");
+    assert_eq!(reopen(&u).entries[0].username, "changed");
 }
 
 #[test]
-fn failed_navigation_save_retains_the_destination_and_draft() {
+fn failed_navigation_save_retains_selection_and_draft() {
     use crate::desktop::workspace::Destination;
     let dir = tempfile::tempdir().unwrap();
     let mut u = unlocked(&dir);
-    add(&mut u, "First", "", "");
+    let first = add(&mut u, "First", "", "");
     u.start_edit();
     u.draft.as_mut().unwrap().entry.title.clear();
     u.navigate(Destination::Close);
-    u.resolve_navigation(true);
-    assert!(u.pending_navigation.is_some());
+    assert_eq!(u.selected.as_ref(), Some(&first));
     assert!(u.draft.is_some());
     assert!(u.error.is_some());
     u.draft.as_mut().unwrap().entry.title = "Valid".into();
-    std::fs::remove_dir_all(dir.path()).unwrap();
-    u.resolve_navigation(true);
-    assert!(u.pending_navigation.is_some());
-    assert!(u.draft.is_some());
-    assert!(u.error.is_some());
+    u.navigate(Destination::Close);
+    assert!(u.selected.is_none());
+    assert!(u.draft.is_none());
+    assert_eq!(reopen(&u).entries[0].title, "Valid");
 }
 
 #[test]

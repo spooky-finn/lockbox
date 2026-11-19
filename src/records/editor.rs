@@ -30,6 +30,7 @@ pub(crate) enum Control {
 pub(crate) struct Draft {
     pub(crate) entry: Entry,
     pub(crate) is_new: bool,
+    pub(crate) autosave_at: Option<std::time::Instant>,
     pub(crate) focus_field: Option<Field>,
     pub(crate) show_password: bool,
     pub(crate) show_totp: bool,
@@ -57,6 +58,7 @@ impl Draft {
         Self {
             entry,
             is_new,
+            autosave_at: None,
             focus_field: None,
             show_password: false,
             show_totp: false,
@@ -66,6 +68,10 @@ impl Draft {
             icon_picker_open: false,
             icon_query: String::new(),
         }
+    }
+
+    pub(crate) fn schedule_autosave(&mut self) {
+        self.autosave_at = Some(std::time::Instant::now() + std::time::Duration::from_millis(600));
     }
 
     pub(crate) fn is_empty(&self) -> bool {
@@ -161,6 +167,7 @@ impl Draft {
                 replace_secret(&mut self.entry.password, &password);
                 self.generator_error = None;
                 self.generator_open = false;
+                self.schedule_autosave();
             }
             Err(error) => self.generator_error = Some(error.to_string()),
         }

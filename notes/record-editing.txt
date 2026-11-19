@@ -1,30 +1,9 @@
-Record editing — 2026-11-17
+Record autosave contract
 
-Cause
-- Input scheduled save after 600 ms idle; runtime tick persisted synchronously.
-- Save path: autosave_draft, Vault::upsert_entry, save_changes; encrypted durable write on UI thread.
-- Multi-field edit_draft cloned whole entry for comparison, including attachments.
-- Code-path evidence; native latency not measured.
-
-Changes
-- Remove input save timer. Typing updates draft only; remove comparison clones.
-- Default read view. Field click copies; double click edits and focuses field.
-- Delay value-copy 400 ms; double click cancels pending copy. Copy icons immediate.
-- Same heading/field grid in both modes; editing adds generator, TOTP, folder, icon, attachments controls.
-- Close top left; Escape closes current record.
-- Changed draft: native modal Save / Discard / Cancel. Escape cancels dialog.
-- Sidebar navigation and creation stay available during record editing; pending destination retained.
-- Failed save retains draft, destination, error. Unchanged/empty draft closes without prompt.
-- Explicit save persists; security lock still attempts flush before clearing secrets.
-- Encryption, KDF, transactional persistence unchanged.
-
-Validation
-- Desktop: 62 tests pass. Records: 89 tests pass.
-- Final editor focus change: 9 record-view tests pass.
-- Node tree navigation: 4 tests pass.
-- Strict all-target Clippy; formatting; diff whitespace checked.
-
-Limits
-- Native interactive WebView, focus placement, visual layout, p95 typing latency unmeasured.
-- Explicit encrypted save remains synchronous. Later UI pass caches sidebar metadata by record revision.
-- No real credentials or live storage used.
+- Draft owns 600 ms idle deadline. Field changes reset deadline; record mutations schedule through edit_draft. Attachment picker schedules after target checks and successful add.
+- Reveal, generator visibility, icon search stay transient; draft_control schedules no writes.
+- Runtime checks deadline without reactive writes. Due save persists validated snapshot through existing encrypted transactional Vault path; editor and controls remain owned by Draft.
+- Navigation flushes immediately; success permits switch, failure keeps draft and selection, exposes error. No save/discard decision for ordinary navigation.
+- Lock and window close retain existing final flush, then clear secrets. Invalid or failed flush retains existing locked-screen loss notice; no plaintext draft recovery.
+- Failed timed save stops timer; next record edit or navigation retries. Empty untouched draft creates no record. Unchanged snapshot creates no revision.
+- Tradeoff: durable encryption remains synchronous on UI thread after idle pause. Debounce avoids per-keystroke writes; large vault saves can still briefly stall UI.

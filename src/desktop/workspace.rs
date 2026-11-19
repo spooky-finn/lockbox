@@ -28,7 +28,6 @@ pub(crate) enum Destination {
 }
 
 pub(crate) struct Unlocked {
-    pub(crate) pending_navigation: Option<Destination>,
     pub(crate) favicon_cache: crate::records::favicon::Cache,
     pub(crate) page: Page,
     pub(crate) sync: crate::sync::scheduler::SpaceSync,
@@ -61,7 +60,6 @@ impl Unlocked {
             ..Directories::default()
         };
         Self {
-            pending_navigation: None,
             favicon_cache: Default::default(),
             page: Page::Vault,
             sync: crate::sync::scheduler::SpaceSync::default(),
@@ -82,26 +80,14 @@ impl Unlocked {
         }
     }
 
-    pub(crate) fn draft_changed(&self) -> bool {
-        self.draft
-            .as_ref()
-            .is_some_and(|draft| !draft.is_empty() && !self.vault.entries().contains(&draft.entry))
-    }
-
     pub(crate) fn navigate(&mut self, destination: Destination) {
-        if self.directories.draft.is_some() {
-            return;
-        }
-        if self.draft_changed() {
-            self.pending_navigation = Some(destination);
-        } else {
+        if self.finish_editing() {
             self.finish_navigation(destination);
         }
     }
 
     fn finish_navigation(&mut self, destination: Destination) {
         self.draft = None;
-        self.pending_navigation = None;
         self.show_password = false;
         self.error = None;
         match destination {
@@ -136,17 +122,6 @@ impl Unlocked {
             Destination::Page(Page::Sharing) => self.open_sharing(),
             Destination::Page(page) => self.open_records_page(page),
         }
-    }
-
-    pub(crate) fn resolve_navigation(&mut self, save: bool) {
-        let Some(destination) = self.pending_navigation.clone() else {
-            return;
-        };
-        if save && let Err(error) = self.close_draft() {
-            self.error = Some(error);
-            return;
-        }
-        self.finish_navigation(destination);
     }
 
     pub(crate) fn edit_field(&mut self, field: crate::records::editor::Field) {
@@ -285,6 +260,7 @@ impl Unlocked {
         if self.vault.entries().contains(&entry) {
             if let Some(draft) = &mut self.draft {
                 draft.is_new = false;
+                draft.autosave_at = None;
             }
             return Ok(());
         }
@@ -295,6 +271,7 @@ impl Unlocked {
             .map_err(|error| format!("Could not save: {error}"))?;
         if let Some(draft) = &mut self.draft {
             draft.is_new = false;
+            draft.autosave_at = None;
         }
         self.sync.saved();
         if created {

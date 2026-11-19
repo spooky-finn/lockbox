@@ -9,7 +9,7 @@ use crate::{
         widgets::{
             button::IconButton,
             icons::{EntryIcon, IconPicker},
-            symbol::{Icon, Symbol},
+            symbol::Icon,
         },
     },
     records::{
@@ -52,20 +52,12 @@ pub(crate) fn DraftView() -> Element {
                 }
             },
             onsubmit: move |event| { event.prevent_default(); edit_unlocked(state, |u| u.error = u.close_draft().err()); },
-            div { class: "entry-close",
-                IconButton { class: "quiet", icon: Icon::Close, label: language.text(Text::CloseEditor), onclick: move |_| edit_unlocked(state, |u| u.navigate(crate::desktop::workspace::Destination::Close)) }
-                span { class: "record-hint", {language.text(Text::RecordEditHint)} }
-            }
             div { class: "detail-heading",
                 EntryIcon { title: entry.title.clone(), slug: entry.icon.clone(), url: entry.url.clone(), large: true }
                 div { class: "detail-title",
                     p { class: "detail-kind", {language.text(Text::Password)} }
                     input { onkeydown: move |event| finish_on_enter(state, event), id: "entry-title", class: "entry-title-input", aria_label: language.text(Text::Name), required: true, onmounted: move |event| async move { if focus_field == Some(Field::Title) { let _ = event.data.set_focus(true).await; } },
                         value: "{entry.title}", oninput: move |e| set_field(state, Field::Title, e.value()) }
-                }
-                button { class: "primary record-save", r#type: "button", title: if cfg!(target_os = "macos") { "⌘S" } else { "Ctrl+S" },
-                    onclick: move |_| edit_unlocked(state, |u| u.error = u.save_draft().err()),
-                    Symbol { icon: Icon::Save } {language.text(Text::Save)}
                 }
             }
             dl { class: "fields",

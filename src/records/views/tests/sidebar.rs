@@ -52,7 +52,7 @@ fn keyboard_selection_opens_records_and_preserves_folder_disclosure() {
 }
 
 #[test]
-fn keyboard_navigation_preserves_changed_drafts_and_pending_destination() {
+fn keyboard_navigation_saves_changed_drafts_before_switching() {
     let mut dom = mounted();
     let mut other_id = String::new();
     update(&mut dom, |state| {
@@ -62,39 +62,19 @@ fn keyboard_navigation_preserves_changed_drafts_and_pending_destination() {
             other_id = other.id.clone();
             u.vault.test_entries_mut().push(other);
             u.start_edit();
-            u.draft.as_mut().unwrap().entry.title = "Unsaved keyboard draft".into();
+            u.draft.as_mut().unwrap().entry.title = "Saved keyboard draft".into();
         })
     });
     update(&mut dom, |state| {
         select_tree_row(state, TreeAction::Entry(other_id.clone()));
-        let (destination, original_id) = {
-            let Screen::Unlocked(u) = &*state.peek() else {
-                panic!("locked");
-            };
-            assert_ne!(u.selected.as_deref(), Some(other_id.as_str()));
-            assert_eq!(
-                u.draft.as_ref().unwrap().entry.title,
-                "Unsaved keyboard draft"
-            );
-            assert_eq!(u.vault.entries()[0].title, "GitLab");
-            (u.pending_navigation.clone(), u.selected.clone().unwrap())
-        };
-        assert!(destination.is_some());
-        select_tree_row(state, TreeAction::Entry(original_id));
-        let Screen::Unlocked(u) = &*state.peek() else {
-            panic!("locked");
-        };
-        assert!(u.pending_navigation == destination);
-    });
-    update(&mut dom, |state| {
-        edit_unlocked(state, |u| u.resolve_navigation(false))
-    });
-    update(&mut dom, |state| {
         let Screen::Unlocked(u) = &*state.peek() else {
             panic!("locked");
         };
         assert_eq!(u.selected.as_deref(), Some(other_id.as_str()));
         assert!(u.draft.is_none());
-        assert_eq!(u.vault.entries()[0].title, "GitLab");
+        assert_eq!(
+            crate::desktop::test_support::reopen(u).entries[0].title,
+            "Saved keyboard draft"
+        );
     });
 }

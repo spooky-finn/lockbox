@@ -47,19 +47,6 @@ pub(crate) fn UnlockedView() -> Element {
         div { class: if has_detail { "workspace has-detail" } else { "workspace" },
             onkeydown: move |event| handle_record_shortcut(state, event),
             Sidebar {}
-            if unlocked.pending_navigation.is_some() {
-                dialog { id: "record-save-dialog", class: "record-dialog stack", aria_labelledby: "save-entry-question",
-                    onmounted: move |_| { document::eval("document.getElementById('record-save-dialog')?.showModal();"); },
-                    oncancel: move |event| { event.prevent_default(); edit_unlocked(state, |u| u.pending_navigation = None); },
-                        h2 { id: "save-entry-question", {language.text(Text::SaveEntryChanges)} }
-                        if let Some(error) = &unlocked.error { p { class: "error", role: "alert", {language.message(error)} } }
-                        div { class: "actions",
-                            button { r#type: "button", class: "primary", autofocus: true, onclick: move |_| edit_unlocked(state, |u| u.resolve_navigation(true)), {language.text(Text::Save)} }
-                            button { r#type: "button", class: "danger quiet", onclick: move |_| edit_unlocked(state, |u| u.resolve_navigation(false)), {language.text(Text::DiscardChanges)} }
-                            button { r#type: "button", class: "quiet", onclick: move |_| edit_unlocked(state, |u| u.pending_navigation = None), {language.text(Text::Cancel)} }
-                        }
-                }
-            }
             section { class: "detail",
                 if !records_open && (settings_open || sharing_open || (!editing && has_detail)) {
                     IconButton { class: "mobile-back quiet", icon: Icon::ArrowLeft,
@@ -93,8 +80,8 @@ pub(crate) fn handle_record_shortcut(state: Session, event: KeyboardEvent) {
         && !modifiers.intersects(Modifiers::ALT | Modifiers::SHIFT);
     let close = event.key() == Key::Escape && modifiers.is_empty();
     let active = matches!(&*state.peek(), Screen::Unlocked(u) if
-        (save && u.draft.is_some() && u.pending_navigation.is_none()) ||
-        (close && (u.pending_navigation.is_some() || u.draft.is_some() || u.selected.is_some())));
+        (save && u.draft.is_some()) ||
+        (close && (u.draft.is_some() || u.selected.is_some())));
     if !active {
         return;
     }
@@ -104,8 +91,6 @@ pub(crate) fn handle_record_shortcut(state: Session, event: KeyboardEvent) {
     edit_unlocked(state, |u| {
         if save {
             u.error = u.save_draft().err();
-        } else if u.pending_navigation.is_some() {
-            u.pending_navigation = None;
         } else {
             u.navigate(crate::desktop::workspace::Destination::Close);
         }

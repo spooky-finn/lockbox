@@ -118,7 +118,7 @@ fn history_follows_selection_and_keeps_other_record_contents_hidden() {
 }
 
 #[test]
-fn double_click_edits_and_escape_asks_before_closing_changed_record() {
+fn double_click_edits_and_escape_saves_before_closing_changed_record() {
     use crate::desktop::{context::Session, context::set_field, session::Screen};
     use crate::records::editor::Field;
     use dioxus::html::{
@@ -180,19 +180,19 @@ fn double_click_edits_and_escape_asks_before_closing_changed_record() {
     dom.runtime()
         .handle_event("keydown", escape(), escape_target);
     dom.render_immediate_to_vec();
-    assert!(dioxus_ssr::render(&dom).contains("Сохранить изменения записи?"));
-    dom.runtime()
-        .handle_event("keydown", escape(), escape_target);
-    dom.render_immediate_to_vec();
-    assert!(!dioxus_ssr::render(&dom).contains("Сохранить изменения записи?"));
+    assert!(!dioxus_ssr::render(&dom).contains("record-save-dialog"));
     dom.in_scope(ScopeId::APP, || {
         let state = consume_context::<Session>();
         let screen = state.peek();
         let Screen::Unlocked(u) = &*screen else {
             panic!("locked");
         };
-        assert_eq!(u.draft.as_ref().unwrap().entry.title, "Changed");
-        assert_eq!(u.vault.entries()[0].title, "GitLab");
+        assert!(u.draft.is_none());
+        assert!(u.selected.is_none());
+        assert_eq!(
+            crate::desktop::test_support::reopen(u).entries[0].title,
+            "Changed"
+        );
     });
 }
 

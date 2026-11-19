@@ -78,6 +78,9 @@ fn finish_add_attachment(
             .map_err(str::to_owned)
     })()
     .err();
+    if u.error.is_none() {
+        draft.schedule_autosave();
+    }
 }
 
 pub(crate) fn export_attachment(id: &str) {

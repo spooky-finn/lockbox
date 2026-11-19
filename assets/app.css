@@ -628,7 +628,6 @@ button.copy-value:disabled { opacity: 1; }
 .locked-space-switcher { position: absolute; top: 16px; left: 20px; max-width: calc(100% - 40px); z-index: 3; }
 
 /* Record fields keep the same geometry in reading and editing modes. */
-.record-save { flex-shrink: 0; gap: 7px; }
 button.copy-value.title-value { display: block; font: inherit; line-height: 1.2; letter-spacing: inherit; width: 100%; min-height: 26px; padding: 0; margin: 0; }
 .notes-value { -webkit-user-select: text; user-select: text; cursor: text; }
 .copy-value-group { position: relative; }
@@ -648,12 +647,7 @@ button.copy-value.title-value { display: block; font: inherit; line-height: 1.2;
 .draft.entry-detail .fields input:focus, .draft.entry-detail .fields textarea:focus,
 .draft.entry-detail .entry-title-input:focus { outline: 2px solid var(--accent-ink); outline-offset: 3px; }
 .entry-options { margin-top: 16px; }
-.record-dialog::backdrop { background: #0006; }
-.record-dialog:not([open]) { display: none; }
-.record-dialog { width: min(480px, calc(100% - 32px)); max-height: calc(100% - 32px); overflow: auto; padding: 24px; border: 1px solid var(--separator); border-radius: 16px; background: var(--surface); box-shadow: 0 16px 64px #0004; }
-.record-dialog .actions { flex-wrap: wrap; }
 
-.record-dialog { color: var(--ink); margin: auto; }
 .draft.entry-detail .totp-editor { flex: 1; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; border: 0; padding: 0; margin: 0; }
 .draft.entry-detail .totp-editor > .input-actions { grid-column: 1; grid-row: 1; flex-wrap: nowrap; min-width: 0; }
 .draft.entry-detail .totp-editor > details { grid-column: 2; grid-row: 1; }
