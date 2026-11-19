@@ -1,0 +1,3 @@
+- Desktop runtime samples spell only after successful ordinary unlock in active session.
+- Workspace holds one-shot timestamp in memory. Mounted view consumes it. Expired events drop.
+- Effect owns presentation lifetime. No vault data, persistence, or input blocking.

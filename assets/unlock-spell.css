@@ -1,0 +1,108 @@
+.unlock-spell {
+    position: fixed;
+    inset: 0;
+    z-index: 18;
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+    color: #8e5e19;
+}
+
+.app[data-theme="dark"] .unlock-spell { color: #eac484; }
+
+.unlock-spell-glyph {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: var(--surface);
+    animation: unlock-spell-fade var(--spell-duration) ease both;
+}
+
+.unlock-spell-glyph::before {
+    content: "";
+    position: absolute;
+    inset: 4px;
+    border: 1px solid transparent;
+    border-top-color: currentColor;
+    border-right-color: currentColor;
+    border-radius: 50%;
+    animation: unlock-spell-arc var(--spell-duration) ease-out both;
+}
+
+.unlock-spell-lock {
+    position: relative;
+    width: 18px;
+    height: 13px;
+    margin-top: 7px;
+}
+
+.unlock-spell-shackle {
+    position: absolute;
+    top: -9px;
+    right: 3px;
+    width: 12px;
+    height: 12px;
+    border: 1.5px solid currentColor;
+    border-bottom: 0;
+    border-radius: 8px 8px 0 0;
+    transform-origin: right bottom;
+    animation: unlock-spell-open 280ms 280ms cubic-bezier(.2, .8, .3, 1) both;
+}
+
+.unlock-spell-lock-body {
+    position: absolute;
+    inset: 0;
+    border: 1.5px solid currentColor;
+    border-radius: 3px;
+    background: var(--surface);
+}
+
+.unlock-spell-lock-body::after {
+    content: "";
+    position: absolute;
+    inset: 50% auto auto 50%;
+    width: 2px;
+    height: 3px;
+    border-radius: 1px;
+    background: currentColor;
+    transform: translate(-50%, -50%);
+}
+
+.unlock-spell-ember {
+    position: absolute;
+    top: calc(50% - 1px);
+    left: calc(50% - 1px);
+    width: 2px;
+    height: 2px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: unlock-spell-ember 480ms 310ms ease-out both;
+}
+
+@keyframes unlock-spell-fade {
+    0%, 100% { opacity: 0; }
+    20%, 60% { opacity: 1; }
+}
+
+@keyframes unlock-spell-arc {
+    from { transform: rotate(-115deg); }
+    to { transform: rotate(140deg); }
+}
+
+@keyframes unlock-spell-open {
+    from { transform: rotate(0); }
+    to { transform: translateY(-2px) rotate(32deg); }
+}
+
+@keyframes unlock-spell-ember {
+    0% { opacity: 0; transform: rotate(var(--angle)) translateX(12px); }
+    25% { opacity: 1; }
+    100% { opacity: 0; transform: rotate(var(--angle)) translateX(35px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .unlock-spell { display: none; }
+}

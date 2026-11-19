@@ -5,6 +5,7 @@ use crate::{
         context::{Session, edit_unlocked, edit_workspace_ui, navigate, use_unlocked_selector},
         session::Screen,
         sync_review::SyncReview,
+        unlock_spell::{DURATION as UNLOCK_SPELL_DURATION, UnlockSpell},
         widgets::{
             button::IconButton,
             symbol::{Icon, Symbol},
@@ -33,6 +34,13 @@ struct WorkspaceLayout {
 pub(crate) fn UnlockedView() -> Element {
     let language = crate::desktop::i18n::use_language();
     let state = use_context::<Session>();
+    let play_unlock_spell = use_hook(|| match &*state.peek() {
+        Screen::Unlocked(workspace) => workspace
+            .unlock_spell
+            .take()
+            .is_some_and(|started| started.elapsed() < UNLOCK_SPELL_DURATION),
+        Screen::Locked(_) => false,
+    });
     let layout = use_unlocked_selector(|u| WorkspaceLayout {
         page: u.page,
         selected: u.selected.clone(),
@@ -59,6 +67,9 @@ pub(crate) fn UnlockedView() -> Element {
         || editing;
     rsx! {
         Toolbar {}
+        if play_unlock_spell {
+            UnlockSpell {}
+        }
         if layout.record_created > 0 {
             CreationCelebration { key: "{layout.record_created}" }
         }

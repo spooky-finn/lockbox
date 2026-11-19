@@ -34,6 +34,39 @@ fn creation_feedback_is_noninteractive_and_removed_on_lock() {
 }
 
 #[test]
+fn unlock_spell_is_consumed_when_the_workspace_mounts() {
+    use crate::{access::auth::Locked, desktop::session::Screen};
+    use dioxus::prelude::{ReadableExt, WritableExt};
+    use std::time::Instant;
+
+    let mut dom = mounted();
+    let locked = || Screen::Locked(Box::new(Locked::new(None)));
+    let mut previous = locked();
+    update(&mut dom, |mut state| {
+        std::mem::swap(&mut *state.write(), &mut previous);
+    });
+    let Screen::Unlocked(workspace) = &previous else {
+        panic!("fixture starts unlocked");
+    };
+    workspace.unlock_spell.set(Some(Instant::now()));
+    update(&mut dom, |mut state| {
+        std::mem::swap(&mut *state.write(), &mut previous);
+        assert!(matches!(&*state.peek(), Screen::Unlocked(_)));
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("class=\"unlock-spell\" aria-hidden=\"true\""));
+
+    update(&mut dom, |mut state| {
+        std::mem::swap(&mut *state.write(), &mut previous);
+    });
+    assert!(!dioxus_ssr::render(&dom).contains("class=\"unlock-spell\""));
+    update(&mut dom, |mut state| {
+        std::mem::swap(&mut *state.write(), &mut previous);
+    });
+    assert!(!dioxus_ssr::render(&dom).contains("class=\"unlock-spell\""));
+}
+
+#[test]
 fn an_imported_profile_keeps_records_readable_and_disables_mutating_actions() {
     use crate::desktop::session::Screen;
     use crate::desktop::workspace::Unlocked;

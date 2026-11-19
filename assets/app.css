@@ -126,7 +126,7 @@ h2 { font-size: 15px; font-weight: 600; letter-spacing: -.2px; }
 .app::before { display: none; }
 .sidebar { background: var(--subtle); border-right: 1px solid var(--border); }
 
-/* Lock screen with labeled actions at the bottom right. */
+/* Vault access */
 .app.is-locked { color: var(--lock-ink); background: var(--lock-canvas); }
 .app.is-locked { background-image: var(--canvas-image, none); }
 .app.is-locked::before { display: none; }
@@ -191,6 +191,102 @@ h2 { font-size: 15px; font-weight: 600; letter-spacing: -.2px; }
 .lock-actions > button > span { overflow-wrap: anywhere; }
 .lock-actions > button:hover:not(:disabled), .lock-actions > button:focus-visible { color: var(--lock-ink); background: var(--control); }
 .lock-screen :focus-visible { outline-color: var(--lock-focus); }
+
+.lock-screen.base-unlock {
+    gap: 24px;
+    padding: 64px clamp(16px, 3vw, 32px) 16px;
+}
+.base-unlock .locked-space-switcher .brand-icon { display: none; }
+.base-unlock .space-switch-trigger { padding-inline: 8px; }
+.base-unlock .unlock-content { animation: unlock-enter 320ms cubic-bezier(.2, .7, .3, 1); }
+.unlock-emblem {
+    display: grid;
+    place-items: center;
+    width: 56px;
+    height: 56px;
+    margin-bottom: 16px;
+    border: 1px solid var(--lock-field-border);
+    border-radius: var(--panel-radius, 16px);
+    color: var(--lock-ink);
+    background: var(--lock-field);
+}
+.unlock-emblem > .symbol { width: 24px; height: 24px; }
+.base-unlock .unlock-title { font-size: 24px; letter-spacing: -.65px; }
+.base-unlock .unlock-form { width: 280px; margin-top: 20px; }
+.base-unlock .unlock-input { height: 44px; }
+.base-unlock .unlock-input:focus-within {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--lock-focus-shadow) 55%, transparent);
+}
+.base-unlock .unlock-input > input[type=password] {
+    padding: 8px 48px 8px 12px;
+    border: 0;
+    border-radius: inherit;
+    background: transparent;
+    box-shadow: none;
+    font-size: 13px;
+    text-align: start;
+}
+.base-unlock .unlock-input > input::placeholder { opacity: 1; }
+.base-unlock .unlock-input > .unlock-submit {
+    inset: 4px 4px auto auto;
+    width: 34px;
+    height: 34px;
+    color: var(--lock-ink);
+    background: var(--selected);
+}
+.base-unlock .unlock-input > .unlock-submit:hover:not(:disabled) { background: var(--control); }
+.base-unlock .unlock-submit > .symbol { transition: transform 160ms ease-out; }
+.base-unlock .unlock-submit:hover:not(:disabled) > .symbol { transform: translateX(2px); }
+.base-unlock .unlock-form[aria-busy="true"] .unlock-submit > .symbol { display: none; }
+.base-unlock .unlock-form[aria-busy="true"] .unlock-submit::after {
+    content: "";
+    width: 13px;
+    height: 13px;
+    border: 1.5px solid currentColor;
+    border-inline-end-color: transparent;
+    border-radius: 50%;
+    animation: unlock-progress 800ms linear infinite;
+}
+.base-unlock .unlock-options {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 2px 6px;
+    margin-top: 6px;
+}
+.base-unlock .unlock-options > button {
+    min-height: 32px;
+    color: var(--lock-secondary);
+    font-size: 12px;
+}
+.base-unlock .unlock-options .symbol { width: 14px; height: 14px; flex-basis: 14px; }
+.base-unlock .lock-actions {
+    align-self: center;
+    flex-flow: row wrap;
+    justify-content: center;
+    gap: 2px 6px;
+}
+.base-unlock .lock-actions > button {
+    justify-content: center;
+    min-height: 32px;
+    padding: 4px 8px;
+    text-align: center;
+    font-size: 12px;
+}
+.base-unlock .lock-actions > button > .symbol { display: none; }
+@media (max-width: 520px) {
+    .base-unlock .lock-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        width: 100%;
+        max-width: 340px;
+    }
+}
+@keyframes unlock-enter {
+    from { opacity: .75; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+@keyframes unlock-progress { to { transform: rotate(1turn); } }
 
 /* Toolbar and preferences */
 .toolbar { position: relative; z-index: 2; min-height: 36px; padding: 3px 10px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto; flex-shrink: 0; gap: 12px; align-items: center; }
@@ -537,7 +633,7 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 99px; }
 }
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
-    button:active:not(:disabled) { transform: none; }
+    button:active:not(:disabled), .base-unlock .unlock-submit:hover:not(:disabled) > .symbol { transform: none; }
 }
 
 @media (max-height: 620px) {

@@ -1,6 +1,7 @@
 //! Dioxus lifecycle and the few actions that coordinate independent domains.
 
 use crate::{
+    access::auth::Mode,
     desktop::{
         context::{BiometricProvider, Clock, SecurityHandle, Session},
         draft_save::SaveWake,
@@ -265,11 +266,13 @@ fn poll_session(mut state: Session) {
     let mut settings = consume_context::<Signal<Settings>>();
     let hardware = consume_context::<BiometricProvider>();
     let native = consume_context::<SecurityHandle>();
+    let active = state == consume_context::<Session>();
     let mut screen = state.write();
 
     match &mut *screen {
         Screen::Locked(form) => {
             let language = settings.peek().config.language;
+            let ordinary_unlock = form.mode == Mode::Open && !form.recovering;
 
             if let Some(opened) = form.poll(hardware.for_language(language)) {
                 screen.open(
@@ -280,6 +283,12 @@ fn poll_session(mut state: Session) {
                 );
                 if let Screen::Unlocked(u) = &mut *screen {
                     u.set_save_wake(try_consume_context::<SaveWake>());
+                    if ordinary_unlock
+                        && active
+                        && getrandom::u32().is_ok_and(|roll| roll.is_multiple_of(32))
+                    {
+                        u.unlock_spell.set(Some(Instant::now()));
+                    }
                 }
             }
         }

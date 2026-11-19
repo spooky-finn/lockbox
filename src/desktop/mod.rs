@@ -14,6 +14,7 @@ pub(crate) mod space_switcher;
 mod sync_review;
 pub(crate) mod tabs;
 pub(crate) mod time;
+mod unlock_spell;
 pub(crate) mod widgets;
 pub mod window;
 pub(crate) mod workspace;

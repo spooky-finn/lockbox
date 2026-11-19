@@ -37,6 +37,7 @@ pub(crate) fn LockedView() -> Element {
     let create_password = create && locked.creation_step == CreationStep::Password;
     let cloud_password = create_password && locked.storage_kind == Some(StorageKind::Cloud);
     let recovering = locked.recovering;
+    let base_unlock = !create && !recovering;
     let cloud_restore = locked.cloud_recovery.restoring;
     let ready = identity_setup
         || create_password
@@ -62,6 +63,10 @@ pub(crate) fn LockedView() -> Element {
     let weak_password = ((create && !identity_unlock) || recovering)
         && !locked.password.is_empty()
         && locked.password.chars().count() < MIN_PASSWORD_CHARS;
+    let unlock_with_touch_id = move |_| {
+        let biometrics = hardware.for_language(language);
+        edit_locked(state, |locked| locked.start_touch_id(biometrics));
+    };
     let submit = move |event: FormEvent| {
         event.prevent_default();
 
@@ -76,19 +81,18 @@ pub(crate) fn LockedView() -> Element {
         });
     };
     rsx! {
-        section { class: if key_setup || identity_setup || cloud_password || recovering { "lock-screen recovery-screen" } else { "lock-screen" }, aria_label: language.text(if key_setup { Text::EncryptionKeySetup } else { Text::UnlockVault }),
-            if !create && !recovering {
+        section { class: if base_unlock { "lock-screen base-unlock" } else if key_setup || identity_setup || cloud_password || recovering { "lock-screen recovery-screen" } else { "lock-screen" }, aria_label: language.text(if key_setup { Text::EncryptionKeySetup } else { Text::UnlockVault }),
+            if base_unlock {
                 div { class: "locked-space-switcher", crate::desktop::space_switcher::SpaceSwitcher {} }
             }
             div { class: "unlock-content",
-                if !key_setup && !identity_setup && !cloud_password {
+                if base_unlock {
+                    div { class: "unlock-emblem", aria_hidden: "true", Symbol { icon: Icon::Lock } }
+                } else if !key_setup && !identity_setup && !cloud_password {
                     LockMark {
                         if touch_id {
                             IconButton { class: "lock-badge touch-id", icon: Icon::Fingerprint, label: language.text(Text::UnlockWithTouchID), disabled: busy,
-                                onclick: move |_| {
-                                    let biometrics = hardware.for_language(language);
-                                    edit_locked(state, |locked| locked.start_touch_id(biometrics));
-                                },
+                                onclick: unlock_with_touch_id.clone(),
                             }
                         } else {
                             span { class: "lock-badge", aria_hidden: "true", Symbol { icon: Icon::Lock } }
@@ -168,11 +172,11 @@ pub(crate) fn LockedView() -> Element {
                 }
 
                 if ready {
-                    form { class: "unlock-form", onsubmit: submit,
+                    form { class: "unlock-form", aria_busy: (base_unlock && busy).then_some("true"), onsubmit: submit,
                         label { class: "sr-only", r#for: "master-password", {language.text(if recovering { Text::NewMasterPassword } else { Text::MasterPassword })} }
                         div { class: "unlock-input",
                             input { id: "master-password", r#type: "password", autocomplete: "off", autofocus: true,
-                                placeholder: if recovering { language.text(Text::NewMasterPassword) } else if create { language.text(Text::MasterPassword) } else { language.text(Text::EnterMasterPassword) },
+                                placeholder: language.text(if recovering { Text::NewMasterPassword } else { Text::MasterPassword }),
                                 disabled: busy, value: locked.password.as_str(),
                                 oninput: move |event| {
                                     let value = Zeroizing::new(event.value());
@@ -180,7 +184,7 @@ pub(crate) fn LockedView() -> Element {
                                 },
                             }
 
-                            if !create && !recovering {
+                            if base_unlock {
                                 IconButton { class: "unlock-submit quiet", kind: "submit", icon: Icon::ArrowRight, label: language.text(Text::Unlock), disabled: busy }
                             }
                         }
@@ -231,10 +235,17 @@ pub(crate) fn LockedView() -> Element {
                 }
 
                 if ready && (!create || (identity_setup && locked.identity_source.is_none() && locked.unlocking_identity())) {
-                    button { r#type: "button", class: "quiet", disabled: busy,
-                        onclick: move |_| edit_locked(state, |locked| locked.toggle_recovery()),
-                        if recovering { {language.text(Text::BackToPasswordUnlock)} }
-                        else { {language.text(Text::ForgotMasterPassword)} }
+                    div { class: "unlock-options",
+                        if base_unlock && touch_id {
+                            button { r#type: "button", class: "quiet", disabled: busy, onclick: unlock_with_touch_id,
+                                Symbol { icon: Icon::Fingerprint }
+                                {language.text(Text::UnlockWithTouchID)}
+                            }
+                        }
+                        button { r#type: "button", class: "quiet", disabled: busy,
+                            onclick: move |_| edit_locked(state, |locked| locked.toggle_recovery()),
+                            {language.text(if recovering { Text::BackToPasswordUnlock } else { Text::ForgotMasterPassword })}
+                        }
                     }
                 }
 

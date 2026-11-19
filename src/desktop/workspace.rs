@@ -48,6 +48,8 @@ pub(crate) struct Unlocked {
     pub(crate) error: Option<String>,
     /// UI-only event counter, incremented after the first durable record save.
     pub(crate) record_created: u64,
+    /// One-shot presentation event for the newly opened workspace.
+    pub(super) unlock_spell: std::cell::Cell<Option<std::time::Instant>>,
     /// Generator settings last until the window closes; they are never saved.
     pub(crate) generator: generator::Options,
 }
@@ -80,6 +82,7 @@ impl Unlocked {
             confirm_delete: false,
             error: None,
             record_created: 0,
+            unlock_spell: Default::default(),
             generator: generator::Options::default(),
         }
     }
