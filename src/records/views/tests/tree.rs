@@ -27,6 +27,8 @@ fn draft_typing_does_not_reproject_the_tree() {
 
 #[test]
 fn tree_records_show_only_titles_and_search_reveals_collapsed_ancestors() {
+    use kuchikiki::traits::TendrilSink;
+
     let mut dom = mounted();
     update(&mut dom, |state| {
         edit_unlocked(state, |u| {
@@ -51,6 +53,13 @@ fn tree_records_show_only_titles_and_search_reveals_collapsed_ancestors() {
     for title in ["Работа", "Сервисы", "GitLab"] {
         assert!(tree.contains(title), "missing {title}");
     }
+    let document = kuchikiki::parse_html().one(html.as_str()).document_node;
+    assert!(
+        document
+            .select_first(".entry-row[title], .folder-label[title]")
+            .is_err(),
+        "native tooltips on row labels can cover other rows during navigation"
+    );
     assert!(
         !tree.contains("alice"),
         "usernames should not appear in record rows"

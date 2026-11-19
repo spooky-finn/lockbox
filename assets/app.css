@@ -240,7 +240,8 @@ input.switch:disabled { opacity: .45; cursor: default; }
 .entry-row.selected:hover:not(:disabled), .folder-row.selected:hover { background: var(--active-item); box-shadow: none; }
 .folder-row.selected .tree-disclosure, .folder-row.selected .folder-label > .symbol { color: var(--active-item-text); }
 .folder-row.selected .folder-label { font-weight: 600; }
-.entry-row.selected:focus-visible, .folder-row.selected button:focus-visible { outline-color: var(--active-item-text); outline-offset: -3px; }
+.entry-row.selected:focus-visible, .folder-row.selected .folder-label:focus-visible { outline: none; }
+.folder-row.selected .tree-disclosure:focus-visible { outline-color: var(--active-item-text); outline-offset: -3px; }
 .folder-row { display: flex; align-items: center; min-width: 0; min-height: 26px; padding: 0 3px; border: 1px solid transparent; border-radius: var(--button-radius); margin: 1px 0; }
 .tree-disclosure, .folder-label { background: transparent; border: 0; box-shadow: none; min-height: 24px; padding: 0; border-radius: var(--button-radius); }
 .tree-disclosure { width: 18px; flex: 0 0 18px; color: var(--muted); }

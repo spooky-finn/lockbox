@@ -288,7 +288,7 @@ impl RenderCache {
                         li { class: "tree-leaf", key: "entry-{id}",
                             button { class: if selected { "entry-row selected" } else { "entry-row" },
                                 "data-kind": "entry", "data-id": "{id}",
-                                r#type: "button", title: "{title}", aria_current: "{selected}", disabled: editing,
+                                r#type: "button", aria_current: "{selected}", disabled: editing,
                                 onclick: move |_| navigate(state, crate::desktop::workspace::Destination::Entry(id.clone())),
                                 "{title}"
                             }
@@ -309,7 +309,7 @@ impl RenderCache {
                                     onclick: move |_| edit_unlocked(state, |u| u.directories.toggle(toggle.clone())),
                                     Symbol { icon: Icon::ChevronRight }
                                 }
-                                button { class: "folder-label", r#type: "button", title: "{name}",
+                                button { class: "folder-label", r#type: "button",
                                     "data-kind": "directory", "data-id": "{id}",
                                     disabled: editing, aria_current: "{selected}",
                                     aria_expanded: "{expanded}", aria_controls: "folder-{id}",
