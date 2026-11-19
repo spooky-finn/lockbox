@@ -131,7 +131,8 @@ impl SortedTopology {
                 .push(index);
         }
         for siblings in entries.values_mut() {
-            siblings.sort_by_cached_key(|&index| vault.entries()[index].title.to_lowercase());
+            siblings
+                .sort_by_cached_key(|&index| vault.entries()[index].title.trim().to_lowercase());
         }
         Self { folders, entries }
     }

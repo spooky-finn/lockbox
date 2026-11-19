@@ -21,6 +21,7 @@ pub(crate) enum Page {
 pub(crate) enum Destination {
     Close,
     NewEntry,
+    NewEntryInFolder(String),
     NewDirectory,
     Entry(String),
     Directory(Option<String>),
@@ -93,6 +94,13 @@ impl Unlocked {
                 self.confirm_delete = false;
             }
             Destination::NewEntry => self.start_new(),
+            Destination::NewEntryInFolder(id) => {
+                if self.vault.signing_error().is_none()
+                    && self.vault.folders().iter().any(|folder| folder.id == id)
+                {
+                    self.start_new_in(Some(id));
+                }
+            }
             Destination::NewDirectory => self.start_directory(),
             Destination::Entry(id) => self.select(id),
             Destination::Directory(id) => {
@@ -168,12 +176,16 @@ impl Unlocked {
     }
 
     pub(crate) fn start_new(&mut self) {
+        self.start_new_in(self.directories.selected.clone());
+    }
+
+    fn start_new_in(&mut self, folder_id: Option<String>) {
         if !self.editor_is_clear() {
             return;
         }
 
         let mut entry = Entry::new();
-        entry.folder_id = self.directories.selected.clone();
+        entry.folder_id = folder_id;
         self.start_draft(entry, true);
     }
 

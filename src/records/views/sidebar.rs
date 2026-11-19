@@ -216,6 +216,7 @@ fn TreeContent() -> Element {
                 u.directories.selected.clone(),
                 u.page,
                 u.directories.draft.is_some(),
+                u.vault.signing_error().is_some(),
                 language,
             )),
             _ => None,
@@ -228,7 +229,7 @@ fn TreeContent() -> Element {
         // resulting hierarchy happens to contain exactly the same rows.
         let _searching = searching.read();
         let key = tree_key.read();
-        let Some((_, _, _, _, _, language)) = &*key else {
+        let Some((_, _, _, _, _, _, language)) = &*key else {
             *cache.borrow_mut() = RenderCache::default();
             return rsx! {};
         };

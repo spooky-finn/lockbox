@@ -250,6 +250,9 @@ input.switch:disabled { opacity: .45; cursor: default; }
 .folder-label { display: flex; flex: 1; justify-content: flex-start; gap: 6px; min-width: 0; padding-right: 7px; font-size: 12px; font-weight: 550; text-align: left; }
 .folder-label > .symbol { width: 14px; height: 14px; flex-basis: 14px; color: var(--accent-ink); }
 .folder-label > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.folder-new-entry { width: 24px; height: 24px; min-height: 24px; flex-basis: 24px; padding: 4px; color: var(--muted); }
+.folder-new-entry > .symbol { width: 12px; height: 12px; flex-basis: 12px; }
+.folder-row.selected .folder-new-entry { color: var(--active-item-text); }
 .tree-disclosure:hover:not(:disabled), .folder-label:hover:not(:disabled) { background: transparent; box-shadow: none; }
 .tree-disclosure:active:not(:disabled), .folder-label:active:not(:disabled), .entry-row:active:not(:disabled) { transform: none; }
 .tree-empty { padding: 8px 18px; color: var(--muted); font-size: 11px; font-style: italic; }

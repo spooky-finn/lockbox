@@ -2,8 +2,11 @@ use crate::desktop::i18n::Text;
 use crate::{
     desktop::{
         context::{Session, edit_unlocked, navigate},
-        widgets::symbol::{Icon, Symbol},
-        workspace::Unlocked,
+        widgets::{
+            button::IconButton,
+            symbol::{Icon, Symbol},
+        },
+        workspace::{Destination, Page, Unlocked},
     },
     records::tree::DisplayNode,
     settings::language::Language,
@@ -20,6 +23,7 @@ struct RowState {
     expanded: bool,
     editing: bool,
     searching: bool,
+    can_create: bool,
     language: Language,
 }
 
@@ -36,6 +40,7 @@ struct Navigation {
     collapsed: BTreeSet<String>,
     editing: bool,
     searching: bool,
+    read_only: bool,
     language: Language,
 }
 
@@ -144,7 +149,7 @@ impl RenderCache {
             self.entry_parents.clear();
             self.index_parents(&nodes, None);
         }
-        let in_vault = workspace.page == crate::desktop::workspace::Page::Vault;
+        let in_vault = workspace.page == Page::Vault;
         let navigation = Navigation {
             entry: in_vault.then(|| workspace.selected.clone()).flatten(),
             folder: (in_vault && workspace.selected.is_none())
@@ -153,6 +158,7 @@ impl RenderCache {
             collapsed: workspace.directories.collapsed.clone(),
             editing: workspace.directories.draft.is_some(),
             searching: !workspace.search.trim().is_empty(),
+            read_only: workspace.vault.signing_error().is_some(),
             language,
         };
         let mut dirty = DirtyRows::default();
@@ -160,6 +166,7 @@ impl RenderCache {
             && self.navigation.as_ref().is_some_and(|previous| {
                 previous.editing == navigation.editing
                     && previous.searching == navigation.searching
+                    && previous.read_only == navigation.read_only
                     && previous.language == navigation.language
             });
         if targeted {
@@ -173,13 +180,7 @@ impl RenderCache {
                 self.mark_folder(id, &mut dirty);
             }
         }
-        let (view, changed) = self.branch(
-            &nodes,
-            workspace,
-            state,
-            language,
-            targeted.then_some(&dirty),
-        );
+        let (view, changed) = self.branch(&nodes, &navigation, state, targeted.then_some(&dirty));
         self.navigation = Some(navigation);
         if fresh || changed {
             self.view = view.unwrap_or_else(|| rsx! {});
@@ -192,13 +193,13 @@ impl RenderCache {
     fn branch(
         &mut self,
         nodes: &[DisplayNode],
-        workspace: &Unlocked,
+        navigation: &Navigation,
         state: Session,
-        language: Language,
         dirty: Option<&DirtyRows>,
     ) -> (Option<Element>, bool) {
-        let editing = workspace.directories.draft.is_some();
-        let searching = !workspace.search.trim().is_empty();
+        let editing = navigation.editing;
+        let searching = navigation.searching;
+        let language = navigation.language;
         let mut changed = false;
         let mut views = Vec::with_capacity(nodes.len());
         for node in nodes {
@@ -220,27 +221,23 @@ impl RenderCache {
                 continue;
             }
             let (id, folder, selected, expanded) = match node {
-                DisplayNode::Record { id, .. } => (
-                    id,
-                    false,
-                    workspace.page == crate::desktop::workspace::Page::Vault
-                        && workspace.selected.as_ref() == Some(id),
-                    false,
-                ),
+                DisplayNode::Record { id, .. } => {
+                    (id, false, navigation.entry.as_ref() == Some(id), false)
+                }
                 DisplayNode::Folder { id, .. } => (
                     id,
                     true,
-                    workspace.page == crate::desktop::workspace::Page::Vault
-                        && workspace.selected.is_none()
-                        && workspace.directories.selected.as_ref() == Some(id),
-                    searching || !workspace.directories.collapsed.contains(id),
+                    navigation.folder.as_ref() == Some(id),
+                    searching || !navigation.collapsed.contains(id),
                 ),
             };
+            let can_create = folder && !editing && !navigation.read_only;
             let row = RowState {
                 selected,
                 expanded,
                 editing,
                 searching,
+                can_create,
                 language,
             };
             if !expanded
@@ -255,7 +252,7 @@ impl RenderCache {
             }
             let (children_view, children_changed) = match node {
                 DisplayNode::Folder { children, .. } if expanded => {
-                    self.branch(children, workspace, state, language, dirty)
+                    self.branch(children, navigation, state, dirty)
                 }
                 _ => (None, false),
             };
@@ -289,7 +286,7 @@ impl RenderCache {
                             button { class: if selected { "entry-row selected" } else { "entry-row" },
                                 "data-kind": "entry", "data-id": "{id}",
                                 r#type: "button", aria_current: "{selected}", disabled: editing,
-                                onclick: move |_| navigate(state, crate::desktop::workspace::Destination::Entry(id.clone())),
+                                onclick: move |_| navigate(state, Destination::Entry(id.clone())),
                                 "{title}"
                             }
                         }
@@ -298,6 +295,7 @@ impl RenderCache {
                 DisplayNode::Folder { id, name, children } => {
                     let toggle = id.clone();
                     let select = id.clone();
+                    let create_in = id.clone();
                     rsx! {
                         li { class: "tree-folder", key: "folder-{id}",
                             div { class: if selected { "folder-row selected" } else { "folder-row" },
@@ -313,9 +311,14 @@ impl RenderCache {
                                     "data-kind": "directory", "data-id": "{id}",
                                     disabled: editing, aria_current: "{selected}",
                                     aria_expanded: "{expanded}", aria_controls: "folder-{id}",
-                                    onclick: move |_| navigate(state, crate::desktop::workspace::Destination::ToggleDirectory(select.clone())),
+                                    onclick: move |_| navigate(state, Destination::ToggleDirectory(select.clone())),
                                     Symbol { icon: if expanded { Icon::FolderOpen } else { Icon::Folder } }
                                     span { "{name}" }
+                                }
+                                IconButton { class: "quiet folder-new-entry", icon: Icon::Plus,
+                                    label: language.format(Text::NewEntryInFolder, std::slice::from_ref(name)),
+                                    disabled: !can_create,
+                                    onclick: move |_| navigate(state, Destination::NewEntryInFolder(create_in.clone())),
                                 }
                             }
                             if expanded {

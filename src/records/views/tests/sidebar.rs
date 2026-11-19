@@ -79,3 +79,73 @@ fn keyboard_navigation_saves_changed_drafts_before_switching() {
         );
     });
 }
+
+#[test]
+fn folder_row_creates_a_record_in_the_clicked_folder_after_saving_pending_edits() {
+    use crate::desktop::{context::Session, test_support::reopen, view_test_support::finish_save};
+    use dioxus::{
+        dioxus_core::{AttributeValue, Mutation},
+        html::{EventData, SerializedHtmlEventConverter, SerializedMouseData},
+    };
+
+    dioxus::html::set_event_converter(Box::new(SerializedHtmlEventConverter));
+    let mut dom = mounted();
+    let mut folder_id = String::new();
+    dom.in_scope(ScopeId::APP, || {
+        edit_unlocked(consume_context::<Session>(), |u| {
+            let parent = Folder::new("Parent folder".into(), None);
+            let folder = Folder::new("Target folder".into(), Some(parent.id.clone()));
+            folder_id = folder.id.clone();
+            u.vault.save_folder(parent).unwrap();
+            u.vault.save_folder(folder).unwrap();
+            u.directories.collapsed.insert(folder_id.clone());
+            u.start_edit();
+            u.draft.as_mut().unwrap().entry.title = "Saved before switching".into();
+        });
+    });
+    let edits = dom.render_immediate_to_vec().edits;
+    let button = edits
+        .iter()
+        .find_map(|edit| match edit {
+            Mutation::SetAttribute {
+                name: "aria-label",
+                value: AttributeValue::Text(label),
+                id,
+                ..
+            } if label == "Новая запись в папке Target folder" => Some(*id),
+            _ => None,
+        })
+        .unwrap();
+    dom.runtime().handle_event(
+        "click",
+        Event::new(
+            EventData::Mouse(SerializedMouseData::default()).into_any(),
+            true,
+        ),
+        button,
+    );
+    update(&mut dom, |state| {
+        finish_save(state);
+        edit_unlocked(state, |u| {
+            assert_eq!(reopen(u).entries[0].title, "Saved before switching");
+            assert!(u.directories.collapsed.contains(&folder_id));
+
+            let draft = u.draft.as_mut().unwrap();
+            assert!(draft.is_empty());
+            assert_eq!(draft.entry.folder_id.as_ref(), Some(&folder_id));
+            draft.entry.title = "New folder record".into();
+            u.request_save();
+        });
+        finish_save(state);
+        let Screen::Unlocked(u) = &*state.peek() else {
+            panic!("locked");
+        };
+        let saved = reopen(u);
+        let entry = saved
+            .entries
+            .iter()
+            .find(|entry| entry.title == "New folder record")
+            .unwrap();
+        assert_eq!(entry.folder_id.as_ref(), Some(&folder_id));
+    });
+}

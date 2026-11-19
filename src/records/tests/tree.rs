@@ -192,7 +192,7 @@ fn branches_keep_sorted_siblings_and_inherit_matching_folder_names() {
     .collect();
     *workspace.vault.test_entries_mut() = [
         ("z root", None),
-        ("z child", Some("alpha")),
+        (" z child ", Some("alpha")),
         ("Hidden Match", Some("nested")),
         ("Alpha root", None),
         ("alpha child", Some("alpha")),
@@ -213,7 +213,7 @@ fn branches_keep_sorted_siblings_and_inherit_matching_folder_names() {
             "1:folder:Nested",
             "2:entry:Hidden Match",
             "1:entry:alpha child",
-            "1:entry:z child",
+            "1:entry: z child ",
             "0:folder:beta",
             "0:entry:Alpha root",
             "0:entry:z root",
@@ -226,7 +226,7 @@ fn branches_keep_sorted_siblings_and_inherit_matching_folder_names() {
             "1:folder:Nested",
             "2:entry:Hidden Match",
             "1:entry:alpha child",
-            "1:entry:z child",
+            "1:entry: z child ",
             "0:entry:Alpha root",
         ]
     );
