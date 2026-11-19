@@ -2,7 +2,7 @@
 
 **Local-first, serverless password manager for teams, powered by S3-compatible storage.**
 
-![Lockbox desktop app showing folders and a saved login in dark mode](docs/images/lockbox-screenshot.png)
+![Lockbox desktop app in dark mode showing demo folders and a fictional Cedar Dashboard login](docs/images/lockbox-screenshot.png)
 
 Keep passwords, TOTP codes, and attachments in encrypted vaults on your own devices. Share access with your team through an object storage bucket, with local edits available offline and encrypted changes exchanged in the background.
 
