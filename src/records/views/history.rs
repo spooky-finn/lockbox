@@ -4,13 +4,16 @@ use crate::{
         context::{Session, edit_unlocked},
         i18n::Text,
         session::Screen,
-        widgets::{button::IconButton, symbol::Icon},
+        widgets::{button::IconButton, identifier::Identifier, symbol::Icon},
         workspace::Page,
     },
     records::{entry::Entry, history::RecordChange},
 };
 use dioxus::prelude::*;
 use std::borrow::Cow;
+
+mod diff;
+use diff::{Kind, lines};
 
 enum Records {
     History(Vec<RecordChange>),
@@ -72,9 +75,23 @@ pub(crate) fn RecordsView() -> Element {
                             if let Some(name) = change.actor.parse().ok().and_then(|user| u.vault.participant_name(user)) {
                                 p { strong { "{name}" } }
                             }
-                            p { {language.format(Text::HistoryAuthor, std::slice::from_ref(&change.actor))} }
-                            p { class: "muted fingerprint", {language.format(Text::Device, std::slice::from_ref(&change.device))} }
-                            code { class: "fingerprint", "{change.revision}" }
+                            p {
+                                if change.actor.parse::<crate::sync::protocol::Hash>().is_ok() {
+                                    {language.format(Text::HistoryAuthor, &[String::new()])}
+                                    Identifier { value: change.actor.clone() }
+                                } else {
+                                    {language.format(Text::HistoryAuthor, std::slice::from_ref(&change.actor))}
+                                }
+                            }
+                            p { class: "muted fingerprint",
+                                if change.device.parse::<crate::sync::protocol::Hash>().is_ok() {
+                                    {language.format(Text::Device, &[String::new()])}
+                                    Identifier { value: change.device.clone() }
+                                } else {
+                                    {language.format(Text::Device, std::slice::from_ref(&change.device))}
+                                }
+                            }
+                            Identifier { value: change.revision.clone() }
                             if let Some(at) = change.at {
                                 p { class: "muted", {language.format(if u.vault.sync_state().is_some() { Text::HistoryAuthorTime } else { Text::HistoryTime }, &[crate::desktop::time::utc_timestamp(at)])} }
                             } else {
@@ -82,14 +99,10 @@ pub(crate) fn RecordsView() -> Element {
                             }
                             button { class: "quiet", onclick: { let revision = change.revision.clone(); move |_| { let mut values = revealed.write(); if !values.remove(&revision) { values.insert(revision.clone()); } } }, {language.text(Text::HistorySecrets)} }
                             for before in &change.before {
-                                div { class: "history-diff",
-                                    div { h3 { {language.text(Text::HistoryBefore)} } {snapshot(language, before, change.after.as_ref(), revealed.read().contains(&change.revision))} }
-                                    div { h3 { {language.text(Text::HistoryAfter)} } if let Some(after) = &change.after { {snapshot(language, after, Some(before), revealed.read().contains(&change.revision))} } else { p { {language.text(Text::Deleted)} } } }
-                                }
+                                {record_diff(language, Some(before), change.after.as_ref(), revealed.read().contains(&change.revision))}
                             }
                             if change.before.is_empty() {
-                                if let Some(after) = &change.after { {snapshot(language, after, None, revealed.read().contains(&change.revision))} }
-                                else { p { {language.text(Text::Deleted)} } }
+                                {record_diff(language, None, change.after.as_ref(), revealed.read().contains(&change.revision))}
                             }
                         }
                     }
@@ -99,94 +112,134 @@ pub(crate) fn RecordsView() -> Element {
     }
 }
 
-fn snapshot(
+fn record_diff(
     language: crate::settings::language::Language,
-    entry: &Entry,
-    other: Option<&Entry>,
+    before: Option<&Entry>,
+    after: Option<&Entry>,
     reveal: bool,
 ) -> Element {
+    let empty = Entry::default();
+    let old = before.unwrap_or(&empty);
+    let new = after.unwrap_or(&empty);
     let mut fields = Vec::new();
-    for (label, value, previous, secret) in [
-        (
-            Text::Name,
-            entry.title.as_str(),
-            other.map(|e| e.title.as_str()),
-            false,
-        ),
+    for (label, previous, value, secret) in [
+        (Text::Name, old.title.as_str(), new.title.as_str(), false),
         (
             Text::Username2,
-            entry.username.as_str(),
-            other.map(|e| e.username.as_str()),
+            old.username.as_str(),
+            new.username.as_str(),
             false,
         ),
         (
             Text::Password,
-            entry.password.as_str(),
-            other.map(|e| e.password.as_str()),
+            old.password.as_str(),
+            new.password.as_str(),
             true,
         ),
+        (Text::Url, old.url.as_str(), new.url.as_str(), false),
+        (Text::Note, old.notes.as_str(), new.notes.as_str(), false),
         (
-            Text::Url,
-            entry.url.as_str(),
-            other.map(|e| e.url.as_str()),
+            Text::Folder,
+            old.folder_id.as_deref().unwrap_or_default(),
+            new.folder_id.as_deref().unwrap_or_default(),
             false,
         ),
         (
-            Text::Note,
-            entry.notes.as_str(),
-            other.map(|e| e.notes.as_str()),
+            Text::ChooseIcon,
+            old.icon.as_deref().unwrap_or_default(),
+            new.icon.as_deref().unwrap_or_default(),
             false,
         ),
     ] {
-        if previous != Some(value) {
-            fields.push((
+        if previous != value {
+            fields.push(field_diff(
                 language.text(label),
-                if secret && !reveal {
-                    Cow::Borrowed("••••••••")
-                } else {
-                    Cow::Borrowed(value)
-                },
+                masked(previous, secret && !reveal),
+                masked(value, secret && !reveal),
+                secret && !reveal,
             ));
         }
     }
-    if other.is_none_or(|e| e.totp != entry.totp) {
-        fields.push((
-            "TOTP",
-            if reveal {
-                Cow::Owned(
-                    entry
-                        .totp
-                        .as_ref()
-                        .map(|t| {
-                            format!(
-                                "{} · {:?} · {} · {}",
-                                t.secret, t.algorithm, t.digits, t.period
-                            )
-                        })
-                        .unwrap_or_default(),
-                )
+    if old.totp != new.totp {
+        let display = |entry: &Entry| match &entry.totp {
+            None => Cow::Borrowed(""),
+            Some(_) if !reveal => Cow::Borrowed("••••••••"),
+            Some(t) => Cow::Owned(format!(
+                "{} · {:?} · {} · {}",
+                t.secret, t.algorithm, t.digits, t.period
+            )),
+        };
+        fields.push(field_diff("TOTP", &display(old), &display(new), !reveal));
+    }
+    if old.attachments != new.attachments {
+        // Compare the files themselves: replacing bytes can leave names and sizes unchanged.
+        let removed = old
+            .attachments
+            .iter()
+            .filter(|file| !new.attachments.contains(file))
+            .collect::<Vec<_>>();
+        let added = new
+            .attachments
+            .iter()
+            .filter(|file| !old.attachments.contains(file))
+            .collect::<Vec<_>>();
+        let display = |files: Vec<&crate::records::entry::Attachment>| {
+            files
+                .iter()
+                .map(|file| format!("{} ({} B)", file.name, file.data.len()))
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+        let reordered = removed.is_empty() && added.is_empty();
+        fields.push(field_diff(
+            language.text(Text::Attachments),
+            &display(if reordered {
+                old.attachments.iter().collect()
             } else {
-                Cow::Borrowed("••••••••")
-            },
+                removed
+            }),
+            &display(if reordered {
+                new.attachments.iter().collect()
+            } else {
+                added
+            }),
+            true,
         ));
     }
-    if other.is_none_or(|e| e.folder_id != entry.folder_id) {
-        fields.push((
-            language.text(Text::Folder),
-            Cow::Borrowed(entry.folder_id.as_deref().unwrap_or_default()),
-        ));
+    rsx! { div { class: "history-diff", {fields.into_iter()} } }
+}
+
+fn masked(text: &str, hide: bool) -> &str {
+    if hide && !text.is_empty() {
+        "••••••••"
+    } else {
+        text
     }
-    if other.is_none_or(|e| e.icon != entry.icon) {
-        fields.push((
-            language.text(Text::ChooseIcon),
-            Cow::Borrowed(entry.icon.as_deref().unwrap_or_default()),
-        ));
-    }
-    let files_changed = other.is_none_or(|e| e.attachments != entry.attachments);
+}
+
+fn field_diff(label: &str, before: &str, after: &str, replace: bool) -> Element {
+    let rows = lines(before, after, replace);
     rsx! {
-        dl { class: "history-fields",
-            for (label, value) in fields { dt { "{label}" } dd { "{value}" } }
-            if files_changed { dt { {language.text(Text::Attachments)} } dd { for file in &entry.attachments { p { "{file.name} ({file.data.len()} B)" } } } }
+        section { class: "history-diff-field",
+            h3 { "{label}" }
+            div { class: "history-diff-lines",
+                for row in rows {
+                    div { class: match row.kind {
+                        Kind::Equal => "diff-line diff-context",
+                        Kind::Removed => "diff-line diff-removed",
+                        Kind::Added => "diff-line diff-added",
+                    },
+                        span { class: "diff-number", "{row.old.map(|n| n.to_string()).unwrap_or_default()}" }
+                        span { class: "diff-number", "{row.new.map(|n| n.to_string()).unwrap_or_default()}" }
+                        span { class: "diff-sign", {match row.kind { Kind::Equal => " ", Kind::Removed => "−", Kind::Added => "+" }} }
+                        code { class: "diff-text", {row.text.trim_end_matches('\n')} }
+                    }
+                }
+            }
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/history.rs"]
+mod tests;

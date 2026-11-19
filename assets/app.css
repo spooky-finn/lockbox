@@ -570,11 +570,22 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 99px; }
 .welcome-create { gap: 8px; min-height: 34px; padding: 7px 14px; }
 
 .history-change { border-top: 1px solid var(--border); padding: 12px 0; }
-.history-diff { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
-.history-fields { white-space: pre-wrap; overflow-wrap: anywhere; }
-.history-fields dd { margin: 4px 0 16px; }
+.history-diff { display: grid; gap: 12px; margin-top: 12px; min-width: 0; }
+.history-diff-field { min-width: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 6px; }
+.history-diff-field h3 { margin: 0; padding: 6px 12px; font-size: 12px; background: var(--subtle); border-bottom: 1px solid var(--border); }
+.history-diff-lines { padding: 4px 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.diff-line { display: grid; grid-template-columns: 4ch 4ch 3ch minmax(0, 1fr); min-height: 21px; line-height: 21px; }
+.diff-number { color: var(--muted); text-align: right; padding-right: 1ch; user-select: none; font-variant-numeric: tabular-nums; }
+.diff-sign { text-align: center; user-select: none; }
+.diff-text { font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; padding-right: 12px; }
+.diff-removed { background: color-mix(in srgb, var(--error) 12%, transparent); }
+.diff-added { background: color-mix(in srgb, var(--success) 12%, transparent); }
+.diff-removed .diff-sign { color: var(--error); }
+.diff-added .diff-sign { color: var(--success); }
 .fingerprint { overflow-wrap: anywhere; font-size: 12px; }
-@media (max-width: 640px) { .history-diff { grid-template-columns: 1fr; } }
+button.identifier { display: inline-flex; vertical-align: baseline; gap: 6px; min-height: 24px; padding: 2px 5px; color: inherit; white-space: nowrap; }
+.identifier code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.identifier .symbol { width: 13px; height: 13px; flex-basis: 13px; color: var(--muted); }
 
 .entry-icon.favicon { background: transparent; box-shadow: none; }
 .entry-icon img { width: 100%; height: 100%; object-fit: contain; border-radius: inherit; }

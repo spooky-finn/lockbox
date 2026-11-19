@@ -2,6 +2,7 @@
 
 pub(crate) mod button;
 pub(crate) mod icons;
+pub(crate) mod identifier;
 pub(crate) mod lock_mark;
 pub(crate) mod status;
 pub(crate) mod symbol;
