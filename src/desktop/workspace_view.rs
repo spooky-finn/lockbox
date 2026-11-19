@@ -165,7 +165,7 @@ fn VaultContent() -> Element {
         SyncReview {}
 
         if unlocked.directories.draft.is_some() { DirectoryEditor {} }
-        else if unlocked.draft.is_some() { DraftView {} }
+        else if let Some(draft) = &unlocked.draft { DraftView { key: "{draft.entry.id}" } }
         else if unlocked.selected_entry().is_some() { EntryView {} }
         else if unlocked.directories.selected.is_some() { DirectoryView {} }
         else { div { class: "empty-state vault-welcome",

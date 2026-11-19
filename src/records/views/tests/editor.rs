@@ -111,6 +111,83 @@ fn editor_keeps_shared_field_layout_without_manual_save_or_edit_banner() {
 }
 
 #[test]
+fn notes_accept_input_without_writing_the_value_back_to_the_webview() {
+    use crate::{desktop::test_support::reopen, records::entry::Entry};
+    use dioxus::dioxus_core::Mutation;
+    use dioxus::html::{EventData, SerializedFormData, SerializedHtmlEventConverter};
+
+    dioxus::html::set_event_converter(Box::new(SerializedHtmlEventConverter));
+    let mut dom = mounted();
+    dom.in_scope(ScopeId::APP, || {
+        edit_unlocked(consume_context(), |u| {
+            u.start_edit();
+            u.draft.as_mut().unwrap().entry.notes = "Original note".into();
+        });
+    });
+    let changes = dom.render_immediate_to_vec();
+    let textarea = changes
+        .edits
+        .iter()
+        .find_map(|edit| match edit {
+            Mutation::SetAttribute {
+                name: "rows", id, ..
+            } => Some(*id),
+            _ => None,
+        })
+        .expect("notes textarea has a rows attribute");
+    assert!(changes.edits.iter().any(|edit| {
+        matches!(edit, Mutation::CreateTextNode { value, .. } if value == "Original note")
+    }));
+
+    let latest = "Edited note\nSecond line";
+    let event = Event::new(
+        EventData::Form(SerializedFormData::new(latest.into(), vec![])).into_any(),
+        true,
+    );
+    dom.runtime().handle_event("input", event, textarea);
+    let changes = dom.render_immediate_to_vec();
+    assert!(changes.edits.iter().any(|edit| {
+        matches!(edit, Mutation::SetAttribute { name: "rows", id, .. } if *id == textarea)
+    }));
+    assert!(changes.edits.iter().all(|edit| match edit {
+        Mutation::SetAttribute {
+            name: "value" | "initial_value",
+            id,
+            ..
+        } => *id != textarea,
+        Mutation::SetText { value, .. } | Mutation::CreateTextNode { value, .. } => value != latest,
+        _ => true,
+    }));
+
+    dom.in_scope(ScopeId::APP, || {
+        edit_unlocked(consume_context(), |u| {
+            let draft = u.draft.as_ref().unwrap();
+            let id = draft.entry.id.clone();
+            assert!(draft.autosave_at.is_some());
+            u.autosave_draft().unwrap();
+            let saved = reopen(u);
+            assert_eq!(
+                saved
+                    .entries
+                    .iter()
+                    .find(|entry| entry.id == id)
+                    .unwrap()
+                    .notes,
+                latest
+            );
+
+            let mut next = Entry::new();
+            next.notes = "Another record's note".into();
+            u.start_draft(next, true);
+        });
+    });
+    let changes = dom.render_immediate_to_vec();
+    assert!(changes.edits.iter().any(|edit| {
+        matches!(edit, Mutation::CreateTextNode { value, .. } if value == "Another record's note")
+    }));
+}
+
+#[test]
 fn keyboard_finishes_inputs_and_keeps_notes_newlines_and_composition() {
     use dioxus::dioxus_core::Mutation;
     use dioxus::html::{EventData, SerializedHtmlEventConverter, SerializedKeyboardData};

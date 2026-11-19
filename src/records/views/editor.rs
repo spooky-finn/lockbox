@@ -83,7 +83,14 @@ pub(crate) fn DraftView() -> Element {
                 }
                 div { class: "field-row totp-field", dt { "TOTP" } dd { TotpEditor {} } }
                 div { class: "field-row notes-row", dt { label { r#for: "entry-notes", {language.text(Text::Note)} } }
-                    dd { textarea { id: "entry-notes", class: "field-value", onmounted: move |event| async move { if focus_field == Some(Field::Notes) { let _ = event.data.set_focus(true).await; } }, rows: entry.notes.lines().count().clamp(1, 8), value: "{entry.notes}", oninput: move |e| set_field(state, Field::Notes, e.value()) } }
+                    dd {
+                        textarea { id: "entry-notes", class: "field-value",
+                            rows: entry.notes.lines().take(8).count().max(1),
+                            onmounted: move |event| async move { if focus_field == Some(Field::Notes) { let _ = event.data.set_focus(true).await; } },
+                            oninput: move |e| set_field(state, Field::Notes, e.value()),
+                            InitialNote {}
+                        }
+                    }
                 }
             }
             if draft.generator_open { GeneratorView {} }
@@ -121,6 +128,22 @@ pub(crate) fn DraftView() -> Element {
             }
         }
     }
+}
+
+#[component]
+fn InitialNote() -> Element {
+    let state = use_context::<Session>();
+    let screen = state.peek();
+    let Screen::Unlocked(unlocked) = &*screen else {
+        return rsx! {};
+    };
+    let Some(draft) = &unlocked.draft else {
+        return rsx! {};
+    };
+
+    // A textarea uses its text child as its initial value. Keep this read
+    // non-reactive so the WebView owns the live value and selection.
+    rsx! { "{draft.entry.notes}" }
 }
 
 #[cfg(test)]
