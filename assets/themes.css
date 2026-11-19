@@ -1,0 +1,191 @@
+/* Theme tokens apply to the whole app and to each miniature in Settings. */
+[data-preset] {
+    --theme-font: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    --heading-font: var(--theme-font);
+    --button-radius: 3px;
+    --field-radius: 3px;
+    --panel-radius: 4px;
+    --rule: color-mix(in srgb, var(--accent) 10%, transparent);
+    --accent-line: color-mix(in srgb, var(--accent) 44%, transparent);
+    --lock-focus-shadow: color-mix(in srgb, var(--lock-focus) 45%, transparent);
+    --pattern: none;
+    --pattern-size: auto;
+    --sheet-edge: transparent;
+    --sheet-rule: solid;
+    --sheet-shadow: none;
+    --shadow: 0 2px 8px rgb(0 0 0 / 8%);
+    color-scheme: light;
+}
+[data-preset][data-theme="dark"] { color-scheme: dark; }
+.app[data-preset] { font-family: var(--theme-font); }
+.app[data-preset] :is(h1, h2, .entry-title-input) { font-family: var(--heading-font); letter-spacing: normal; }
+.app[data-preset] :is(.detail, .lock-screen) {
+    background-image: var(--pattern);
+    background-size: var(--pattern-size);
+}
+
+[data-preset="paper"] {
+    --pattern: repeating-linear-gradient(transparent 0 23px, var(--rule) 23px 24px);
+    --sheet-edge: var(--border);
+    --sheet-shadow: 0 3px 0 -1px var(--control), 0 4px 0 -1px var(--border);
+    --panel-radius: 6px;
+}
+[data-preset="forest"] {
+    --pattern: radial-gradient(circle, var(--rule) 1px, transparent 1px);
+    --pattern-size: 12px 12px;
+    --sheet-edge: var(--border);
+    --panel-radius: 10px 3px 3px 10px;
+    --sheet-shadow: -3px 0 var(--accent-line);
+}
+[data-preset="ocean"] {
+    --pattern: linear-gradient(var(--rule) 1px, transparent 1px), linear-gradient(90deg, var(--rule) 1px, transparent 1px);
+    --pattern-size: 28px 28px;
+    --sheet-edge: var(--accent-line);
+    --button-radius: 0px;
+    --field-radius: 0px;
+    --panel-radius: 0px;
+}
+[data-preset="slate"] {
+    --pattern: linear-gradient(var(--rule) 1px, transparent 1px), linear-gradient(90deg, var(--rule) 1px, transparent 1px);
+    --pattern-size: 8px 8px;
+    --sheet-edge: var(--border);
+    --button-radius: 1px;
+    --field-radius: 1px;
+    --panel-radius: 1px;
+}
+[data-preset="amber"] {
+    --pattern: radial-gradient(circle, var(--rule) .7px, transparent 1px), radial-gradient(circle at 25% 75%, var(--rule) .7px, transparent 1px);
+    --pattern-size: 7px 9px, 11px 13px;
+    --sheet-edge: var(--accent-line);
+    --sheet-rule: dashed;
+    --panel-radius: 8px;
+}
+[data-preset="rose"] {
+    --pattern: repeating-linear-gradient(transparent 0 23px, var(--rule) 23px 24px);
+    --sheet-edge: var(--border);
+    --heading-font: "Iowan Old Style", Georgia, serif;
+    --panel-radius: 3px 9px 9px 3px;
+}
+[data-preset="teal"] {
+    --sheet-edge: var(--border);
+    --sheet-shadow: 0 3px 0 -1px var(--control), 0 4px 0 -1px var(--border), 0 6px 0 -2px var(--control), 0 7px 0 -2px var(--border);
+    --button-radius: 7px;
+    --field-radius: 7px;
+    --panel-radius: 9px;
+}
+[data-preset="plum"] {
+    --heading-font: "Iowan Old Style", Palatino, Georgia, serif;
+    --sheet-edge: var(--border);
+    --sheet-shadow: 0 4px 12px rgb(0 0 0 / 9%);
+    --button-radius: 6px;
+    --field-radius: 6px;
+    --panel-radius: 14px;
+}
+[data-preset="indigo"] {
+    --button-radius: 0px;
+    --field-radius: 0px;
+    --panel-radius: 0px;
+    --sheet-edge: var(--accent-line);
+    --pattern: repeating-linear-gradient(transparent 0 4px, var(--rule) 4px 5px);
+}
+
+/* Keep a solid reading surface over patterned backgrounds. */
+.app[data-preset] :is(.entry-detail, .directory-detail) {
+    background-color: var(--surface);
+    border: 1px var(--sheet-rule) var(--sheet-edge);
+    border-radius: var(--panel-radius);
+    box-shadow: var(--sheet-shadow);
+    padding: clamp(12px, 2.4vw, 24px);
+}
+.app:is([data-preset="paper"], [data-preset="rose"]) :is(.entry-detail, .directory-detail),
+:is([data-preset="paper"], [data-preset="rose"]) .theme-sample {
+    background-image: linear-gradient(var(--accent-line), var(--accent-line));
+    background-size: 1px 100%;
+    background-position: 12px 0;
+    background-repeat: no-repeat;
+    padding-inline-start: clamp(22px, 4vw, 34px);
+}
+.app:is([data-preset="paper"], [data-preset="rose"]) .entry-detail .notes,
+.app:is([data-preset="paper"], [data-preset="rose"]) .draft.entry-detail .fields #entry-notes {
+    min-height: 48px;
+    padding: 0 6px;
+    background-image: var(--pattern);
+    background-attachment: local;
+    font-size: 13px;
+    line-height: 24px;
+}
+.app[data-preset="amber"] .field-row + .field-row { border-top-style: dashed; }
+.app:is([data-preset="teal"], [data-preset="plum"]) .entry-detail .detail-heading {
+    border-bottom: 2px solid var(--accent-line);
+    padding-bottom: 8px;
+}
+.app:is([data-preset="ocean"], [data-preset="indigo"]) .space-tab.active .space-tab-select {
+    box-shadow: inset 0 -2px var(--accent);
+}
+.app[data-preset="indigo"] .detail-kind { color: var(--accent-ink); }
+
+.theme-grid {
+    --theme-gap: 10px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, max(108px, calc((100% - 4 * var(--theme-gap)) / 5))), 1fr));
+    gap: var(--theme-gap);
+}
+button.theme-card {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 0;
+    min-width: 0;
+    padding: 4px;
+    background: var(--surface);
+    border-radius: var(--button-radius);
+    box-shadow: none;
+    text-align: left;
+}
+button.theme-card:hover { background: var(--control); }
+button.theme-card[aria-pressed="true"] {
+    border-color: var(--accent-ink);
+    box-shadow: inset 0 0 0 1px var(--accent-ink);
+}
+.theme-preview {
+    display: grid;
+    place-items: center;
+    height: 66px;
+    border: 1px solid var(--border);
+    border-radius: var(--field-radius);
+    color: var(--ink);
+    background-color: var(--canvas);
+    background-image: var(--pattern);
+    background-size: var(--pattern-size);
+}
+.theme-sample {
+    width: 68px;
+    padding: 6px 8px 8px;
+    border: 1px var(--sheet-rule) var(--sheet-edge);
+    border-radius: var(--panel-radius);
+    box-shadow: var(--sheet-shadow);
+    background-color: var(--surface);
+    font: 600 20px/1.15 var(--heading-font);
+    text-align: center;
+}
+.theme-sample::after {
+    content: "";
+    display: block;
+    width: 20px;
+    margin: 4px auto 0;
+    border-top: 2px solid var(--accent);
+}
+.theme-preview[data-preset="indigo"] .theme-sample { color: var(--accent-ink); }
+.theme-card-caption {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 3px;
+    min-height: 30px;
+    padding: 4px 2px;
+    font-size: 11px;
+    overflow-wrap: anywhere;
+}
+.theme-card-check { flex-shrink: 0; color: var(--accent-ink); }
+.theme-card-check .symbol { width: 12px; height: 12px; }

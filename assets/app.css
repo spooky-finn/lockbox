@@ -120,15 +120,11 @@ h2 { font-size: 15px; font-weight: 600; letter-spacing: -.2px; }
     overflow: hidden;
     background: var(--canvas);
 }
-.app { background-image: var(--canvas-image, none); }
-.app[data-corners="square"] { --button-radius: 0px; --field-radius: 0px; --panel-radius: 0px; }
-.app[data-corners="rounded"] { --button-radius: 12px; --field-radius: 12px; --panel-radius: 20px; }
 .app::before { display: none; }
 .sidebar { background: var(--subtle); border-right: 1px solid var(--border); }
 
 /* Vault access */
 .app.is-locked { color: var(--lock-ink); background: var(--lock-canvas); }
-.app.is-locked { background-image: var(--canvas-image, none); }
 .app.is-locked::before { display: none; }
 .lock-screen { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 32px; padding: 80px 24px 20px; overflow: auto; }
 .unlock-content { width: 100%; max-width: 420px; flex: 1 0 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; margin: auto; text-align: center; }
@@ -387,9 +383,6 @@ button.sidebar-settings[aria-current="page"]:focus-visible { outline-color: var(
 .preference-copy p { font-size: 11px; line-height: 1.35; }
 .settings-page .preference-row > select { flex-shrink: 0; padding: 3px 7px; font-size: 12px; }
 .settings-page .preference-row > .switch { flex-shrink: 0; }
-.color-controls { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-shrink: 0; }
-.color-controls input[type=color] { width: 40px; height: 30px; padding: 3px; border-radius: var(--field-radius, 6px); background: var(--surface); cursor: pointer; }
-.color-controls button { min-height: 30px; padding: 4px 7px; font-size: 12px; }
 .sharing-code { overflow-wrap: anywhere; user-select: text; font-size: 11px; line-height: 1.6; }
 .sharing-member { border-top: 1px solid var(--border); padding-top: 14px; margin-top: 6px; }
 .sharing-actions { flex-wrap: wrap; }
@@ -429,7 +422,6 @@ button.sidebar-settings[aria-current="page"]:focus-visible { outline-color: var(
 
 /* Credentials */
 .detail { min-width: 0; min-height: 0; overflow: auto; padding: 16px 20px 20px; background: var(--surface); }
-.detail { background-image: var(--canvas-image, none); }
 .detail > .error { margin-bottom: 18px; }
 .entry-detail { width: 100%; max-width: none; margin: 0; }
 .directory-detail { width: 100%; max-width: none; margin: 0; }
@@ -843,49 +835,4 @@ button.copy-value.title-value { display: block; font: inherit; line-height: 1.2;
     .entry-row, .folder-row, .sidebar-settings { min-height: 32px; }
     .field-row { min-height: 48px; }
     .entry-detail .field-row .icon-button, .entry-detail .detail-heading .icon-button { width: 32px; height: 32px; min-height: 32px; flex-basis: 32px; }
-}
-
-.app[data-preset="paper"] {
-    --paper-gutter: clamp(14px, 3vw, 28px);
-    --paper-tint: #fff;
-    --paper-tint-amount: 54%;
-    --paper-font: "Iowan Old Style", Palatino, Georgia, serif;
-}
-.app[data-preset="paper"][data-theme="dark"] {
-    --paper-tint: #000;
-    --paper-tint-amount: 18%;
-}
-.app[data-preset="paper"] :is(.entry-detail:not(.record-history), .directory-detail) {
-    max-width: 760px;
-    margin-inline: auto;
-    padding: clamp(14px, 3vw, 28px);
-    padding-inline-start: calc(var(--paper-gutter) + clamp(12px, 2vw, 22px));
-    border: 1px solid var(--border);
-    border-radius: var(--panel-radius, 4px);
-    background-color: var(--control);
-    background-color: color-mix(in srgb, var(--surface), var(--paper-tint) var(--paper-tint-amount));
-    background-image: linear-gradient(var(--selected), var(--selected));
-    background-image: linear-gradient(
-        color-mix(in srgb, var(--accent) 33%, transparent),
-        color-mix(in srgb, var(--accent) 33%, transparent)
-    );
-    background-position: var(--paper-gutter) 0;
-    background-repeat: no-repeat;
-    background-size: 1px 100%;
-    box-shadow: 0 2px 0 -1px var(--control), 0 3px 0 -1px var(--border), var(--shadow);
-}
-.app[data-preset="paper"] :is(.entry-detail, .directory-detail) .detail-heading h1,
-.app[data-preset="paper"] .draft.entry-detail input.entry-title-input {
-    font-family: var(--paper-font);
-    font-size: clamp(22px, 3vw, 30px);
-    font-weight: 600;
-    line-height: 1.2;
-}
-.app[data-preset="paper"] .entry-detail .notes,
-.app[data-preset="paper"] .draft.entry-detail .fields #entry-notes {
-    min-height: 72px;
-    padding: 0 8px;
-    background-image: repeating-linear-gradient(transparent 0 23px, var(--separator) 23px 24px);
-    background-attachment: local;
-    font: 14px / 24px var(--paper-font);
 }

@@ -70,46 +70,7 @@ pub(crate) fn set_theme(theme: crate::settings::appearance::ThemeMode) {
 }
 
 pub(crate) fn set_theme_preset(preset: crate::settings::appearance::ThemePreset) {
-    update_preferences(|config| {
-        config.appearance.preset = preset;
-        config.appearance.accent = None;
-        config.appearance.background = None;
-    });
-}
-
-pub(crate) fn set_gradient(enabled: bool) {
-    update_preferences(|config| config.appearance.gradient = enabled);
-}
-
-pub(crate) fn set_corner_style(corners: crate::settings::appearance::CornerStyle) {
-    update_preferences(|config| config.appearance.corners = corners);
-}
-
-pub(crate) fn set_accent_color(value: Option<&str>) {
-    set_color(value, |config, color| config.appearance.accent = color);
-}
-
-pub(crate) fn set_background_color(value: Option<&str>) {
-    set_color(value, |config, color| config.appearance.background = color);
-}
-
-fn set_color(
-    value: Option<&str>,
-    change: impl FnOnce(
-        &mut crate::settings::config::Config,
-        Option<crate::settings::appearance::RgbColor>,
-    ),
-) {
-    let color = match value {
-        Some(value) => {
-            let Some(color) = crate::settings::appearance::RgbColor::parse(value) else {
-                return;
-            };
-            Some(color)
-        }
-        None => None,
-    };
-    update_preferences(|config| change(config, color));
+    update_preferences(|config| config.appearance.preset = preset);
 }
 
 fn update_preferences(change: impl FnOnce(&mut crate::settings::config::Config)) {

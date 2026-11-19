@@ -1,7 +1,7 @@
-//! Resolve saved appearance against the system theme and build readable color palettes.
+//! Resolve the native light/dark mode and supply palette tokens for the app and previews.
 
 use crate::settings::{
-    appearance::{Appearance, RgbColor, ThemeMode},
+    appearance::{ThemeMode, ThemePreset},
     state::Settings,
 };
 
@@ -26,22 +26,32 @@ impl ResolvedTheme {
     }
 
     pub(crate) fn name(self) -> &'static str {
-        if self.is_dark() { "dark" } else { "light" }
+        mode_name(self.is_dark())
     }
+}
+
+pub(crate) fn mode_name(dark: bool) -> &'static str {
+    if dark { "dark" } else { "light" }
 }
 
 pub(crate) fn use_theme() -> ResolvedTheme {
     let settings = use_context::<Signal<Settings>>();
     let window = use_window();
     let mut theme = use_signal(|| window.theme());
-    let dark =
-        use_memo(move || effective_dark(settings.read().config.appearance, theme() == Theme::Dark));
+    let dark = use_memo(move || {
+        settings
+            .read()
+            .config
+            .appearance
+            .theme
+            .is_dark(theme() == Theme::Dark)
+    });
     let resolved = ResolvedTheme(dark);
     use_context_provider(|| resolved);
     let events = window.clone();
     use_wry_event_handler(move |event, _| {
         let appearance = settings.peek().config.appearance;
-        if appearance.theme != ThemeMode::System || appearance.background.is_some() {
+        if appearance.theme != ThemeMode::System {
             return;
         }
         let next = match event {
@@ -68,14 +78,10 @@ pub(crate) fn use_theme() -> ResolvedTheme {
     let native = window.clone();
     use_effect(move || {
         let appearance = settings.read().config.appearance;
-        let requested = if appearance.background.is_some() {
-            Some(if dark() { Theme::Dark } else { Theme::Light })
-        } else {
-            match appearance.theme {
-                ThemeMode::System => None,
-                ThemeMode::Light => Some(Theme::Light),
-                ThemeMode::Dark => Some(Theme::Dark),
-            }
+        let requested = match appearance.theme {
+            ThemeMode::System => None,
+            ThemeMode::Light => Some(Theme::Light),
+            ThemeMode::Dark => Some(Theme::Dark),
         };
         native.set_theme(requested);
         // Refresh the system value after leaving a forced light/dark appearance.
@@ -87,20 +93,13 @@ pub(crate) fn use_theme() -> ResolvedTheme {
         }
     });
     use_effect(move || {
-        // Match --canvas in app.css, including the transparent title bar's backdrop.
-        let [red, green, blue] =
-            backgrounds(settings.read().config.appearance.colors(dark()).1, dark())[0];
+        // Match the canvas, including the transparent title bar's backdrop.
+        let (canvas, _) = colors(settings.read().config.appearance.preset, dark());
+        let [red, green, blue] = canvas;
         window.set_background_color(Some((red, green, blue, 255)));
     });
 
     resolved
-}
-
-pub(crate) fn effective_dark(appearance: Appearance, system_dark: bool) -> bool {
-    appearance.background.map_or_else(
-        || appearance.theme.is_dark(system_dark),
-        |background| luminance(background.rgb()) <= 0.179,
-    )
 }
 
 fn system_theme(window: &DesktopContext) -> Theme {
@@ -109,113 +108,82 @@ fn system_theme(window: &DesktopContext) -> Theme {
     window.theme()
 }
 
-pub(crate) fn appearance_style(appearance: Appearance, dark: bool) -> String {
-    let (accent, background) = appearance.colors(dark);
-    let mut style = background.map_or_else(String::new, |color| background_style(color, dark));
-    // Default accents also need readable text when the background is customized.
-    let accent = accent.or_else(|| background.and_then(|_| RgbColor::parse(default_accent(dark))));
-    style.push_str(&accent_style(accent, dark, &backgrounds(background, dark)));
-    if appearance.gradient {
-        let surfaces = backgrounds(background, dark);
-        // Interpolate only between already contrast-checked surfaces, never
-        // beneath text using an arbitrary saturated accent.
-        style.push_str(&format!(
-            "--canvas-image:linear-gradient(135deg,{},{});",
-            hex(surfaces[0]),
-            hex(surfaces[2])
-        ));
-    }
-    style
-}
+type Rgb = [u8; 3];
 
-pub(crate) fn color_swatches(appearance: Appearance, dark: bool) -> (String, String) {
-    let (accent, background) = appearance.colors(dark);
-    (
-        accent.map_or_else(|| default_accent(dark).into(), RgbColor::hex),
-        hex(backgrounds(background, dark)[0]),
-    )
-}
-
-fn default_accent(dark: bool) -> &'static str {
-    if dark { "#409cff" } else { "#007aff" }
-}
-
-fn backgrounds(background: Option<RgbColor>, dark: bool) -> [[u8; 3]; 3] {
-    if let Some(background) = background {
-        let rgb = background.rgb();
-        let target = if dark { 0 } else { 255 };
-        [rgb, mix(rgb, target, 0.05), mix(rgb, target, 0.10)]
-    } else if dark {
-        [[32, 33, 36], [37, 38, 40], [44, 46, 47]]
-    } else {
-        [[245, 245, 247], [255; 3], [241, 242, 243]]
+// Canvas and accent. The same palette is used in the preview, app, and native window.
+fn colors(preset: ThemePreset, dark: bool) -> (Rgb, Rgb) {
+    use ThemePreset::*;
+    match (preset, dark) {
+        (Classic, false) => ([246, 241, 229], [67, 59, 47]),
+        (Classic, true) => ([30, 28, 24], [215, 200, 173]),
+        (Paper, false) => ([249, 242, 221], [43, 78, 134]),
+        (Paper, true) => ([37, 33, 27], [165, 191, 248]),
+        (Forest, false) => ([235, 238, 221], [51, 82, 56]),
+        (Forest, true) => ([26, 35, 28], [166, 201, 145]),
+        (Ocean, false) => ([229, 239, 249], [35, 79, 150]),
+        (Ocean, true) => ([19, 33, 52], [142, 185, 248]),
+        (Slate, false) => ([237, 239, 238], [62, 77, 82]),
+        (Slate, true) => ([32, 37, 39], [188, 203, 210]),
+        (Amber, false) => ([236, 218, 190], [119, 62, 29]),
+        (Amber, true) => ([42, 31, 23], [233, 174, 117]),
+        (Rose, false) => ([250, 236, 233], [142, 49, 69]),
+        (Rose, true) => ([44, 28, 33], [244, 165, 178]),
+        (Teal, false) => ([225, 241, 235], [27, 89, 75]),
+        (Teal, true) => ([19, 38, 34], [133, 224, 199]),
+        (Plum, false) => ([240, 231, 244], [93, 52, 116]),
+        (Plum, true) => ([32, 25, 39], [216, 171, 239]),
+        (Indigo, false) => ([232, 236, 229], [34, 88, 54]),
+        (Indigo, true) => ([16, 25, 21], [139, 227, 168]),
     }
 }
 
-fn background_style(background: RgbColor, dark: bool) -> String {
-    let surfaces = backgrounds(Some(background), dark);
-    let canvas = background.hex();
-    let subtle = hex(surfaces[1]);
-    let control = hex(surfaces[2]);
-    let ink = if dark { "#fff" } else { "#000" };
-    let channel = if dark { 255 } else { 0 };
+pub(crate) fn preset_style(preset: ThemePreset, dark: bool) -> String {
+    let (canvas, accent) = colors(preset, dark);
+    let (paper, ink_channel) = if dark { (0, 255) } else { (255, 0) };
+    let surface = mix(canvas, 255, if dark { 0.04 } else { 0.40 });
+    let subtle = mix(canvas, ink_channel, if dark { 0.08 } else { 0.04 });
+    let control = mix(canvas, paper, if dark { 0.12 } else { 0.65 });
+    let selected_opacity = if dark { 18 } else { 11 };
+    let accent_fill = blend(subtle, accent, f64::from(selected_opacity) / 100.0);
+    let surfaces = [canvas, surface, subtle, control, accent_fill];
     let readable = |rgb| hex(readable_ink(rgb, dark, &surfaces));
-    let muted = readable(if dark {
-        [161, 167, 181]
-    } else {
-        [113, 119, 134]
-    });
-    let error_rgb = readable_ink(
-        if dark { [255, 133, 133] } else { [196, 53, 56] },
+    let ink = hex(mix(canvas, ink_channel, 0.88));
+    let muted = readable(if dark { [167, 173, 182] } else { [93, 91, 96] });
+    let error = hex(readable_ink(
+        if dark { [255, 153, 153] } else { [163, 40, 43] },
         dark,
         &surfaces,
-    );
-    let error = hex(error_rgb);
-    let error_text = if luminance(error_rgb) > 0.179 {
-        "#000"
-    } else {
-        "#fff"
-    };
-    let notice = readable(if dark { [239, 188, 107] } else { [146, 91, 7] });
-    let success = readable(if dark { [50, 215, 75] } else { [36, 138, 61] });
+    ));
+    let error_text = if dark { "#000" } else { "#fff" };
+    let notice = readable(if dark { [239, 188, 107] } else { [128, 74, 16] });
+    let success = readable(if dark { [123, 217, 150] } else { [36, 108, 61] });
+    let accent_ink = readable(accent);
+    let accent_text = if dark { "#000" } else { "#fff" };
+    let hover = mix(accent, ink_channel, 0.12);
+    let [red, green, blue] = accent;
     format!(
-        "--canvas:{canvas};--surface:{canvas};--subtle:{subtle};--control:{control};\
-         --glass:{control};--glass-solid:{control};\
-         --glass-edge:rgb({channel} {channel} {channel} / 10%);\
+        "--canvas:{};--surface:{};--subtle:{};--control:{};\
+         --glass:{};--glass-solid:{};--glass-edge:rgb({ink_channel} {ink_channel} {ink_channel} / 10%);\
          --ink:{ink};--muted:{muted};--error:{error};--error-text:{error_text};--notice:{notice};--success:{success};\
-         --border:rgb({channel} {channel} {channel} / 18%);\
-         --separator:rgb({channel} {channel} {channel} / 12%);\
-         --lock-canvas:{canvas};--lock-ink:{ink};--lock-secondary:{muted};\
-         --lock-field:{subtle};--lock-field-border:rgb({channel} {channel} {channel} / 28%);"
-    )
-}
-
-fn accent_style(accent: Option<RgbColor>, dark: bool, backgrounds: &[[u8; 3]]) -> String {
-    let Some(accent) = accent else {
-        return String::new();
-    };
-    let rgb = accent.rgb();
-    let [red, green, blue] = rgb;
-    let foreground = if luminance(rgb) > 0.179 {
-        "#000"
-    } else {
-        "#fff"
-    };
-    let ink = readable_ink(rgb, dark, backgrounds);
-    let hover = mix(rgb, if foreground == "#000" { 255 } else { 0 }, 0.12);
-    let opacity = if dark { "18%" } else { "11%" };
-    format!(
-        "--accent:{};--accent-hover:{};--accent-text:{foreground};\
-         --accent-ink:{};--selected:rgb({red} {green} {blue} / {opacity});\
-         --selected-text:{};--active-item:{};--active-item-text:{foreground};\
-         --accent-shadow:rgb({red} {green} {blue} / 17%);\
-         --lock-focus:{};--lock-focus-shadow:rgb({red} {green} {blue} / 45%);",
-        accent.hex(),
+         --border:rgb({ink_channel} {ink_channel} {ink_channel} / 18%);\
+         --separator:rgb({ink_channel} {ink_channel} {ink_channel} / 12%);\
+         --lock-canvas:{};--lock-ink:{ink};--lock-secondary:{muted};\
+         --lock-field:{};--lock-field-border:rgb({ink_channel} {ink_channel} {ink_channel} / 28%);\
+         --accent:{};--accent-hover:{};--accent-text:{accent_text};--accent-ink:{accent_ink};\
+         --selected:rgb({red} {green} {blue} / {selected_opacity}%);--selected-text:{accent_ink};\
+         --active-item:{};--active-item-text:{accent_text};--accent-shadow:rgb({red} {green} {blue} / 17%);\
+         --lock-focus:{accent_ink};",
+        hex(canvas),
+        hex(surface),
+        hex(subtle),
+        hex(control),
+        hex(control),
+        hex(control),
+        hex(canvas),
+        hex(surface),
+        hex(accent),
         hex(hover),
-        hex(ink),
-        hex(ink),
-        accent.hex(),
-        hex(ink),
+        hex(accent),
     )
 }
 
@@ -224,7 +192,13 @@ fn hex([red, green, blue]: [u8; 3]) -> String {
 }
 
 fn mix(rgb: [u8; 3], target: u8, amount: f64) -> [u8; 3] {
-    rgb.map(|value| (f64::from(value) * (1.0 - amount) + f64::from(target) * amount).round() as u8)
+    blend(rgb, [target; 3], amount)
+}
+
+fn blend(rgb: Rgb, target: Rgb, amount: f64) -> Rgb {
+    std::array::from_fn(|index| {
+        (f64::from(rgb[index]) * (1.0 - amount) + f64::from(target[index]) * amount).round() as u8
+    })
 }
 
 fn luminance(rgb: [u8; 3]) -> f64 {
@@ -246,12 +220,12 @@ fn contrast(first: [u8; 3], second: [u8; 3]) -> f64 {
 }
 
 fn readable_ink(rgb: [u8; 3], dark: bool, backgrounds: &[[u8; 3]]) -> [u8; 3] {
-    // Keep custom color fills exact. Adjust text and focus rings for each surface.
+    // Leave room for the low-opacity patterns that sit on top of these surfaces.
     for step in 0..=20 {
         let candidate = mix(rgb, if dark { 255 } else { 0 }, f64::from(step) / 20.0);
         if backgrounds
             .iter()
-            .all(|background| contrast(candidate, *background) >= 4.5)
+            .all(|background| contrast(candidate, *background) >= 5.5)
         {
             return candidate;
         }

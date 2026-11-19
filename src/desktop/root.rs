@@ -3,6 +3,7 @@
 use crate::access::views::locked::LockedView;
 use crate::desktop::{runtime, session::Screen, widgets::theme, workspace_view::UnlockedView};
 use dioxus::prelude::*;
+const THEMES_CSS: &str = include_str!("../../assets/themes.css");
 const CSS: &str = include_str!("../../assets/app.css");
 
 #[component]
@@ -14,7 +15,7 @@ pub fn App() -> Element {
     let theme = theme::use_theme();
     let settings = use_context::<Signal<crate::settings::state::Settings>>();
     let appearance = settings.read().config.appearance;
-    let appearance_style = theme::appearance_style(appearance, theme.is_dark());
+    let appearance_style = theme::preset_style(appearance.preset, theme.is_dark());
     let language = crate::desktop::i18n::use_language();
     let activity = use_hook(|| std::rc::Rc::new(std::cell::Cell::new(None::<document::Eval>)));
     let cleanup = activity.clone();
@@ -35,12 +36,12 @@ pub fn App() -> Element {
     }
     rsx! {
         style { "{CSS}" }
+        style { "{THEMES_CSS}" }
         main {
             lang: language.code(),
             class: if locked() { "app is-locked" } else { "app" },
             "data-theme": theme.name(),
             "data-preset": appearance.preset.code(),
-            "data-corners": appearance.corners.code(),
             style: appearance_style,
             onmounted: move |_| {
                 if activity.get().is_none() {

@@ -8,7 +8,7 @@ use crate::{
         workspace::Page,
     },
     settings::{
-        appearance::{CornerStyle, RgbColor, ThemeMode, ThemePreset},
+        appearance::{ThemeMode, ThemePreset},
         config::Config,
         language::Language,
         state::Settings,
@@ -71,8 +71,7 @@ fn settings_saves_pending_edits_before_switching_preferences_and_returning() {
     update(&mut dom, |_| {
         actions::set_language(Language::English);
         actions::set_theme(ThemeMode::Dark);
-        actions::set_accent_color(Some("#af52de"));
-        actions::set_background_color(Some("#f3e8d2"));
+        actions::set_theme_preset(ThemePreset::Forest);
     });
     let html = dioxus_ssr::render(&dom);
     assert!(!html.contains("id=\"entry-title\""));
@@ -106,17 +105,13 @@ fn appearance_language_and_security_preferences_persist_and_remain_after_lock() 
         actions::set_auto_lock(15);
         actions::set_language(Language::English);
         actions::set_theme(ThemeMode::Dark);
-        actions::set_accent_color(Some("#AF52DE"));
-        actions::set_background_color(Some("#F3E8D2"));
-        actions::set_corner_style(CornerStyle::Rounded);
+        actions::set_theme_preset(ThemePreset::Paper);
     });
     let saved = Config::load(&path);
     assert_eq!(saved.language, Language::English);
     assert_eq!(saved.auto_lock_minutes, 15);
     assert_eq!(saved.appearance.theme, ThemeMode::Dark);
-    assert_eq!(saved.appearance.accent, RgbColor::parse("#af52de"));
-    assert_eq!(saved.appearance.background, RgbColor::parse("#f3e8d2"));
-    assert_eq!(saved.appearance.corners, CornerStyle::Rounded);
+    assert_eq!(saved.appearance.preset, ThemePreset::Paper);
     update(&mut dom, |_| runtime::lock(None));
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("Master password"));
@@ -130,66 +125,7 @@ fn appearance_language_and_security_preferences_persist_and_remain_after_lock() 
 }
 
 #[test]
-fn invalid_accent_is_ignored_and_reset_preserves_other_preferences() {
-    let mut dom = mounted();
-    update(&mut dom, |_| {
-        actions::set_theme(ThemeMode::Dark);
-        actions::set_accent_color(Some("#af52de"));
-        actions::set_accent_color(Some("#af52de;--canvas:red"));
-    });
-    dom.in_scope(ScopeId::APP, || {
-        let settings = consume_context::<Signal<Settings>>();
-        assert_eq!(
-            settings.read().config.appearance.accent,
-            RgbColor::parse("#af52de")
-        );
-    });
-    update(&mut dom, |state| {
-        actions::set_accent_color(None);
-        edit_unlocked(state, |u| u.open_settings());
-    });
-    dom.in_scope(ScopeId::APP, || {
-        let settings = consume_context::<Signal<Settings>>();
-        assert_eq!(settings.read().config.appearance.theme, ThemeMode::Dark);
-        assert_eq!(settings.read().config.appearance.accent, None);
-        assert_eq!(settings.read().config.language, Language::Russian);
-    });
-    let html = dioxus_ssr::render(&dom);
-    assert!(html.contains("settings-preset"));
-    assert!(html.contains("id=\"settings-accent\" type=\"color\" value=\"#409cff\""));
-}
-
-#[test]
-fn invalid_background_is_ignored_and_reset_keeps_accent_and_mode() {
-    let mut dom = mounted();
-    update(&mut dom, |_| {
-        actions::set_theme(ThemeMode::System);
-        actions::set_accent_color(Some("#af52de"));
-        actions::set_background_color(Some("#182432"));
-        actions::set_background_color(Some("#182432;--ink:red"));
-    });
-    dom.in_scope(ScopeId::APP, || {
-        assert_eq!(
-            consume_context::<Signal<Settings>>()
-                .read()
-                .config
-                .appearance
-                .background,
-            RgbColor::parse("#182432")
-        );
-    });
-    update(&mut dom, |_| actions::set_background_color(None));
-    dom.in_scope(ScopeId::APP, || {
-        let settings = consume_context::<Signal<Settings>>();
-        let appearance = settings.read().config.appearance;
-        assert_eq!(appearance.background, None);
-        assert_eq!(appearance.accent, RgbColor::parse("#af52de"));
-        assert_eq!(appearance.theme, ThemeMode::System);
-    });
-}
-
-#[test]
-fn appearance_controls_apply_and_reset_presets_colors_and_corners() {
+fn appearance_controls_apply_each_preset_and_update_its_preview() {
     use dioxus::{
         dioxus_core::Mutation,
         html::{EventData, SerializedFormData, SerializedHtmlEventConverter, SerializedMouseData},
@@ -210,15 +146,16 @@ fn appearance_controls_apply_and_reset_presets_colors_and_corners() {
     dioxus::html::set_event_converter(Box::new(SerializedHtmlEventConverter));
     let mut dom = VirtualDom::new(fixture);
     let changes = dom.rebuild_to_vec();
-    let controls = changes
+    let theme_control = changes
         .edits
         .iter()
         .filter_map(|edit| match edit {
             Mutation::NewEventListener { name, id } if name == "change" => Some(*id),
             _ => None,
         })
-        .collect::<Vec<_>>();
-    let resets = changes
+        .next()
+        .unwrap();
+    let preset_controls = changes
         .edits
         .iter()
         .filter_map(|edit| match edit {
@@ -226,15 +163,6 @@ fn appearance_controls_apply_and_reset_presets_colors_and_corners() {
             _ => None,
         })
         .collect::<Vec<_>>();
-    let [
-        theme_control,
-        preset_control,
-        accent_control,
-        background_control,
-        gradient,
-        corners,
-    ]: [_; 6] = controls.try_into().unwrap();
-    let [reset_accent, reset_background]: [_; 2] = resets.try_into().unwrap();
     let change = |dom: &mut VirtualDom, control, value: &str| {
         dom.runtime().handle_event(
             "change",
@@ -265,45 +193,54 @@ fn appearance_controls_apply_and_reset_presets_colors_and_corners() {
                 .appearance
         })
     };
-    let document = kuchikiki::parse_html()
-        .one(dioxus_ssr::render(&dom))
-        .document_node;
+    let render = |dom: &VirtualDom| {
+        kuchikiki::parse_html()
+            .one(dioxus_ssr::render(dom))
+            .document_node
+    };
+    let document = render(&dom);
     let preset_codes = document
-        .select("#settings-preset option")
+        .select("#settings-presets button")
         .unwrap()
-        .map(|option| option.attributes.borrow().get("value").unwrap().to_owned())
+        .map(|button| {
+            button
+                .attributes
+                .borrow()
+                .get("data-theme-choice")
+                .unwrap()
+                .to_owned()
+        })
         .collect::<Vec<_>>();
     assert_eq!(preset_codes, ThemePreset::ALL.map(ThemePreset::code));
-    for mode in ["dark", "light", "system"] {
+    assert!(document.select_first("input[type=color]").is_err());
+    assert_eq!(preset_controls.len(), ThemePreset::ALL.len());
+
+    for mode in ["light", "system", "dark"] {
         change(&mut dom, theme_control, mode);
         assert_eq!(appearance(&dom).theme.code(), mode);
     }
-    for preset in ThemePreset::ALL {
-        change(&mut dom, preset_control, preset.code());
+    for (preset, control) in ThemePreset::ALL.into_iter().zip(preset_controls) {
+        click(&mut dom, control);
         assert_eq!(appearance(&dom).preset, preset);
+        assert_eq!(appearance(&dom).theme, ThemeMode::Dark);
+        let document = render(&dom);
+        let pressed = document
+            .select("#settings-presets button[aria-pressed=true]")
+            .unwrap()
+            .collect::<Vec<_>>();
+        assert_eq!(pressed.len(), 1);
+        assert_eq!(
+            pressed[0].attributes.borrow().get("data-theme-choice"),
+            Some(preset.code())
+        );
+        assert_eq!(
+            document
+                .select(".theme-preview[data-theme=dark]")
+                .unwrap()
+                .count(),
+            10
+        );
     }
-    change(&mut dom, gradient, "true");
-    change(&mut dom, corners, "rounded");
-    change(&mut dom, accent_control, "#da70d6");
-    change(&mut dom, background_control, "#233249");
-    assert_eq!(appearance(&dom).accent, RgbColor::parse("#da70d6"));
-    assert_eq!(appearance(&dom).background, RgbColor::parse("#233249"));
-
-    click(&mut dom, reset_accent);
-    assert_eq!(appearance(&dom).accent, None);
-    assert_eq!(appearance(&dom).background, RgbColor::parse("#233249"));
-    click(&mut dom, reset_background);
-    assert_eq!(appearance(&dom).background, None);
-
-    change(&mut dom, accent_control, "#da70d6");
-    change(&mut dom, background_control, "#233249");
-    change(&mut dom, preset_control, "ocean");
-    let appearance = appearance(&dom);
-    assert_eq!(appearance.preset, ThemePreset::Ocean);
-    assert_eq!(appearance.accent, None);
-    assert_eq!(appearance.background, None);
-    assert_eq!(appearance.corners, CornerStyle::Rounded);
-    assert!(appearance.gradient);
 }
 
 #[test]

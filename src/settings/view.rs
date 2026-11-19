@@ -9,14 +9,14 @@ use crate::{
         session::Screen,
         widgets::{
             symbol::{Icon, Symbol},
-            theme::{ResolvedTheme, color_swatches, effective_dark},
+            theme::{ResolvedTheme, mode_name, preset_style},
         },
         workspace::Page,
     },
     platform::autolock,
     records::editor::replace_secret,
     settings::{
-        appearance::{CornerStyle, ThemeMode, ThemePreset},
+        appearance::{ThemeMode, ThemePreset},
         language::Language,
         state::Settings,
     },
@@ -130,16 +130,12 @@ fn AppearanceSection() -> Element {
     let settings = use_context::<Signal<Settings>>();
     let appearance = settings.read().config.appearance;
     let dark = try_use_context::<ResolvedTheme>()
-        .map_or_else(|| effective_dark(appearance, false), ResolvedTheme::is_dark);
-    let (accent, background) = color_swatches(appearance, dark);
+        .map_or_else(|| appearance.theme.is_dark(false), ResolvedTheme::is_dark);
     rsx! {
         section { class: "settings-section stack",
-            h2 { {language.text(Text::Appearance)} }
+            h2 { id: "settings-appearance", {language.text(Text::Appearance)} }
             div { class: "preference-row",
-                div { class: "preference-copy",
-                    label { r#for: "settings-theme", {language.text(Text::ColorTheme)} }
-                    p { class: "muted", {language.text(Text::ColorThemeDescription)} }
-                }
+                label { r#for: "settings-theme", {language.text(Text::ColorTheme)} }
                 select { id: "settings-theme", value: appearance.theme.code(),
                     onchange: move |event| match event.value().as_str() {
                         "system" => actions::set_theme(ThemeMode::System),
@@ -156,95 +152,50 @@ fn AppearanceSection() -> Element {
                     }
                 }
             }
-            div { class: "preference-row",
-                div { class: "preference-copy",
-                    label { r#for: "settings-preset", {language.text(Text::ThemePreset)} }
-                    p { class: "muted", {language.text(Text::ThemePresetDescription)} }
-                }
-                select { id: "settings-preset", value: appearance.preset.code(),
-                    onchange: move |event| {
-                        let selected = event.value();
-                        if let Some(preset) = ThemePreset::ALL.into_iter().find(|preset| preset.code() == selected) {
-                            actions::set_theme_preset(preset);
-                        }
-                    },
-                    for preset in ThemePreset::ALL {
-                        option { value: preset.code(), selected: appearance.preset == preset,
-                            {language.text(match preset {
-                                ThemePreset::Classic => Text::ThemeClassic,
-                                ThemePreset::Ocean => Text::ThemeOcean,
-                                ThemePreset::Forest => Text::ThemeForest,
-                                ThemePreset::Plum => Text::ThemePlum,
-                                ThemePreset::Amber => Text::ThemeAmber,
-                                ThemePreset::Rose => Text::ThemeRose,
-                                ThemePreset::Teal => Text::ThemeTeal,
-                                ThemePreset::Indigo => Text::ThemeIndigo,
-                                ThemePreset::Slate => Text::ThemeSlate,
-                                ThemePreset::Paper => Text::ThemePaper,
-                            })}
-                        }
-                    }
+            div { id: "settings-presets", class: "theme-grid", role: "group", aria_labelledby: "settings-appearance",
+                for preset in ThemePreset::ALL {
+                    ThemeCard { key: "{preset.code()}", preset, dark, selected: appearance.preset == preset }
                 }
             }
-            div { class: "preference-row",
-                div { class: "preference-copy",
-                    label { r#for: "settings-accent", {language.text(Text::AccentColor)} }
-                    p { id: "accent-description", class: "muted", {language.text(Text::AccentColorDescription)} }
-                }
-                div { class: "color-controls",
-                    input { id: "settings-accent", r#type: "color", value: "{accent}",
-                        aria_describedby: "accent-description",
-                        onchange: move |event| actions::set_accent_color(Some(&event.value())),
-                    }
-                    button { class: "quiet", r#type: "button", disabled: appearance.accent.is_none(),
-                        onclick: move |_| actions::set_accent_color(None),
-                        {language.text(Text::ResetAccentColor)}
-                    }
-                }
+        }
+    }
+}
+
+#[component]
+fn ThemeCard(preset: ThemePreset, dark: bool, selected: bool) -> Element {
+    let language = use_language();
+    let name = match preset {
+        ThemePreset::Classic => Text::ThemeTypewriter,
+        ThemePreset::Paper => Text::ThemeNotebook,
+        ThemePreset::Forest => Text::ThemeFieldNotes,
+        ThemePreset::Ocean => Text::ThemeBlueprint,
+        ThemePreset::Slate => Text::ThemeGraphPaper,
+        ThemePreset::Amber => Text::ThemeKraft,
+        ThemePreset::Rose => Text::ThemeRedMargin,
+        ThemePreset::Teal => Text::ThemeIndexCards,
+        ThemePreset::Plum => Text::ThemeInk,
+        ThemePreset::Indigo => Text::ThemeTerminal,
+    };
+    let sample = if preset == ThemePreset::Indigo { ">_" } else { "Aa" };
+    rsx! {
+        button {
+            class: "theme-card",
+            r#type: "button",
+            aria_pressed: selected,
+            "data-theme-choice": preset.code(),
+            onclick: move |_| actions::set_theme_preset(preset),
+            span {
+                class: "theme-preview",
+                "data-preset": preset.code(),
+                "data-theme": mode_name(dark),
+                style: preset_style(preset, dark),
+                aria_hidden: true,
+                span { class: "theme-sample", "{sample}" }
             }
-            div { class: "preference-row",
-                div { class: "preference-copy",
-                    label { r#for: "settings-background", {language.text(Text::BackgroundColor)} }
-                    p { id: "background-description", class: "muted", {language.text(Text::BackgroundColorDescription)} }
-                }
-                div { class: "color-controls",
-                    input { id: "settings-background", r#type: "color", value: "{background}",
-                        aria_describedby: "background-description",
-                        onchange: move |event| actions::set_background_color(Some(&event.value())),
-                    }
-                    button { class: "quiet", r#type: "button", disabled: appearance.background.is_none(),
-                        onclick: move |_| actions::set_background_color(None),
-                        {language.text(Text::ResetBackgroundColor)}
-                    }
-                }
-            }
-            div { class: "preference-row",
-                div { class: "preference-copy",
-                    label { r#for: "settings-gradient", {language.text(Text::GradientBackground)} }
-                }
-                input { id: "settings-gradient", class: "switch", r#type: "checkbox",
-                    checked: appearance.gradient,
-                    onchange: move |event| actions::set_gradient(event.checked()),
-                }
-            }
-            div { class: "preference-row",
-                label { r#for: "settings-corners", {language.text(Text::CornerStyle)} }
-                select { id: "settings-corners", value: appearance.corners.code(),
-                    onchange: move |event| {
-                        let selected = event.value();
-                        if let Some(corners) = CornerStyle::ALL.into_iter().find(|corners| corners.code() == selected) {
-                            actions::set_corner_style(corners);
-                        }
-                    },
-                    for corners in CornerStyle::ALL {
-                        option { value: corners.code(), selected: appearance.corners == corners,
-                            {language.text(match corners {
-                                CornerStyle::Standard => Text::CornersStandard,
-                                CornerStyle::Square => Text::CornersSquare,
-                                CornerStyle::Rounded => Text::CornersRounded,
-                            })}
-                        }
-                    }
+            span { class: "theme-card-caption",
+                span { {language.text(name)} }
+                if selected {
+                    span { class: "theme-card-check", aria_hidden: true, Symbol { icon: Icon::Check } }
                 }
             }
         }

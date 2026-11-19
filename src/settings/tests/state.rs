@@ -1,5 +1,5 @@
 use crate::settings::{
-    appearance::{RgbColor, ThemeMode},
+    appearance::{ThemeMode, ThemePreset},
     language::Language,
     state::*,
 };
@@ -23,10 +23,7 @@ fn tabs_keep_each_others_changes() {
         .update(|c| c.appearance.theme = ThemeMode::Dark)
         .unwrap();
     second
-        .update(|c| c.appearance.accent = RgbColor::parse("#af52de"))
-        .unwrap();
-    first
-        .update(|c| c.appearance.background = RgbColor::parse("#f3e8d2"))
+        .update(|c| c.appearance.preset = ThemePreset::Paper)
         .unwrap();
     second.update(|c| c.auto_lock_minutes = 15).unwrap();
     second
@@ -37,8 +34,7 @@ fn tabs_keep_each_others_changes() {
     let saved = Config::load(&path);
     assert_eq!(saved.language, Language::Russian);
     assert_eq!(saved.appearance.theme, ThemeMode::Dark);
-    assert_eq!(saved.appearance.accent, RgbColor::parse("#af52de"));
-    assert_eq!(saved.appearance.background, RgbColor::parse("#f3e8d2"));
+    assert_eq!(saved.appearance.preset, ThemePreset::Paper);
     assert_eq!(saved.auto_lock_minutes, 15);
     assert_eq!(saved.last_vault, Some(dir.path().join("cloud.lbx")));
     assert_eq!(saved.touch_id, vec!["vault-id".to_owned()]);
