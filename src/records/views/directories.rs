@@ -101,7 +101,6 @@ pub(crate) fn DirectoryView() -> Element {
                     div { strong { "{records}" } span { {language.text(Text::Entries)} } }
                     div { strong { "{folders}" } span { {language.text(Text::Subfolders)} } }
                 }
-                p { {language.text(Text::SelectAnEntryInTheTreeOrAddOneToThisFolder)} }
                 div { class: "actions",
                     IconButton { class: "primary", icon: Icon::Plus, label: language.text(Text::NewEntry), disabled: workspace.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.start_new()) }
                     IconButton { icon: Icon::FolderPlus, label: language.text(Text::NewSubfolder), disabled: workspace.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.start_directory()) }
