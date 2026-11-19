@@ -55,6 +55,17 @@ pub(crate) fn LockedView() -> Element {
     let keyboard_previous = previous.clone();
     let keyboard_next = next.clone();
     let cloud_restore = locked.cloud_recovery.restoring;
+    let busy_status = if !busy {
+        None
+    } else if locked.waiting_touch_id {
+        Some(Text::WaitingForTouchID)
+    } else if cloud_restore && !identity_setup {
+        Some(Text::CloudRestoreProgress)
+    } else if create && !identity_setup {
+        Some(Text::CreatingVault)
+    } else {
+        None
+    };
     let ready = identity_setup
         || create_password
         || !create && locked.path.as_ref().is_some_and(|path| path.exists());
@@ -296,17 +307,12 @@ pub(crate) fn LockedView() -> Element {
                     }
                 }
 
-                if weak_password || locked.notice.is_some() || busy || locked.error.is_some() {
+                if weak_password || locked.notice.is_some() || busy_status.is_some() || locked.error.is_some() {
                     div { class: "unlock-feedback", aria_live: "polite",
                         if weak_password { p { class: "notice", {language.format(Text::PasswordsShorterThanCharactersAreEasierToGuess, &[MIN_PASSWORD_CHARS.to_string()])} } }
                         if let Some(notice) = &locked.notice { p { class: "notice", role: "status", {language.message(notice)} } }
-                        if busy {
-                            p { role: "status", class: "muted",
-                                if locked.waiting_touch_id { {language.text(Text::WaitingForTouchID)} }
-                                else if cloud_restore && !identity_setup { {language.text(Text::CloudRestoreProgress)} }
-                                else if create && !identity_setup { {language.text(Text::CreatingVault)} }
-                                else { {language.text(Text::CheckingPassword)} }
-                            }
+                        if let Some(status) = busy_status {
+                            p { role: "status", class: "muted", {language.text(status)} }
                         }
 
                         if let Some(error) = &locked.error { p { class: "error", role: "alert", {language.message(error)} } }
