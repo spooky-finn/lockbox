@@ -1,7 +1,7 @@
 //! Preference persistence. Contains no vault, editor or native handles.
 
 use crate::settings::config::Config;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub(crate) struct Settings {
     pub config: Config,
@@ -54,6 +54,30 @@ impl Settings {
                 config.space_names.remove(&path);
             }
             config.last_vault = Some(path);
+        })
+    }
+
+    pub(crate) fn rename_local_vault(
+        &mut self,
+        source: &Path,
+        destination: &Path,
+    ) -> Result<(), String> {
+        self.update(|config| {
+            config.recent_vaults.retain(|path| path != destination);
+            if let Some(path) = config.recent_vaults.iter_mut().find(|path| *path == source) {
+                *path = destination.to_path_buf();
+            } else {
+                config.recent_vaults.insert(0, destination.to_path_buf());
+            }
+            if config
+                .last_vault
+                .as_deref()
+                .is_none_or(|path| path == source)
+            {
+                config.last_vault = Some(destination.to_path_buf());
+            }
+            config.space_names.remove(source);
+            config.space_names.remove(destination);
         })
     }
 

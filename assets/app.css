@@ -212,6 +212,9 @@ h2 { font-size: 15px; font-weight: 600; letter-spacing: -.2px; }
 }
 .unlock-emblem > .symbol { width: 24px; height: 24px; }
 .base-unlock .unlock-title { font-size: 24px; letter-spacing: -.65px; }
+.unlock-heading { display: flex; align-items: center; justify-content: center; gap: 8px; max-width: 100%; }
+.unlock-heading > .unlock-title { min-width: 0; overflow-wrap: anywhere; }
+.unlock-heading > .icon-button { flex-shrink: 0; color: var(--lock-secondary); }
 .base-unlock .unlock-form { width: 280px; margin-top: 20px; }
 .base-unlock .unlock-input { height: 44px; }
 .base-unlock .unlock-input:focus-within {
@@ -741,6 +744,8 @@ button.copy-value:disabled { opacity: 1; }
 .space-option-path { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 10px; font-weight: 400; color: var(--muted); }
 .space-switch-actions { display: flex; flex-direction: column; flex-shrink: 0; gap: 2px; padding-top: 7px; margin-top: 7px; border-top: 1px solid var(--border); }
 .space-switch-actions > button { justify-content: flex-start; font-size: 12px; }
+.space-rename-form { display: grid; flex-shrink: 0; gap: 6px; padding-top: 7px; border-top: 1px solid var(--border); font-size: 12px; }
+.space-rename-actions { display: flex; justify-content: flex-end; gap: 6px; }
 .locked-space-switcher { position: absolute; top: 16px; left: 20px; max-width: calc(100% - 40px); z-index: 3; }
 
 /* Record fields keep the same geometry in reading and editing modes. */

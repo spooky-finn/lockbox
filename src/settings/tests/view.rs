@@ -119,12 +119,12 @@ fn appearance_language_and_security_preferences_persist_and_remain_after_lock() 
     assert_eq!(saved.appearance.corners, CornerStyle::Rounded);
     update(&mut dom, |_| runtime::lock(None));
     let html = dioxus_ssr::render(&dom);
-    assert!(html.contains("Vault is locked"));
+    assert!(html.contains("Master password"));
     assert!(!html.contains("locked-language"));
     assert!(!html.contains("Interface language"));
     assert!(html.contains("Unlock"));
     update(&mut dom, |_| actions::set_language(Language::Russian));
-    assert!(dioxus_ssr::render(&dom).contains("Хранилище заблокировано"));
+    assert!(dioxus_ssr::render(&dom).contains("Мастер-пароль"));
     assert_eq!(Config::load(&path).language, Language::Russian);
     assert_eq!(Config::load(&path).appearance, saved.appearance);
 }

@@ -3,6 +3,88 @@ use crate::desktop::view_test_support::{mounted, update};
 use crate::settings::actions;
 
 #[test]
+fn arrows_change_the_centered_vault_name_and_clear_the_password() {
+    use crate::{
+        access::auth::Locked,
+        desktop::{context::Session, session::Screen},
+        settings::{language::Language, state::Settings},
+    };
+    use dioxus::{
+        dioxus_core::Mutation,
+        html::{EventData, SerializedHtmlEventConverter, SerializedKeyboardData},
+        prelude::*,
+    };
+    dioxus::html::set_event_converter(Box::new(SerializedHtmlEventConverter));
+    let mut dom = mounted();
+    let dir = tempfile::tempdir().unwrap();
+    let local = dir.path().join("Personal.lbx");
+    let missing = dir.path().join("missing.lbx");
+    let cloud = dir.path().join("profile-123.lbx");
+    std::fs::write(&local, []).unwrap();
+    std::fs::write(&cloud, []).unwrap();
+    dom.in_scope(ScopeId::APP, || {
+        let mut settings = consume_context::<Signal<Settings>>();
+        let mut preferences = settings.write();
+        preferences.config.language = Language::English;
+        preferences.config.recent_vaults = vec![local.clone(), missing, cloud.clone()];
+        preferences
+            .config
+            .space_names
+            .insert(cloud.clone(), "Design team".into());
+        let mut form = Locked::new(Some(local.clone()));
+        form.password.push_str("entered for Personal");
+        consume_context::<Session>().set(Screen::Locked(Box::new(form)));
+    });
+    let changes = dom.render_immediate_to_vec();
+    let keydown = changes
+        .edits
+        .iter()
+        .find_map(|edit| match edit {
+            Mutation::NewEventListener { name, id } if name == "keydown" => Some(*id),
+            _ => None,
+        })
+        .unwrap();
+    let heading = |dom: &VirtualDom, name: &str| {
+        let html = dioxus_ssr::render(dom);
+        assert!(html.contains(&format!(
+            "<h1 class=\"unlock-title\" aria-live=\"polite\">{name}</h1>"
+        )));
+    };
+    heading(&dom, "Personal");
+    for (key, code, path, name) in [
+        (Key::ArrowRight, Code::ArrowRight, &cloud, "Design team"),
+        (Key::ArrowLeft, Code::ArrowLeft, &local, "Personal"),
+    ] {
+        let event = Event::new(
+            EventData::Keyboard(SerializedKeyboardData::new(
+                key,
+                code,
+                Location::Standard,
+                false,
+                Modifiers::empty(),
+                false,
+            ))
+            .into_any(),
+            true,
+        );
+        dom.runtime()
+            .handle_event("keydown", event.clone(), keydown);
+        assert!(!event.default_action_enabled());
+        dom.render_immediate_to_vec();
+        heading(&dom, name);
+        dom.in_scope(ScopeId::APP, || {
+            let state = consume_context::<Session>();
+            let screen = state.peek();
+            let Screen::Locked(form) = &*screen else {
+                panic!("expected password unlock");
+            };
+            assert_eq!(form.path.as_ref(), Some(path));
+            assert!(form.password.is_empty());
+        });
+    }
+}
+
+#[test]
 fn cloud_restore_requires_original_words_and_has_no_create_or_join_storage_choice() {
     use crate::{
         access::auth::{CreationStep, StorageKind},

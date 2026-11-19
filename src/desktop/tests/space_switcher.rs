@@ -109,3 +109,37 @@ fn switcher_opens_lists_local_and_cloud_profiles_and_selects_without_unlocking()
     });
     assert!(!dioxus_ssr::render(&dom).contains("id=\"space-switch-panel\""));
 }
+
+#[test]
+fn renaming_updates_the_open_session_and_persisted_profile_path() {
+    use crate::desktop::{runtime, view_test_support};
+
+    let directory = tempfile::tempdir().unwrap();
+    let preferences = directory.path().join("config.json");
+    let mut dom = view_test_support::mounted();
+    view_test_support::update(&mut dom, |state| {
+        let source = match &*state.peek() {
+            Screen::Unlocked(workspace) => workspace.vault.path().to_path_buf(),
+            Screen::Locked(_) => panic!("expected an open vault"),
+        };
+        let mut settings = consume_context::<Signal<Settings>>();
+        let mut settings = settings.write();
+        settings.path = Some(preferences.clone());
+        settings.remember_profile(source.clone(), None).unwrap();
+        drop(settings);
+
+        profiles::rename_local_vault("Personal").unwrap();
+        let destination = source.with_file_name("Personal.lbx");
+        let saved = Config::load(&preferences);
+        assert_eq!(saved.last_vault, Some(destination.clone()));
+        assert_eq!(saved.recent_vaults, vec![destination.clone()]);
+        runtime::lock(None);
+        let screen = state.peek();
+        let Screen::Locked(form) = &*screen else {
+            panic!("expected password unlock");
+        };
+        assert_eq!(form.path.as_ref(), Some(&destination));
+        assert!(destination.is_file());
+        assert!(!source.exists());
+    });
+}

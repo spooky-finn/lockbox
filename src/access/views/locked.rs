@@ -13,6 +13,7 @@ use crate::{
         },
     },
     records::editor::replace_secret,
+    settings::state::Settings,
 };
 use dioxus::prelude::*;
 use std::borrow::Cow;
@@ -22,6 +23,7 @@ use zeroize::Zeroizing;
 pub(crate) fn LockedView() -> Element {
     let language = crate::desktop::i18n::use_language();
     let state = use_context::<Session>();
+    let settings = use_context::<Signal<Settings>>();
     let hardware = use_context::<BiometricProvider>();
     let screen = state.read();
     let Screen::Locked(locked) = &*screen else {
@@ -38,6 +40,20 @@ pub(crate) fn LockedView() -> Element {
     let cloud_password = create_password && locked.storage_kind == Some(StorageKind::Cloud);
     let recovering = locked.recovering;
     let base_unlock = !create && !recovering;
+    let preferences = settings.read();
+    let vault_name = locked.space_name.clone().or_else(|| {
+        locked
+            .path
+            .as_deref()
+            .map(|path| crate::desktop::space_switcher::profile_name(path, &preferences.config))
+    });
+    let (previous, next) = if base_unlock {
+        profiles::adjacent_profiles(&preferences, locked.path.as_deref())
+    } else {
+        (None, None)
+    };
+    let keyboard_previous = previous.clone();
+    let keyboard_next = next.clone();
     let cloud_restore = locked.cloud_recovery.restoring;
     let ready = identity_setup
         || create_password
@@ -82,6 +98,20 @@ pub(crate) fn LockedView() -> Element {
     };
     rsx! {
         section { class: if base_unlock { "lock-screen base-unlock" } else if key_setup || identity_setup || cloud_password || recovering { "lock-screen recovery-screen" } else { "lock-screen" }, aria_label: language.text(if key_setup { Text::EncryptionKeySetup } else { Text::UnlockVault }),
+            onkeydown: move |event: KeyboardEvent| {
+                if busy || event.is_composing() || !event.modifiers().is_empty() {
+                    return;
+                }
+                let target = match event.key() {
+                    Key::ArrowLeft => &keyboard_previous,
+                    Key::ArrowRight => &keyboard_next,
+                    _ => return,
+                };
+                if let Some(path) = target {
+                    event.prevent_default();
+                    profiles::select_profile(path.clone());
+                }
+            },
             if base_unlock {
                 div { class: "locked-space-switcher", crate::desktop::space_switcher::SpaceSwitcher {} }
             }
@@ -99,16 +129,28 @@ pub(crate) fn LockedView() -> Element {
                         }
                     }
                 }
-                h1 { class: "unlock-title",
-                    if cloud_restore { {language.text(Text::CloudRestore)} }
-                    else if recovering { {language.text(Text::RecoverVault)} }
-                    else if key_setup { {language.text(Text::EncryptionKeySetup)} }
-                    else if identity_unlock { {language.text(Text::UnlockIdentity)} }
-                    else if identity_setup { {language.text(Text::ProtectIdentity)} }
-                    else if create && locked.joining { {language.text(Text::SharingConnect)} }
-                    else if create { {language.text(Text::CreateAVault)} }
-                    else if ready { {language.text(Text::VaultIsLocked)} }
-                    else { {language.text(Text::YourPasswordsLockedAway)} }
+                div { class: "unlock-heading",
+                    if let Some(path) = previous {
+                        IconButton { class: "quiet", icon: Icon::ArrowLeft, label: language.text(Text::PreviousVault), disabled: busy,
+                            onclick: move |_| profiles::select_profile(path.clone()),
+                        }
+                    }
+                    h1 { class: "unlock-title", aria_live: base_unlock.then_some("polite"),
+                        if cloud_restore { {language.text(Text::CloudRestore)} }
+                        else if recovering { {language.text(Text::RecoverVault)} }
+                        else if key_setup { {language.text(Text::EncryptionKeySetup)} }
+                        else if identity_unlock { {language.text(Text::UnlockIdentity)} }
+                        else if identity_setup { {language.text(Text::ProtectIdentity)} }
+                        else if create && locked.joining { {language.text(Text::SharingConnect)} }
+                        else if create { {language.text(Text::CreateAVault)} }
+                        else if let Some(name) = vault_name { "{name}" }
+                        else { {language.text(Text::YourPasswordsLockedAway)} }
+                    }
+                    if let Some(path) = next {
+                        IconButton { class: "quiet", icon: Icon::ArrowRight, label: language.text(Text::NextVault), disabled: busy,
+                            onclick: move |_| profiles::select_profile(path.clone()),
+                        }
+                    }
                 }
                 if create || recovering || !ready {
                     p { class: "unlock-description", title: "{path}",
@@ -267,7 +309,7 @@ pub(crate) fn LockedView() -> Element {
                 }
             }
             nav { class: "lock-actions", aria_label: language.text(Text::VaultActions),
-                button { r#type: "button", class: "quiet", disabled: busy,
+                button { r#type: "button", class: "quiet", disabled: busy, autofocus: base_unlock && !ready,
                     onclick: move |_| profiles::pick_vault(false),
                     Symbol { icon: Icon::FolderOpen }
                     span { {language.text(Text::OpenVault)} }

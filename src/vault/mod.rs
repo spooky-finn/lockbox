@@ -56,6 +56,10 @@ pub enum VaultError {
     ProfileInUse,
     #[error("vault already exists: {0}")]
     AlreadyExists(PathBuf),
+    #[error("enter a valid vault filename")]
+    InvalidVaultFilename,
+    #[error("only local vault files can be renamed")]
+    RenameRequiresLocalVault,
     #[error("this is not a lockbox file or it is truncated")]
     NotAVault,
     #[error("format version {0} is not supported")]
@@ -167,7 +171,7 @@ mod exchange;
 mod file;
 mod format;
 
-use file::{lock_profile, refresh_profile_snapshot, sync_dir};
+use file::{lock_profile, sync_dir};
 #[cfg(test)]
 use format::HEADER_LEN;
 use format::{
@@ -386,27 +390,21 @@ impl Vault {
         witnesses: Arc<dyn WitnessStore>,
     ) -> Result<Self> {
         let path = path.to_path_buf();
-        let data = file::read_bounded(&path, file::MAX_VAULT_BYTES)?;
-        let header = Header::parse(&data)?;
-        let path = if matches!(header.version, 3 | 5 | PROFILE_VERSION | RECOVERY_VERSION) {
+        let header = Header::parse(&file::read_header(&path)?)?;
+        let canonical_path = matches!(header.version, 3 | 5 | PROFILE_VERSION | RECOVERY_VERSION);
+        let path = if canonical_path {
             path.canonicalize()?
         } else {
             path
         };
-
-        let profile_lock = if matches!(header.version, 3 | 5 | PROFILE_VERSION | RECOVERY_VERSION) {
-            Some(lock_profile(&path)?)
-        } else {
-            None
-        };
-
-        let (data, header) = refresh_profile_snapshot(&path, data, header, &profile_lock)?;
-        // Profiles re-read their snapshot under the lock above; a local vault
-        // takes the same sidecar lock so another window cannot open it too.
-        let profile_lock = match profile_lock {
-            Some(lock) => Some(lock),
-            None => Some(lock_profile(&path)?),
-        };
+        let profile_lock = Some(lock_profile(&path)?);
+        // Read under the lease so a concurrent rename cannot leave an opener
+        // with an old snapshot and permission to write to the vacated path.
+        let data = file::read_bounded(&path, file::MAX_VAULT_BYTES)?;
+        let header = Header::parse(&data)?;
+        if canonical_path && !matches!(header.version, 3 | 5 | PROFILE_VERSION | RECOVERY_VERSION) {
+            return Err(VaultError::Corrupted);
+        }
         let (key, failed_decryption) = match unlock {
             Unlock::Password(password) => (header.password_key(password)?, VaultError::Corrupted),
             Unlock::Recovery(phrase) => (
@@ -657,6 +655,44 @@ impl Vault {
 
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    /// Rename an open local vault without rewriting its ciphertext or keys.
+    /// A directory sync error reports uncertain durability after the path moved.
+    pub(crate) fn rename_local(&mut self, name: &str) -> Result<Option<io::Error>> {
+        self.ensure_not_display_snapshot()?;
+        if self.profile.as_ref().is_some() {
+            return Err(VaultError::RenameRequiresLocalVault);
+        }
+
+        let name = name.trim();
+        let extension = self.path.extension();
+        let name = name
+            .rsplit_once('.')
+            .filter(|(_, suffix)| extension.is_some_and(|ext| ext.eq_ignore_ascii_case(suffix)))
+            .map_or(name, |(stem, _)| stem.trim_end());
+        if name.is_empty()
+            || name.ends_with('.')
+            || name
+                .chars()
+                .any(|c| c.is_control() || "/\\:*?\"<>|".contains(c))
+        {
+            return Err(VaultError::InvalidVaultFilename);
+        }
+        let mut filename = std::ffi::OsString::from(name);
+        if let Some(extension) = extension {
+            filename.push(".");
+            filename.push(extension);
+        }
+        let destination = self.path.with_file_name(filename);
+        if destination == self.path {
+            return Ok(None);
+        }
+        if let Some(lease) = file::rename_vault(&self.path, &destination)? {
+            self._profile_lock = Some(lease);
+        }
+        self.path = destination;
+        Ok(sync_dir(&self.path).err())
     }
 }
 

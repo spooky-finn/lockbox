@@ -13,7 +13,7 @@ use crate::{
 use dioxus::prelude::*;
 use std::path::Path;
 
-fn profile_name(path: &Path, config: &Config) -> String {
+pub(crate) fn profile_name(path: &Path, config: &Config) -> String {
     config.space_names.get(path).cloned().unwrap_or_else(|| {
         path.file_stem()
             .unwrap_or_default()
@@ -33,6 +33,8 @@ pub(crate) fn SpaceSwitcher() -> Element {
     let state = use_context::<Session>();
     let mut settings = use_context::<Signal<Settings>>();
     let mut open = use_signal(|| false);
+    let mut rename = use_signal(|| None::<String>);
+    let mut rename_error = use_signal(|| None::<String>);
     let screen = state.read();
     let preferences = settings.read();
     let current = match &*screen {
@@ -66,6 +68,13 @@ pub(crate) fn SpaceSwitcher() -> Element {
     };
     let allowed = screen.can_switch_profile();
     let busy = matches!(&*screen, Screen::Locked(form) if form.busy());
+    let can_rename = allowed && !cloud && matches!(&*screen, Screen::Unlocked(_));
+    let filename = current
+        .as_deref()
+        .and_then(Path::file_name)
+        .unwrap_or_default()
+        .to_string_lossy()
+        .into_owned();
     let mut paths = preferences.known_profiles();
     if let Some(path) = &current
         && !paths.contains(path)
@@ -75,9 +84,14 @@ pub(crate) fn SpaceSwitcher() -> Element {
     rsx! {
         div { class: "space-switcher",
             onkeydown: move |event: KeyboardEvent| {
-                if event.key() == Key::Escape && open() {
+                if !open() {
+                    return;
+                }
+                if event.key() == Key::Escape {
                     event.stop_propagation();
                     close(open);
+                } else if matches!(event.key(), Key::ArrowLeft | Key::ArrowRight) {
+                    event.stop_propagation();
                 }
             },
             button {
@@ -91,6 +105,8 @@ pub(crate) fn SpaceSwitcher() -> Element {
                         // this window last wrote its preferences.
                         let path = settings.peek().path.clone();
                         if let Some(path) = path { settings.write().config = Config::load(&path); }
+                        rename.set(None);
+                        rename_error.set(None);
                         open.set(true);
                     }
                 },
@@ -145,7 +161,47 @@ pub(crate) fn SpaceSwitcher() -> Element {
                             }
                         }
                     }
+                    if let Some(filename) = rename() {
+                        form { class: "space-rename-form",
+                            onsubmit: move |event| {
+                                event.prevent_default();
+                                if let Some(filename) = rename() {
+                                    match profiles::rename_local_vault(&filename) {
+                                        Ok(()) => close(open),
+                                        Err(error) => rename_error.set(Some(error)),
+                                    }
+                                }
+                            },
+                            label { r#for: "vault-filename", {language.text(Text::VaultFilename)} }
+                            input { id: "vault-filename", r#type: "text", value: "{filename}", disabled: !can_rename,
+                                autocomplete: "off", autofocus: true,
+                                onmounted: move |event: MountedEvent| async move {
+                                    let _ = event.set_focus(true).await;
+                                },
+                                oninput: move |event| {
+                                    rename.set(Some(event.value()));
+                                    rename_error.set(None);
+                                },
+                            }
+                            if let Some(error) = rename_error() {
+                                p { class: "error", role: "alert", "{error}" }
+                            }
+                            div { class: "space-rename-actions",
+                                button { r#type: "button", class: "quiet",
+                                    onclick: move |_| { rename.set(None); rename_error.set(None); },
+                                    {language.text(Text::Cancel)}
+                                }
+                                button { r#type: "submit", disabled: !can_rename || filename.trim().is_empty(), {language.text(Text::Save)} }
+                            }
+                        }
+                    }
                     div { class: "space-switch-actions",
+                        if can_rename && rename().is_none() {
+                            button { class: "quiet", r#type: "button",
+                                onclick: move |_| rename.set(Some(filename.clone())),
+                                Symbol { icon: Icon::Edit } {language.text(Text::RenameVaultFile)}
+                            }
+                        }
                         button { class: "quiet", r#type: "button", disabled: !allowed,
                             onclick: move |_| { close(open); profiles::pick_vault(false); },
                             Symbol { icon: Icon::FolderOpen } {language.text(Text::OpenAnotherSpace)}

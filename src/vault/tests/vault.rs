@@ -281,6 +281,53 @@ fn previous_version_is_kept_as_backup() {
 }
 
 #[test]
+fn local_vault_rename_moves_ciphertext_backup_and_lease() {
+    let dir = tempfile::tempdir().unwrap();
+    let (path, mut vault) = new_vault(&dir);
+    let backup = sibling(&path, "bak");
+    let expected = fs::read(&path).unwrap();
+    let expected_backup = fs::read(&backup).unwrap();
+    let id = vault.id();
+    let destination = dir.path().join("Personal vault.lbx");
+    let destination_backup = sibling(&destination, "bak");
+
+    assert!(matches!(
+        vault.rename_local("../escape"),
+        Err(VaultError::InvalidVaultFilename)
+    ));
+    for collision in [&destination, &destination_backup] {
+        fs::write(collision, b"existing").unwrap();
+        assert!(matches!(
+            vault.rename_local("Personal vault"),
+            Err(VaultError::AlreadyExists(_))
+        ));
+        assert_eq!(fs::read(collision).unwrap(), b"existing");
+        assert_eq!(vault.path(), path);
+        assert_eq!(fs::read(&backup).unwrap(), expected_backup);
+        fs::remove_file(collision).unwrap();
+    }
+
+    assert!(vault.rename_local("Personal vault.lbx").unwrap().is_none());
+    assert_eq!(vault.path(), destination);
+    assert!(!path.exists());
+    assert!(!backup.exists());
+    assert_eq!(fs::read(&destination).unwrap(), expected);
+    assert_eq!(fs::read(&destination_backup).unwrap(), expected_backup);
+    assert_eq!(Vault::peek_id(&destination).unwrap(), id);
+    assert!(matches!(
+        Vault::open(&destination, &password("master")),
+        Err(VaultError::ProfileInUse)
+    ));
+
+    vault.save().unwrap();
+    drop(vault);
+    assert!(!path.exists());
+    let reopened = Vault::open(&destination, &password("master")).unwrap();
+    assert_eq!(reopened.id(), id);
+    assert_eq!(reopened.entries[0].title, sample_entry().title);
+}
+
+#[test]
 fn create_never_overwrites_an_existing_file() {
     let dir = tempfile::tempdir().unwrap();
     let (path, _) = new_vault(&dir);

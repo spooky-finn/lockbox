@@ -1,16 +1,18 @@
-//! Desktop profile selection and creation. Owns tab coordination and native pickers.
+//! Desktop profile selection, creation and rename. Owns tab coordination and native pickers.
 //! Authentication and persistence remain in access workflows and the vault.
 
 use crate::{
     access::auth::{CreationStep, Locked, Mode, StorageKind},
     desktop::{
         context::{BiometricProvider, SecurityHandle, Session},
+        i18n::Text,
         runtime::{lock, publish_status},
         session::Screen,
     },
     settings::state::Settings,
 };
 use dioxus::prelude::*;
+use std::path::{Path, PathBuf};
 
 pub(crate) fn begin_create() {
     begin_creation(false);
@@ -36,6 +38,68 @@ pub(crate) fn select_profile(path: std::path::PathBuf) {
         &mut native.borrow_mut(),
     );
     publish_status();
+}
+
+pub(crate) fn adjacent_profiles(
+    settings: &Settings,
+    current: Option<&Path>,
+) -> (Option<PathBuf>, Option<PathBuf>) {
+    let mut paths = settings.known_profiles();
+    if let Some(path) = current
+        && !paths.iter().any(|known| known == path)
+    {
+        paths.insert(0, path.to_owned());
+    }
+    paths.retain(|path| path.is_file());
+    let (previous, next) = match paths
+        .iter()
+        .position(|path| Some(path.as_path()) == current)
+    {
+        Some(index) if paths.len() > 1 => (
+            paths.get((index + paths.len() - 1) % paths.len()),
+            paths.get((index + 1) % paths.len()),
+        ),
+        Some(_) => (None, None),
+        None => (paths.last(), paths.first()),
+    };
+    (previous.cloned(), next.cloned())
+}
+
+pub(crate) fn rename_local_vault(name: &str) -> Result<(), String> {
+    let mut state = consume_context::<Session>();
+    let mut settings = consume_context::<Signal<Settings>>();
+    let language = settings.peek().config.language;
+    let mut screen = state.write();
+    if !screen.can_switch_profile() {
+        return Err(language.text(Text::SpaceSwitchEditing).to_owned());
+    }
+    let Screen::Unlocked(workspace) = &mut *screen else {
+        return Err(language.text(Text::UnlockToRenameVault).to_owned());
+    };
+
+    let source = workspace.vault.path().to_path_buf();
+    let sync_error = workspace.vault.rename_local(name).map_err(|error| {
+        language.format(
+            Text::CouldNotRenameVault,
+            &[language.message(&error.to_string())],
+        )
+    })?;
+    let destination = workspace.vault.path();
+    if destination != source {
+        let settings_error = settings
+            .write()
+            .rename_local_vault(&source, destination)
+            .err();
+        let errors: Vec<_> = sync_error
+            .map(|error| language.format(Text::VaultRenameSyncFailed, &[error.to_string()]))
+            .into_iter()
+            .chain(settings_error)
+            .collect();
+        if !errors.is_empty() {
+            workspace.error = Some(errors.join("\n"));
+        }
+    }
+    Ok(())
 }
 
 pub(crate) fn create_from_switcher(joining: bool) {

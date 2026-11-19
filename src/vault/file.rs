@@ -2,12 +2,8 @@
 //! Directory synchronization remains explicit in the Vault witness orchestration.
 
 use crate::{
-    platform::files::create_new_private,
-    vault::{
-        Result, VaultError,
-        format::{Header, PROFILE_VERSION, RECOVERY_VERSION},
-        lease::ExclusiveFile,
-    },
+    platform::files::{create_new_private, rename_new},
+    vault::{Result, VaultError, lease::ExclusiveFile},
 };
 use std::{
     fs::{self, File, OpenOptions},
@@ -68,24 +64,60 @@ pub(super) fn sibling(path: &Path, extension: &str) -> PathBuf {
     path.with_file_name(name)
 }
 
-pub(super) fn refresh_profile_snapshot(
-    path: &Path,
-    data: Vec<u8>,
-    header: Header,
-    lock: &Option<ExclusiveFile>,
-) -> Result<(Vec<u8>, Header)> {
-    if lock.is_none() {
-        return Ok((data, header));
+/// The caller holds the source lease. Return a destination lease unless both
+/// names resolve to the same path on a case-insensitive filesystem.
+pub(super) fn rename_vault(source: &Path, destination: &Path) -> Result<Option<ExclusiveFile>> {
+    check_metadata(&fs::symlink_metadata(source)?, MAX_VAULT_BYTES)?;
+    let source = source.canonicalize()?;
+    let destination = source.with_file_name(destination.file_name().expect("validated filename"));
+    let same_path = check_destination(&source, &destination)?;
+    let destination_lock = if same_path {
+        None
+    } else {
+        Some(lock_profile(&destination)?)
+    };
+
+    let backup = sibling(&source, "bak");
+    let destination_backup = sibling(&destination, "bak");
+    check_destination(&backup, &destination_backup)?;
+    let moved_backup = match fs::symlink_metadata(&backup) {
+        Ok(metadata) => {
+            check_metadata(&metadata, MAX_VAULT_BYTES)?;
+            rename_new(&backup, &destination_backup)?;
+            true
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => false,
+        Err(error) => return Err(error.into()),
+    };
+    if let Err(error) = rename_new(&source, &destination) {
+        if moved_backup && let Err(restore) = rename_new(&destination_backup, &backup) {
+            return Err(io::Error::other(format!(
+                "{error}. Could not move the backup back from {}: {restore}",
+                destination_backup.display()
+            ))
+            .into());
+        }
+        return Err(error.into());
     }
+    Ok(destination_lock)
+}
 
-    let data = read_bounded(path, MAX_VAULT_BYTES)?;
-    let header = Header::parse(&data)?;
-
-    if !matches!(header.version, 3 | 5 | PROFILE_VERSION | RECOVERY_VERSION) {
-        return Err(VaultError::Corrupted);
+fn check_destination(source: &Path, destination: &Path) -> Result<bool> {
+    match fs::symlink_metadata(destination) {
+        Ok(metadata) => {
+            if metadata.is_file()
+                && source
+                    .canonicalize()
+                    .is_ok_and(|path| destination.canonicalize().is_ok_and(|other| path == other))
+            {
+                Ok(true)
+            } else {
+                Err(VaultError::AlreadyExists(destination.to_path_buf()))
+            }
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error.into()),
     }
-
-    Ok((data, header))
 }
 
 /// Stable sidecar: replacing the encrypted file must not release the process lock.
