@@ -86,7 +86,7 @@ fn attachment_controls_render_names_and_sizes_without_file_contents() {
 }
 
 #[test]
-fn editor_keeps_shared_field_layout_without_manual_save_or_edit_banner() {
+fn editor_uses_placeholders_and_accessible_names() {
     use kuchikiki::traits::TendrilSink;
     let mut dom = mounted();
     update(&mut dom, |state| edit_unlocked(state, |u| u.start_edit()));
@@ -101,6 +101,20 @@ fn editor_keeps_shared_field_layout_without_manual_save_or_edit_banner() {
             .count(),
         5
     );
+    for (id, text) in [
+        ("entry-title", "Название"),
+        ("entry-username", "Логин"),
+        ("entry-password", "Пароль"),
+        ("entry-url", "URL"),
+        ("totp-secret", "Секрет или ссылка otpauth://"),
+        ("entry-notes", "Заметка"),
+    ] {
+        let field = document.select_first(&format!(".draft #{id}")).unwrap();
+        let attrs = field.attributes.borrow();
+        assert_eq!(attrs.get("placeholder"), Some(text));
+        assert_eq!(attrs.get("aria-label"), Some(text));
+    }
+    assert!(document.select_first(".draft .field-label").is_err());
     assert!(document.select_first(".draft > .entry-close").is_err());
     assert!(
         document

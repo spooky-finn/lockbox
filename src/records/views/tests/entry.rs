@@ -6,6 +6,8 @@ use crate::desktop::{
 
 #[test]
 fn selected_entry_hides_secrets_and_escapes_user_text() {
+    use kuchikiki::traits::TendrilSink;
+
     let mut dom = mounted();
     update(&mut dom, |state| {
         edit_unlocked(state, |u| {
@@ -19,6 +21,16 @@ fn selected_entry_hides_secrets_and_escapes_user_text() {
     assert!(!html.contains("private-test-password"));
     assert!(!html.contains("JBSWY3DPEHPK3PXP"));
     assert!(html.contains("Код TOTP"));
+
+    let document = kuchikiki::parse_html().one(html).document_node;
+    for selector in [
+        "dd > .copy-value + .field-copy",
+        "dd > .copy-value + button[aria-pressed] + .field-copy",
+        "dd > .url-value + .field-copy",
+        ".totp-code + .field-copy",
+    ] {
+        assert!(document.select_first(selector).is_ok(), "{selector}");
+    }
 }
 
 #[test]
@@ -257,6 +269,7 @@ fn notes_render_as_plain_text_and_explicit_copy_preserves_the_full_text() {
         .one(dioxus_ssr::render(&dom))
         .document_node;
     let note = document.select_first(".notes-value").unwrap();
+    assert!(document.select_first(".notes-value + .field-copy").is_ok());
     assert_eq!(
         note.name.local.as_ref(),
         "span",

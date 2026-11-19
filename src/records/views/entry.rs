@@ -1,3 +1,4 @@
+use super::field_label::FieldLabel;
 use crate::desktop::context::navigate;
 use crate::desktop::i18n::Text;
 use crate::records::dialogs;
@@ -67,18 +68,25 @@ pub(crate) fn EntryView() -> Element {
             }
             dl { class: "fields",
                 div { class: "field-row",
-                    dt { {language.text(Text::Username2)} }
-                    dd { span { class: "field-value copy-value-group", button { class: "quiet copy-value", ondoubleclick: move |_| { cancel_copy(pending_copy); edit_unlocked(state, |u| u.edit_field(Field::Username)); }, aria_label: language.text(Text::CopyUsername), onclick: move |_| queue_copy(state, copied, pending_copy, CopyField::Username), if entry.username.is_empty() { span { class: "muted", "—" } } else { "{entry.username}" } } if username_copied { span { class: "copy-indicator", role: "status", {language.text(Text::Copied)} } } }
+                    FieldLabel { icon: Icon::User, text: language.text(Text::Username2) }
+                    dd {
+                        button { class: "quiet copy-value field-value", ondoubleclick: move |_| { cancel_copy(pending_copy); edit_unlocked(state, |u| u.edit_field(Field::Username)); }, aria_label: language.text(Text::CopyUsername), onclick: move |_| queue_copy(state, copied, pending_copy, CopyField::Username),
+                            if entry.username.is_empty() { span { class: "muted", "—" } } else { "{entry.username}" }
+                        }
                         if !entry.username.is_empty() {
                             IconButton { class: "quiet field-copy", label: language.text(Text::CopyUsername), icon: Icon::Copy,
                                 onclick: move |_| copy_value(state, copied, CopyField::Username),
                             }
                         }
+                        if username_copied { span { class: "copy-indicator", role: "status", {language.text(Text::Copied)} } }
                     }
                 }
                 div { class: "field-row",
-                    dt { {language.text(Text::Password)} }
-                    dd { span { class: "field-value copy-value-group", button { class: "quiet copy-value", ondoubleclick: move |_| { cancel_copy(pending_copy); edit_unlocked(state, |u| u.edit_field(Field::Password)); }, aria_label: language.text(Text::CopyPassword), onclick: move |_| queue_copy(state, copied, pending_copy, CopyField::Password), code { class: "password-value", "{password}" } } if password_copied { span { class: "copy-indicator", role: "status", {language.text(Text::Copied)} } } }
+                    FieldLabel { icon: Icon::Key, text: language.text(Text::Password) }
+                    dd {
+                        button { class: "quiet copy-value field-value", ondoubleclick: move |_| { cancel_copy(pending_copy); edit_unlocked(state, |u| u.edit_field(Field::Password)); }, aria_label: language.text(Text::CopyPassword), onclick: move |_| queue_copy(state, copied, pending_copy, CopyField::Password),
+                            code { class: "password-value", "{password}" }
+                        }
                         IconButton { class: "quiet", label: if unlocked.show_password { language.text(Text::HidePassword) } else { language.text(Text::ShowPassword) },
                             icon: if unlocked.show_password { Icon::EyeOff } else { Icon::Eye },
                             pressed: Some(unlocked.show_password),
@@ -90,33 +98,32 @@ pub(crate) fn EntryView() -> Element {
                                 onclick: move |_| copy_value(state, copied, CopyField::Password),
                             }
                         }
+                        if password_copied { span { class: "copy-indicator", role: "status", {language.text(Text::Copied)} } }
                     }
                 }
                 div { class: "field-row",
-                    dt { {language.text(Text::Url)} }
+                    FieldLabel { icon: Icon::Link, text: language.text(Text::Url), focusable: entry.url.is_empty() }
                     dd {
-                        span { class: "field-value copy-value-group",
-                            if let Some(url) = browser_url {
-                                // Dioxus Desktop opens external anchors in the default browser.
-                                a { class: "url-value", href: url.as_str(), rel: "noopener noreferrer", "{entry.url}" }
-                            } else if entry.url.is_empty() {
-                                span { class: "muted", "—" }
-                            } else {
-                                span { class: "url-value", "{entry.url}" }
-                            }
-                            if url_copied { span { class: "copy-indicator", role: "status", {language.text(Text::Copied)} } }
+                        if let Some(url) = browser_url {
+                            // Dioxus Desktop opens external anchors in the default browser.
+                            a { class: "field-value url-value", href: url.as_str(), rel: "noopener noreferrer", "{entry.url}" }
+                        } else if entry.url.is_empty() {
+                            span { class: "muted", "—" }
+                        } else {
+                            span { class: "field-value url-value", "{entry.url}" }
                         }
                         if !entry.url.is_empty() {
                             IconButton { class: "quiet field-copy", label: language.text(Text::CopyUrl), icon: Icon::Copy,
                                 onclick: move |_| copy_value(state, copied, CopyField::Url),
                             }
                         }
+                        if url_copied { span { class: "copy-indicator", role: "status", {language.text(Text::Copied)} } }
                     }
                 }
                 if entry.totp.is_some() { TotpField {} }
 
                 div { class: "field-row notes-row",
-                    dt { {language.text(Text::Note)} }
+                    FieldLabel { icon: Icon::Note, text: language.text(Text::Note), focusable: entry.notes.is_empty() }
                     dd { class: "notes",
                         span { class: "field-value notes-value",
                             if entry.notes.is_empty() { span { class: "muted", "—" } }
@@ -173,21 +180,22 @@ fn TotpField() -> Element {
     let Some(settings) = u.selected_entry().and_then(|e| e.totp.as_ref()) else {
         return rsx! {};
     };
+    let code = totp::code(settings, now);
     rsx! {
         div { class: "field-row totp-field",
-            dt { {language.text(Text::TOTPCode)} }
+            FieldLabel { icon: Icon::Clock, text: language.text(Text::TOTPCode), focusable: code.is_err() }
             dd {
-                match totp::code(settings, now) {
+                match code {
                     Ok(code) => rsx! {
                         div { class: "field-value totp-value",
                             code { class: "totp-code", "{totp::group(&code)}" }
+                            IconButton { class: "quiet field-copy", label: language.text(Text::CopyTOTPCode), icon: Icon::Copy,
+                                onclick: move |_| { runtime::copy(CopyField::Totp); },
+                            }
                             div { class: "totp-countdown",
                                 progress { aria_label: language.text(Text::CodeValidity), max: "{settings.period}", value: "{totp::seconds_left(settings, now)}" }
                                 span { class: "muted", {language.format(Text::S, &[totp::seconds_left(settings, now).to_string()])} }
                             }
-                        }
-                        IconButton { class: "quiet field-copy", label: language.text(Text::CopyTOTPCode), icon: Icon::Copy,
-                            onclick: move |_| { runtime::copy(CopyField::Totp); },
                         }
                     },
                     Err(error) => rsx! { span { class: "error", {language.message(&error.to_string())} } },

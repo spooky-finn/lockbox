@@ -45,6 +45,11 @@ pub(crate) fn DraftView() -> Element {
     let entry = &draft.entry;
     let icon = icons::catalog().for_entry(entry);
     let automatic_favicon = entry.icon.is_none() && icons::favicon_url(&entry.url).is_some();
+    let name_label = language.text(Text::Name);
+    let username_label = language.text(Text::Username2);
+    let password_label = language.text(Text::Password);
+    let url_label = language.text(Text::Url);
+    let note_label = language.text(Text::Note);
     rsx! {
         form { class: "draft entry-detail", aria_busy: unlocked.saving_draft().to_string(), aria_label: if draft.is_new { language.text(Text::NewEntry) } else { language.text(Text::EditEntry) },
             onkeydown: move |event: KeyboardEvent| {
@@ -56,40 +61,38 @@ pub(crate) fn DraftView() -> Element {
             div { class: "detail-heading",
                 EntryIcon { title: entry.title.clone(), slug: entry.icon.clone(), url: entry.url.clone(), large: true }
                 div { class: "detail-title",
-                    p { class: "detail-kind", {language.text(Text::Password)} }
-                    input { onkeydown: move |event| finish_on_enter(state, event), id: "entry-title", class: "entry-title-input", aria_label: language.text(Text::Name), required: true, onmounted: move |event| async move { if focus_field == Some(Field::Title) { let _ = event.data.set_focus(true).await; } },
+                    p { class: "detail-kind", "{password_label}" }
+                    input { onkeydown: move |event| finish_on_enter(state, event), id: "entry-title", class: "entry-title-input", placeholder: name_label, aria_label: name_label, required: true, onmounted: move |event| async move { if focus_field == Some(Field::Title) { let _ = event.data.set_focus(true).await; } },
                         value: "{entry.title}", oninput: move |e| set_field(state, Field::Title, e.value()) }
                 }
             }
-            dl { class: "fields",
-                div { class: "field-row", dt { label { r#for: "entry-username", {language.text(Text::Username2)} } }
-                    dd { input { onkeydown: move |event| finish_on_enter(state, event), id: "entry-username", class: "field-value", onmounted: move |event| async move { if focus_field == Some(Field::Username) { let _ = event.data.set_focus(true).await; } }, autocomplete: "off", value: "{entry.username}", oninput: move |e| set_field(state, Field::Username, e.value()) } }
+            div { class: "fields",
+                div { class: "field-row",
+                    input { onkeydown: move |event| finish_on_enter(state, event), id: "entry-username", class: "field-value", placeholder: username_label, aria_label: username_label, onmounted: move |event| async move { if focus_field == Some(Field::Username) { let _ = event.data.set_focus(true).await; } }, autocomplete: "off", value: "{entry.username}", oninput: move |e| set_field(state, Field::Username, e.value()) }
                 }
-                div { class: "field-row", dt { label { r#for: "entry-password", {language.text(Text::Password)} } }
-                    dd {
-                        input { onkeydown: move |event| finish_on_enter(state, event), id: "entry-password", class: "field-value password-value", onmounted: move |event| async move { if focus_field == Some(Field::Password) { let _ = event.data.set_focus(true).await; } }, r#type: if draft.show_password { "text" } else { "password" }, autocomplete: "off",
-                            value: "{entry.password}", oninput: move |e| set_field(state, Field::Password, e.value()) }
-                        IconButton { icon: if draft.show_password { Icon::EyeOff } else { Icon::Eye },
-                            label: if draft.show_password { language.text(Text::HidePassword) } else { language.text(Text::ShowPassword) }, pressed: Some(draft.show_password),
-                            onclick: move |_| draft_control(state, Control::TogglePassword),
-                        }
-                        IconButton { icon: Icon::Sparkles, label: language.text(Text::Generate), expanded: Some(draft.generator_open),
-                            onclick: move |_| draft_control(state, Control::ToggleGenerator),
-                        }
+                div { class: "field-row",
+                    input { onkeydown: move |event| finish_on_enter(state, event), id: "entry-password", class: "field-value password-value", placeholder: password_label, aria_label: password_label, onmounted: move |event| async move { if focus_field == Some(Field::Password) { let _ = event.data.set_focus(true).await; } }, r#type: if draft.show_password { "text" } else { "password" }, autocomplete: "off",
+                        value: "{entry.password}", oninput: move |e| set_field(state, Field::Password, e.value()) }
+                    IconButton { icon: if draft.show_password { Icon::EyeOff } else { Icon::Eye },
+                        label: if draft.show_password { language.text(Text::HidePassword) } else { language.text(Text::ShowPassword) }, pressed: Some(draft.show_password),
+                        onclick: move |_| draft_control(state, Control::TogglePassword),
+                    }
+                    IconButton { icon: Icon::Sparkles, label: language.text(Text::Generate), expanded: Some(draft.generator_open),
+                        onclick: move |_| draft_control(state, Control::ToggleGenerator),
                     }
                 }
-                div { class: "field-row", dt { label { r#for: "entry-url", {language.text(Text::Url)} } }
-                    dd { input { onkeydown: move |event| finish_on_enter(state, event), id: "entry-url", class: "field-value", onmounted: move |event| async move { if focus_field == Some(Field::Url) { let _ = event.data.set_focus(true).await; } }, value: "{entry.url}", oninput: move |e| set_field(state, Field::Url, e.value()) } }
+                div { class: "field-row",
+                    input { onkeydown: move |event| finish_on_enter(state, event), id: "entry-url", class: "field-value", placeholder: url_label, aria_label: url_label, onmounted: move |event| async move { if focus_field == Some(Field::Url) { let _ = event.data.set_focus(true).await; } }, value: "{entry.url}", oninput: move |e| set_field(state, Field::Url, e.value()) }
                 }
-                div { class: "field-row totp-field", dt { "TOTP" } dd { TotpEditor {} } }
-                div { class: "field-row notes-row", dt { label { r#for: "entry-notes", {language.text(Text::Note)} } }
-                    dd {
-                        textarea { id: "entry-notes", class: "field-value",
-                            rows: entry.notes.lines().take(8).count().max(1),
-                            onmounted: move |event| async move { if focus_field == Some(Field::Notes) { let _ = event.data.set_focus(true).await; } },
-                            oninput: move |e| set_field(state, Field::Notes, e.value()),
-                            InitialNote {}
-                        }
+                div { class: "field-row totp-field",
+                    TotpEditor {}
+                }
+                div { class: "field-row notes-row",
+                    textarea { id: "entry-notes", class: "field-value", placeholder: note_label, aria_label: note_label,
+                        rows: entry.notes.lines().take(8).count().max(1),
+                        onmounted: move |event| async move { if focus_field == Some(Field::Notes) { let _ = event.data.set_focus(true).await; } },
+                        oninput: move |e| set_field(state, Field::Notes, e.value()),
+                        InitialNote {}
                     }
                 }
             }

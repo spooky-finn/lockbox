@@ -29,13 +29,12 @@ pub(crate) fn TotpEditor() -> Element {
     let Some(draft) = &unlocked.draft else {
         return rsx! {};
     };
+    let secret_label = language.text(Text::SecretOrOtpauthURL);
     rsx! {
-        section { class: if draft.entry.totp.is_some() { "totp-editor stack" } else { "totp-editor stack is-empty" },
-            h2 { "TOTP" }
+        section { class: if draft.entry.totp.is_some() { "totp-editor stack" } else { "totp-editor stack is-empty" }, aria_label: "TOTP",
             if let Some(settings) = &draft.entry.totp {
-                label { class: "sr-only", r#for: "totp-secret", {language.text(Text::SecretOrOtpauthURL)} }
                 div { class: "input-actions",
-                    input { onkeydown: move |event| super::editor::finish_on_enter(state, event), id: "totp-secret", r#type: if draft.show_totp { "text" } else { "password" }, autocomplete: "off",
+                    input { onkeydown: move |event| super::editor::finish_on_enter(state, event), id: "totp-secret", placeholder: secret_label, aria_label: secret_label, r#type: if draft.show_totp { "text" } else { "password" }, autocomplete: "off",
                         value: "{settings.secret}", oninput: move |e| set_field(state, Field::Totp, e.value()) }
                     IconButton { icon: if draft.show_totp { Icon::EyeOff } else { Icon::Eye },
                         label: if draft.show_totp { language.text(Text::HideTOTPSecret) } else { language.text(Text::ShowTOTPSecret) }, pressed: Some(draft.show_totp),

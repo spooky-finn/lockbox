@@ -4,6 +4,7 @@ pub(crate) mod directories;
 pub(crate) mod directory_editor;
 pub(crate) mod editor;
 pub(crate) mod entry;
+mod field_label;
 pub(crate) mod folder_select;
 pub(crate) mod generator;
 pub(crate) mod history;

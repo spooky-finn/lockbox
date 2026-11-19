@@ -117,7 +117,12 @@ pub(crate) fn LockedView() -> Element {
             }
             div { class: "unlock-content",
                 if base_unlock {
-                    div { class: "unlock-emblem", aria_hidden: "true", Symbol { icon: Icon::Lock } }
+                    div { class: "unlock-emblem", aria_hidden: "true",
+                        div { class: "unlock-lock",
+                            span { class: "unlock-lock-shackle" }
+                            span { class: "unlock-lock-body", span { class: "unlock-lock-face" } }
+                        }
+                    }
                 } else if !key_setup && !identity_setup && !cloud_password {
                     LockMark {
                         if touch_id {

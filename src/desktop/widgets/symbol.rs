@@ -7,6 +7,9 @@ pub(crate) enum Icon {
     Cloud,
     Lock,
     Key,
+    User,
+    Link,
+    Note,
     Folder,
     FolderOpen,
     ChevronRight,
@@ -39,6 +42,13 @@ pub(crate) fn Symbol(icon: Icon) -> Element {
             "M7 10V7a5 5 0 0 1 10 0v3M6 10h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2Zm6 5v3"
         }
         Icon::Key => "M16 3a5 5 0 1 1-3 9l-3 3H7v3H4v3H2v-3l9-10a5 5 0 0 1 5-5Zm1 3h.01",
+        Icon::User => "M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM4 21v-2a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v2",
+        Icon::Link => {
+            "M10 13a4 4 0 0 0 6 .4l4-4a4 4 0 0 0-5.7-5.7L12 6m0 12-2.3 2.3A4 4 0 0 1 4 14.6l4-4a4 4 0 0 1 6 .4"
+        }
+        Icon::Note => {
+            "M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Zm0 0v6h6M8 13h8m-8 4h6"
+        }
         Icon::Folder => {
             "M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Zm0 1h18"
         }
