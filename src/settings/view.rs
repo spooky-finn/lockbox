@@ -176,7 +176,11 @@ fn ThemeCard(preset: ThemePreset, dark: bool, selected: bool) -> Element {
         ThemePreset::Plum => Text::ThemeInk,
         ThemePreset::Indigo => Text::ThemeTerminal,
     };
-    let sample = if preset == ThemePreset::Indigo { ">_" } else { "Aa" };
+    let sample = if preset == ThemePreset::Indigo {
+        ">_"
+    } else {
+        "Aa"
+    };
     rsx! {
         button {
             class: "theme-card",
