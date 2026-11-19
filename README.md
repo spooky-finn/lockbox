@@ -99,6 +99,24 @@ and tarballs, and Windows x64 portable ZIPs (requires WebView2 Evergreen Runtime
 See [CI and automatic releases](docs/development.md#github-ci-and-releases) for
 version-bump publishing and signing limitations.
 
+### Install on macOS
+
+Download the ZIP for Apple Silicon (`aarch64-apple-darwin`) or Intel
+(`x86_64-apple-darwin`). Verify it against the release's `SHA256SUMS`, extract
+it, and move `Lockbox.app` to Applications.
+
+Release builds are ad-hoc signed and lack Apple notarization. If macOS blocks
+the first launch because it can’t verify the developer, run this in Terminal to
+remove the quarantine attribute from the Lockbox bundle, then reopen the app.
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Lockbox.app
+```
+
+You can also make an exception for Lockbox after attempting to open it. Go to
+**System Settings → Privacy & Security → Open Anyway**, then confirm. See
+[Apple’s guide to opening apps on your Mac](https://support.apple.com/en-us/102445).
+
 ## Documentation
 
 | Topic | Guide |
