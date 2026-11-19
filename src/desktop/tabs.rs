@@ -5,7 +5,10 @@ use crate::{
         context::{BiometricProvider, SecurityHandle, Session},
         i18n::Text,
         session::Screen,
-        widgets::symbol::{Icon, Symbol},
+        widgets::{
+            button::IconButton,
+            symbol::{Icon, Symbol},
+        },
     },
     settings::state::Settings,
 };
@@ -145,7 +148,8 @@ pub(crate) fn TabBar() -> Element {
     let tabs = use_context::<Signal<Tabs>>();
     let settings = use_context::<Signal<Settings>>();
     let tabs = tabs.read();
-    let active = tabs.sessions[tabs.active].read();
+    let active_index = tabs.active;
+    let active = tabs.sessions[active_index].read();
     let busy = matches!(&*active, Screen::Locked(f) if f.busy())
         || matches!(&*active, Screen::Unlocked(u) if u.import.busy());
     rsx! {
@@ -195,6 +199,12 @@ pub(crate) fn TabBar() -> Element {
             button { class: "space-tab-add quiet icon-button", r#type: "button", disabled: busy, aria_label: language.text(Text::MenuNewTab), title: language.text(Text::MenuNewTab), onclick: move |_| new_tab(), Symbol { icon: Icon::Plus } }
             div { class: "space-tabs-drag", aria_hidden: "true",
                 onmousedown: move |_| { if cfg!(target_os = "macos") { dioxus::desktop::window().drag(); } },
+            }
+            if matches!(&*active, Screen::Unlocked(_)) {
+                crate::desktop::space_switcher::SpaceSwitcher { key: "{active_index}" }
+                IconButton { class: "quiet", icon: Icon::Lock, label: language.text(Text::LockVault),
+                    onclick: move |_| crate::desktop::runtime::lock(None),
+                }
             }
         }
     }

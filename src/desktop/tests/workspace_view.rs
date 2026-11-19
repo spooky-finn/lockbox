@@ -207,8 +207,6 @@ fn profile_shows_full_public_fingerprints_and_lock_removes_identity() {
     for value in ["Alice Profile", "Team Profile", &fingerprint, &device] {
         assert!(html.contains(value));
     }
-    assert!(html.contains("id=\"space-switch-trigger\""));
-    assert!(html.contains("<strong>Team Profile</strong>"));
     assert!(!html.contains("private-access-key"));
     assert!(!html.contains("private-secret-key"));
     update(&mut dom, |_| crate::desktop::runtime::lock(None));

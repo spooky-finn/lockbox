@@ -37,6 +37,51 @@ fn mounted() -> VirtualDom {
 }
 
 #[test]
+fn header_places_space_selector_before_lock_button() {
+    use dioxus::{
+        dioxus_core::{AttributeValue, Mutation},
+        html::{EventData, SerializedHtmlEventConverter, SerializedMouseData},
+    };
+
+    dioxus::html::set_event_converter(Box::new(SerializedHtmlEventConverter));
+    let mut dom = VirtualDom::new(fixture);
+    let lock = dom
+        .rebuild_to_vec()
+        .edits
+        .into_iter()
+        .find_map(|edit| match edit {
+            Mutation::SetAttribute {
+                name: "aria-label",
+                value: AttributeValue::Text(label),
+                id,
+                ..
+            } if label == "Lock vault" => Some(id),
+            _ => None,
+        })
+        .expect("lock button in the tab bar");
+    let html = dioxus_ssr::render(&dom);
+    let selector = html.find("id=\"space-switch-trigger\"").unwrap();
+    let lock_button = html.find("aria-label=\"Lock vault\"").unwrap();
+    assert!(selector < lock_button);
+
+    let click = Event::new(
+        EventData::Mouse(SerializedMouseData::default()).into_any(),
+        true,
+    );
+    dom.runtime().handle_event("click", click, lock);
+    dom.render_immediate_to_vec();
+    dom.in_scope(ScopeId::APP, || {
+        assert!(matches!(
+            &*consume_context::<Session>().peek(),
+            Screen::Locked(_)
+        ));
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(!html.contains("aria-label=\"Lock vault\""));
+    assert!(!html.contains("id=\"space-switch-trigger\""));
+}
+
+#[test]
 fn switching_preserves_each_spaces_draft_search_and_selection() {
     let mut dom = mounted();
     dom.in_scope(ScopeId::APP, || {
