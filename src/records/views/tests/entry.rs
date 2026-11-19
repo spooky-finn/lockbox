@@ -179,6 +179,9 @@ fn double_click_edits_and_escape_saves_before_closing_changed_record() {
     };
     dom.runtime()
         .handle_event("keydown", escape(), escape_target);
+    dom.in_scope(ScopeId::APP, || {
+        crate::desktop::view_test_support::finish_save(consume_context())
+    });
     dom.render_immediate_to_vec();
     assert!(!dioxus_ssr::render(&dom).contains("record-save-dialog"));
     dom.in_scope(ScopeId::APP, || {

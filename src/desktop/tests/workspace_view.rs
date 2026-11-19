@@ -227,6 +227,7 @@ fn save_shortcuts_work_in_both_layouts_and_ignore_composition_and_repeats() {
                 true,
             );
             handle_record_shortcut(state, event.clone());
+            crate::desktop::view_test_support::finish_save(state);
             assert!(!event.default_action_enabled());
             assert!(matches!(&*state.peek(), Screen::Unlocked(u) if u.draft.is_none()));
             let Screen::Unlocked(u) = &*state.peek() else {

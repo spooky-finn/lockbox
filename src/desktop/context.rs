@@ -2,7 +2,11 @@
 
 use crate::{
     access::auth::Locked,
-    desktop::{security::Security, session::Screen, workspace::Unlocked},
+    desktop::{
+        security::Security,
+        session::Screen,
+        workspace::{Destination, Unlocked},
+    },
     platform::touchid::Biometrics,
     records::editor::{Draft, Field},
 };
@@ -74,11 +78,7 @@ pub(crate) fn use_unlocked_selector<T: PartialEq + 'static>(
 
 /// Subscribe to committed record changes without scanning the vault on input.
 pub(crate) fn use_records_version() -> Memo<Option<(std::path::PathBuf, u64)>> {
-    let state = use_context::<Session>();
-    use_memo(move || match &*state.read() {
-        Screen::Unlocked(u) => Some((u.vault.path().to_path_buf(), u.vault.records_revision())),
-        Screen::Locked(_) => None,
-    })
+    use_unlocked_selector(|u| (u.vault.path().to_path_buf(), u.vault.records_revision()))
 }
 
 pub(crate) fn edit_locked(mut state: Session, edit: impl FnOnce(&mut Locked)) {
@@ -86,13 +86,25 @@ pub(crate) fn edit_locked(mut state: Session, edit: impl FnOnce(&mut Locked)) {
         edit(locked);
     }
 }
-pub(crate) fn edit_unlocked(mut state: Session, edit: impl FnOnce(&mut Unlocked)) {
+pub(crate) fn edit_unlocked(state: Session, edit: impl FnOnce(&mut Unlocked)) {
+    if matches!(&*state.peek(), Screen::Unlocked(u) if !u.saving_draft()) {
+        edit_workspace_ui(state, edit);
+    }
+}
+
+/// Pure UI edits can continue while the writer holds the live vault.
+pub(crate) fn edit_workspace_ui(mut state: Session, edit: impl FnOnce(&mut Unlocked)) {
     if let Screen::Unlocked(unlocked) = &mut *state.write() {
         edit(unlocked);
     }
 }
+
+pub(crate) fn navigate(state: Session, destination: Destination) {
+    edit_workspace_ui(state, |u| u.request_navigation(destination));
+}
+
 pub(crate) fn edit_draft(state: Session, edit: impl FnOnce(&mut Draft)) {
-    edit_unlocked(state, |unlocked| {
+    edit_workspace_ui(state, |unlocked| {
         if let Some(draft) = &mut unlocked.draft {
             edit(draft);
             draft.schedule_autosave();
@@ -102,7 +114,7 @@ pub(crate) fn edit_draft(state: Session, edit: impl FnOnce(&mut Draft)) {
 pub(crate) fn set_field(state: Session, field: Field, value: String) {
     // Late WebView input may arrive after lock removed the draft.
     let mut value = zeroize::Zeroizing::new(value);
-    edit_unlocked(state, |unlocked| {
+    edit_workspace_ui(state, |unlocked| {
         if let Some(draft) = &mut unlocked.draft
             && draft.set_field(field, std::mem::take(&mut *value))
         {
@@ -112,7 +124,7 @@ pub(crate) fn set_field(state: Session, field: Field, value: String) {
 }
 
 pub(crate) fn draft_control(state: Session, control: crate::records::editor::Control) {
-    edit_unlocked(state, |unlocked| {
+    edit_workspace_ui(state, |unlocked| {
         if let Some(draft) = &mut unlocked.draft {
             draft.control(control);
         }

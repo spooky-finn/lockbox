@@ -111,3 +111,9 @@ pub(crate) fn update(dom: &mut VirtualDom, edit: impl FnOnce(Session)) {
     dom.in_scope(ScopeId::APP, || edit(consume_context::<Session>()));
     dom.render_immediate_to_vec();
 }
+
+pub(crate) fn finish_save(mut state: Session) {
+    if let Screen::Unlocked(workspace) = &mut *state.write() {
+        workspace.complete_background_save();
+    }
+}

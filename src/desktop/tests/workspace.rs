@@ -410,7 +410,7 @@ fn failed_navigation_save_retains_selection_and_draft() {
 
 #[test]
 fn navigation_flushes_pending_edits_before_leaving_the_editor() {
-    use crate::desktop::workspace::Page;
+    use crate::desktop::workspace::{Destination, Page};
     let dir = tempfile::tempdir().unwrap();
     let mut workspace = unlocked(&dir);
     let other = add(&mut workspace, "Other", "", "");
@@ -419,15 +419,15 @@ fn navigation_flushes_pending_edits_before_leaving_the_editor() {
         let draft = workspace.draft.as_mut().unwrap();
         let title = format!("Pending {destination}");
         draft.entry.title = title.clone();
-        match destination {
-            0 => workspace.select(other.clone()),
-            1 => workspace.select_directory(None),
-            2 => workspace.open_settings(),
-            3 => workspace.open_sharing(),
-            4 => workspace.open_records_page(Page::Trash),
-            5 => workspace.start_new(),
-            _ => workspace.start_directory(),
-        }
+        workspace.navigate(match destination {
+            0 => Destination::Entry(other.clone()),
+            1 => Destination::Directory(None),
+            2 => Destination::Page(Page::Settings),
+            3 => Destination::Page(Page::Sharing),
+            4 => Destination::Page(Page::Trash),
+            5 => Destination::NewEntry,
+            _ => Destination::NewDirectory,
+        });
         assert!(
             reopen(&workspace)
                 .entries
@@ -445,7 +445,7 @@ fn navigation_flushes_pending_edits_before_leaving_the_editor() {
 
 #[test]
 fn navigation_keeps_the_editor_and_destination_when_saving_fails() {
-    use crate::desktop::workspace::Page;
+    use crate::desktop::workspace::{Destination, Page};
     let dir = tempfile::tempdir().unwrap();
     let mut workspace = unlocked(&dir);
     let other = add(&mut workspace, "Other", "", "");
@@ -454,15 +454,15 @@ fn navigation_keeps_the_editor_and_destination_when_saving_fails() {
     let tmp = workspace.vault.path().with_extension("lbx.tmp");
     std::fs::create_dir(&tmp).unwrap();
     for destination in 0..7 {
-        match destination {
-            0 => workspace.select(other.clone()),
-            1 => workspace.select_directory(None),
-            2 => workspace.open_settings(),
-            3 => workspace.open_sharing(),
-            4 => workspace.open_records_page(Page::Trash),
-            5 => workspace.start_new(),
-            _ => workspace.start_directory(),
-        }
+        workspace.navigate(match destination {
+            0 => Destination::Entry(other.clone()),
+            1 => Destination::Directory(None),
+            2 => Destination::Page(Page::Settings),
+            3 => Destination::Page(Page::Sharing),
+            4 => Destination::Page(Page::Trash),
+            5 => Destination::NewEntry,
+            _ => Destination::NewDirectory,
+        });
         assert!(workspace.page == Page::Vault);
         assert!(workspace.error.is_some());
         assert_eq!(workspace.draft.as_ref().unwrap().entry.title, "Pending");
@@ -470,7 +470,7 @@ fn navigation_keeps_the_editor_and_destination_when_saving_fails() {
     }
     assert_eq!(reopen(&workspace).entries.len(), 1);
     std::fs::remove_dir(tmp).unwrap();
-    workspace.open_settings();
+    workspace.navigate(Destination::Page(Page::Settings));
     assert!(workspace.page == Page::Settings);
     assert!(workspace.draft.is_none());
     assert_eq!(reopen(&workspace).entries.len(), 2);

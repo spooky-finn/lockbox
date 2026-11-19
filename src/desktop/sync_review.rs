@@ -16,8 +16,10 @@ pub(super) fn SyncReview() -> Element {
     let mut revealed_drafts =
         use_signal(std::collections::BTreeSet::<crate::sync::protocol::Hash>::new);
     let state = use_context::<Session>();
+    let last_view = use_hook(|| std::rc::Rc::new(std::cell::RefCell::new(rsx! {})));
     let input = use_unlocked_selector(|u| {
         (
+            u.saving_draft(),
             u.vault.review_revision(),
             u.vault.records_revision(),
             u.vault.has_pending_exchange(),
@@ -31,11 +33,14 @@ pub(super) fn SyncReview() -> Element {
         let Screen::Unlocked(unlocked) = &*screen else {
             return rsx! {};
         };
+        if unlocked.saving_draft() {
+            return last_view.borrow().clone();
+        }
         #[cfg(test)]
         if unlocked.vault.sync_state().is_some() {
             REVIEW_REPLAYS.set(REVIEW_REPLAYS.get() + 1);
         }
-        rsx! {
+        let view = rsx! {
             if let Ok(Some(replay)) = unlocked.vault.sync_replay_state() {
                 for record in replay.projection.conflicts() {
                     details { class: "notice",
@@ -107,7 +112,9 @@ pub(super) fn SyncReview() -> Element {
                     }
                 }
             }
-        }
+        };
+        *last_view.borrow_mut() = view.clone();
+        view
     });
     view()
 }

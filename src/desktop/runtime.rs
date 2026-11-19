@@ -3,6 +3,7 @@
 use crate::{
     desktop::{
         context::{BiometricProvider, Clock, SecurityHandle, Session},
+        draft_save::SaveWake,
         security::{CopyField, Security, Status},
         session::Screen,
         time::unix_now,
@@ -28,6 +29,8 @@ pub(crate) fn use_runtime() -> Session {
     let state = use_signal(|| Screen::locked(&settings.peek(), &*hardware.0));
     let clock = use_signal(unix_now);
     let status = use_signal(Status::default);
+    let save_wake = use_hook(SaveWake::default);
+    use_context_provider(|| save_wake.clone());
     use_context_provider(|| settings);
     use_context_provider(|| hardware.clone());
     use_context_provider(|| native.clone());
@@ -69,10 +72,16 @@ pub(crate) fn use_runtime() -> Session {
             _ => {}
         }
     });
-    use_future(move || async move {
-        loop {
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            tick();
+    use_future(move || {
+        let save_wake = save_wake.clone();
+        async move {
+            loop {
+                // Saves can wake the runtime early. The timeout still drives
+                // inactivity checks and polls for other workers.
+                let _ =
+                    tokio::time::timeout(Duration::from_millis(100), save_wake.notified()).await;
+                tick();
+            }
         }
     });
     state
@@ -105,19 +114,34 @@ pub(crate) fn tick() {
     }
 }
 
+/// Returns true when the rest of the session must wait for the live vault.
+fn tick_draft_save(mut state: Session) -> bool {
+    let reply = match &*state.peek() {
+        Screen::Unlocked(u) => u.try_save_reply(),
+        Screen::Locked(_) => None,
+    };
+    if let Some(reply) = reply {
+        let interrupted = reply.is_err();
+        if let Screen::Unlocked(u) = &mut *state.write() {
+            u.accept_save_reply(reply);
+        }
+        if interrupted {
+            lock(None);
+            return true;
+        }
+    }
+    let autosave_due = matches!(&*state.peek(), Screen::Unlocked(u) if u.autosave_due());
+    if autosave_due && let Screen::Unlocked(workspace) = &mut *state.write() {
+        workspace.request_autosave();
+        return workspace.saving_draft();
+    }
+    matches!(&*state.peek(), Screen::Unlocked(u) if u.saving_draft())
+}
+
 fn tick_session(mut state: Session) {
-    let autosave_due = matches!(&*state.peek(), Screen::Unlocked(u) if
-        u.draft.as_ref().and_then(|d| d.autosave_at).is_some_and(|at| Instant::now() >= at));
-    if autosave_due {
-        state.with_mut(|screen| {
-            if let Screen::Unlocked(workspace) = screen {
-                // One attempt per edit. Navigation or another edit retries failures.
-                if let Some(draft) = &mut workspace.draft {
-                    draft.autosave_at = None;
-                }
-                workspace.error = workspace.autosave_draft().err();
-            }
-        });
+    // Only the writer holds the real vault while a draft save is in flight.
+    if tick_draft_save(state) {
+        return;
     }
 
     let pending = match &*state.peek() {
@@ -254,6 +278,9 @@ fn poll_session(mut state: Session) {
                     &*hardware.0,
                     &mut native.borrow_mut(),
                 );
+                if let Screen::Unlocked(u) = &mut *screen {
+                    u.set_save_wake(try_consume_context::<SaveWake>());
+                }
             }
         }
         Screen::Unlocked(workspace) => {
@@ -278,6 +305,9 @@ pub(crate) fn copy(field: CopyField) -> bool {
         let Screen::Unlocked(workspace) = &*screen else {
             return false;
         };
+        if workspace.saving_draft() {
+            return false;
+        }
         let Some(entry) = workspace.selected_entry() else {
             return false;
         };

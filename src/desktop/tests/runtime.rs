@@ -42,6 +42,7 @@ fn autosave_waits_for_idle_then_persists_without_closing_the_editor() {
             u.draft.as_mut().unwrap().autosave_at = Some(Instant::now())
         });
         runtime::tick();
+        crate::desktop::view_test_support::finish_save(state);
         let Screen::Unlocked(u) = &*state.peek() else {
             panic!("locked");
         };
@@ -74,6 +75,7 @@ fn autosave_coalesces_edits_and_ignores_transient_controls() {
         });
         set_field(state, Field::Notes, "latest edit".into());
         runtime::tick();
+        crate::desktop::view_test_support::finish_save(state);
         let Screen::Unlocked(u) = &*state.peek() else {
             panic!("locked");
         };
@@ -85,6 +87,7 @@ fn autosave_coalesces_edits_and_ignores_transient_controls() {
             u.draft.as_mut().unwrap().autosave_at = Some(Instant::now())
         });
         runtime::tick();
+        crate::desktop::view_test_support::finish_save(state);
         let Screen::Unlocked(u) = &*state.peek() else {
             panic!("locked");
         };
@@ -112,6 +115,7 @@ fn failed_timed_save_retains_draft_and_next_edit_retries() {
             u.draft.as_mut().unwrap().autosave_at = Some(Instant::now())
         });
         runtime::tick();
+        crate::desktop::view_test_support::finish_save(state);
         let Screen::Unlocked(u) = &*state.peek() else {
             panic!("locked");
         };
@@ -127,6 +131,7 @@ fn failed_timed_save_retains_draft_and_next_edit_retries() {
             u.draft.as_mut().unwrap().autosave_at = Some(Instant::now())
         });
         runtime::tick();
+        crate::desktop::view_test_support::finish_save(state);
         let Screen::Unlocked(u) = &*state.peek() else {
             panic!("locked");
         };
@@ -135,6 +140,39 @@ fn failed_timed_save_retains_draft_and_next_edit_retries() {
             crate::desktop::test_support::reopen(u).entries[0].notes,
             "retry note"
         );
+    });
+}
+
+#[test]
+fn lock_flushes_inflight_save_and_newer_input_before_releasing_the_vault() {
+    use crate::desktop::context::set_field;
+    use crate::records::editor::Field;
+    use crate::vault::{Vault, VaultError};
+    let mut dom = mounted();
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| u.start_edit());
+        set_field(state, Field::Title, "Snapshot before lock".into());
+        let path = {
+            let mut state = state;
+            let Screen::Unlocked(u) = &mut *state.write() else {
+                panic!("locked");
+            };
+            u.request_autosave();
+            assert!(u.saving_draft());
+            u.vault.path().to_owned()
+        };
+        let password = secrecy::SecretString::from("master".to_owned());
+        assert!(matches!(
+            Vault::open(&path, &password),
+            Err(VaultError::ProfileInUse)
+        ));
+        set_field(state, Field::Title, "Final edit before lock".into());
+        runtime::lock(None);
+        assert!(matches!(&*state.peek(), Screen::Locked(_)));
+        let reopened = Vault::open(path, &password).unwrap();
+        assert_eq!(reopened.entries()[0].title, "Final edit before lock");
+        runtime::tick();
+        assert!(matches!(&*state.peek(), Screen::Locked(_)));
     });
 }
 

@@ -3,7 +3,7 @@ use crate::records::dialogs;
 
 use crate::{
     desktop::{
-        context::{Session, draft_control, edit_draft, edit_unlocked, set_field},
+        context::{Session, draft_control, edit_draft, edit_workspace_ui, set_field},
         icons,
         session::Screen,
         widgets::{
@@ -11,6 +11,7 @@ use crate::{
             icons::{EntryIcon, IconPicker},
             symbol::Icon,
         },
+        workspace::Unlocked,
     },
     records::{
         editor::{Control, Field},
@@ -23,7 +24,7 @@ pub(crate) fn finish_on_enter(state: Session, event: KeyboardEvent) {
     if !event.is_composing() && !event.is_auto_repeating() && event.key() == Key::Enter {
         event.prevent_default();
         event.stop_propagation();
-        edit_unlocked(state, |u| u.error = u.close_draft().err());
+        edit_workspace_ui(state, Unlocked::request_close_editor);
     }
 }
 
@@ -45,13 +46,13 @@ pub(crate) fn DraftView() -> Element {
     let icon = icons::catalog().for_entry(entry);
     let automatic_favicon = entry.icon.is_none() && icons::favicon_url(&entry.url).is_some();
     rsx! {
-        form { class: "draft entry-detail", aria_label: if draft.is_new { language.text(Text::NewEntry) } else { language.text(Text::EditEntry) },
+        form { class: "draft entry-detail", aria_busy: unlocked.saving_draft().to_string(), aria_label: if draft.is_new { language.text(Text::NewEntry) } else { language.text(Text::EditEntry) },
             onkeydown: move |event: KeyboardEvent| {
                 if !event.is_composing() && !event.is_auto_repeating() && event.key() == Key::Enter && (event.modifiers().meta() || event.modifiers().ctrl()) {
                     finish_on_enter(state, event);
                 }
             },
-            onsubmit: move |event| { event.prevent_default(); edit_unlocked(state, |u| u.error = u.close_draft().err()); },
+            onsubmit: move |event| { event.prevent_default(); edit_workspace_ui(state, Unlocked::request_close_editor); },
             div { class: "detail-heading",
                 EntryIcon { title: entry.title.clone(), slug: entry.icon.clone(), url: entry.url.clone(), large: true }
                 div { class: "detail-title",

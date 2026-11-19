@@ -2,6 +2,7 @@
 
 use crate::{
     access::biometrics::TouchId,
+    desktop::draft_save::DraftSaves,
     records::{directories::Directories, editor::Draft, entry::Entry, generator},
     vault::Vault,
 };
@@ -39,6 +40,7 @@ pub(crate) struct Unlocked {
     pub(crate) search: String,
     pub(crate) selected: Option<String>,
     pub(crate) draft: Option<Draft>,
+    pub(super) draft_saves: DraftSaves,
     pub(crate) directories: Directories,
     pub(crate) show_password: bool,
     pub(crate) confirm_delete: bool,
@@ -71,6 +73,7 @@ impl Unlocked {
             search: String::new(),
             selected: None,
             draft: None,
+            draft_saves: DraftSaves::default(),
             directories,
             show_password: false,
             confirm_delete: false,
@@ -80,13 +83,7 @@ impl Unlocked {
         }
     }
 
-    pub(crate) fn navigate(&mut self, destination: Destination) {
-        if self.finish_editing() {
-            self.finish_navigation(destination);
-        }
-    }
-
-    fn finish_navigation(&mut self, destination: Destination) {
+    pub(super) fn finish_navigation(&mut self, destination: Destination) {
         self.draft = None;
         self.show_password = false;
         self.error = None;
@@ -153,7 +150,7 @@ impl Unlocked {
     }
 
     pub(crate) fn select(&mut self, id: String) {
-        if !self.finish_editing() {
+        if !self.editor_is_clear() {
             return;
         }
         self.page = Page::Vault;
@@ -171,7 +168,7 @@ impl Unlocked {
     }
 
     pub(crate) fn start_new(&mut self) {
-        if !self.finish_editing() {
+        if !self.editor_is_clear() {
             return;
         }
 
@@ -185,7 +182,7 @@ impl Unlocked {
     }
 
     pub(crate) fn start_edit(&mut self) {
-        if !self.finish_editing() {
+        if !self.editor_is_clear() {
             return;
         }
         if let Some(entry) = self.selected_entry().cloned() {
@@ -201,7 +198,7 @@ impl Unlocked {
     }
 
     pub(crate) fn open_records_page(&mut self, page: Page) {
-        if !self.finish_editing() {
+        if !self.editor_is_clear() {
             return;
         }
         self.page = page;
@@ -222,7 +219,7 @@ impl Unlocked {
     }
 
     pub(crate) fn open_settings(&mut self) {
-        if !self.finish_editing() {
+        if !self.editor_is_clear() {
             return;
         }
         self.page = Page::Settings;
@@ -231,80 +228,26 @@ impl Unlocked {
         self.directories.confirm_delete = false;
     }
 
-    /// Navigation flushes the entry first; failures retain the draft and current page.
-    /// Folder editors still require their explicit save/cancel action.
-    pub(crate) fn finish_editing(&mut self) -> bool {
-        if self.directories.draft.is_some() {
-            return false;
-        }
-        match self.close_draft() {
-            Ok(()) => true,
-            Err(error) => {
-                self.error = Some(error);
-                false
-            }
-        }
+    /// Commands that require a clear editor run after request_navigation.
+    pub(crate) fn editor_is_clear(&self) -> bool {
+        !self.is_editing() && !self.saving_draft()
     }
 
-    /// Persist a validated snapshot without closing the editor or resetting its controls.
-    pub(crate) fn autosave_draft(&mut self) -> Result<(), String> {
-        let Some(draft) = &self.draft else {
-            return Ok(());
-        };
-
-        if draft.is_empty() {
-            return Ok(());
-        }
-
-        let entry = draft.prepare_save()?;
-        if self.vault.entries().contains(&entry) {
-            if let Some(draft) = &mut self.draft {
-                draft.is_new = false;
-                draft.autosave_at = None;
-            }
-            return Ok(());
-        }
-
-        let created = draft.is_new;
-        self.vault
-            .upsert_entry(entry)
-            .map_err(|error| format!("Could not save: {error}"))?;
+    pub(super) fn record_draft_saved(&mut self) {
         if let Some(draft) = &mut self.draft {
+            if draft.is_new {
+                self.record_created = self.record_created.wrapping_add(1);
+            }
             draft.is_new = false;
-            draft.autosave_at = None;
         }
         self.sync.saved();
-        if created {
-            self.record_created = self.record_created.wrapping_add(1);
-        }
-        Ok(())
     }
 
-    /// Flush pending edits before closing. A failed save keeps the editor open.
-    pub(crate) fn save_draft(&mut self) -> Result<(), String> {
-        let Some(draft) = &self.draft else {
-            return Ok(());
-        };
-        // Explicit saves still validate new entries; closing an untouched empty
-        // editor is handled separately.
-        draft.validate()?;
-        let id = draft.entry.id.clone();
-        self.autosave_draft()?;
-
+    pub(super) fn finish_saved_draft(&mut self, id: String) {
         self.draft = None;
         self.search.clear();
         self.select(id);
         self.sync.saved();
-        Ok(())
-    }
-
-    pub(crate) fn close_draft(&mut self) -> Result<(), String> {
-        if self.draft.as_ref().is_some_and(Draft::is_empty) {
-            self.draft = None;
-            self.error = None;
-            return Ok(());
-        }
-        self.save_draft()
     }
 
     pub(crate) fn delete_selected(&mut self) -> Result<(), String> {

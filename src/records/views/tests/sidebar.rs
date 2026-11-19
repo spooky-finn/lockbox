@@ -67,6 +67,7 @@ fn keyboard_navigation_saves_changed_drafts_before_switching() {
     });
     update(&mut dom, |state| {
         select_tree_row(state, TreeAction::Entry(other_id.clone()));
+        crate::desktop::view_test_support::finish_save(state);
         let Screen::Unlocked(u) = &*state.peek() else {
             panic!("locked");
         };

@@ -65,7 +65,7 @@ fn settings_saves_pending_edits_before_switching_preferences_and_returning() {
         edit_unlocked(state, |u| {
             u.start_new();
             u.draft.as_mut().unwrap().entry.title = "Несохранённая запись {work}".into();
-            u.open_settings();
+            u.navigate(crate::desktop::workspace::Destination::Page(Page::Settings));
         })
     });
     update(&mut dom, |_| {

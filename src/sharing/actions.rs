@@ -274,7 +274,7 @@ impl Unlocked {
     }
 
     pub fn open_sharing(&mut self) {
-        if !self.finish_editing() {
+        if !self.editor_is_clear() {
             return;
         }
         self.page = Page::Sharing;

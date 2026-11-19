@@ -1,7 +1,7 @@
 use crate::desktop::i18n::Text;
 use crate::{
     desktop::{
-        context::{Session, edit_unlocked},
+        context::{Session, edit_unlocked, navigate},
         widgets::symbol::{Icon, Symbol},
         workspace::Unlocked,
     },
@@ -289,7 +289,7 @@ impl RenderCache {
                             button { class: if selected { "entry-row selected" } else { "entry-row" },
                                 "data-kind": "entry", "data-id": "{id}",
                                 r#type: "button", title: "{title}", aria_current: "{selected}", disabled: editing,
-                                onclick: move |_| edit_unlocked(state, |u| u.navigate(crate::desktop::workspace::Destination::Entry(id.clone()))),
+                                onclick: move |_| navigate(state, crate::desktop::workspace::Destination::Entry(id.clone())),
                                 "{title}"
                             }
                         }
@@ -313,7 +313,7 @@ impl RenderCache {
                                     "data-kind": "directory", "data-id": "{id}",
                                     disabled: editing, aria_current: "{selected}",
                                     aria_expanded: "{expanded}", aria_controls: "folder-{id}",
-                                    onclick: move |_| edit_unlocked(state, |u| u.navigate(crate::desktop::workspace::Destination::ToggleDirectory(select.clone()))),
+                                    onclick: move |_| navigate(state, crate::desktop::workspace::Destination::ToggleDirectory(select.clone())),
                                     Symbol { icon: if expanded { Icon::FolderOpen } else { Icon::Folder } }
                                     span { "{name}" }
                                 }

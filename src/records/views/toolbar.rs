@@ -17,8 +17,8 @@ pub(crate) fn Toolbar() -> Element {
     let state = use_context::<Session>();
     let sync = use_unlocked_selector(|u| {
         u.vault
-            .sync_state()
-            .map(|sync| (u.sync.status, sync.outbox.len()))
+            .pending_uploads()
+            .map(|count| (u.sync.status, count))
     });
     let sync = sync.read();
     let Some(sync) = *sync else {

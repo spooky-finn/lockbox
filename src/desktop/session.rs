@@ -18,7 +18,9 @@ pub(crate) enum Screen {
 impl Screen {
     pub(crate) fn can_switch_profile(&self) -> bool {
         match self {
-            Self::Unlocked(workspace) => !workspace.is_editing() && !workspace.import.busy(),
+            Self::Unlocked(workspace) => {
+                !workspace.is_editing() && !workspace.import.busy() && !workspace.saving_draft()
+            }
             Self::Locked(form) => !form.busy(),
         }
     }
@@ -77,7 +79,7 @@ impl Screen {
         }
 
         if let Self::Unlocked(unlocked) = self {
-            let save_error = unlocked.autosave_draft().err();
+            let save_error = unlocked.flush_draft_for_lock().err();
             let mut locked = Locked::new(Some(unlocked.vault.path().to_path_buf()))
                 .with_identity_path(settings.identity_path(), None)
                 .offer_touch_id(&settings.config, biometrics, false);

@@ -164,7 +164,9 @@ fn recipient_enters_an_independent_code_and_navigation_saves_private_draft() {
             u.start_new();
             u.draft.as_mut().unwrap().entry.title = "Preserved draft".into();
             u.draft.as_mut().unwrap().entry.password = "private-draft-marker".into();
-            u.open_sharing();
+            u.navigate(crate::desktop::workspace::Destination::Page(
+                crate::desktop::workspace::Page::Sharing,
+            ));
             u.sharing.review = Some(Artifact::Invitation(offer));
         });
     });

@@ -7,7 +7,7 @@ use dioxus::prelude::*;
 pub(crate) fn import_sharing_file() {
     let mut state = consume_context::<Session>();
     let ticket = match &*state.peek() {
-        Screen::Unlocked(u) if !u.sharing.busy() => u.sharing.ticket(&u.vault),
+        Screen::Unlocked(u) if !u.sharing.busy() && !u.saving_draft() => u.sharing.ticket(&u.vault),
         _ => return,
     };
     spawn(async move {
@@ -16,6 +16,7 @@ pub(crate) fn import_sharing_file() {
             .pick_file()
             .await
             && let Screen::Unlocked(u) = &mut *state.write()
+            && !u.saving_draft()
         {
             u.import_sharing(ticket, path.path().to_path_buf());
         }
@@ -25,7 +26,7 @@ pub(crate) fn import_sharing_file() {
 pub(crate) fn export_sharing_file() {
     let mut state = consume_context::<Session>();
     let (ticket, output) = match &*state.peek() {
-        Screen::Unlocked(u) if !u.sharing.busy() => {
+        Screen::Unlocked(u) if !u.sharing.busy() && !u.saving_draft() => {
             let Some(output) = u
                 .sharing
                 .output
@@ -46,6 +47,7 @@ pub(crate) fn export_sharing_file() {
             .save_file()
             .await
             && let Screen::Unlocked(u) = &mut *state.write()
+            && !u.saving_draft()
         {
             u.export_sharing(ticket, path.path().to_path_buf(), output);
         }

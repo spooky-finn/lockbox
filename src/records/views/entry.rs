@@ -1,3 +1,4 @@
+use crate::desktop::context::navigate;
 use crate::desktop::i18n::Text;
 use crate::records::dialogs;
 
@@ -62,7 +63,7 @@ pub(crate) fn EntryView() -> Element {
                         IconButton { class: "danger quiet", icon: Icon::Trash, label: language.text(Text::Delete), disabled: unlocked.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.confirm_delete = true) }
                     }
                 }
-                IconButton { class: "quiet entry-dismiss", icon: Icon::Close, label: language.text(Text::CloseEditor), onclick: move |_| edit_unlocked(state, |u| u.navigate(crate::desktop::workspace::Destination::Close)) }
+                IconButton { class: "quiet entry-dismiss", icon: Icon::Close, label: language.text(Text::CloseEditor), onclick: move |_| navigate(state, crate::desktop::workspace::Destination::Close) }
             }
             dl { class: "fields",
                 div { class: "field-row",

@@ -2,7 +2,7 @@ use crate::desktop::i18n::Text;
 
 use crate::{
     desktop::{
-        context::{Session, edit_unlocked, use_unlocked_selector},
+        context::{Session, edit_unlocked, edit_workspace_ui, navigate, use_unlocked_selector},
         session::Screen,
         sync_review::SyncReview,
         widgets::{
@@ -69,10 +69,13 @@ pub(crate) fn UnlockedView() -> Element {
                 if !records_open && (settings_open || sharing_open || (!editing && has_detail)) {
                     IconButton { class: "mobile-back quiet", icon: Icon::ArrowLeft,
                         label: if settings_open || sharing_open { language.text(Text::BackToVault) } else { language.text(Text::BackToList) },
-                        onclick: move |_| edit_unlocked(state, |u| {
-                            if u.page != crate::desktop::workspace::Page::Vault { u.page = crate::desktop::workspace::Page::Vault; }
-                            else { u.navigate(crate::desktop::workspace::Destination::Directory(None)); }
-                        }),
+                        onclick: move |_| {
+                            if !matches!(&*state.peek(), Screen::Unlocked(u) if u.page == Page::Vault) {
+                                edit_unlocked(state, |u| u.page = Page::Vault);
+                            } else {
+                                navigate(state, crate::desktop::workspace::Destination::Directory(None));
+                            }
+                        },
                     }
                 }
 
@@ -106,11 +109,11 @@ pub(crate) fn handle_record_shortcut(state: Session, event: KeyboardEvent) {
     event.prevent_default();
     event.stop_propagation();
     crate::desktop::runtime::record_activity();
-    edit_unlocked(state, |u| {
+    edit_workspace_ui(state, |u| {
         if save {
-            u.error = u.save_draft().err();
+            u.request_save();
         } else {
-            u.navigate(crate::desktop::workspace::Destination::Close);
+            u.request_navigation(crate::desktop::workspace::Destination::Close);
         }
     });
 }

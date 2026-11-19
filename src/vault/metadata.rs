@@ -17,6 +17,9 @@ pub struct ProfileSummary<'a> {
 
 impl Vault {
     pub fn profile_summary(&self) -> Option<ProfileSummary<'_>> {
+        if let Some(snapshot) = &self.editor_view {
+            return snapshot.profile_summary();
+        }
         self.profile.as_ref().map(|profile| ProfileSummary {
             username: &profile.username,
             space_name: &profile.space_name,

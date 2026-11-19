@@ -96,6 +96,7 @@ pub(crate) fn BrowserConsent() -> Element {
             _ => Vec::new(),
         };
         let locked = matches!(&*session, Screen::Locked(_));
+        let saving = matches!(&*session, Screen::Unlocked(u) if u.saving_draft());
         rsx! {
             section { class: "browser-consent", style: "position:fixed;top:36px;right:20px;width:min(420px,90vw);max-height:45vh;overflow:auto;z-index:10000;padding:18px;border:1px solid #718368;border-radius:12px;background:var(--panel, #242824);color:var(--text, #f4f4ed);box-shadow:0 8px 32px #0006", role: "region", aria_label: "Browser autofill request",
                 strong { "Browser autofill" }
@@ -109,6 +110,7 @@ pub(crate) fn BrowserConsent() -> Element {
                     for (id, title, username) in entries {
                         { let origin = origin.clone(); rsx! {
                         button {
+                            disabled: saving,
                             onclick: move |_| {
                                 // Reject a click left over from a previous consent render.
                                 if !pending.peek().as_ref().is_some_and(|request|
@@ -117,7 +119,7 @@ pub(crate) fn BrowserConsent() -> Element {
                                 let credential = {
                                     let current = state.read();
                                     match &*current {
-                                        Screen::Unlocked(unlocked) => unlocked.vault.entries().iter()
+                                        Screen::Unlocked(unlocked) if !unlocked.saving_draft() => unlocked.vault.entries().iter()
                                             .find(|entry| entry.id == id && crate::browser::origin(&entry.url).is_ok_and(|actual| actual.ascii_serialization() == origin)
                                                 && entry.username.len() <= 4096 && entry.password.len() <= 4096)
                                             .map(|entry| Credential { username: zeroize::Zeroizing::new(entry.username.clone()), password: zeroize::Zeroizing::new(entry.password.clone()) }),

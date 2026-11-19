@@ -2,7 +2,7 @@ use crate::desktop::i18n::Text;
 
 use crate::{
     desktop::{
-        context::{Session, draft_control, edit_unlocked},
+        context::{Session, draft_control, edit_workspace_ui},
         session::Screen,
         widgets::{button::IconButton, symbol::Icon},
     },
@@ -36,17 +36,17 @@ pub(crate) fn GeneratorView() -> Element {
         section { class: "subpanel stack", aria_label: language.text(Text::PasswordGenerator),
             label { r#for: "password-length", {language.format(Text::LengthCharacters, &[options.length.to_string()])} }
             input { id: "password-length", r#type: "range", min: "{generator::LENGTH.start()}", max: "{generator::LENGTH.end()}", value: "{options.length}",
-                oninput: move |e| { if let Ok(length) = e.value().parse() { edit_unlocked(state, |u| u.generator.length = length); } } }
+                oninput: move |e| { if let Ok(length) = e.value().parse() { edit_workspace_ui(state, |u| u.generator.length = length); } } }
             div { class: "actions",
-                label { class: "inline", input { r#type: "checkbox", checked: options.lower, onchange: move |e| edit_unlocked(state, |u| u.generator.lower = e.checked()) } "a–z" }
-                label { class: "inline", input { r#type: "checkbox", checked: options.upper, onchange: move |e| edit_unlocked(state, |u| u.generator.upper = e.checked()) } "A–Z" }
-                label { class: "inline", input { r#type: "checkbox", checked: options.digits, onchange: move |e| edit_unlocked(state, |u| u.generator.digits = e.checked()) } "0–9" }
-                label { class: "inline", input { r#type: "checkbox", checked: options.symbols, onchange: move |e| edit_unlocked(state, |u| u.generator.symbols = e.checked()) } "!#$%…" }
+                label { class: "inline", input { r#type: "checkbox", checked: options.lower, onchange: move |e| edit_workspace_ui(state, |u| u.generator.lower = e.checked()) } "a–z" }
+                label { class: "inline", input { r#type: "checkbox", checked: options.upper, onchange: move |e| edit_workspace_ui(state, |u| u.generator.upper = e.checked()) } "A–Z" }
+                label { class: "inline", input { r#type: "checkbox", checked: options.digits, onchange: move |e| edit_workspace_ui(state, |u| u.generator.digits = e.checked()) } "0–9" }
+                label { class: "inline", input { r#type: "checkbox", checked: options.symbols, onchange: move |e| edit_workspace_ui(state, |u| u.generator.symbols = e.checked()) } "!#$%…" }
             }
-            label { class: "inline", input { r#type: "checkbox", checked: options.avoid_ambiguous, onchange: move |e| edit_unlocked(state, |u| u.generator.avoid_ambiguous = e.checked()) } {language.format(Text::ExcludeSimilarCharacters, &[generator::AMBIGUOUS.to_string()])} }
+            label { class: "inline", input { r#type: "checkbox", checked: options.avoid_ambiguous, onchange: move |e| edit_workspace_ui(state, |u| u.generator.avoid_ambiguous = e.checked()) } {language.format(Text::ExcludeSimilarCharacters, &[generator::AMBIGUOUS.to_string()])} }
             p { class: "muted", {language.format(Text::StrengthBits, &[format!("{:.0}", bits), verdict.to_string()])} }
             div { class: "actions",
-                IconButton { class: "primary", icon: Icon::Check, label: language.text(Text::UsePassword), onclick: move |_| edit_unlocked(state, |u| {
+                IconButton { class: "primary", icon: Icon::Check, label: language.text(Text::UsePassword), onclick: move |_| edit_workspace_ui(state, |u| {
                     if let Some(draft) = &mut u.draft { draft.generate(&u.generator); }
                 }) }
                 IconButton { icon: Icon::Close, label: language.text(Text::CloseGenerator), onclick: move |_| draft_control(state, crate::records::editor::Control::CloseGenerator) }

@@ -19,7 +19,9 @@ pub(crate) fn set_touch_id(wanted: bool) {
     let hardware = consume_context::<BiometricProvider>();
     let biometrics = hardware.for_language(settings.peek().config.language);
 
-    if let Screen::Unlocked(workspace) = &mut *state.write() {
+    if let Screen::Unlocked(workspace) = &mut *state.write()
+        && !workspace.saving_draft()
+    {
         workspace.error =
             workspace
                 .touch_id

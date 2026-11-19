@@ -9,8 +9,16 @@
 - Multi-field edits use `edit_draft` without cloning a comparison snapshot.
   Dirty checks compare the draft with the saved record only when leaving it.
 - Record edits schedule autosave after 600 ms of inactivity. Explicit save,
-  navigation and lock can flush earlier. Lock still clears secrets if saving
-  fails. Failed navigation saves retain the draft.
+  navigation and lock can flush earlier. The UI schedules a validated draft
+  snapshot on one writer per unlocked vault. The writer holds the live vault,
+  file lease and signer until it returns the durable result. During the write
+  the UI renders a search snapshot with no keys, passwords, notes or attachments.
+- The editor accepts newer changes during a write. Navigation waits for the
+  latest snapshot to commit. A failure leaves the draft editable and retains
+  the current page. Sync polling pauses and other vault commands are gated
+  until the writer returns the live vault. Lock and window shutdown drain the
+  write and the latest edits before releasing the leases, and clear secrets
+  even on failure.
 - Vault saves remain transactional. Do not bypass durable writes or weaken KDF
   parameters to make interaction appear faster.
 
@@ -108,7 +116,5 @@ including release-build timings. Compare search, tree expansion, editor controls
 first save and subsequent saves. Never log real credentials or record contents.
 
 Remaining work requires measurement: session-wide render notifications, very large
-tree virtualization, synchronous encrypted saves after explicit user actions. Moving
-saves to workers requires an explicit single-writer protocol, versioned snapshots,
-failure retention, lock/cancel behavior and shutdown flushing; do not introduce an
-uncoordinated background save or stale-snapshot overwrite.
+tree virtualization, and synchronous vault work when applying sync results or
+running administrative commands.

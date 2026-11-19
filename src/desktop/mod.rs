@@ -2,6 +2,7 @@
 
 pub mod browser;
 pub(crate) mod context;
+mod draft_save;
 pub(crate) mod i18n;
 pub mod icons;
 pub(crate) mod profiles;

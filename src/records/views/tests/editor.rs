@@ -35,6 +35,9 @@ fn submitting_the_dioxus_form_saves_and_finishes_without_browser_navigation() {
     dom.runtime()
         .handle_event("submit", event.clone(), submit_id);
     assert!(!event.default_action_enabled());
+    dom.in_scope(ScopeId::APP, || {
+        crate::desktop::view_test_support::finish_save(consume_context())
+    });
     dom.render_immediate_to_vec();
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("From submit event"));
@@ -165,6 +168,9 @@ fn keyboard_finishes_inputs_and_keeps_notes_newlines_and_composition() {
             true,
         );
         dom.runtime().handle_event("keydown", event.clone(), target);
+        dom.in_scope(ScopeId::APP, || {
+            crate::desktop::view_test_support::finish_save(consume_context())
+        });
         dom.render_immediate_to_vec();
         assert_eq!(event.default_action_enabled(), !finishes);
         dom.in_scope(ScopeId::APP, || {

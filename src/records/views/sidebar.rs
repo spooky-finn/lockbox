@@ -2,7 +2,9 @@ use crate::desktop::i18n::Text;
 
 use crate::{
     desktop::{
-        context::{Session, edit_unlocked, use_records_version, use_unlocked_selector},
+        context::{
+            Session, edit_workspace_ui, navigate, use_records_version, use_unlocked_selector,
+        },
         session::Screen,
         widgets::{
             button::IconButton,
@@ -31,7 +33,7 @@ fn select_tree_row(state: Session, selection: TreeAction) {
     if !matches!(&*state.peek(), Screen::Unlocked(_)) {
         return;
     }
-    edit_unlocked(state, |u| {
+    edit_workspace_ui(state, |u| {
         let destination = match selection {
             TreeAction::Entry(id) if u.vault.entries().iter().any(|e| e.id == id) => {
                 crate::desktop::workspace::Destination::Entry(id)
@@ -49,7 +51,7 @@ fn select_tree_row(state: Session, selection: TreeAction) {
             }
             _ => return,
         };
-        u.navigate(destination);
+        u.request_navigation(destination);
     });
 }
 
@@ -75,7 +77,7 @@ pub(crate) fn Sidebar() -> Element {
             u.vault.entries().len(),
             u.directories.draft.is_some(),
             u.vault.signing_error().is_some(),
-            u.vault.device_certificate().is_some(),
+            u.vault.has_device_certificate(),
             u.page,
         )
     });
@@ -90,10 +92,10 @@ pub(crate) fn Sidebar() -> Element {
                 h2 { {language.text(Text::Vault)} }
                 span { class: "count", "{count}" }
                 IconButton { class: "primary", icon: Icon::Plus, label: language.text(Text::NewEntry),
-                    disabled: editing_folder || read_only, onclick: move |_| edit_unlocked(state, |u| u.navigate(Destination::NewEntry)),
+                    disabled: editing_folder || read_only, onclick: move |_| navigate(state, Destination::NewEntry),
                 }
                 IconButton { class: "quiet", icon: Icon::FolderPlus, label: language.text(Text::NewFolder),
-                    disabled: editing_folder || read_only, onclick: move |_| edit_unlocked(state, |u| u.navigate(Destination::NewDirectory)),
+                    disabled: editing_folder || read_only, onclick: move |_| navigate(state, Destination::NewDirectory),
                 }
             }
             SearchBox {}
@@ -115,20 +117,20 @@ pub(crate) fn Sidebar() -> Element {
             div { class: "sidebar-footer",
                 button { class: "quiet sidebar-settings", disabled: editing_folder,
                     aria_current: (page == Page::Trash).then_some("page"),
-                    onclick: move |_| edit_unlocked(state, |u| u.navigate(Destination::Page(Page::Trash))),
+                    onclick: move |_| navigate(state, Destination::Page(Page::Trash)),
                     Symbol { icon: Icon::Trash } {language.text(Text::Trash)}
                 }
                 if shared {
                     button { class: "quiet sidebar-settings", r#type: "button",
                         aria_current: (page == Page::Sharing).then_some("page"),
-                        onclick: move |_| edit_unlocked(state, |u| u.navigate(Destination::Page(Page::Sharing))),
+                        onclick: move |_| navigate(state, Destination::Page(Page::Sharing)),
                         Symbol { icon: Icon::Fingerprint }
                         {language.text(Text::SharingParticipants)}
                     }
                 }
                 button { class: "quiet sidebar-settings", r#type: "button",
                     aria_current: (page == Page::Settings).then_some("page"),
-                    onclick: move |_| edit_unlocked(state, |u| u.navigate(Destination::Page(Page::Settings))),
+                    onclick: move |_| navigate(state, Destination::Page(Page::Settings)),
                     Symbol { icon: Icon::Settings }
                     {language.text(Text::Settings)}
                 }
@@ -157,7 +159,7 @@ fn SearchBox() -> Element {
         div { class: "search-field",
             Symbol { icon: Icon::Search }
             input { id: "search", r#type: "search", placeholder: language.text(Text::Search), value: "{query}",
-                oninput: move |event| edit_unlocked(state, |u| u.search = event.value()),
+                oninput: move |event| edit_workspace_ui(state, |u| u.search = event.value()),
             }
         }
     }

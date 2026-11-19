@@ -149,6 +149,7 @@ pub struct Vault {
     pub(in crate::vault) folders: Vec<Folder>,
     profile: VersionedProfile,
     pending_exchange: Option<exchange::PendingExchange>,
+    editor_view: Option<EditorView>,
     _profile_lock: Option<crate::vault::lease::ExclusiveFile>,
     witnesses: Arc<dyn WitnessStore>,
     protection: Option<RefCell<protection::Protection>>,
@@ -174,7 +175,9 @@ use format::{
     SALT_LEN, decrypt, derive,
 };
 mod authority;
+mod editor_view;
 mod edits;
+use editor_view::EditorView;
 mod metadata;
 pub use metadata::ProfileSummary;
 mod cloud_recovery;
@@ -262,6 +265,7 @@ impl Vault {
             folders: Vec::new(),
             profile: None.into(),
             pending_exchange: None,
+            editor_view: None,
             _profile_lock: Some(file_lock),
             witnesses: witness::system(),
             protection: None,
@@ -358,6 +362,7 @@ impl Vault {
             folders: snapshot.1,
             profile: Some(profile).into(),
             pending_exchange: None,
+            editor_view: None,
             _profile_lock: Some(profile_lock),
             witnesses,
             protection,
@@ -507,6 +512,7 @@ impl Vault {
     }
 
     fn save_inner(&self, create_new: bool) -> Result<()> {
+        self.ensure_not_display_snapshot()?;
         for entry in &self.entries {
             entry
                 .validate_attachments()
@@ -601,6 +607,9 @@ impl Vault {
     /// Cached reason this shared profile cannot sign or exchange. Readable data
     /// remains available. Missing bindings are never recreated implicitly.
     pub fn signing_error(&self) -> Option<anchor::Error> {
+        if let Some(snapshot) = &self.editor_view {
+            return snapshot.signing_error();
+        }
         if self.profile.as_ref().is_none_or(|p| p.sync.is_none()) {
             return None;
         }
@@ -623,6 +632,7 @@ impl Vault {
     }
 
     pub(crate) fn ensure_profile_writable(&self) -> Result<()> {
+        self.ensure_not_display_snapshot()?;
         if self.profile.as_ref().is_none_or(|p| p.sync.is_none()) {
             return Ok(());
         }
@@ -636,6 +646,7 @@ impl Vault {
     }
 
     fn ensure_sync_commit_allowed(&self) -> Result<()> {
+        self.ensure_not_display_snapshot()?;
         self.protection
             .as_ref()
             .ok_or(anchor::Error::Legacy)?
@@ -673,6 +684,7 @@ impl Header {
             folders: contents.folders,
             profile: contents.profile.into(),
             pending_exchange: None,
+            editor_view: None,
             _profile_lock: profile_lock,
             witnesses,
             protection: None,
