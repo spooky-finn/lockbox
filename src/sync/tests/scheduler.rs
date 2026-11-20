@@ -219,11 +219,13 @@ fn downloaded_history_waits_until_the_active_draft_is_finished() {
     );
     Machine::complete_intent(&mut remote, &device).unwrap();
     let batch = Download {
+        rejected: Vec::new(),
         objects: remote.objects.into_iter().map(|(h, b)| (h, b.0)).collect(),
         incomplete: true,
     };
     let mut session = SpaceSync {
         worker: Some(Worker::ready(Ok(Reply::Downloaded(batch)))),
+        factory: Some(Arc::new(MemoryFactory::default())),
         ..SpaceSync::default()
     };
     assert!(!session.needs_tick(true));
@@ -232,7 +234,16 @@ fn downloaded_history_waits_until_the_active_draft_is_finished() {
     assert!(session.worker.is_some());
     assert!(session.tick(&mut vault, false).is_none());
     assert_eq!(vault.entries()[0].title, "Remote");
-    assert_eq!(session.status, Status::Incomplete);
+    // Publication is not held hostage by an incomplete download; the status
+    // still reports missing history once the local outbox is delivered.
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while session.status != Status::Incomplete {
+        assert!(Instant::now() < deadline, "status {:?}", session.status);
+        if session.needs_tick(false) {
+            assert!(session.tick(&mut vault, false).is_none());
+        }
+        std::thread::yield_now();
+    }
 }
 
 #[test]
@@ -372,6 +383,7 @@ fn unadmitted_device_waits_for_the_owner_without_reporting_removal() {
     let mut guest = vault(&guest_dir);
     guest.join_space(owner.space_descriptor().unwrap()).unwrap();
     let batch = Download {
+        rejected: Vec::new(),
         incomplete: false,
         objects: owner
             .sync_state()
@@ -458,6 +470,7 @@ fn a_pending_receive_commit_cancels_old_work_and_resumes_after_storage_recovers(
     assert!(
         vault
             .receive_sync(Download {
+                rejected: Vec::new(),
                 objects: vec![(hash, remote.objects[&hash].0.clone())],
                 incomplete: false
             })
@@ -488,4 +501,178 @@ fn a_pending_receive_commit_cancels_old_work_and_resumes_after_storage_recovers(
     assert_eq!(drive(&mut session, &mut vault), None);
     assert!(!vault.has_pending_exchange());
     assert!(vault.sync_state().unwrap().objects.contains_key(&hash));
+}
+
+/// Drive passes until `done` holds, skipping retry delays. Returns false on timeout.
+fn drive_until(
+    session: &mut SpaceSync,
+    vault: &mut Vault,
+    done: impl Fn(&SpaceSync, &Vault) -> bool,
+) -> bool {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while Instant::now() < deadline {
+        if done(session, vault) {
+            return true;
+        }
+        if session.worker.is_none() {
+            session.retry();
+        }
+        if session.needs_tick(false) {
+            let _ = session.tick(vault, false);
+        }
+        std::thread::yield_now();
+    }
+    done(session, vault)
+}
+
+fn replace_membership(value: &mut serde_json::Value, membership: &serde_json::Value) -> bool {
+    match value {
+        serde_json::Value::Object(map) => {
+            if let Some(slot) = map.get_mut("membership") {
+                *slot = membership.clone();
+                return true;
+            }
+            map.values_mut()
+                .any(|child| replace_membership(child, membership))
+        }
+        serde_json::Value::Array(items) => items
+            .iter_mut()
+            .any(|child| replace_membership(child, membership)),
+        _ => false,
+    }
+}
+
+/// Attack: a writer without any space key uploads a change whose membership
+/// points to an object that never exists. It must not stop honest publication.
+#[test]
+fn unauthenticated_object_with_missing_dependency_does_not_block_publication() {
+    use crate::sync::protocol::Object;
+    let directory = tempfile::tempdir().unwrap();
+    let mut vault = vault(&directory);
+    let mut entry = Entry::new();
+    entry.title = "Before attack".into();
+    vault.test_entries_mut().push(entry);
+    vault.save_changes().unwrap();
+    let factory = Arc::new(MemoryFactory::default());
+    let mut session = SpaceSync::new(Some(factory.clone()));
+    assert_eq!(drive(&mut session, &mut vault), None);
+
+    let genesis = vault.sync_state().unwrap().genesis;
+    let change = factory
+        .objects
+        .lock()
+        .unwrap()
+        .iter()
+        .find(|(hash, _)| **hash != genesis)
+        .map(|(_, bytes)| bytes.clone())
+        .unwrap();
+    let mut value: serde_json::Value = serde_json::from_slice(&change).unwrap();
+    let unknown = serde_json::to_value(Hash([9; 32])).unwrap();
+    assert!(replace_membership(&mut value, &unknown));
+    let forged: Object = serde_json::from_value(value).unwrap();
+    let forged_hash = forged.hash().unwrap();
+    factory
+        .objects
+        .lock()
+        .unwrap()
+        .insert(forged_hash, forged.bytes().unwrap());
+
+    let mut entry = Entry::new();
+    entry.title = "After attack".into();
+    vault.test_entries_mut().push(entry);
+    vault.save_changes().unwrap();
+    session.saved();
+
+    let published = drive_until(&mut session, &mut vault, |session, vault| {
+        vault.sync_state().unwrap().outbox.is_empty()
+            && matches!(session.status, Status::Synced | Status::Conflict)
+    });
+    assert!(
+        published,
+        "honest edit stuck behind forged object, status {:?}",
+        session.status
+    );
+    assert!(
+        !vault
+            .sync_state()
+            .unwrap()
+            .objects
+            .contains_key(&forged_hash)
+    );
+}
+
+/// Attack: a writer uploads bytes that are not a valid object under some key.
+/// The pass must skip it, remember it and still publish honest edits.
+#[test]
+fn undecodable_listed_object_is_skipped_without_failing_exchange() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut vault = vault(&directory);
+    let factory = Arc::new(MemoryFactory::default());
+    let mut session = SpaceSync::new(Some(factory.clone()));
+    assert_eq!(drive(&mut session, &mut vault), None);
+
+    let junk = Hash([8; 32]);
+    factory
+        .objects
+        .lock()
+        .unwrap()
+        .insert(junk, b"not an object".to_vec());
+
+    let mut entry = Entry::new();
+    entry.title = "After junk".into();
+    vault.test_entries_mut().push(entry);
+    vault.save_changes().unwrap();
+    session.saved();
+
+    let published = drive_until(&mut session, &mut vault, |session, vault| {
+        vault.sync_state().unwrap().outbox.is_empty()
+            && matches!(session.status, Status::Synced | Status::Conflict)
+    });
+    assert!(
+        published,
+        "honest edit stuck behind junk object, status {:?}",
+        session.status
+    );
+    assert!(
+        vault
+            .sync_state()
+            .unwrap()
+            .rejected_candidates
+            .contains_key(&junk)
+    );
+}
+
+/// Attack: a writer floods the namespace with more junk keys than one bounded
+/// pass can fetch. Honest local edits must still reach the provider.
+#[test]
+fn junk_flood_beyond_the_pass_budget_does_not_block_publication() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut vault = vault(&directory);
+    let factory = Arc::new(MemoryFactory::default());
+    let mut session = SpaceSync::new(Some(factory.clone()));
+    assert_eq!(drive(&mut session, &mut vault), None);
+
+    {
+        let mut objects = factory.objects.lock().unwrap();
+        for index in 0u32..600 {
+            let mut key = [0xA0; 32];
+            key[..4].copy_from_slice(&index.to_be_bytes());
+            objects.insert(Hash(key), b"junk".to_vec());
+        }
+    }
+
+    let mut entry = Entry::new();
+    entry.title = "Under flood".into();
+    vault.test_entries_mut().push(entry);
+    vault.save_changes().unwrap();
+    session.saved();
+
+    let published = drive_until(&mut session, &mut vault, |_, vault| {
+        vault.sync_state().unwrap().outbox.is_empty()
+    });
+    assert!(
+        published,
+        "honest edit stuck behind junk flood, status {:?}",
+        session.status
+    );
 }

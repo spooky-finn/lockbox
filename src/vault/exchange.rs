@@ -43,6 +43,10 @@ impl Vault {
             .ok_or(Error::UnauthorizedDevice)?
             .clone();
 
+        for (hash, error) in batch.rejected {
+            Machine::reject_download(&mut candidate, hash, error);
+        }
+
         for (hash, bytes) in batch.objects {
             Machine::receive(&mut candidate, hash, bytes)?;
         }

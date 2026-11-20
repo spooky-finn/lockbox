@@ -61,6 +61,7 @@ fn device(vault: &Vault) -> Hash {
 
 fn delivery(vault: &Vault) -> Download {
     Download {
+        rejected: Vec::new(),
         objects: vault
             .sync_state()
             .unwrap()

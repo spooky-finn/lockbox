@@ -1,8 +1,14 @@
 //! Resolve immutable references directly, then scan for previously unknown heads.
 //! References are availability hints only; authorization remains in core replay.
+//!
+//! Only authenticated history (and pinned anchors) may require an object. A
+//! reference from an unverified candidate or a freshly downloaded object is a
+//! hint: it is fetched when available, but its absence never marks the pass
+//! incomplete. Otherwise one unsigned object pointing at a hash that will never
+//! exist would stop every replica from publishing.
 
 use crate::sync::{
-    protocol::{Hash, MAX_OBJECT_BYTES, MAX_OBJECTS, Object, SyncState, decode},
+    protocol::{Error, Hash, MAX_OBJECT_BYTES, MAX_OBJECTS, Object, SyncState, decode},
     transport::{Cancellation, Download, MAX_BATCH_BYTES, Result, Storage, TransportError},
 };
 use std::collections::{BTreeSet, VecDeque};
@@ -17,7 +23,10 @@ const MAX_FETCHES: usize = 256;
 pub struct Discovery {
     namespace: Hash,
     known: BTreeSet<Hash>,
+    /// Pinned anchors and dependencies of authenticated objects.
     required: BTreeSet<Hash>,
+    /// Dependencies of unverified candidates: fetched, never required.
+    hints: BTreeSet<Hash>,
 }
 
 impl Discovery {
@@ -26,6 +35,7 @@ impl Discovery {
             namespace,
             known,
             required: BTreeSet::new(),
+            hints: BTreeSet::new(),
         }
     }
 
@@ -48,13 +58,20 @@ impl Discovery {
         request.required.insert(state.genesis);
         request.required.extend(state.required_control);
 
-        for bytes in state.objects.values().chain(state.candidates.values()) {
+        for bytes in state.objects.values() {
             let object: Object = decode(&bytes.0).map_err(TransportError::Verification)?;
             request.required.extend(object.dependencies());
         }
+        for bytes in state.candidates.values() {
+            let object: Object = decode(&bytes.0).map_err(TransportError::Verification)?;
+            request.hints.extend(object.dependencies());
+        }
+        let known = &request.known;
+        request.required.retain(|hash| !known.contains(hash));
+        let required = &request.required;
         request
-            .required
-            .retain(|hash| !request.known.contains(hash));
+            .hints
+            .retain(|hash| !known.contains(hash) && !required.contains(hash));
         Ok(request)
     }
 
@@ -65,8 +82,15 @@ impl Discovery {
             request: &self,
             attempted: BTreeSet::new(),
             missing: BTreeSet::new(),
-            queue: self.required.iter().copied().collect(),
+            listed: BTreeSet::new(),
+            queue: self
+                .required
+                .iter()
+                .chain(self.hints.iter())
+                .copied()
+                .collect(),
             objects: Vec::new(),
+            rejected: Vec::new(),
             bytes: 0,
         };
 
@@ -83,6 +107,7 @@ impl Discovery {
             if page.objects.len() > 1000 {
                 return Err(TransportError::InvalidResponse);
             }
+            batch.listed.extend(page.objects.iter().copied());
             batch.queue.extend(page.objects);
 
             if !batch.fetch(storage, cancel)? {
@@ -108,8 +133,10 @@ struct Batch<'a> {
     request: &'a Discovery,
     attempted: BTreeSet<Hash>,
     missing: BTreeSet<Hash>,
+    listed: BTreeSet<Hash>,
     queue: VecDeque<Hash>,
     objects: Vec<(Hash, Vec<u8>)>,
+    rejected: Vec<(Hash, Error)>,
     bytes: usize,
 }
 
@@ -134,18 +161,29 @@ impl Batch<'_> {
                     self.missing.insert(hash);
                     continue;
                 }
+                Err(TransportError::Budget) => {
+                    self.invalid(hash, Error::ResourceBudgetExceeded);
+                    continue;
+                }
                 Err(error) => return Err(error),
             };
 
             if bytes.len() > MAX_OBJECT_BYTES {
-                return Err(TransportError::Budget);
+                self.invalid(hash, Error::ResourceBudgetExceeded);
+                continue;
             }
 
             if self.bytes + bytes.len() > MAX_BATCH_BYTES {
                 return Ok(false);
             }
 
-            let object = Object::decode(&bytes, hash).map_err(TransportError::Verification)?;
+            let object = match Object::decode(&bytes, hash) {
+                Ok(object) => object,
+                Err(error) => {
+                    self.invalid(hash, error);
+                    continue;
+                }
+            };
 
             if self.request.known.len() + self.objects.len()
                 >= MAX_OBJECTS + 2 * crate::sync::protocol::MAX_CANDIDATES
@@ -161,10 +199,26 @@ impl Batch<'_> {
         Ok(true)
     }
 
+    /// Bytes stored under this key can never verify. A required object stays
+    /// pending (the provider may still repair it); anything else is remembered
+    /// as rejected so one bad upload cannot abort every later pass.
+    fn invalid(&mut self, hash: Hash, error: Error) {
+        if self.request.required.contains(&hash) {
+            self.missing.insert(hash);
+        } else {
+            self.rejected.push((hash, error));
+        }
+    }
+
     fn finish(self, limited: bool) -> Download {
+        let blocking = self
+            .missing
+            .iter()
+            .any(|hash| self.request.required.contains(hash) || self.listed.contains(hash));
         Download {
             objects: self.objects,
-            incomplete: limited || !self.missing.is_empty(),
+            incomplete: limited || blocking,
+            rejected: self.rejected,
         }
     }
 }

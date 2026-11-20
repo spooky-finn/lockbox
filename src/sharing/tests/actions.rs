@@ -53,6 +53,7 @@ fn action(u: &mut Unlocked, action: Action) {
 fn deliver(from: &Unlocked, to: &mut Unlocked) {
     to.vault
         .receive_sync(Download {
+            rejected: Vec::new(),
             incomplete: false,
             objects: from
                 .vault

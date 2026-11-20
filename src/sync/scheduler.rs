@@ -62,6 +62,10 @@ pub(crate) struct SpaceSync {
     schedule: Schedule,
     pub status: Status,
     stopped: bool,
+    /// The last download left listed or required objects unavailable. Local
+    /// publication still proceeds: signed outbox objects never depend on what
+    /// the provider withholds, and junk from any writer must not stall it.
+    incomplete: bool,
 }
 
 impl Default for SpaceSync {
@@ -80,6 +84,7 @@ impl SpaceSync {
             schedule: Schedule::new(Instant::now()),
             status: Status::Saved,
             stopped: false,
+            incomplete: false,
         }
     }
 
@@ -215,11 +220,12 @@ impl SpaceSync {
             return Ok(());
         }
 
-        if !replay.ready || incomplete {
+        if !replay.ready {
             self.status = Status::Incomplete;
             self.schedule.defer(Instant::now(), INCOMPLETE_INTERVAL);
             return Ok(());
         }
+        self.incomplete = incomplete;
 
         let state = vault
             .sync_state()
@@ -277,6 +283,9 @@ impl SpaceSync {
         self.status = if pending {
             self.retry();
             Status::Saved
+        } else if self.incomplete {
+            self.schedule.defer(Instant::now(), INCOMPLETE_INTERVAL);
+            Status::Incomplete
         } else if replay.projection.conflicts().next().is_some()
             || !replay.projection.structural_conflicts().is_empty()
             || !replay.excluded.is_empty()

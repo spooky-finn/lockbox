@@ -123,6 +123,14 @@ impl Machine {
         Self::receive_decoded(state, expected, bytes, object)
     }
 
+    /// Remember a listed key whose bytes can never verify, so discovery skips it.
+    /// Known objects are never demoted: a bad copy cannot evict good history.
+    pub fn reject_download(state: &mut SyncState, hash: Hash, error: Error) {
+        if !state.objects.contains_key(&hash) && !state.candidates.contains_key(&hash) {
+            super::candidates::reject(state, hash, error);
+        }
+    }
+
     /// Artifact inputs carry canonical object bytes without a separately advertised hash.
     pub(super) fn import_object(state: &mut SyncState, bytes: &[u8]) -> Result<bool> {
         let (hash, object) = Object::decode_with_hash(bytes)?;

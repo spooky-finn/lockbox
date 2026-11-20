@@ -94,9 +94,16 @@ impl Cancellation {
     }
 }
 
+#[derive(Default)]
 pub struct Download {
     pub objects: Vec<(Hash, Vec<u8>)>,
+    /// True only when listed or authenticated-required objects are still
+    /// unavailable, or a budget stopped the pass. References from unverified
+    /// objects never set it: anyone with PUT could otherwise stall publication.
     pub incomplete: bool,
+    /// Listed objects that can never verify (bad encoding, hash or size). The
+    /// host remembers them so later passes skip them instead of failing.
+    pub rejected: Vec<(Hash, Error)>,
 }
 
 /// Full bounded scan, deliberately independent of Storj's listing order. Known
