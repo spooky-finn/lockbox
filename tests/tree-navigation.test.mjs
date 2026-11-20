@@ -44,7 +44,8 @@ function fixture(rows, options = {}) {
         isConnected: true,
         dataset: { navigateRecords: String(options.recordsPage !== false) },
         closest: () => workspace,
-        querySelectorAll: () => rows.filter(item => !item.disabled),
+        querySelectorAll: selector => rows.filter(item => !item.disabled
+            && (item.dataset.kind === "entry" || selector.includes(".folder-label"))),
     };
     const done = new AsyncFunction("document", "dioxus", source)(
         {
@@ -88,11 +89,42 @@ function fixture(rows, options = {}) {
             return event;
         },
         async close() {
-            assert.ok(rows.every(item => !item.scrolled), "keyboard selection must not scroll");
+            if (!options.searching) {
+                assert.ok(rows.every(item => !item.scrolled), "tree keyboard selection must not scroll");
+            }
             finish(); await done; assert.equal(listener, null);
         },
     };
 }
+
+test("search arrows select matching records in tree order and keep focus in search", async () => {
+    const rows = [row(), row("folder-label"), row(), row()];
+    const [first, folder, disabled, last] = rows;
+    folder.selected = true;
+    disabled.disabled = true;
+    const search = { ...control(), id: "search", value: "match" };
+    const app = fixture(rows, { searching: true, recordsPage: false });
+    assert.ok(app.key(search, "ArrowDown").prevented);
+    assert.ok(first.selected && first.scrolled);
+    assert.ok(app.key(search, "ArrowDown").prevented);
+    assert.ok(last.selected && last.scrolled);
+    assert.ok(app.key(search, "ArrowUp").prevented);
+    assert.ok(first.selected);
+    assert.equal(app.key(search, "ArrowLeft").prevented, undefined);
+    assert.equal(app.key(search, "Home").prevented, undefined);
+    assert.equal(app.key(search, "ArrowDown", { isComposing: true }).prevented, undefined);
+    assert.equal(app.key({ ...search, value: " " }, "ArrowDown").prevented, undefined);
+    assert.ok(rows.every(item => !item.focused));
+    await app.close();
+});
+
+test("search arrows leave native behavior in place when no records match", async () => {
+    const search = { ...control(), id: "search", value: "match" };
+    const app = fixture([row("folder-label")]);
+    assert.equal(app.key(search, "ArrowDown").prevented, undefined);
+    assert.equal(app.messages.length, 0);
+    await app.close();
+});
 
 test("arrows and Home/End change selection without scrolling; boundaries keep selection", async () => {
     const rows = [row(), row(), row()];
