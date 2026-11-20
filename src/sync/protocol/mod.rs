@@ -64,6 +64,11 @@ pub const MAX_OBJECTS: usize = 4096;
 pub const MAX_CACHE_BYTES: usize = 64 * 1024 * 1024;
 pub const MAX_CANDIDATES: usize = 128;
 pub const MAX_CANDIDATE_BYTES: usize = 8 * 1024 * 1024;
+/// Late changes are signed for a closed epoch but outside its successor's
+/// closed frontier. They stay durable only for explicit rebase, within a
+/// per-author quota, so a removed member cannot fill the shared journal.
+pub const LATE_EDITS_PER_AUTHOR: usize = 32;
+pub const LATE_BYTES_PER_AUTHOR: usize = 4 * 1024 * 1024;
 pub const MAX_PARENTS: usize = 64;
 pub const MAX_MUTATIONS: usize = 256;
 

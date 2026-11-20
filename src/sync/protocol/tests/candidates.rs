@@ -235,3 +235,159 @@ fn unknown_membership_ciphertexts_cannot_exceed_the_quarantine_byte_budget() {
         "still writable"
     );
 }
+
+fn remove(state: &mut SyncState, controller: &DeviceSecret, removed: Hash) {
+    let members = Machine::members(state, controller)
+        .unwrap()
+        .into_iter()
+        .filter(|(certificate, _)| certificate.body.device != removed)
+        .collect();
+    state.intent = Some(Machine::prepare_membership(state, controller, members).unwrap());
+    Machine::complete_intent(state, controller).unwrap();
+}
+
+fn late_changes_by(state: &SyncState, author: Hash, head: Hash) -> (usize, usize) {
+    state
+        .objects
+        .values()
+        .filter_map(|bytes| match decode::<Object>(&bytes.0).unwrap() {
+            Object::Change(change)
+                if change.body.header.author == author && change.body.header.membership != head =>
+            {
+                Some(bytes.0.len())
+            }
+            _ => None,
+        })
+        .fold((0, 0), |(count, size), len| (count + 1, size + len))
+}
+
+fn head(state: &SyncState) -> Hash {
+    state
+        .objects
+        .iter()
+        .filter_map(|(hash, bytes)| match decode::<Object>(&bytes.0).unwrap() {
+            Object::Control(control) => Some((control.body.epoch.number.0, *hash)),
+            Object::Change(_) => None,
+        })
+        .max()
+        .unwrap()
+        .1
+}
+
+/// Attack: a removed editor keeps signing changes for the epoch where they
+/// were a member. Valid signatures must not let them fill the durable journal.
+#[test]
+fn removed_member_cannot_fill_the_journal_with_late_signed_changes() {
+    let (mut alice, alice_key) = owner();
+    let (bob_key, bob_certificate) = identity(2);
+    admit(
+        &mut alice,
+        &alice_key,
+        &bob_key,
+        bob_certificate,
+        Role::Editor,
+    );
+    let mut bob = alice.clone();
+    remove(&mut alice, &alice_key, bob_key.id());
+
+    for index in 0..100u32 {
+        edit(&mut bob, &bob_key, vec![entry(1, &format!("late {index}"))]);
+    }
+    deliver(&bob, &mut alice);
+
+    let (count, _) = late_changes_by(&alice, bob_key.id(), head(&alice));
+    assert!(
+        count <= crate::sync::protocol::LATE_EDITS_PER_AUTHOR,
+        "removed member stored {count} late changes"
+    );
+    assert!(
+        count >= 1,
+        "an honest late edit must still be kept for rebase"
+    );
+    edit(&mut alice, &alice_key, vec![entry(2, "owner still writes")]);
+    let replay = Machine::replay(&alice, &alice_key).unwrap();
+    assert!(replay.ready);
+    assert!(
+        replay
+            .projection
+            .entries()
+            .iter()
+            .any(|entry| entry.password == "owner still writes")
+    );
+}
+
+/// Large late changes are bounded by bytes as well as by count.
+#[test]
+fn late_changes_are_bounded_by_bytes_per_author() {
+    let (mut alice, alice_key) = owner();
+    let (bob_key, bob_certificate) = identity(2);
+    admit(
+        &mut alice,
+        &alice_key,
+        &bob_key,
+        bob_certificate,
+        Role::Editor,
+    );
+    let mut bob = alice.clone();
+    remove(&mut alice, &alice_key, bob_key.id());
+
+    for index in 0..8u8 {
+        let mut large = entry(1, "late");
+        large.notes = char::from(b'a' + index).to_string().repeat(900 * 1024);
+        edit(&mut bob, &bob_key, vec![large]);
+    }
+    deliver(&bob, &mut alice);
+
+    let (_, size) = late_changes_by(&alice, bob_key.id(), head(&alice));
+    assert!(
+        size <= crate::sync::protocol::LATE_BYTES_PER_AUTHOR,
+        "removed member stored {size} late bytes"
+    );
+}
+
+/// Honest flow: an editor works offline while the owner changes the roster.
+/// The editor rebases their own late edits and the owner receives the result.
+#[test]
+fn offline_editor_rebases_late_edits_after_a_roster_change() {
+    let (mut alice, alice_key) = owner();
+    let (bob_key, bob_certificate) = identity(2);
+    admit(
+        &mut alice,
+        &alice_key,
+        &bob_key,
+        bob_certificate,
+        Role::Editor,
+    );
+    let mut bob = alice.clone();
+
+    let mut offline = Vec::new();
+    for index in 0..40u32 {
+        offline.push(edit(
+            &mut bob,
+            &bob_key,
+            vec![entry(1, &format!("offline {index}"))],
+        ));
+    }
+    let (carol_key, carol_certificate) = identity(3);
+    admit(
+        &mut alice,
+        &alice_key,
+        &carol_key,
+        carol_certificate,
+        Role::Editor,
+    );
+
+    deliver(&alice, &mut bob);
+    let replay = Machine::replay(&bob, &bob_key).unwrap();
+    assert!(replay.ready);
+    let last = *offline.last().unwrap();
+    assert!(replay.excluded.contains(&last));
+    bob.intent = Some(Machine::prepare_rebase(&bob, &bob_key, last).unwrap());
+    let rebased = Machine::complete_intent(&mut bob, &bob_key).unwrap();
+
+    deliver(&bob, &mut alice);
+    assert!(alice.objects.contains_key(&rebased));
+    let replay = Machine::replay(&alice, &alice_key).unwrap();
+    assert!(replay.ready);
+    assert_eq!(replay.projection.entries()[0].password, "offline 39");
+}

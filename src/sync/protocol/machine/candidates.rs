@@ -10,9 +10,10 @@ use super::{
     state::SyncState,
 };
 use crate::sync::protocol::{
-    Blob, Error, Hash, MAX_CANDIDATE_BYTES, MAX_CANDIDATES, Object, Result, Role, Signed, crypto,
-    decode,
+    Blob, Error, Hash, LATE_BYTES_PER_AUTHOR, LATE_EDITS_PER_AUTHOR, MAX_CANDIDATE_BYTES,
+    MAX_CANDIDATES, MAX_OBJECTS, Object, Result, Role, Signed, crypto, decode,
 };
+use std::collections::{BTreeMap, BTreeSet};
 
 pub(super) fn insert(state: &mut SyncState, hash: Hash, bytes: Blob) {
     let mut size: usize = state.candidates.values().map(|bytes| bytes.0.len()).sum();
@@ -27,12 +28,90 @@ pub(super) fn insert(state: &mut SyncState, hash: Hash, bytes: Blob) {
     state.candidates.insert(hash, bytes);
 }
 
+/// Durable room for late changes: signed for a closed epoch but outside the
+/// successor's signed closed frontier. Replay never applies them; they only
+/// back an explicit rebase. Without a quota, a removed member who still holds
+/// a signing key could fill the journal with valid old-epoch signatures.
+struct LateBudget {
+    head: Hash,
+    closure: BTreeSet<Hash>,
+    used: BTreeMap<Hash, (usize, usize)>,
+}
+
+impl LateBudget {
+    fn new(state: &SyncState, history: &ControlHistory<'_>) -> Result<Self> {
+        let (head, _) = history.tip();
+        // Walk each signed closed frontier through known parents. Both journal
+        // and quarantine are searched, so arrival order cannot hide a needed
+        // ancestor. Parents of late changes are never followed.
+        let mut closure = BTreeSet::new();
+        let mut stack: Vec<Hash> = history
+            .chain
+            .iter()
+            .flat_map(|(_, control)| control.body.closed_frontier.iter().copied())
+            .collect();
+        while let Some(hash) = stack.pop() {
+            if !closure.insert(hash) {
+                continue;
+            }
+            if closure.len() > MAX_OBJECTS + MAX_CANDIDATES {
+                return Err(Error::ResourceBudgetExceeded);
+            }
+            let bytes = state
+                .objects
+                .get(&hash)
+                .or_else(|| state.candidates.get(&hash));
+            if let Some(bytes) = bytes
+                && let Object::Change(change) = decode::<Object>(&bytes.0)?
+            {
+                stack.extend(change.body.header.parents.iter().copied());
+            }
+        }
+        let mut budget = Self {
+            head,
+            closure,
+            used: BTreeMap::new(),
+        };
+        for (hash, bytes) in &state.objects {
+            if let Object::Change(change) = decode::<Object>(&bytes.0)?
+                && budget.is_late(*hash, &change)
+            {
+                let used = budget.used.entry(change.body.header.author).or_default();
+                used.0 += 1;
+                used.1 += bytes.0.len();
+            }
+        }
+        Ok(budget)
+    }
+
+    fn is_late(&self, hash: Hash, change: &Signed<Change>) -> bool {
+        change.body.header.membership != self.head && !self.closure.contains(&hash)
+    }
+
+    /// Reserve room for one authenticated late change. A refusal keeps it in
+    /// evictable quarantine; it is never rejected, because a later frontier
+    /// walk may still prove it part of closed history.
+    fn admit(&mut self, author: Hash, size: usize) -> bool {
+        let used = self.used.entry(author).or_default();
+        if used.0 >= LATE_EDITS_PER_AUTHOR || used.1.saturating_add(size) > LATE_BYTES_PER_AUTHOR {
+            return false;
+        }
+        used.0 += 1;
+        used.1 += size;
+        true
+    }
+}
+
 // Ok(false) means dependencies are still unknown, not rejected authority.
+// `late` is None only for migration, which must not drop already-durable
+// objects (including the local outbox) by a quota introduced afterwards.
 fn authenticated(
     hash: Hash,
     object: &Object,
+    size: usize,
     state: &SyncState,
     history: Option<&ControlHistory<'_>>,
+    late: Option<&mut LateBudget>,
 ) -> Result<bool> {
     let verified = match object {
         Object::Control(control) if hash == state.genesis => {
@@ -72,7 +151,15 @@ fn authenticated(
             else {
                 return Ok(false);
             };
-            authenticate_change(change, &control.body)
+            let result = authenticate_change(change, &control.body);
+            if result.is_ok()
+                && let Some(late) = late
+                && late.is_late(hash, change)
+                && !late.admit(change.body.header.author, size)
+            {
+                return Ok(false);
+            }
+            result
         }
     };
     match verified {
@@ -122,11 +209,22 @@ pub(super) fn promote(state: &mut SyncState) -> Result<()> {
             Err(error) if error.is_history_fault() => return Ok(()),
             Err(error) => return Err(error),
         };
+        let mut late = history
+            .as_ref()
+            .map(|history| LateBudget::new(state, history))
+            .transpose()?;
         let mut verified = Vec::new();
         let mut rejected = Vec::new();
         for (hash, bytes) in &state.candidates {
             let object = Object::decode(&bytes.0, *hash)?;
-            match authenticated(*hash, &object, state, history.as_ref()) {
+            match authenticated(
+                *hash,
+                &object,
+                bytes.0.len(),
+                state,
+                history.as_ref(),
+                late.as_mut(),
+            ) {
                 Ok(true) => verified.push(*hash),
                 Ok(false) => {}
                 Err(error) => rejected.push((*hash, error)),
@@ -171,7 +269,7 @@ impl Machine {
         for (hash, bytes) in &state.objects {
             let object: Object = decode(&bytes.0)?;
             if !matches!(
-                authenticated(*hash, &object, state, history.as_ref()),
+                authenticated(*hash, &object, bytes.0.len(), state, history.as_ref(), None),
                 Ok(true)
             ) {
                 if state.outbox.contains(hash) {
