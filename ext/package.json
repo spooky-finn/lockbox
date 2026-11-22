@@ -6,7 +6,8 @@
     "build": "node scripts/build.mjs",
     "package": "node scripts/build.mjs && node scripts/package.mjs",
     "test": "node --test tests/*.test.mjs",
-    "check": "node --check src/automatic.js && node --check src/background.js && node --check src/native.js && node --check src/popup.js && node --check src/page.js && npm run build && npm test"
+    "check:build": "node --check src/automatic.js && node --check src/background.js && node --check src/native.js && node --check src/popup.js && node --check src/page.js && npm run build",
+    "check": "npm run check:build && npm test"
   },
   "engines": { "node": ">=20" }
 }

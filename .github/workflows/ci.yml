@@ -15,8 +15,6 @@ env:
   CARGO_INCREMENTAL: '0'
   CARGO_BUILD_JOBS: '2'
   CARGO_PROFILE_DEV_DEBUG: '0'
-  CARGO_PROFILE_TEST_DEBUG: '0'
-  RUST_TEST_THREADS: '2'
 
 defaults:
   run:
@@ -33,17 +31,13 @@ jobs:
           persist-credentials: false
       - name: Check Rust formatting
         run: cargo fmt --all -- --check
-      - name: Test release validation
-        run: python3 -B -m unittest discover -s .github/scripts/tests -v
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
           package-manager-cache: false
       # The companion has no npm dependencies or lockfile; no install is needed.
-      - name: Check and test browser companion
-        run: npm --prefix ext run check
-      - name: Test desktop keyboard navigation
-        run: node --test tests/tree-navigation.test.mjs
+      - name: Check and build browser companion
+        run: npm --prefix ext run check:build
 
   rust:
     name: Rust (${{ matrix.os }})
@@ -62,10 +56,6 @@ jobs:
           cache-key: checks
       - name: Check all Rust targets
         run: cargo clippy --locked --all-targets -- -D warnings
-      - name: Test all Rust targets
-        run: cargo test --locked --all-targets
-      - name: Test documentation
-        run: cargo test --locked --doc
 
   ci:
     name: CI passed

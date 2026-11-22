@@ -21,8 +21,17 @@ for implemented sync behavior, release plans and the protocol proposal.
 ```sh
 cargo fmt --all
 cargo fmt --all -- --check
-cargo test --locked
 cargo clippy --locked --all-targets -- -D warnings
+```
+
+Run the test suites locally from the repository root:
+
+```sh
+cargo test --locked --all-targets
+cargo test --locked --doc
+npm --prefix ext run check
+node --test tests/tree-navigation.test.mjs
+python3 -B -m unittest discover -s .github/scripts/tests -v
 ```
 
 Separate types, implementations, and functions with blank lines. Within a function,
@@ -66,19 +75,18 @@ pushes and merge commits. Git must have a commit identity (`user.name` and
 commit is needed. Publication uses the existing version-triggered workflow below;
 the script itself does not create a version or release.
 
-GitHub Actions runs [CI](../.github/workflows/ci.yml) for pushes to `main`, pull
-requests, and merge queues. It also supports manual runs. Formatting, browser
-checks, and release-script tests run first; strict Clippy, all-target Rust tests,
-and doctests then run on Linux x86_64, macOS Apple Silicon, and Windows x64. Configure branch
-protection to require **CI passed**. Documentation changes still receive this
-check, so required checks cannot remain pending because of path filters.
+GitHub Actions runs [CI](../.github/workflows/ci.yml) on pushes. CI checks Rust
+formatting, builds the browser companion after syntax checks, and runs strict
+Clippy for all Rust targets on Linux x86_64, macOS Apple Silicon, and Windows x64.
+Configure branch protection to require **CI passed**. Documentation changes still
+receive this check, so required checks cannot remain pending because of path filters.
 
 The toolchain is pinned in `rust-toolchain.toml`. Native dependencies are installed
 by a shared setup action. Rust dependencies are cached separately by build profile,
 OS, architecture, toolchain, and dependency manifests; default-branch runs save
-caches and PRs restore them. New commits cancel superseded CI runs. Disabling debug
-symbols and incremental compilation reduces runner disk use; two compilation and
-test workers bound memory usage. The browser companion has no npm dependencies,
+caches. New commits cancel superseded CI runs. Disabling debug symbols and
+incremental compilation reduces runner disk use, and two compilation workers
+bound memory usage. The browser companion has no npm dependencies,
 so CI does not run `npm install`. Action revisions are pinned to commit SHAs and
 Dependabot proposes grouped updates weekly.
 
@@ -89,20 +97,16 @@ To create a release:
    `Cargo.lock`, then `cargo check --locked`. Commit the version changes
    and merge them into the default branch. Browser ZIP filenames and the local
    macOS bundle use the manifest version automatically.
-2. Push/merge to `main`. A version increase automatically starts the release
-   workflow and publishes the completed release (not a draft). Pushes with an
-   unchanged version only run CI; decreases fail validation. The initial push
-   also releases the current version if its tag does not exist.
-3. The workflow validates versions and requires an unused `vX.Y.Z` tag, reruns full
-   CI at the selected commit, builds packages in parallel, smoke-tests each optimized
-   browser host, verifies the complete asset set, and generates `SHA256SUMS`.
+2. Push or merge to `main`, then start the Release workflow on GitHub with the
+   matching version and your chosen draft and prerelease settings.
+3. The workflow validates versions and requires an unused `vX.Y.Z` tag. It builds
+   packages in parallel, verifies the complete asset set, and generates `SHA256SUMS`.
    The final job creates the tag/release at that exact commit, with generated
    changelog notes listing every commit since the highest reachable `vX.Y.Z`
    tag, including direct commits and merges. The first release includes all
-   history. Existing tags and releases are never overwritten; automatic runs
-   skip existing tags.
+   history. Existing tags and releases are never overwritten.
 
-For recovery/retries or draft releases, use **Actions → Release → Run workflow**
+To start a release, use **Actions → Release → Run workflow**
 on the default branch, or GitHub CLI (replace `OWNER/REPO`):
 
 ```sh

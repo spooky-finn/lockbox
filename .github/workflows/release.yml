@@ -129,7 +129,7 @@ jobs:
 
   publish:
     name: Create GitHub release
-    # Push CI reports test failures separately; release requires build artifacts.
+    # Release publication requires the build artifacts.
     needs: [prepare, native, browser]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
