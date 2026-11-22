@@ -57,12 +57,10 @@ pub(crate) fn EntryView() -> Element {
                 span { class: "sr-only", {language.text(Text::RecordReadHint)} }
                 EntryIcon { title: entry.title.clone(), slug: entry.icon.clone(), url: entry.url.clone(), large: true }
                 div { class: "detail-title", p { class: "detail-kind", {language.text(Text::Password)} } h1 { button { class: "quiet copy-value title-value", aria_label: language.text(Text::CopyTitle), onclick: move |_| queue_copy(state, copied, pending_copy, CopyField::Title), ondoubleclick: move |_| { cancel_copy(pending_copy); edit_unlocked(state, |u| u.edit_field(Field::Title)); }, "{entry.title}" } } if title_copied { span { class: "copy-indicator", role: "status", {language.text(Text::Copied)} } } }
-                if !unlocked.confirm_delete {
-                    div { class: "actions entry-actions",
-                        IconButton { class: "quiet", icon: Icon::Clock, label: language.text(Text::RecordHistory), onclick: move |_| edit_unlocked(state, |u| u.open_records_page(crate::desktop::workspace::Page::History)) }
-                        IconButton { class: "quiet", icon: Icon::Edit, label: language.text(Text::Edit), disabled: unlocked.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.start_edit()) }
-                        IconButton { class: "danger quiet", icon: Icon::Trash, label: language.text(Text::Delete), disabled: unlocked.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.confirm_delete = true) }
-                    }
+                div { class: "actions entry-actions",
+                    IconButton { class: "quiet", icon: Icon::Clock, label: language.text(Text::RecordHistory), onclick: move |_| edit_unlocked(state, |u| u.open_records_page(crate::desktop::workspace::Page::History)) }
+                    IconButton { class: "quiet", icon: Icon::Edit, label: language.text(Text::Edit), disabled: unlocked.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.start_edit()) }
+                    IconButton { class: "danger quiet entry-trash-trigger", icon: Icon::Trash, label: language.text(Text::Delete), disabled: unlocked.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.confirm_delete = true) }
                 }
                 IconButton { class: "quiet entry-dismiss", icon: Icon::Close, label: language.text(Text::CloseEditor), onclick: move |_| navigate(state, crate::desktop::workspace::Destination::Close) }
             }
@@ -155,16 +153,45 @@ pub(crate) fn EntryView() -> Element {
             }
 
             if unlocked.confirm_delete {
-                div { class: "delete-confirm", role: "alert",
-                    p { {language.format(Text::MoveEntryToTrash, &[entry.title.to_string()])} }
+                dialog { id: "entry-trash-dialog", class: "entry-trash-dialog",
+                    aria_labelledby: "entry-trash-prompt",
+                    onmounted: move |_| {
+                        let _ = document::eval(
+                            "document.querySelector('.entry-trash-trigger')?.focus();
+                             document.getElementById('entry-trash-dialog')?.showModal();",
+                        );
+                    },
+                    onkeydown: move |event| {
+                        if event.key() == Key::Escape {
+                            event.stop_propagation();
+                        }
+                    },
+                    oncancel: move |event| {
+                        event.prevent_default();
+                        finish_trash_confirmation(state, false);
+                    },
+                    p { id: "entry-trash-prompt", {language.format(Text::MoveEntryToTrash, &[entry.title.to_string()])} }
                     div { class: "actions",
-                        IconButton { class: "danger", icon: Icon::Trash, label: language.text(Text::DeleteEntry), disabled: unlocked.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.error = u.delete_selected().err()) }
-                        IconButton { icon: Icon::Close, label: language.text(Text::Cancel), onclick: move |_| edit_unlocked(state, |u| u.confirm_delete = false) }
+                        button { r#type: "button", autofocus: true, onclick: move |_| finish_trash_confirmation(state, false), {language.text(Text::Cancel)} }
+                        button { r#type: "button", class: "danger", disabled: unlocked.vault.signing_error().is_some(), onclick: move |_| finish_trash_confirmation(state, true), {language.text(Text::MoveToTrash)} }
                     }
                 }
             }
         }
     }
+}
+
+fn finish_trash_confirmation(state: Session, confirm: bool) {
+    edit_unlocked(state, |u| {
+        if !u.confirm_delete {
+            return;
+        }
+        let _ = document::eval("document.getElementById('entry-trash-dialog')?.close()");
+        u.confirm_delete = false;
+        if confirm {
+            u.error = u.delete_selected().err();
+        }
+    });
 }
 
 /// The one-second clock belongs to this row, not the complete record card.

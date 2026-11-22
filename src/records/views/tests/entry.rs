@@ -87,6 +87,88 @@ fn history_hides_secrets_and_trash_restores_record() {
 }
 
 #[test]
+fn trash_dialog_escape_keeps_the_record_open_and_confirmation_trashes_it() {
+    use crate::desktop::context::Session;
+    use dioxus::{
+        dioxus_core::Mutation,
+        html::{
+            EventData, SerializedCancelData, SerializedHtmlEventConverter, SerializedKeyboardData,
+            SerializedMouseData,
+        },
+        prelude::*,
+    };
+
+    dioxus::html::set_event_converter(Box::new(SerializedHtmlEventConverter));
+    let mut dom = mounted();
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| u.vault.save_changes().unwrap());
+    });
+    let request_confirmation = |dom: &mut VirtualDom| {
+        dom.in_scope(ScopeId::APP, || {
+            edit_unlocked(consume_context::<Session>(), |u| u.confirm_delete = true);
+        });
+        dom.render_immediate_to_vec()
+    };
+    let dialog = request_confirmation(&mut dom)
+        .edits
+        .into_iter()
+        .find_map(|edit| match edit {
+            Mutation::NewEventListener { name, id } if name == "cancel" => Some(id),
+            _ => None,
+        })
+        .unwrap();
+    dom.runtime().handle_event(
+        "keydown",
+        Event::new(
+            EventData::Keyboard(SerializedKeyboardData::new(
+                Key::Escape,
+                Code::Escape,
+                Location::Standard,
+                false,
+                Modifiers::empty(),
+                false,
+            ))
+            .into_any(),
+            true,
+        ),
+        dialog,
+    );
+    dom.runtime().handle_event(
+        "cancel",
+        Event::new(EventData::Cancel(SerializedCancelData {}).into_any(), false),
+        dialog,
+    );
+    dom.render_immediate_to_vec();
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("entry-detail"));
+    assert!(!html.contains("entry-trash-dialog"));
+
+    let confirm = request_confirmation(&mut dom)
+        .edits
+        .into_iter()
+        .rev()
+        .find_map(|edit| match edit {
+            Mutation::NewEventListener { name, id } if name == "click" => Some(id),
+            _ => None,
+        })
+        .unwrap();
+    dom.runtime().handle_event(
+        "click",
+        Event::new(
+            EventData::Mouse(SerializedMouseData::default()).into_any(),
+            true,
+        ),
+        confirm,
+    );
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| {
+            assert!(u.selected.is_none());
+            assert_eq!(u.vault.trash().unwrap()[0].title, "GitLab");
+        });
+    });
+}
+
+#[test]
 fn history_follows_selection_and_keeps_other_record_contents_hidden() {
     use crate::{desktop::workspace::Page, records::entry::Entry};
     let mut dom = mounted();

@@ -662,6 +662,18 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 99px; }
 .form-actions { border-top: 1px solid var(--separator); padding-top: 10px; margin-top: 6px; }
 .delete-confirm { padding: 18px; border: 1px solid var(--error); border-radius: 16px; background: var(--surface); margin-top: 20px; }
 .delete-confirm p { margin-bottom: 14px; }
+.entry-trash-dialog {
+    width: min(28rem, calc(100% - 32px));
+    padding: 20px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow: var(--shadow);
+}
+.entry-trash-dialog::backdrop { background: rgb(0 0 0 / 45%); }
+.entry-trash-dialog p { overflow-wrap: anywhere; }
+.entry-trash-dialog .actions { justify-content: flex-end; margin-top: 16px; }
 .status { max-width: 100%; min-width: 0; color: var(--muted); font-size: 10px; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 2px 8px; overflow-wrap: anywhere; text-align: end; }
 .mobile-back { display: none; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
