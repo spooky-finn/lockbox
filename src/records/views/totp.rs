@@ -66,7 +66,7 @@ pub(crate) fn TotpEditor() -> Element {
                 }
                 IconButton { class: "danger quiet", icon: Icon::Trash, label: language.text(Text::RemoveTOTP), onclick: move |_| edit_draft(state, |d| { d.entry.totp = None; d.totp_error = None; }) }
             } else {
-                IconButton { icon: Icon::Clock, label: language.text(Text::AddTOTP), onclick: move |_| edit_draft(state, |d| d.entry.totp = Some(Totp { secret: String::new(), algorithm: TotpAlgorithm::Sha1, digits: 6, period: 30 })) }
+                IconButton { icon: Icon::Plus, label: language.text(Text::AddTOTP), onclick: move |_| edit_draft(state, |d| d.entry.totp = Some(Totp { secret: String::new(), algorithm: TotpAlgorithm::Sha1, digits: 6, period: 30 })) }
             }
 
             if let Some(error) = &draft.totp_error { p { class: "error", role: "alert", {language.message(error)} } }

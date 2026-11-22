@@ -84,9 +84,6 @@ pub(crate) fn DraftView() -> Element {
                 div { class: "field-row",
                     input { onkeydown: move |event| finish_on_enter(state, event), id: "entry-url", class: "field-value", placeholder: url_label, aria_label: url_label, onmounted: move |event| async move { if focus_field == Some(Field::Url) { let _ = event.data.set_focus(true).await; } }, value: "{entry.url}", oninput: move |e| set_field(state, Field::Url, e.value()) }
                 }
-                div { class: "field-row totp-field",
-                    TotpEditor {}
-                }
                 div { class: "field-row notes-row",
                     textarea { id: "entry-notes", class: "field-value", placeholder: note_label, aria_label: note_label,
                         rows: entry.notes.lines().take(8).count().max(1),
@@ -127,6 +124,10 @@ pub(crate) fn DraftView() -> Element {
                 IconButton { icon: Icon::Plus, label: language.text(Text::AddAttachment),
                     onclick: move |_| dialogs::add_attachment(),
                 }
+            }
+            fieldset { class: "stack",
+                legend { {language.text(Text::TwoFactorTOTP)} }
+                TotpEditor {}
             }
             }
         }

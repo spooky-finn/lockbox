@@ -99,14 +99,14 @@ fn editor_uses_placeholders_and_accessible_names() {
             .select(".draft .fields > .field-row")
             .unwrap()
             .count(),
-        5
+        4
     );
     for (id, text) in [
         ("entry-title", "Название"),
         ("entry-username", "Логин"),
         ("entry-password", "Пароль"),
         ("entry-url", "URL"),
-        ("totp-secret", "Секрет или ссылка otpauth://"),
+        ("totp-secret", "2FA (TOTP): секрет или otpauth://"),
         ("entry-notes", "Заметка"),
     ] {
         let field = document.select_first(&format!(".draft #{id}")).unwrap();
