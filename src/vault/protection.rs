@@ -116,7 +116,10 @@ impl Protection {
             Reconciliation::Advance(next) => {
                 // Synchronize the exact file and containing rename before making
                 // the witness prohibit recovery of the previous generation.
-                File::open(path)
+                std::fs::OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .open(path)
                     .and_then(|file| file.sync_all())
                     .map_err(|_| Error::Unavailable)?;
                 crate::vault::sync_dir(path).map_err(|_| Error::Unavailable)?;
