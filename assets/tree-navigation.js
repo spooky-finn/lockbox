@@ -83,11 +83,20 @@ function navigateTree(target, key) {
 
 function keydown(event) {
     const { key, target } = event;
-    if (!navigationKeys.has(key) || event.defaultPrevented || !tree.isConnected) return;
+    if (event.defaultPrevented || !tree.isConnected) return;
     // Native WebViews can leave focus on body after a pointer selection.
-    if (target !== document.body && target !== document.documentElement && !workspace.contains(target)) return;
+    const unfocused = target === document.body || target === document.documentElement;
+    if (!unfocused && !workspace.contains(target)) return;
     if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.isComposing) return;
     if (workspace.querySelector("dialog[open]")) return;
+    // Focused controls reach Rust's own Escape handler; body focus never does.
+    if (key === "Escape" && unfocused && !event.repeat) {
+        event.preventDefault();
+        event.stopPropagation();
+        dioxus.send({ kind: "close" });
+        return;
+    }
+    if (!navigationKeys.has(key)) return;
 
     const action = target.id === "search" ? navigateSearch(target, key) : navigateTree(target, key);
     if (!action) return;
