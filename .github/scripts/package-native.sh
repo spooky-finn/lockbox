@@ -10,7 +10,7 @@ if [[ "$host" != "$target" ]]; then
 fi
 
 root=$(pwd)
-output="$root/target/release-assets"
+output=${RELEASE_OUTPUT_DIR:-"$root/target/release-assets"}
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
 mkdir -p "$output"
