@@ -4,7 +4,7 @@
 pub(crate) enum Text {
     RecordReadHint,
     CopyTitle,
-    CopyNotes,
+    OpenRecordUrl,
     CopyIdentifier,
     ThemeTypewriter,
     ThemeBlueprint,
@@ -588,9 +588,9 @@ pub(crate) enum Text {
 impl Text {
     pub(super) fn translations(self) -> (&'static str, &'static str) {
         match self {
-            Self::RecordReadHint => ("Клик — копировать · Двойной клик — изменить · URL — открыть в браузере", "Click to copy · Double-click to edit · URL opens in browser"),
+            Self::RecordReadHint => ("Клик по названию, логину или паролю — копировать · Двойной клик — изменить", "Click the title, username, or password to copy · Double-click to edit"),
             Self::CopyTitle => ("Копировать название", "Copy title"),
-            Self::CopyNotes => ("Копировать заметку", "Copy note"),
+            Self::OpenRecordUrl => ("Открыть", "Open"),
             Self::CopyIdentifier => ("Копировать полный идентификатор {0}", "Copy full identifier {0}"),
             Self::ThemeTypewriter => ("Машинопись", "Typewriter"),
             Self::ThemeBlueprint => ("Чертёж", "Blueprint"),
@@ -1176,7 +1176,7 @@ impl Text {
 pub(super) const CATALOG: &[Text] = &[
     Text::RecordReadHint,
     Text::CopyTitle,
-    Text::CopyNotes,
+    Text::OpenRecordUrl,
     Text::CopyIdentifier,
     Text::ThemeTypewriter,
     Text::ThemeBlueprint,

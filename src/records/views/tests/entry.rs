@@ -24,13 +24,14 @@ fn selected_entry_hides_secrets_and_escapes_user_text() {
 
     let document = kuchikiki::parse_html().one(html).document_node;
     for selector in [
-        "dd > .copy-value + .field-copy",
-        "dd > .copy-value + button[aria-pressed] + .field-copy",
-        "dd > .url-value + .field-copy",
-        ".totp-code + .field-copy",
+        "dd > button.copy-value.field-value",
+        "dd > button.copy-value + button[aria-pressed]",
+        "dd > button.url-value + a.open-record-url[href='https://gitlab.com/']",
+        "button.copy-value > .totp-code",
     ] {
         assert!(document.select_first(selector).is_ok(), "{selector}");
     }
+    assert!(document.select_first(".field-copy").is_err());
 }
 
 #[test]
@@ -305,78 +306,26 @@ fn double_click_edits_and_escape_saves_then_closes_the_record_on_second_press() 
 }
 
 #[test]
-fn notes_render_as_plain_text_and_explicit_copy_preserves_the_full_text() {
-    use crate::{
-        desktop::{context::SecurityHandle, i18n::Text},
-        platform::clipboard::{Guard, tests::FakeBoard},
-        settings::language::Language,
-    };
-    use dioxus::{
-        dioxus_core::{AttributeValue, Mutation},
-        html::{EventData, SerializedHtmlEventConverter, SerializedMouseData},
-        prelude::*,
-    };
+fn notes_render_as_selectable_plain_text() {
     use kuchikiki::traits::TendrilSink;
 
-    let executor = tokio::runtime::Builder::new_current_thread()
-        .enable_time()
-        .build()
-        .unwrap();
-    let _executor_guard = executor.enter();
-    dioxus::html::set_event_converter(Box::new(SerializedHtmlEventConverter));
-    let mut dom = VirtualDom::new(crate::desktop::view_test_support::fixture);
-    dom.rebuild_in_place();
+    let mut dom = mounted();
     let text = "First <line>\nSelected part\nLast line";
-    let board = FakeBoard::default();
-    *board.0.borrow_mut() = Some("earlier selection".into());
-    dom.in_scope(ScopeId::APP, || {
-        edit_unlocked(consume_context(), |u| {
-            u.vault.test_entries_mut()[0].notes = text.into()
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| {
+            u.vault.test_entries_mut()[0].notes = text.into();
         });
-        consume_context::<SecurityHandle>().borrow_mut().clipboard =
-            Guard::new(Box::new(board.clone()));
     });
-    let changes = dom.render_immediate_to_vec();
-    let copy_label = Language::Russian.text(Text::CopyNotes);
-    let copy = changes
-        .edits
-        .iter()
-        .find_map(|edit| match edit {
-            Mutation::SetAttribute {
-                name: "aria-label",
-                value: AttributeValue::Text(label),
-                id,
-                ..
-            } if label == copy_label => Some(*id),
-            _ => None,
-        })
-        .unwrap();
-    let mouse = || {
-        Event::new(
-            EventData::Mouse(SerializedMouseData::default()).into_any(),
-            true,
-        )
-    };
 
     let document = kuchikiki::parse_html()
         .one(dioxus_ssr::render(&dom))
         .document_node;
     let note = document.select_first(".notes-value").unwrap();
-    assert!(document.select_first(".notes-value + .field-copy").is_ok());
-    assert_eq!(
-        note.name.local.as_ref(),
-        "span",
-        "note text must support native selection"
-    );
+    assert_eq!(note.name.local.as_ref(), "span");
     assert_eq!(note.text_contents(), text);
-    assert_eq!(board.0.borrow().as_deref(), Some("earlier selection"));
+    assert!(document.select_first(".notes-row button").is_err());
 
-    dom.runtime().handle_event("click", mouse(), copy);
-    dom.render_immediate_to_vec();
-    assert_eq!(board.0.borrow().as_deref(), Some(text));
-    assert!(dioxus_ssr::render(&dom).contains(Language::Russian.text(Text::Copied)));
     update(&mut dom, |_| runtime::lock(None));
-    assert!(board.0.borrow().is_none());
     assert!(!dioxus_ssr::render(&dom).contains("Selected part"));
 }
 

@@ -3,7 +3,6 @@ use crate::desktop::{
     context::{SecurityHandle, Session, edit_unlocked},
     i18n::{Text, use_language},
     runtime,
-    widgets::symbol::{Icon, Symbol},
 };
 use dioxus::prelude::*;
 
@@ -27,7 +26,6 @@ pub(crate) fn Identifier(value: String) -> Element {
                 runtime::publish_status();
             },
             code { "{short}" }
-            Symbol { icon: Icon::Copy }
         }
     }
 }

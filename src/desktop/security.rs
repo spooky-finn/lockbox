@@ -26,7 +26,6 @@ pub(crate) struct Status {
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) enum CopyField {
     Title,
-    Notes,
     Username,
     Password,
     Url,
@@ -76,7 +75,6 @@ impl Security {
         let generated;
         let text = match field {
             CopyField::Title => entry.title.as_str(),
-            CopyField::Notes => entry.notes.as_str(),
             CopyField::Username => entry.username.as_str(),
             CopyField::Password => entry.password.as_str(),
             CopyField::Url => entry.url.as_str(),

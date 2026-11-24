@@ -97,6 +97,9 @@
     box-shadow: var(--sheet-shadow);
     padding: clamp(12px, 2.4vw, 24px);
 }
+.app[data-preset] .record-read {
+    padding-block: clamp(14px, 2vw, 20px);
+}
 @supports ((-webkit-backdrop-filter: blur(6px)) or (backdrop-filter: blur(6px))) {
     .app[data-preset] :is(.entry-detail, .directory-detail) {
         background-color: transparent;

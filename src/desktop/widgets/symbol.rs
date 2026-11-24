@@ -19,7 +19,6 @@ pub(crate) enum Icon {
     Plus,
     Search,
     Settings,
-    Copy,
     Eye,
     EyeOff,
     Edit,
@@ -66,9 +65,6 @@ pub(crate) fn Symbol(icon: Icon) -> Element {
         Icon::Plus => "M12 5v14M5 12h14",
         Icon::Search => "m21 21-5-5M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z",
         Icon::Settings => "M4 7h10m4 0h2M4 17h2m4 0h10M14 4v6M10 14v6",
-        Icon::Copy => {
-            "M9 8V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-4M4 8h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2Z"
-        }
         Icon::Eye => {
             "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Zm13 0a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
         }

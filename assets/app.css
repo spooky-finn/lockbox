@@ -822,22 +822,19 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 99px; }
 .diff-removed .diff-sign { color: var(--error); }
 .diff-added .diff-sign { color: var(--success); }
 .fingerprint { overflow-wrap: anywhere; font-size: 12px; }
-button.identifier { display: inline-flex; vertical-align: baseline; gap: 6px; min-height: 24px; padding: 2px 5px; color: inherit; white-space: nowrap; }
+button.identifier { display: inline-flex; vertical-align: baseline; min-height: 24px; padding: 2px 5px; color: inherit; white-space: nowrap; }
 .identifier code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
-.identifier .symbol { width: 13px; height: 13px; flex-basis: 13px; color: var(--muted); }
 
 .entry-icon.favicon { background: transparent; box-shadow: none; }
 .entry-icon img { width: 100%; height: 100%; object-fit: contain; border-radius: inherit; }
 
 .url-value { min-width: 0; overflow-wrap: anywhere; }
-a.url-value { color: inherit; text-decoration: none; padding: 4px 6px; margin-left: -6px; border-radius: 5px; }
-a.url-value:hover { color: var(--accent-ink); text-decoration: underline; }
-a.url-value:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
+.open-record-url { flex-shrink: 0; color: var(--accent-ink); font-size: 12px; white-space: nowrap; }
+.open-record-url:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
 
 /* Record values copy with pointer or keyboard activation. */
 button.copy-value { justify-content: flex-start; text-align: left; font: inherit; padding: 4px 6px; margin-left: -6px; border-radius: 5px; transition: color 140ms, background 140ms; }
-button.copy-value:hover:not(:disabled) { background: transparent; box-shadow: none; }
-button.copy-value:active:not(:disabled) { transform: none; }
+button.quiet.copy-value:active:not(:disabled), button.quiet.identifier:active:not(:disabled) { background: var(--control); transform: none; }
 .copy-indicator { color: var(--success); font-size: 12px; white-space: nowrap; }
 button.copy-value:disabled { opacity: 1; }
 
@@ -884,8 +881,7 @@ button.copy-value.title-value { display: block; font: inherit; line-height: 1.2;
 .notes-value { -webkit-user-select: text; user-select: text; cursor: text; }
 .entry-detail .detail-title { position: relative; }
 .entry-detail .detail-title > .copy-indicator { position: absolute; top: 100%; }
-.entry-detail button.copy-value:hover:not(:disabled) { background: var(--control); }
-.entry-detail button.copy-value:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
+button.copy-value:focus-visible, button.identifier:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
 .draft.entry-detail { width: 100%; max-width: none; padding: 0; border-radius: 0; background: transparent; }
 .draft.entry-detail .entry-icon.large { width: 36px; height: 36px; flex-basis: 36px; font-size: 20px; border-radius: 8px; }
 .draft .fields > .field-row { display: flex; gap: 7px; }
@@ -942,8 +938,16 @@ button.copy-value.title-value { display: block; font: inherit; line-height: 1.2;
     .space-tabs .space-tab-add { width: 28px; height: 28px; flex-basis: 28px; }
 }
 @media (prefers-reduced-motion: reduce) {
-    .space-tab, .space-tabs .space-tab-close { transition: none; }
+    .space-tab, .space-tabs .space-tab-close, button.copy-value, button.identifier { transition: none; }
 }
+
+.record-read > .detail-heading { margin-bottom: 12px; }
+.record-read .field-row { grid-template-columns: 16px minmax(0, 1fr); column-gap: 12px; }
+.record-read .field-row > dd { gap: 5px; }
+.record-read .field-row button.copy-value { border: 0; }
+.record-read dd:has(> .open-record-url) { align-items: baseline; }
+.record-read .field-row:has(> dd > .open-record-url) .field-label { align-content: start; padding-top: 3px; }
+.record-read .notes-row { padding-block: 10px 12px; }
 
 /* Native-scale record controls keep reading and editing on the same grid. */
 .entry-detail .detail-heading > .entry-dismiss { color: var(--muted); flex-shrink: 0; }
