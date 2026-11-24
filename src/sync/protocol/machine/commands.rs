@@ -460,7 +460,12 @@ impl Machine {
         let mut edits = Vec::new();
 
         for &hash in &replay.excluded {
-            let Object::Change(signed) = decode::<Object>(&state.objects[&hash].0)? else {
+            // Late edits over the per-author budget stay quarantined as
+            // candidates; only stored edits within that budget are reviewable.
+            let Some(bytes) = state.objects.get(&hash) else {
+                continue;
+            };
+            let Object::Change(signed) = decode::<Object>(&bytes.0)? else {
                 continue;
             };
 

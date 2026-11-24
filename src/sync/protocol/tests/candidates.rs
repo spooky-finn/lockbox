@@ -391,3 +391,42 @@ fn offline_editor_rebases_late_edits_after_a_roster_change() {
     assert!(replay.ready);
     assert_eq!(replay.projection.entries()[0].password, "offline 39");
 }
+
+/// Late edits over the per-author budget stay quarantined as candidates. They
+/// still replay as excluded, and reviewing excluded edits must not crash.
+#[test]
+fn excluded_review_skips_late_edits_left_in_quarantine() {
+    let (mut alice, alice_key) = owner();
+    let (bob_key, bob_certificate) = identity(2);
+    admit(
+        &mut alice,
+        &alice_key,
+        &bob_key,
+        bob_certificate,
+        Role::Editor,
+    );
+    let mut bob = alice.clone();
+    remove(&mut alice, &alice_key, bob_key.id());
+
+    for index in 0..40u32 {
+        edit(&mut bob, &bob_key, vec![entry(1, &format!("late {index}"))]);
+    }
+    deliver(&bob, &mut alice);
+
+    let replay = Machine::replay(&alice, &alice_key).unwrap();
+    assert!(
+        replay
+            .excluded
+            .iter()
+            .any(|hash| alice.candidates.contains_key(hash)),
+        "the scenario needs an excluded edit that is still a candidate"
+    );
+    let edits = Machine::excluded_edits(&alice, &alice_key).unwrap();
+    assert!(!edits.is_empty(), "stored late edits stay reviewable");
+    assert!(edits.len() <= crate::sync::protocol::LATE_EDITS_PER_AUTHOR);
+    assert!(
+        edits
+            .iter()
+            .all(|edit| alice.objects.contains_key(&edit.hash))
+    );
+}
