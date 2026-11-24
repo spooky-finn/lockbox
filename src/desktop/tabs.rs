@@ -103,7 +103,7 @@ pub(crate) fn focus_path(path: &Path) -> bool {
     }
 }
 
-fn same_path(left: &Path, right: &Path) -> bool {
+pub(crate) fn same_path(left: &Path, right: &Path) -> bool {
     left == right
         || left
             .canonicalize()

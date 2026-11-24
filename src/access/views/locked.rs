@@ -48,7 +48,11 @@ pub(crate) fn LockedView() -> Element {
             .map(|path| crate::desktop::space_switcher::profile_name(path, &preferences.config))
     });
     let (previous, next) = if base_unlock {
-        profiles::adjacent_profiles(&preferences, locked.path.as_deref())
+        profiles::adjacent_profiles(
+            &preferences,
+            locked.path.as_deref(),
+            &profiles::paths_in_other_tabs(),
+        )
     } else {
         (None, None)
     };
@@ -118,9 +122,9 @@ pub(crate) fn LockedView() -> Element {
                     Key::ArrowRight => &keyboard_next,
                     _ => return,
                 };
-                if let Some(path) = target {
+                if let Some(stop) = target {
                     event.prevent_default();
-                    profiles::select_profile(path.clone());
+                    profiles::select_stop(stop.clone());
                 }
             },
             if base_unlock {
@@ -146,9 +150,9 @@ pub(crate) fn LockedView() -> Element {
                     }
                 }
                 div { class: "unlock-heading",
-                    if let Some(path) = previous {
+                    if let Some(stop) = previous {
                         IconButton { class: "quiet", icon: Icon::ArrowLeft, label: language.text(Text::PreviousVault), disabled: busy,
-                            onclick: move |_| profiles::select_profile(path.clone()),
+                            onclick: move |_| profiles::select_stop(stop.clone()),
                         }
                     }
                     h1 { class: "unlock-title", aria_live: base_unlock.then_some("polite"),
@@ -162,9 +166,9 @@ pub(crate) fn LockedView() -> Element {
                         else if let Some(name) = vault_name { "{name}" }
                         else { {language.text(Text::YourPasswordsLockedAway)} }
                     }
-                    if let Some(path) = next {
+                    if let Some(stop) = next {
                         IconButton { class: "quiet", icon: Icon::ArrowRight, label: language.text(Text::NextVault), disabled: busy,
-                            onclick: move |_| profiles::select_profile(path.clone()),
+                            onclick: move |_| profiles::select_stop(stop.clone()),
                         }
                     }
                 }

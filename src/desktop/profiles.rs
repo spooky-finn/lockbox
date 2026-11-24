@@ -40,30 +40,98 @@ pub(crate) fn select_profile(path: std::path::PathBuf) {
     publish_status();
 }
 
+/// One stop of the lock-screen carousel.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum CarouselStop {
+    Vault(PathBuf),
+    /// The open-or-create page, where new vaults join the carousel.
+    Add,
+}
+
+/// Known vaults this tab can open, then the open-or-create page. Vaults open
+/// in other tabs are skipped: selecting one would only switch to that tab.
 pub(crate) fn adjacent_profiles(
     settings: &Settings,
     current: Option<&Path>,
-) -> (Option<PathBuf>, Option<PathBuf>) {
+    open_elsewhere: &[PathBuf],
+) -> (Option<CarouselStop>, Option<CarouselStop>) {
     let mut paths = settings.known_profiles();
     if let Some(path) = current
         && !paths.iter().any(|known| known == path)
     {
         paths.insert(0, path.to_owned());
     }
-    paths.retain(|path| path.is_file());
-    let (previous, next) = match paths
-        .iter()
-        .position(|path| Some(path.as_path()) == current)
-    {
-        Some(index) if paths.len() > 1 => (
-            paths.get((index + paths.len() - 1) % paths.len()),
-            paths.get((index + 1) % paths.len()),
+    paths.retain(|path| {
+        path.is_file()
+            && (Some(path.as_path()) == current
+                || !open_elsewhere
+                    .iter()
+                    .any(|open| crate::desktop::tabs::same_path(open, path)))
+    });
+    let mut stops: Vec<_> = paths.into_iter().map(CarouselStop::Vault).collect();
+    stops.push(CarouselStop::Add);
+    let here = current.map_or(CarouselStop::Add, |path| {
+        CarouselStop::Vault(path.to_owned())
+    });
+    let (previous, next) = match stops.iter().position(|stop| *stop == here) {
+        Some(index) if stops.len() > 1 => (
+            stops.get((index + stops.len() - 1) % stops.len()),
+            stops.get((index + 1) % stops.len()),
         ),
         Some(_) => (None, None),
-        None => (paths.last(), paths.first()),
+        None => (stops.last(), stops.first()),
     };
     (previous.cloned(), next.cloned())
 }
+
+/// Paths held by the other tabs of this window.
+pub(crate) fn paths_in_other_tabs() -> Vec<PathBuf> {
+    let Some(tabs) = try_consume_context::<Signal<crate::desktop::tabs::Tabs>>() else {
+        return Vec::new();
+    };
+    let tabs = tabs.peek();
+    tabs.sessions
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| *index != tabs.active)
+        .filter_map(|(_, session)| match &*session.peek() {
+            Screen::Unlocked(workspace) => Some(workspace.vault.path().to_path_buf()),
+            Screen::Locked(form) => form.path.clone(),
+        })
+        .collect()
+}
+
+pub(crate) fn select_stop(stop: CarouselStop) {
+    match stop {
+        CarouselStop::Vault(path) => select_profile(path),
+        CarouselStop::Add => show_open_or_create(),
+    }
+}
+
+/// Leave the selected vault for the open-or-create page in this tab.
+fn show_open_or_create() {
+    let mut state = consume_context::<Session>();
+    if !state.peek().can_switch_profile()
+        || matches!(&*state.peek(), Screen::Locked(form) if form.path.is_none())
+    {
+        return;
+    }
+    let settings = consume_context::<Signal<Settings>>();
+    let hardware = consume_context::<BiometricProvider>();
+    consume_context::<SecurityHandle>()
+        .borrow_mut()
+        .clipboard
+        .clear_now();
+    let form = Locked::new(None)
+        .with_identity_path(settings.peek().identity_path(), None)
+        .offer_touch_id(&settings.peek().config, &*hardware.0, false);
+    *state.write() = Screen::Locked(Box::new(form));
+    publish_status();
+}
+
+#[cfg(test)]
+#[path = "tests/profiles.rs"]
+mod tests;
 
 pub(crate) fn rename_local_vault(name: &str) -> Result<(), String> {
     let mut state = consume_context::<Session>();
