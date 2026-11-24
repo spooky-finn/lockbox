@@ -34,3 +34,66 @@
 {"slug":"art-briefcase","title":"Работа · Work","hex":"78350F","accent":"B45309","path":"M4 7h16a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1ZM9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M3 12.5h18"}
 {"slug":"art-terminal","title":"Терминал · Terminal","hex":"111827","accent":"374151","path":"M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2ZM7 9.5l3 2.5-3 2.5M12.5 15H17"}
 {"slug":"art-server","title":"Сервер · Server","hex":"0F766E","accent":"1E3A8A","path":"M5 4h14a1 1 0 0 1 1 1v5H4V5a1 1 0 0 1 1-1ZM4 10h16v5H4ZM4 15h16v4a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-4ZM7.5 7h.01M7.5 12.5h.01M7.5 17.5h.01"}
+{"slug":"art-ssh","title":"SSH · SSH key","hex":"0F172A","accent":"334155","path":"M5 3h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM6.5 6.5 9 8.5l-2.5 2M11 10.5h3M7 16.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM9 18.5h11M17 18.5v2M20 18.5v2"}
+{"slug":"art-database","title":"База данных · Database","hex":"1E3A8A","accent":"0EA5E9","path":"M12 3c4.4 0 8 1.3 8 3s-3.6 3-8 3-8-1.3-8-3 3.6-3 8-3ZM4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"}
+{"slug":"art-network","title":"Сеть · Network","hex":"0E7490","accent":"6366F1","path":"M12 3a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM5 17a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM19 17a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM12 7v5M12 12l-5.6 5.6M12 12l5.6 5.6"}
+{"slug":"art-wifi","title":"Wi-Fi · Wireless","hex":"2563EB","accent":"06B6D4","path":"M2 8.8a15 15 0 0 1 20 0M5 12.6a10 10 0 0 1 14 0M8.5 16.1a5 5 0 0 1 7 0M12 20h.01"}
+{"slug":"art-vpn","title":"VPN · Secure tunnel","hex":"065F46","accent":"0EA5E9","path":"M12 2.5 4 5.5v6c0 5 3.4 8.6 8 10 4.6-1.4 8-5 8-10v-6l-8-3ZM9.5 12.5h5v4h-5ZM10.5 12.5V11a1.5 1.5 0 0 1 3 0v1.5"}
+{"slug":"art-lock","title":"Замок · Lock","hex":"374151","accent":"6B7280","path":"M6 10h12a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1ZM8 10V7a4 4 0 0 1 8 0v3M12 14.5V17"}
+{"slug":"art-password","title":"Пароль · Password","hex":"4338CA","accent":"7C3AED","path":"M5 6h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2ZM7 10v4M5.3 11l3.4 2M5.3 13l3.4-2M12 10v4M10.3 11l3.4 2M10.3 13l3.4-2M17 10v4M15.3 11l3.4 2M15.3 13l3.4-2"}
+{"slug":"art-router","title":"Роутер · Router","hex":"0369A1","accent":"14B8A6","path":"M4 14h16a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1ZM7 17h.01M10.5 17h.01M16 14V9M13.2 6.6a4 4 0 0 1 5.6 0M10.9 4.2a7.3 7.3 0 0 1 10.2 0"}
+{"slug":"art-git","title":"Git · Branch","hex":"C2410C","accent":"7C2D12","path":"M6 3a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5ZM6 16a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5ZM18 3a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5ZM6 8v8M18 8c0 4-3 5.5-6 6s-5 1-6 2"}
+{"slug":"art-code","title":"Код · Code","hex":"1E293B","accent":"4F46E5","path":"M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"}
+{"slug":"art-api","title":"API · JSON","hex":"7C3AED","accent":"0EA5E9","path":"M8 4H7a2 2 0 0 0-2 2v3.5A2.5 2.5 0 0 1 2.5 12 2.5 2.5 0 0 1 5 14.5V18a2 2 0 0 0 2 2h1M16 4h1a2 2 0 0 1 2 2v3.5a2.5 2.5 0 0 0 2.5 2.5 2.5 2.5 0 0 0-2.5 2.5V18a2 2 0 0 1-2 2h-1M9 12h.01M12 12h.01M15 12h.01"}
+{"slug":"art-bug","title":"Баг · Bug","hex":"B91C1C","accent":"F97316","path":"M12 7a5 5 0 0 1 5 5v3a5 5 0 0 1-10 0v-3a5 5 0 0 1 5-5ZM9 7.5 7.5 5M15 7.5 16.5 5M12 12v8M3 13h4M17 13h4M4 19l3.3-2M20 19l-3.3-2M4 7l3.3 2M20 7l-3.3 2"}
+{"slug":"art-cpu","title":"Процессор · CPU","hex":"0F766E","accent":"22C55E","path":"M7 7h10v10H7ZM10 10h4v4h-4ZM9.5 3v4M14.5 3v4M9.5 17v4M14.5 17v4M3 9.5h4M3 14.5h4M17 9.5h4M17 14.5h4"}
+{"slug":"art-drive","title":"Диск · Drive","hex":"475569","accent":"0EA5E9","path":"M4 13l2.5-7.3a1 1 0 0 1 1-.7h9a1 1 0 0 1 1 .7L20 13M4 13h16v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-5ZM16.5 16h.01M7 16h5"}
+{"slug":"art-upload","title":"Облако · Cloud upload","hex":"1D4ED8","accent":"38BDF8","path":"M7 18a4.5 4.5 0 0 1-.4-9A6 6 0 0 1 18 9a4.5 4.5 0 0 1 0 9M12 12v8M9 15l3-3 3 3"}
+{"slug":"art-backup","title":"Бэкап · Backup","hex":"047857","accent":"14B8A6","path":"M3 12a9 9 0 1 0 2.6-6.4L3 8.2M3 3v5.2h5.2M12 7v5l3.5 2"}
+{"slug":"art-firewall","title":"Файрвол · Firewall","hex":"9A3412","accent":"EF4444","path":"M3 5h18v14H3ZM3 9.7h18M3 14.3h18M9 5v4.7M15 5v4.7M6 9.7v4.6M12 9.7v4.6M18 9.7v4.6M9 14.3V19M15 14.3V19"}
+{"slug":"art-proxy","title":"Прокси · Proxy","hex":"5B21B6","accent":"0891B2","path":"M2 12h7M15 12h7M19 9l3 3-3 3M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"}
+{"slug":"art-layers","title":"Слои · Stack","hex":"4338CA","accent":"0EA5E9","path":"M12 2.5 2 7.5l10 5 10-5-10-5ZM2 12l10 5 10-5M2 16.5l10 5 10-5"}
+{"slug":"art-box","title":"Контейнер · Package","hex":"92400E","accent":"D97706","path":"M12 2.5 21 7v10l-9 4.5L3 17V7l9-4.5ZM3 7l9 4.5L21 7M12 11.5v10"}
+{"slug":"art-qr","title":"QR-код · QR code","hex":"111827","accent":"4B5563","path":"M4 4h6v6H4ZM14 4h6v6h-6ZM4 14h6v6H4ZM14 14h2v2h-2ZM18 18h2v2h-2ZM14 19.5h.01M18 14.5h2M7 7h.01M17 7h.01M7 17h.01"}
+{"slug":"art-power","title":"Питание · Power","hex":"B91C1C","accent":"F43F5E","path":"M12 3v8M6.3 6.3a8 8 0 1 0 11.4 0"}
+{"slug":"art-gear","title":"Настройки · Settings","hex":"475569","accent":"1E293B","path":"M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6ZM12 5a7 7 0 1 0 0 14 7 7 0 0 0 0-14ZM12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"}
+{"slug":"art-wrench","title":"Инструменты · Tools","hex":"57534E","accent":"A16207","path":"M14.7 6.3a4 4 0 0 1 5.2-1.8l-3 3 .6 2 2 .6 3-3a4 4 0 0 1-5.6 5L8 21a2.1 2.1 0 0 1-3-3l8.9-8.9a4 4 0 0 1 .8-2.8Z"}
+{"slug":"art-robot","title":"Робот · AI bot","hex":"0E7490","accent":"8B5CF6","path":"M6 8h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2ZM12 2.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3ZM12 5.5V8M9 13h.01M15 13h.01M9.5 16.5h5M2 13v3M22 13v3"}
+{"slug":"art-laptop","title":"Ноутбук · Laptop","hex":"334155","accent":"64748B","path":"M5 5h14a1 1 0 0 1 1 1v10H4V6a1 1 0 0 1 1-1ZM2 19h20"}
+{"slug":"art-monitor","title":"Монитор · Desktop","hex":"1E40AF","accent":"6366F1","path":"M4 4h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1ZM12 16v4M8 20h8"}
+{"slug":"art-phone","title":"Телефон · Phone","hex":"0F172A","accent":"475569","path":"M8 2.5h8a1.5 1.5 0 0 1 1.5 1.5v16a1.5 1.5 0 0 1-1.5 1.5H8A1.5 1.5 0 0 1 6.5 20V4A1.5 1.5 0 0 1 8 2.5ZM11 18.5h2"}
+{"slug":"art-link","title":"Ссылка · Link","hex":"0369A1","accent":"6366F1","path":"M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"}
+{"slug":"art-at","title":"Эл. почта · Email","hex":"BE185D","accent":"7C3AED","path":"M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Zm0 0v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-3.5 7.1"}
+{"slug":"art-hash","title":"Хэштег · Hash","hex":"0F766E","accent":"0EA5E9","path":"M5 9h15M4 15h15M10 3 8 21M16 3l-2 18"}
+{"slug":"art-eye","title":"Глаз · Watch","hex":"1E3A8A","accent":"0D9488","path":"M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12ZM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"}
+{"slug":"art-target","title":"Цель · Target","hex":"B91C1C","accent":"EA580C","path":"M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10ZM12 11a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z"}
+{"slug":"art-skull","title":"Хак · Hacking","hex":"18181B","accent":"52525B","path":"M12 3a8 8 0 0 0-8 8c0 2.6 1.2 4.6 3 5.8V20h10v-3.2c1.8-1.2 3-3.2 3-5.8a8 8 0 0 0-8-8ZM9 11.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3ZM15 11.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3ZM10.5 20v-2M13.5 20v-2"}
+{"slug":"art-ghost","title":"Призрак · Ghost","hex":"6D28D9","accent":"A78BFA","path":"M5 21V10a7 7 0 0 1 14 0v11l-2.3-1.7L14.3 21 12 19.3 9.7 21l-2.4-1.7L5 21ZM9.5 10h.01M14.5 10h.01"}
+{"slug":"art-chart","title":"Графики · Analytics","hex":"047857","accent":"22C55E","path":"M3 3v18h18M7 15l4-4 3 3 6-6"}
+{"slug":"art-bank","title":"Банк · Bank","hex":"1E3A8A","accent":"475569","path":"M3 9.5 12 4l9 5.5ZM4 20h16M6 10v7M10 10v7M14 10v7M18 10v7"}
+{"slug":"art-wallet","title":"Кошелёк · Wallet","hex":"78350F","accent":"CA8A04","path":"M5 4h11v3M4 7h15a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2M16 13.5h.01"}
+{"slug":"art-coin","title":"Крипта · Crypto","hex":"C2410C","accent":"F59E0B","path":"M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM9.5 8h4a2 2 0 0 1 0 4h-4V8ZM9.5 12h4.5a2 2 0 0 1 0 4H9.5v-4ZM11 6.5V8M11 16v1.5"}
+{"slug":"art-cart","title":"Покупки · Shopping","hex":"BE123C","accent":"F97316","path":"M3 4h2.5l2.2 10.5a1 1 0 0 0 1 .8h8.6a1 1 0 0 0 1-.8L20 8H6.3M9.5 18.8a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4ZM17 18.8a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4Z"}
+{"slug":"art-gift","title":"Подарок · Gift","hex":"BE185D","accent":"F43F5E","path":"M4 11h16v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-9ZM3 7h18v4H3ZM12 7v14M12 7c-1-3-5-4-5-1.5S10 7 12 7Zm0 0c1-3 5-4 5-1.5S14 7 12 7Z"}
+{"slug":"art-plane","title":"Путешествия · Travel","hex":"0284C7","accent":"38BDF8","path":"M12 3c.8 0 1.5.7 1.5 1.5V9l7.5 4.5V15l-7.5-2v4.5l2 1.5v1.5L12 19.5 8.5 20.5V19l2-1.5V13L3 15v-1.5L10.5 9V4.5C10.5 3.7 11.2 3 12 3Z"}
+{"slug":"art-car","title":"Авто · Car","hex":"B91C1C","accent":"7F1D1D","path":"M5 17v2M19 17v2M3.5 12.5 6 7h12l2.5 5.5M4 12.5h16a1 1 0 0 1 1 1V17H3v-3.5a1 1 0 0 1 1-1ZM7 14.7h.01M17 14.7h.01"}
+{"slug":"art-pin","title":"Место · Location","hex":"DC2626","accent":"F97316","path":"M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21ZM12 7a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z"}
+{"slug":"art-calendar","title":"Календарь · Calendar","hex":"DC2626","accent":"9333EA","path":"M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1ZM4 10h16M8 3v4M16 3v4"}
+{"slug":"art-book","title":"Книга · Book","hex":"7C2D12","accent":"B45309","path":"M5 4.5A2.5 2.5 0 0 1 7.5 2H19v15H7.5A2.5 2.5 0 0 0 5 19.5v-15ZM5 19.5A2.5 2.5 0 0 0 7.5 22H19v-5"}
+{"slug":"art-study","title":"Учёба · Study","hex":"1E3A8A","accent":"7C3AED","path":"M2 9l10-5 10 5-10 5-10-5ZM6 11v5c3 2.5 9 2.5 12 0v-5M22 9v5"}
+{"slug":"art-health","title":"Здоровье · Health","hex":"DC2626","accent":"F43F5E","path":"M9 3h6v6h6v6h-6v6H9v-6H3V9h6V3Z"}
+{"slug":"art-sport","title":"Спорт · Fitness","hex":"15803D","accent":"84CC16","path":"M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11"}
+{"slug":"art-food","title":"Еда · Food","hex":"C2410C","accent":"EAB308","path":"M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10M17 21V3c-2.5 1.5-3.5 4-3.5 7v3H17"}
+{"slug":"art-chat","title":"Чат · Chat","hex":"0284C7","accent":"22C55E","path":"M6 4h12a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 4V6a2 2 0 0 1 2-2Z"}
+{"slug":"art-bell","title":"Уведомления · Alerts","hex":"CA8A04","accent":"EA580C","path":"M6 16v-5a6 6 0 0 1 12 0v5l2 2H4l2-2ZM10 21h4"}
+{"slug":"art-camera","title":"Фото · Camera","hex":"334155","accent":"DB2777","path":"M4 7h3l1.5-2.5h7L17 7h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1ZM12 9.5a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"}
+{"slug":"art-video","title":"Видео · Video","hex":"DC2626","accent":"9333EA","path":"M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2ZM10 8.5v7l6-3.5-6-3.5Z"}
+{"slug":"art-flask","title":"Наука · Science","hex":"0D9488","accent":"8B5CF6","path":"M9 3h6M10 3v6l-5.5 9.5A1.7 1.7 0 0 0 6 21h12a1.7 1.7 0 0 0 1.5-2.5L14 9V3M7 15h10"}
+{"slug":"art-palette","title":"Творчество · Art","hex":"DB2777","accent":"F59E0B","path":"M12 3a9 9 0 0 0 0 18c1.2 0 2-.8 2-1.8 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-1 .8-1.8 1.8-1.8H17a4 4 0 0 0 4-4c0-4.4-4-8-9-8ZM7.5 11.5h.01M10 7.5h.01M15 7.5h.01"}
+{"slug":"art-folder","title":"Папка · Folder","hex":"CA8A04","accent":"F59E0B","path":"M3 6a1 1 0 0 1 1-1h5l2 2.5h9a1 1 0 0 1 1 1V18a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6Z"}
+{"slug":"art-user","title":"Аккаунт · Account","hex":"4F46E5","accent":"0EA5E9","path":"M12 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM4 21a8 8 0 0 1 16 0"}
+{"slug":"art-team","title":"Команда · Team","hex":"0F766E","accent":"6366F1","path":"M9 4a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7ZM2.5 20a6.5 6.5 0 0 1 13 0M16 4.3a3.5 3.5 0 0 1 0 6.4M18 13.6a6.5 6.5 0 0 1 3.5 6.4"}
+{"slug":"art-rainbow","title":"Радуга · Rainbow","hex":"DB2777","accent":"0EA5E9","path":"M3 17a9 9 0 0 1 18 0M6.5 17a5.5 5.5 0 0 1 11 0M10 17a2 2 0 0 1 4 0"}
+{"slug":"art-umbrella","title":"Зонт · Umbrella","hex":"1D4ED8","accent":"7C3AED","path":"M12 3a9 9 0 0 1 9 9H3a9 9 0 0 1 9-9ZM12 12v6.5a2 2 0 0 1-4 0"}
+{"slug":"art-dice","title":"Кубик · Dice","hex":"BE123C","accent":"7C3AED","path":"M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM8 8h.01M16 8h.01M12 12h.01M8 16h.01M16 16h.01"}
+{"slug":"art-hourglass","title":"Время · Hourglass","hex":"92400E","accent":"EAB308","path":"M6 3h12M6 21h12M7 3c0 5 10 5 10 9s-10 4-10 9M17 3c0 5-10 5-10 9s10 4 10 9"}
