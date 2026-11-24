@@ -278,3 +278,43 @@ fn folder_label_navigation_toggles_and_saves_pending_edits() {
         "search keeps matching branches visible"
     );
 }
+
+#[test]
+fn collapse_and_expand_all_fold_every_depth_and_report_what_is_left_to_do() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut workspace = unlocked(&dir);
+    assert_eq!(
+        workspace.directories.fold_actions(&workspace.vault),
+        (false, false)
+    );
+
+    let parent = add_folder(&mut workspace, "Работа", None);
+    let child = add_folder(&mut workspace, "Инфраструктура", Some(parent.clone()));
+    let selected = workspace.directories.selected.clone();
+    assert_eq!(
+        workspace.directories.fold_actions(&workspace.vault),
+        (true, false)
+    );
+
+    workspace.directories.collapse_all(&workspace.vault);
+    assert!(workspace.directories.collapsed.contains(&parent));
+    assert!(workspace.directories.collapsed.contains(&child));
+    assert_eq!(workspace.directories.selected, selected);
+    assert_eq!(
+        workspace.directories.fold_actions(&workspace.vault),
+        (false, true)
+    );
+
+    workspace.directories.toggle(parent);
+    assert_eq!(
+        workspace.directories.fold_actions(&workspace.vault),
+        (true, true)
+    );
+
+    workspace.directories.expand_all();
+    assert!(workspace.directories.collapsed.is_empty());
+    assert_eq!(
+        workspace.directories.fold_actions(&workspace.vault),
+        (true, false)
+    );
+}

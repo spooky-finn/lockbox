@@ -13,6 +13,8 @@ pub(crate) enum Icon {
     Folder,
     FolderOpen,
     ChevronRight,
+    CollapseAll,
+    ExpandAll,
     FolderPlus,
     Plus,
     Search,
@@ -56,6 +58,8 @@ pub(crate) fn Symbol(icon: Icon) -> Element {
             "M3 10V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v2M3 10h18l-3 11H3a1 1 0 0 1-1-1V10Z"
         }
         Icon::ChevronRight => "m9 5 7 7-7 7",
+        Icon::CollapseAll => "m7 20 5-5 5 5M7 4l5 5 5-5",
+        Icon::ExpandAll => "m7 15 5 5 5-5M7 9l5-5 5 5",
         Icon::FolderPlus => {
             "M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Zm5 7h8m-4-4v8"
         }

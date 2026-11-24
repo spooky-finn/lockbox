@@ -38,6 +38,31 @@ impl Directories {
         }
     }
 
+    /// Collapse every folder at every depth; the selection is kept.
+    pub fn collapse_all(&mut self, vault: &Vault) {
+        self.collapsed = vault
+            .folders()
+            .iter()
+            .map(|folder| folder.id.clone())
+            .collect();
+    }
+
+    pub fn expand_all(&mut self) {
+        self.collapsed.clear();
+    }
+
+    /// Whether collapse-all and expand-all would change anything.
+    pub fn fold_actions(&self, vault: &Vault) -> (bool, bool) {
+        let folders = vault.folders();
+        let can_collapse = folders
+            .iter()
+            .any(|folder| !self.collapsed.contains(&folder.id));
+        let can_expand = folders
+            .iter()
+            .any(|folder| self.collapsed.contains(&folder.id));
+        (can_collapse, can_expand)
+    }
+
     pub fn save(&mut self, vault: &mut Vault) -> Result<(), String> {
         let Some(draft) = &self.draft else {
             return Ok(());

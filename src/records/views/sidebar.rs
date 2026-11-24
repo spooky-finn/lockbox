@@ -3,7 +3,8 @@ use crate::desktop::i18n::Text;
 use crate::{
     desktop::{
         context::{
-            Session, edit_workspace_ui, navigate, use_records_version, use_unlocked_selector,
+            Session, edit_unlocked, edit_workspace_ui, navigate, use_records_version,
+            use_unlocked_selector,
         },
         session::Screen,
         widgets::{
@@ -85,11 +86,24 @@ pub(crate) fn Sidebar() -> Element {
             u.vault.signing_error().is_some(),
             u.vault.has_device_certificate(),
             u.page,
+            u.directories.fold_actions(&u.vault),
+            !u.search.trim().is_empty(),
         )
     });
-    let Some((count, editing_folder, read_only, shared, page)) = summary() else {
+    let Some((
+        count,
+        editing_folder,
+        read_only,
+        shared,
+        page,
+        (can_collapse, can_expand),
+        searching,
+    )) = summary()
+    else {
         return rsx! {};
     };
+    // Search shows every folder open, so folding has nothing to act on.
+    let fold_locked = editing_folder || searching;
 
     rsx! {
         aside { id: "vault-sidebar", class: "sidebar",
@@ -104,7 +118,17 @@ pub(crate) fn Sidebar() -> Element {
                     disabled: editing_folder || read_only, onclick: move |_| navigate(state, Destination::NewDirectory),
                 }
             }
-            SearchBox {}
+            div { class: "search-row",
+                SearchBox {}
+                IconButton { class: "quiet", icon: Icon::CollapseAll, label: language.text(Text::CollapseAllFolders),
+                    disabled: fold_locked || !can_collapse,
+                    onclick: move |_| edit_unlocked(state, |u| u.directories.collapse_all(&u.vault)),
+                }
+                IconButton { class: "quiet", icon: Icon::ExpandAll, label: language.text(Text::ExpandAllFolders),
+                    disabled: fold_locked || !can_expand,
+                    onclick: move |_| edit_unlocked(state, |u| u.directories.expand_all()),
+                }
+            }
             nav { class: "tree-scroll", aria_label: language.text(Text::EntriesAndFolders),
                 ul { id: "vault-tree", class: "vault-tree",
                     "data-navigate-records": "{page == Page::Vault}",
