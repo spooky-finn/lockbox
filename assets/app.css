@@ -964,3 +964,4 @@ button.copy-value.title-value { display: block; font: inherit; line-height: 1.2;
     .field-row { min-height: 48px; }
     .sidebar-footer .icon-button, .entry-detail .field-row .icon-button, .entry-detail .detail-heading .icon-button { width: 32px; height: 32px; min-height: 32px; flex-basis: 32px; }
 }
+.draft .detail-heading > .draft-save { flex-shrink: 0; }

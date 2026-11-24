@@ -65,6 +65,12 @@ pub(crate) fn DraftView() -> Element {
                     input { onkeydown: move |event| finish_on_enter(state, event), id: "entry-title", class: "entry-title-input", placeholder: name_label, aria_label: name_label, required: true, onmounted: move |event| async move { if focus_field == Some(Field::Title) { let _ = event.data.set_focus(true).await; } },
                         value: "{entry.title}", oninput: move |e| set_field(state, Field::Title, e.value()) }
                 }
+                // Autosave already runs; this forces the pending write and leaves edit mode.
+                if draft.edited {
+                    IconButton { class: "primary draft-save", icon: Icon::Save, label: language.text(Text::SaveAndFinishEditing),
+                        onclick: move |_| edit_workspace_ui(state, Unlocked::request_save),
+                    }
+                }
             }
             div { class: "fields",
                 div { class: "field-row",

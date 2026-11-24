@@ -100,3 +100,21 @@ fn transient_controls_never_schedule_persistence_or_modify_record_data() {
         assert_eq!(draft.entry, original);
     }
 }
+
+#[test]
+fn only_record_edits_mark_the_draft_as_edited() {
+    use super::Control;
+    let mut draft = super::Draft::new(super::Entry::new(), false);
+    assert!(!draft.edited);
+    for control in [
+        Control::TogglePassword,
+        Control::ToggleIconPicker,
+        Control::IconQuery("example".into()),
+    ] {
+        draft.control(control);
+    }
+    assert!(!draft.edited);
+    assert!(draft.set_field(super::Field::Title, "Example".into()));
+    draft.schedule_autosave();
+    assert!(draft.edited);
+}

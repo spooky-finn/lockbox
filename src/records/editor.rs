@@ -39,6 +39,8 @@ pub(crate) struct Draft {
     pub(crate) generator_error: Option<String>,
     pub(crate) icon_picker_open: bool,
     pub(crate) icon_query: String,
+    /// Record data changed since editing began; shows the explicit save button.
+    pub(crate) edited: bool,
 }
 
 impl Draft {
@@ -67,10 +69,12 @@ impl Draft {
             generator_error: None,
             icon_picker_open: false,
             icon_query: String::new(),
+            edited: false,
         }
     }
 
     pub(crate) fn schedule_autosave(&mut self) {
+        self.edited = true;
         self.autosave_at = Some(std::time::Instant::now() + std::time::Duration::from_millis(600));
     }
 

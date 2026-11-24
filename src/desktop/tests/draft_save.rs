@@ -115,3 +115,27 @@ fn disconnected_writer_cannot_resubmit_the_read_only_snapshot() {
     assert_eq!(workspace.flush_draft_for_lock(), Err(INTERRUPTED.into()));
     assert!(reopen(&workspace).entries.is_empty());
 }
+
+#[test]
+fn explicit_save_after_autosave_leaves_edit_mode_on_the_same_record() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut workspace = unlocked(&dir);
+    let id = add(
+        &mut workspace,
+        "Original",
+        "user",
+        "https://example.invalid",
+    );
+    workspace.start_edit();
+    let draft = workspace.draft.as_mut().unwrap();
+    draft.entry.title = "Renamed".into();
+    draft.schedule_autosave();
+    workspace.autosave_draft().unwrap();
+    assert!(workspace.draft.as_ref().is_some_and(|draft| draft.edited));
+
+    workspace.save_draft().unwrap();
+
+    assert!(workspace.draft.is_none());
+    assert_eq!(workspace.selected.as_deref(), Some(id.as_str()));
+    assert_eq!(reopen(&workspace).entries[0].title, "Renamed");
+}
