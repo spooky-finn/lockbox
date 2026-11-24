@@ -809,19 +809,34 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 99px; }
 .vault-welcome details code { font-size: 11px; line-height: 1.6; }
 
 .history-change { border-top: 1px solid var(--border); padding: 12px 0; }
-.history-diff { display: grid; gap: 12px; margin-top: 12px; min-width: 0; }
-.history-diff-field { min-width: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 6px; }
-.history-diff-field h3 { margin: 0; padding: 6px 12px; font-size: 12px; background: var(--subtle); border-bottom: 1px solid var(--border); }
-.history-diff-lines { padding: 4px 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
-.diff-line { display: grid; grid-template-columns: 4ch 4ch 3ch minmax(0, 1fr); min-height: 21px; line-height: 21px; }
-.diff-number { color: var(--muted); text-align: right; padding-right: 1ch; user-select: none; font-variant-numeric: tabular-nums; }
+.record-history > .detail-heading { gap: 8px; min-height: 32px; margin-bottom: 10px; }
+.history-intro { display: grid; gap: 3px; margin-bottom: 10px; overflow-wrap: anywhere; }
+.history-intro > p { font-size: 12px; }
+.record-history .history-change { padding: 8px 0 10px; }
+.history-revision-heading, .history-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; }
+.history-revision-heading { margin-bottom: 2px; }
+.history-revision-heading h2 { font-size: 14px; }
+.history-time, .history-meta { font-size: 12px; overflow-wrap: anywhere; }
+.history-meta > p { min-width: 0; }
+.history-meta strong { color: var(--ink); }
+button.history-secrets { margin-inline-start: auto; min-height: 24px; padding: 2px 6px; font-size: 12px; }
+@media (max-width: 640px) {
+    .history-revision-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+    .history-time { grid-column: 1 / -1; grid-row: 2; }
+}
+.history-diff { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); align-items: start; gap: 8px; margin-top: 6px; min-width: 0; }
+.history-diff:empty { display: none; }
+.history-diff-field { min-width: 0; overflow: hidden; border: 1px solid var(--border); border-radius: var(--button-radius); }
+.history-diff-field h3 { margin: 0; padding: 3px 8px; font-size: 12px; background: var(--subtle); border-bottom: 1px solid var(--border); }
+.history-diff-lines { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.diff-line { display: grid; grid-template-columns: 3ch 3ch 2ch minmax(0, 1fr); min-height: 19px; line-height: 19px; }
+.diff-number { color: var(--muted); text-align: right; user-select: none; font-variant-numeric: tabular-nums; }
 .diff-sign { text-align: center; user-select: none; }
-.diff-text { font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; padding-right: 12px; }
+.diff-text { font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; padding-right: 8px; }
 .diff-removed { background: color-mix(in srgb, var(--error) 12%, transparent); }
 .diff-added { background: color-mix(in srgb, var(--success) 12%, transparent); }
 .diff-removed .diff-sign { color: var(--error); }
 .diff-added .diff-sign { color: var(--success); }
-.fingerprint { overflow-wrap: anywhere; font-size: 12px; }
 button.identifier { display: inline-flex; vertical-align: baseline; min-height: 24px; padding: 2px 5px; color: inherit; white-space: nowrap; }
 .identifier code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
 

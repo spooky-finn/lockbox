@@ -42,7 +42,7 @@ pub(crate) fn RecordsView() -> Element {
         Err(error) => return rsx! { p { class: "error", role: "alert", "{error}" } },
     };
     rsx! {
-        article { class: "entry-detail record-history",
+        article { class: if trash { "entry-detail" } else { "entry-detail record-history" },
             div { class: "detail-heading",
                 IconButton { class: "quiet", icon: Icon::ArrowLeft, label: language.text(Text::BackToVault),
                     onclick: move |_| edit_unlocked(state, |u| u.page = Page::Vault),
@@ -65,39 +65,53 @@ pub(crate) fn RecordsView() -> Element {
                     }
                 },
                 Records::History(history) => rsx! {
-                    if let Some(entry) = u.selected_entry() { h2 { "{entry.title}" } }
-                    p { class: "muted", {language.text(Text::HistoryHint)} }
-                    if u.vault.sync_state().is_none() { p { class: "muted", {language.text(Text::LocalHistoryHint)} } }
+                    div { class: "history-intro",
+                        if let Some(entry) = u.selected_entry() { h2 { "{entry.title}" } }
+                        p { class: "muted",
+                            {language.text(Text::HistoryHint)}
+                            if u.vault.sync_state().is_none() { " " {language.text(Text::LocalHistoryHint)} }
+                        }
+                    }
                     if history.is_empty() { p { {language.text(Text::NoRecordHistory)} } }
                     for change in history.iter().rev() {
                         section { class: "history-change", key: "{change.revision}",
-                             h2 { {language.text(match change.action.as_str() { "Delete" => Text::Deleted, "Restore" => Text::HistoryRestored, "Resolve" => Text::HistoryResolved, _ if change.before.is_empty() => Text::HistoryCreated, _ => Text::HistoryUpdated })} }
-                            if let Some(name) = change.actor.parse().ok().and_then(|user| u.vault.participant_name(user)) {
-                                p { strong { "{name}" } }
-                            }
-                            p {
-                                if change.actor.parse::<crate::sync::protocol::Hash>().is_ok() {
-                                    {language.format(Text::HistoryAuthor, &[String::new()])}
-                                    Identifier { value: change.actor.clone() }
-                                } else {
-                                    {language.format(Text::HistoryAuthor, std::slice::from_ref(&change.actor))}
+                            header { class: "history-revision-heading",
+                                h2 { {language.text(match change.action.as_str() { "Delete" => Text::Deleted, "Restore" => Text::HistoryRestored, "Resolve" => Text::HistoryResolved, _ if change.before.is_empty() => Text::HistoryCreated, _ => Text::HistoryUpdated })} }
+                                p { class: "muted history-time",
+                                    if let Some(at) = change.at {
+                                        {language.format(if u.vault.sync_state().is_some() { Text::HistoryAuthorTime } else { Text::HistoryTime }, &[crate::desktop::time::utc_timestamp(at)])}
+                                    } else {
+                                        {language.text(Text::HistoryTimeUnavailable)}
+                                    }
+                                }
+                                button { class: "quiet history-secrets", r#type: "button",
+                                    aria_pressed: revealed.read().contains(&change.revision).to_string(),
+                                    onclick: { let revision = change.revision.clone(); move |_| { let mut values = revealed.write(); if !values.remove(&revision) { values.insert(revision.clone()); } } },
+                                    {language.text(Text::HistorySecrets)}
                                 }
                             }
-                            p { class: "muted fingerprint",
-                                if change.device.parse::<crate::sync::protocol::Hash>().is_ok() {
-                                    {language.format(Text::Device, &[String::new()])}
-                                    Identifier { value: change.device.clone() }
-                                } else {
-                                    {language.format(Text::Device, std::slice::from_ref(&change.device))}
+                            div { class: "muted history-meta",
+                                p {
+                                    if let Ok(actor) = change.actor.parse() {
+                                        {language.format(Text::HistoryAuthor, &[String::new()])}
+                                        if let Some(name) = u.vault.participant_name(actor) {
+                                            strong { "{name}" }
+                                        }
+                                        Identifier { value: change.actor.clone() }
+                                    } else {
+                                        {language.format(Text::HistoryAuthor, std::slice::from_ref(&change.actor))}
+                                    }
                                 }
+                                p {
+                                    if change.device.parse::<crate::sync::protocol::Hash>().is_ok() {
+                                        {language.format(Text::Device, &[String::new()])}
+                                        Identifier { value: change.device.clone() }
+                                    } else {
+                                        {language.format(Text::Device, std::slice::from_ref(&change.device))}
+                                    }
+                                }
+                                Identifier { value: change.revision.clone() }
                             }
-                            Identifier { value: change.revision.clone() }
-                            if let Some(at) = change.at {
-                                p { class: "muted", {language.format(if u.vault.sync_state().is_some() { Text::HistoryAuthorTime } else { Text::HistoryTime }, &[crate::desktop::time::utc_timestamp(at)])} }
-                            } else {
-                                p { class: "muted", {language.text(Text::HistoryTimeUnavailable)} }
-                            }
-                            button { class: "quiet", onclick: { let revision = change.revision.clone(); move |_| { let mut values = revealed.write(); if !values.remove(&revision) { values.insert(revision.clone()); } } }, {language.text(Text::HistorySecrets)} }
                             for before in &change.before {
                                 {record_diff(language, Some(before), change.after.as_ref(), revealed.read().contains(&change.revision))}
                             }
