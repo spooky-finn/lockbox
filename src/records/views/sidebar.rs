@@ -43,8 +43,9 @@ fn select_tree_row(state: Session, selection: TreeAction) {
             TreeAction::Directory(id) if u.vault.folders().iter().any(|f| f.id == id) => {
                 crate::desktop::workspace::Destination::Directory(Some(id))
             }
-            TreeAction::Close if u.draft.is_some() || u.selected.is_some() => {
-                crate::desktop::workspace::Destination::Close
+            TreeAction::Close => {
+                u.escape();
+                return;
             }
             TreeAction::Toggle(id)
                 if u.directories.draft.is_none()

@@ -212,7 +212,7 @@ fn history_follows_selection_and_keeps_other_record_contents_hidden() {
 }
 
 #[test]
-fn double_click_edits_and_escape_saves_before_closing_changed_record() {
+fn double_click_edits_and_escape_saves_then_closes_the_record_on_second_press() {
     use crate::desktop::{context::Session, context::set_field, session::Screen};
     use crate::records::editor::Field;
     use dioxus::html::{
@@ -285,11 +285,22 @@ fn double_click_edits_and_escape_saves_before_closing_changed_record() {
             panic!("locked");
         };
         assert!(u.draft.is_none());
-        assert!(u.selected.is_none());
+        assert!(u.selected.is_some());
         assert_eq!(
             crate::desktop::test_support::reopen(u).entries[0].title,
             "Changed"
         );
+    });
+    dom.runtime()
+        .handle_event("keydown", escape(), escape_target);
+    dom.render_immediate_to_vec();
+    dom.in_scope(ScopeId::APP, || {
+        let state = consume_context::<Session>();
+        let screen = state.peek();
+        let Screen::Unlocked(u) = &*screen else {
+            panic!("locked");
+        };
+        assert!(u.selected.is_none());
     });
 }
 

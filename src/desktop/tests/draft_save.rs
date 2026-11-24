@@ -139,3 +139,29 @@ fn explicit_save_after_autosave_leaves_edit_mode_on_the_same_record() {
     assert_eq!(workspace.selected.as_deref(), Some(id.as_str()));
     assert_eq!(reopen(&workspace).entries[0].title, "Renamed");
 }
+
+#[test]
+fn escape_leaves_edit_mode_first_and_closes_the_record_next() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut workspace = unlocked(&dir);
+    let id = add(
+        &mut workspace,
+        "Original",
+        "user",
+        "https://example.invalid",
+    );
+    workspace.start_edit();
+    let draft = workspace.draft.as_mut().unwrap();
+    draft.entry.title = "Renamed".into();
+    draft.schedule_autosave();
+
+    workspace.escape();
+    workspace.complete_background_save();
+    assert!(workspace.draft.is_none());
+    assert_eq!(workspace.selected.as_deref(), Some(id.as_str()));
+    assert_eq!(reopen(&workspace).entries[0].title, "Renamed");
+
+    workspace.escape();
+    workspace.complete_background_save();
+    assert!(workspace.selected.is_none());
+}

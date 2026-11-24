@@ -123,7 +123,7 @@ pub(crate) fn handle_record_shortcut(state: Session, event: KeyboardEvent) {
         if save {
             u.request_save();
         } else {
-            u.request_navigation(crate::desktop::workspace::Destination::Close);
+            u.escape();
         }
     });
 }

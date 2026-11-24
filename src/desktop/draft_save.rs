@@ -145,6 +145,15 @@ impl Unlocked {
         self.request_after(AfterSave::CloseEditor);
     }
 
+    /// Escape climbs one level: editing → the saved record → no record.
+    pub(crate) fn escape(&mut self) {
+        if self.draft.is_some() {
+            self.request_close_editor();
+        } else if self.selected.is_some() {
+            self.request_navigation(Destination::Close);
+        }
+    }
+
     pub(crate) fn request_navigation(&mut self, destination: Destination) {
         if self.directories.draft.is_none() {
             self.request_after(AfterSave::Navigate(destination));
