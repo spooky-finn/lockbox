@@ -8,6 +8,8 @@ use serde::Deserialize;
 use crate::records::entry::Entry;
 
 static DATA: &str = include_str!("../../assets/icons.jsonl");
+/// Hand-drawn decorative set (outline glyphs on a gradient tile), slugs `art-*`.
+static DECOR: &str = include_str!("../../assets/decor_icons.jsonl");
 
 /// Suffixes under which names are registered one level deeper (example.co.uk).
 const TWO_LEVEL: &[&str] = &[
@@ -26,6 +28,16 @@ pub struct Icon {
     pub path: String,
     #[serde(default)]
     pub domains: Vec<String>,
+    /// Second gradient colour, `RRGGBB`; set only for the decorative set.
+    #[serde(default)]
+    pub accent: Option<String>,
+}
+
+impl Icon {
+    /// Decorative icons are outline glyphs on a gradient, not brand marks.
+    pub fn is_decorative(&self) -> bool {
+        self.accent.is_some()
+    }
 }
 
 pub struct Catalog {
@@ -38,7 +50,7 @@ pub struct Catalog {
 /// Parsed once, on first use.
 pub fn catalog() -> &'static Catalog {
     static CATALOG: OnceLock<Catalog> = OnceLock::new();
-    CATALOG.get_or_init(|| Catalog::parse(DATA))
+    CATALOG.get_or_init(|| Catalog::parse(&[DATA, DECOR].join("\n")))
 }
 
 impl Catalog {
@@ -77,6 +89,11 @@ impl Catalog {
 
     pub fn get(&self, slug: &str) -> Option<&Icon> {
         self.by_slug.get(slug).map(|&index| &self.icons[index])
+    }
+
+    /// The decorative set, in file order.
+    pub fn decorative(&self) -> impl Iterator<Item = &Icon> {
+        self.icons.iter().filter(|icon| icon.is_decorative())
     }
 
     /// The most specific listed domain wins (mail.google.com before google.com);
@@ -182,11 +199,21 @@ pub fn glyph_is_dark(background: [u8; 3]) -> bool {
     0.2126 * r + 0.7152 * g + 0.0722 * b > 0.6
 }
 
+/// Line width of decorative glyphs in the 24×24 box.
+pub const DECOR_STROKE: &str = "2";
+
 /// The glyph as premultiplied RGBA pixels, `size`×`size`.
 pub fn render(icon: &Icon, size: u32, dark: bool) -> Option<Vec<u8>> {
     let colour = if dark { "000000" } else { "FFFFFF" };
+    let paint = if icon.is_decorative() {
+        format!(
+            r##"fill="none" stroke="#{colour}" stroke-width="{DECOR_STROKE}" stroke-linecap="round" stroke-linejoin="round""##
+        )
+    } else {
+        format!(r##"fill="#{colour}""##)
+    };
     let svg = format!(
-        r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#{colour}" d="{}"/></svg>"##,
+        r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path {paint} d="{}"/></svg>"##,
         icon.path
     );
     let tree = usvg::Tree::from_str(&svg, &usvg::Options::default()).ok()?;

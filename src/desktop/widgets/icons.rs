@@ -57,6 +57,14 @@ pub(crate) fn EntryIcon(
         .or_else(|| icons::catalog().for_url(&url))
         .or_else(|| icons::catalog().get(&icons::normalized(&title)));
     let (background, foreground) = match icon {
+        Some(icons::Icon {
+            hex,
+            accent: Some(accent),
+            ..
+        }) => (
+            format!("linear-gradient(135deg, #{hex}, #{accent})"),
+            "#fff",
+        ),
         Some(icon) => (
             format!("#{}", icon.hex),
             if icons::glyph_is_dark(icons::rgb(&icon.hex)) {
@@ -80,7 +88,9 @@ pub(crate) fn EntryIcon(
     }
     rsx! {
         span { class: if large { "entry-icon large" } else { "entry-icon" }, style: "background:{background};color:{foreground}", aria_hidden: "true",
-            if let Some(icon) = icon {
+            if let Some(icon) = icon.filter(|icon| icon.is_decorative()) {
+                svg { view_box: "0 0 24 24", path { fill: "none", stroke: "currentColor", stroke_width: icons::DECOR_STROKE, stroke_linecap: "round", stroke_linejoin: "round", d: "{icon.path}" } }
+            } else if let Some(icon) = icon {
                 svg { view_box: "0 0 24 24", path { fill: "currentColor", d: "{icon.path}" } }
             } else { "{icons::letter(&title)}" }
         }
@@ -99,7 +109,15 @@ pub(crate) fn IconPicker() -> Element {
             .unwrap_or_default(),
         _ => String::new(),
     });
-    let found = use_memo(move || icons::catalog().search(&query.read(), 60));
+    // An empty query offers the decorative set instead of an empty grid.
+    let found = use_memo(move || {
+        let query = query.read();
+        if query.trim().is_empty() {
+            icons::catalog().decorative().collect()
+        } else {
+            icons::catalog().search(&query, 60)
+        }
+    });
     let screen = state.read();
     let Screen::Unlocked(unlocked) = &*screen else {
         return rsx! {};
@@ -116,7 +134,7 @@ pub(crate) fn IconPicker() -> Element {
                 IconButton { icon: Icon::Close, label: language.text(Text::CloseIconPicker), onclick: move |_| draft_control(state, crate::records::editor::Control::CloseIconPicker) }
             }
 
-            if draft.icon_query.trim().is_empty() { p { class: "muted", {language.format(Text::StartTypingANameIconsAvailable, &[icons::catalog().len().to_string()])} } }
+            if draft.icon_query.trim().is_empty() { p { class: "muted", {language.format(Text::StartTypingANameIconsAvailable, &[icons::catalog().len().to_string()])} } p { class: "muted", {language.text(Text::OrPickDecorativeIcon)} } }
             else if found.read().is_empty() { p { class: "muted", {language.text(Text::NoResults)} } }
             div { class: "icon-grid",
                 for icon in found.read().iter().copied() {

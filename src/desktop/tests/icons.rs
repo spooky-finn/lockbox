@@ -182,3 +182,33 @@ fn favicon_uses_only_http_origin() {
         assert_eq!(favicon_url(input), None);
     }
 }
+
+#[test]
+fn decorative_set_is_separate_from_brands() {
+    let catalog = catalog();
+    let decorative: Vec<_> = catalog.decorative().collect();
+    assert!(decorative.len() >= 30);
+    for icon in decorative {
+        assert!(icon.slug.starts_with("art-"), "{}", icon.slug);
+        assert!(icon.domains.is_empty(), "{}", icon.slug);
+        let accent = icon.accent.as_deref().unwrap();
+        assert!(
+            accent.len() == 6 && accent.chars().all(|c| c.is_ascii_hexdigit()),
+            "{}",
+            icon.slug
+        );
+        assert_eq!(catalog.get(&icon.slug), Some(icon));
+    }
+    // Brand lookups never fall through to a decorative picture.
+    assert!(
+        catalog
+            .for_url("https://moon.example")
+            .is_none_or(|icon| !icon.is_decorative())
+    );
+    assert!(
+        catalog
+            .search("moon", 60)
+            .iter()
+            .any(|icon| icon.slug == "art-moon")
+    );
+}
