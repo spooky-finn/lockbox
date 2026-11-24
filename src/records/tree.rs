@@ -25,6 +25,9 @@ pub(crate) enum DisplayNode {
     Record {
         id: String,
         title: String,
+        /// Icon choice and address, so the row shows the same picture as the record.
+        icon: Option<String>,
+        url: String,
     },
 }
 
@@ -39,6 +42,8 @@ impl From<Node<'_>> for DisplayNode {
             Node::Record(entry) => Self::Record {
                 id: entry.id.clone(),
                 title: entry.title.clone(),
+                icon: entry.icon.clone(),
+                url: entry.url.clone(),
             },
         }
     }

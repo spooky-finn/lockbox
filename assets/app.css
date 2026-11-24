@@ -400,6 +400,10 @@ input.switch:disabled { opacity: .45; cursor: default; }
 .tree-branch { margin: 1px 0 2px 8px; padding-left: 9px; border-left: 1px solid var(--separator); }
 .tree-folder, .tree-leaf { min-width: 0; }
 .entry-row { display: block; width: 100%; min-height: 25px; border: 1px solid transparent; background: transparent; text-align: left; padding: 4px 8px 4px 18px; margin: 1px 0; border-radius: var(--button-radius); box-shadow: none; font-size: 12px; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.entry-row:has(> .entry-icon) { display: flex; align-items: center; gap: 7px; padding-left: 12px; }
+.entry-row > .entry-icon { width: 16px; height: 16px; flex: 0 0 16px; border-radius: 4px; font-size: 10px; box-shadow: none; }
+.entry-row > .entry-icon svg { width: 72%; height: 72%; }
+.entry-row-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .entry-row:hover:not(:disabled), .folder-row:hover { background: var(--control); box-shadow: none; }
 .entry-row.selected, .folder-row.selected { background: var(--active-item); border-color: transparent; color: var(--active-item-text); box-shadow: none; font-weight: 600; }
 .entry-row.selected:hover:not(:disabled), .folder-row.selected:hover { background: var(--active-item); box-shadow: none; }

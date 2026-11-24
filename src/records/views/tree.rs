@@ -4,6 +4,7 @@ use crate::{
         context::{Session, edit_unlocked, navigate},
         widgets::{
             button::IconButton,
+            icons::EntryIcon,
             symbol::{Icon, Symbol},
         },
         workspace::{Destination, Page, Unlocked},
@@ -279,7 +280,12 @@ impl RenderCache {
             #[cfg(test)]
             ROW_BUILDS.set(ROW_BUILDS.get() + 1);
             let view = match node {
-                DisplayNode::Record { id, title } => {
+                DisplayNode::Record {
+                    id,
+                    title,
+                    icon,
+                    url,
+                } => {
                     let id = id.clone();
                     rsx! {
                         li { class: "tree-leaf", key: "entry-{id}",
@@ -287,7 +293,8 @@ impl RenderCache {
                                 "data-kind": "entry", "data-id": "{id}",
                                 r#type: "button", aria_current: "{selected}", disabled: editing,
                                 onclick: move |_| navigate(state, Destination::Entry(id.clone())),
-                                "{title}"
+                                EntryIcon { title: title.clone(), slug: icon.clone(), url: url.clone() }
+                                span { class: "entry-row-title", "{title}" }
                             }
                         }
                     }
