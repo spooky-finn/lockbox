@@ -57,6 +57,18 @@ impl Settings {
         })
     }
 
+    pub(crate) fn forget_local_vault(&mut self, path: &Path, id: &str) -> Result<(), String> {
+        self.update(|config| {
+            config.recent_vaults.retain(|known| known != path);
+            if config.last_vault.as_deref() == Some(path) {
+                config.last_vault = None;
+            }
+            config.space_names.remove(path);
+            config.vault_aliases.remove(path);
+            config.touch_id.retain(|known| known != id);
+        })
+    }
+
     pub(crate) fn rename_local_vault(
         &mut self,
         source: &Path,

@@ -166,6 +166,61 @@ fn VaultNames() -> Element {
                 }
             }
             VaultNameSetting { kind: VaultName::Personal, saved: alias, disabled }
+            if workspace.vault.profile_summary().is_none() {
+                DeleteLocalVault {
+                    key: "{workspace.vault.id()}:{path.display()}",
+                    path: path.to_path_buf(),
+                    disabled: disabled || workspace.touch_id.pending.is_some(),
+                }
+            }
+        }
+    }
+}
+
+#[component]
+fn DeleteLocalVault(path: std::path::PathBuf, disabled: bool) -> Element {
+    let language = use_language();
+    let mut confirming = use_signal(|| false);
+    let mut error = use_signal(|| None::<String>);
+    let prompt = language.format(Text::ConfirmDeleteLocalVault, &[path.to_string_lossy()]);
+    rsx! {
+        button { class: "quiet danger vault-delete-trigger", r#type: "button", disabled,
+            onclick: move |_| { error.set(None); confirming.set(true); },
+            Symbol { icon: Icon::Trash }
+            {language.text(Text::DeleteLocalVault)}
+        }
+        if confirming() {
+            dialog { id: "vault-delete-dialog", class: "entry-trash-dialog",
+                aria_labelledby: "vault-delete-prompt",
+                onmounted: move |_| {
+                    let _ = document::eval("document.getElementById('vault-delete-dialog')?.showModal();");
+                },
+                onkeydown: move |event| {
+                    if event.key() == Key::Escape { event.stop_propagation(); }
+                },
+                oncancel: move |event| {
+                    event.prevent_default();
+                    confirming.set(false);
+                },
+                p { id: "vault-delete-prompt", "{prompt}" }
+                div { class: "actions",
+                    button { r#type: "button", autofocus: true,
+                        onclick: move |_| confirming.set(false), {language.text(Text::Cancel)}
+                    }
+                    button { class: "danger", r#type: "button", disabled,
+                        onclick: move |_| {
+                            confirming.set(false);
+                            if let Err(message) = profiles::delete_local_vault(&path) {
+                                error.set(Some(message));
+                            }
+                        },
+                        {language.text(Text::Delete)}
+                    }
+                }
+            }
+        }
+        if let Some(message) = error() {
+            p { class: "error", role: "alert", "{message}" }
         }
     }
 }

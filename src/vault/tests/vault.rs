@@ -281,6 +281,35 @@ fn previous_version_is_kept_as_backup() {
 }
 
 #[test]
+fn local_vault_deletion_removes_payloads_under_writer_lease() {
+    let dir = tempfile::tempdir().unwrap();
+    let (path, vault) = new_vault(&dir);
+    let backup = sibling(&path, "bak");
+    let temporary = sibling(&path, "tmp");
+    let backup_temporary = sibling(&path, "bak.tmp");
+
+    // A failed sidecar removal leaves the primary vault available for retry.
+    fs::create_dir(&temporary).unwrap();
+    assert!(vault.delete_local_files().is_err());
+    assert!(path.is_file());
+    assert!(backup.is_file());
+    fs::remove_dir(&temporary).unwrap();
+
+    fs::write(&temporary, b"staged vault").unwrap();
+    fs::write(&backup_temporary, b"staged backup").unwrap();
+    assert!(vault.delete_local_files().unwrap().is_none());
+    for deleted in [&path, &backup, &temporary, &backup_temporary] {
+        assert!(!deleted.exists());
+    }
+    assert!(matches!(
+        crate::vault::file::lock_profile(&path),
+        Err(VaultError::ProfileInUse)
+    ));
+    drop(vault);
+    assert!(crate::vault::file::lock_profile(&path).is_ok());
+}
+
+#[test]
 fn local_vault_rename_moves_ciphertext_backup_and_lease() {
     let dir = tempfile::tempdir().unwrap();
     let (path, mut vault) = new_vault(&dir);

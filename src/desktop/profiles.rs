@@ -94,6 +94,41 @@ pub(crate) fn paths_in_other_tabs() -> Vec<PathBuf> {
 #[path = "tests/profiles.rs"]
 mod tests;
 
+pub(crate) fn delete_local_vault(path: &Path) -> Result<(), String> {
+    let mut state = consume_context::<Session>();
+    let mut settings = consume_context::<Signal<Settings>>();
+    let hardware = consume_context::<BiometricProvider>();
+    let native = consume_context::<SecurityHandle>();
+    let language = settings.peek().config.language;
+    let mut screen = state.write();
+    let Screen::Unlocked(workspace) = &*screen else {
+        return Err(language.text(Text::SpaceSwitchEditing).to_owned());
+    };
+    if !screen.can_switch_profile()
+        || workspace.touch_id.pending.is_some()
+        || workspace.vault.path() != path
+    {
+        return Err(language.text(Text::SpaceSwitchEditing).to_owned());
+    }
+
+    let id = workspace.vault.id();
+    let sync_error = workspace
+        .vault
+        .delete_local_files()
+        .map_err(|error| language.format(Text::CouldNotDeleteLocalVault, &[error.to_string()]))?;
+    crate::platform::touchid::disable(&*hardware.0, &id);
+    let settings_error = settings.write().forget_local_vault(path, &id).err();
+    native.borrow_mut().clipboard.clear_now();
+    let mut form = Locked::new(None).with_identity_path(settings.peek().identity_path(), None);
+    form.error = sync_error
+        .map(|error| language.format(Text::VaultDeleteSyncFailed, &[error.to_string()]))
+        .or(settings_error);
+    *screen = Screen::Locked(Box::new(form));
+    drop(screen);
+    publish_status();
+    Ok(())
+}
+
 pub(crate) fn rename_local_vault(name: &str) -> Result<(), String> {
     let mut state = consume_context::<Session>();
     let mut settings = consume_context::<Signal<Settings>>();

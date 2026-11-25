@@ -1,0 +1,5 @@
+Desktop coordinates deletion, clears clipboard, drops unlocked session, forgets vault preferences.
+Vault removes encrypted file, backup and temporary siblings under existing writer lease.
+Remove main file last. Sidecar failure leaves main file available for retry.
+Preserve stable lock sidecar. Unlinking it could split lease across inodes.
+Shared vaults excluded. Rollback witness retained.

@@ -62,6 +62,8 @@ pub enum VaultError {
     InvalidDisplayName,
     #[error("only local vault files can be renamed")]
     RenameRequiresLocalVault,
+    #[error("only open local vault files can be deleted")]
+    DeleteRequiresLocalVault,
     #[error("this is not a lockbox file or it is truncated")]
     NotAVault,
     #[error("format version {0} is not supported")]
@@ -658,6 +660,29 @@ impl Vault {
 
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    /// Remove encrypted files while the open vault still holds its writer lease.
+    pub(crate) fn delete_local_files(&self) -> Result<Option<io::Error>> {
+        self.ensure_not_display_snapshot()?;
+        if self.profile.as_ref().is_some() || self._profile_lock.is_none() {
+            return Err(VaultError::DeleteRequiresLocalVault);
+        }
+        if !std::fs::symlink_metadata(&self.path)?.is_file()
+            || Self::peek_id(&self.path)? != self.id()
+        {
+            return Err(VaultError::NotAVault);
+        }
+
+        for suffix in ["tmp", "bak.tmp", "bak"] {
+            match std::fs::remove_file(file::sibling(&self.path, suffix)) {
+                Ok(()) => {}
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.into()),
+            }
+        }
+        std::fs::remove_file(&self.path)?;
+        Ok(sync_dir(&self.path).err())
     }
 
     /// Rename an open local vault without rewriting its ciphertext or keys.

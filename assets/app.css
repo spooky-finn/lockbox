@@ -473,6 +473,8 @@ input.switch:disabled { opacity: .45; cursor: default; }
 
 .sharing-check { display: flex; align-items: flex-start; gap: 10px; font-size: 12px; line-height: 1.6; }
 .settings-back { align-self: flex-start; }
+.vault-delete-trigger { align-self: flex-start; padding: 4px 8px; font-size: 0.85rem; }
+.vault-delete-trigger > .symbol { width: 13px; height: 13px; flex-basis: 13px; }
 
 /* Credentials */
 .detail { min-width: 0; min-height: 0; overflow: auto; padding: 16px 20px 20px; background: var(--surface); }
