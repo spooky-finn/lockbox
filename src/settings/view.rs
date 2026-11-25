@@ -52,8 +52,16 @@ pub(crate) fn SettingsSidebar(mut section: Signal<u8>) -> Element {
                 Symbol { icon: Icon::ArrowLeft } {language.text(Text::BackToVault)}
             }
             nav { aria_label: language.text(Text::Settings),
-                for (index, label) in [(0, Text::General), (1, Text::VaultSettings), (2, Text::Appearance), (3, Text::Security), (4, Text::ImportVault)] {
-                    button { class: "quiet settings-nav-item", r#type: "button", aria_current: if section() == index { "page" } else { "false" }, onclick: move |_| section.set(index), {language.text(label)} }
+                for (index, label, icon) in [
+                    (0, Text::General, Icon::Settings),
+                    (1, Text::VaultSettings, Icon::Folder),
+                    (2, Text::Appearance, Icon::Sparkles),
+                    (3, Text::Security, Icon::Lock),
+                    (4, Text::ImportVault, Icon::Import),
+                ] {
+                    button { class: "quiet settings-nav-item", r#type: "button", aria_current: if section() == index { "page" } else { "false" }, onclick: move |_| section.set(index),
+                        Symbol { icon } {language.text(label)}
+                    }
                 }
             }
         }

@@ -25,7 +25,13 @@ fn settings_is_a_page_and_returning_restores_the_selected_entry() {
     });
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("settings-page"));
-    assert!(html.contains("settings-nav-item"));
+    let items: Vec<_> = html
+        .split("class=\"quiet settings-nav-item\"")
+        .skip(1)
+        .map(|item| item.split_once("</button>").unwrap().0)
+        .collect();
+    assert_eq!(items.len(), 5);
+    assert!(items.iter().all(|item| item.contains("class=\"symbol\"")));
     assert!(html.contains("id=\"settings-language\""));
     assert!(!html.contains("id=\"settings-vault-appearance\""));
     assert!(!html.contains("id=\"settings-shared-vault-name\""));

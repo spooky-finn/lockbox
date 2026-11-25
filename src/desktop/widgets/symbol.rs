@@ -26,6 +26,7 @@ pub(crate) enum Icon {
     Trash,
     ArrowLeft,
     ArrowRight,
+    Import,
     Fingerprint,
     Save,
     Close,
@@ -79,6 +80,7 @@ pub(crate) fn Symbol(icon: Icon) -> Element {
         Icon::Trash => "M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7",
         Icon::ArrowLeft => "m12 5-7 7 7 7M5 12h15",
         Icon::ArrowRight => "m12 5 7 7-7 7M19 12H5",
+        Icon::Import => "M12 3v12m-5-5 5 5 5-5M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3",
         Icon::Fingerprint => {
             "M4 11a8 8 0 0 1 16 0m-13 1v-1a5 5 0 0 1 10 0v3c0 3-.8 5-2 7M10 18c.8-2 1-4 1-7a1 1 0 0 1 2 0v3c0 3-.5 5-1.5 7M4 15c0 2-.3 3-1 4m4-4c0 3-.4 4.5-1.3 6M20 15c0 2-.2 3.5-.7 5"
         }

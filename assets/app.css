@@ -969,6 +969,5 @@ button.copy-value:focus-visible, button.identifier:focus-visible { outline: 2px 
 
 .settings-sidebar { padding: 12px 8px; gap: 12px; }
 .settings-sidebar nav { display: flex; flex-direction: column; gap: 2px; }
-.settings-nav-back, .settings-nav-item { width: 100%; justify-content: flex-start; text-align: left; }
-.settings-nav-back { gap: 8px; }
+.settings-nav-back, .settings-nav-item { width: 100%; justify-content: flex-start; gap: 8px; text-align: left; }
 .settings-nav-item[aria-current="page"] { background: var(--selected); color: var(--accent-ink); }
