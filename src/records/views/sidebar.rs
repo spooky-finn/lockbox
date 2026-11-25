@@ -193,7 +193,7 @@ pub(crate) fn Sidebar() -> Element {
                     onclick: move |_| navigate(state, Destination::Page(Page::Trash)),
                 }
                 if shared {
-                    IconButton { class: "quiet", icon: Icon::Fingerprint, label: language.text(Text::SharingParticipants),
+                    IconButton { class: "quiet", icon: Icon::Users, label: language.text(Text::SharingParticipants),
                         current: (page == Page::Sharing).then_some("page"),
                         onclick: move |_| navigate(state, Destination::Page(Page::Sharing)),
                     }

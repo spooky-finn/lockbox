@@ -8,6 +8,7 @@ pub(crate) enum Icon {
     Lock,
     Key,
     User,
+    Users,
     Link,
     Note,
     Folder,
@@ -44,6 +45,7 @@ pub(crate) fn Symbol(icon: Icon) -> Element {
         }
         Icon::Key => "M16 3a5 5 0 1 1-3 9l-3 3H7v3H4v3H2v-3l9-10a5 5 0 0 1 5-5Zm1 3h.01",
         Icon::User => "M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM4 21v-2a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v2",
+        Icon::Users => "M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M14 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM20 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75",
         Icon::Link => {
             "M10 13a4 4 0 0 0 6 .4l4-4a4 4 0 0 0-5.7-5.7L12 6m0 12-2.3 2.3A4 4 0 0 1 4 14.6l4-4a4 4 0 0 1 6 .4"
         }
