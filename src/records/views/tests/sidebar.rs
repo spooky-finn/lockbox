@@ -81,6 +81,52 @@ fn keyboard_navigation_saves_changed_drafts_before_switching() {
 }
 
 #[test]
+fn first_autosave_selects_and_reveals_the_new_entry_while_editing() {
+    use crate::desktop::{
+        context::navigate, view_test_support::finish_save, workspace::Destination,
+    };
+    use kuchikiki::traits::TendrilSink;
+
+    let mut dom = mounted();
+    update(&mut dom, |state| {
+        let parent = Folder::new("Parent folder".into(), None);
+        let folder = Folder::new("Target folder".into(), Some(parent.id.clone()));
+        let folder_id = folder.id.clone();
+        edit_unlocked(state, |u| {
+            u.directories
+                .collapsed
+                .extend([parent.id.clone(), folder.id.clone()]);
+            u.vault.save_folder(parent).unwrap();
+            u.vault.save_folder(folder).unwrap();
+            u.search = "GitLab".into();
+        });
+        navigate(state, Destination::NewEntryInFolder(folder_id));
+    });
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| {
+            u.draft.as_mut().unwrap().entry.title = "New folder record".into();
+            u.request_autosave();
+        });
+        finish_save(state);
+        let Screen::Unlocked(u) = &*state.peek() else {
+            panic!("locked");
+        };
+        assert!(u.draft.is_some());
+    });
+
+    let html = dioxus_ssr::render(&dom);
+    let document = kuchikiki::parse_html().one(html).document_node;
+    let mut selected = document
+        .select(".entry-row.selected[aria-current='true'] .entry-row-title")
+        .unwrap();
+    assert_eq!(
+        selected.next().unwrap().text_contents(),
+        "New folder record"
+    );
+    assert!(selected.next().is_none());
+}
+
+#[test]
 fn folder_row_creates_a_record_in_the_clicked_folder_after_saving_pending_edits() {
     use crate::desktop::{context::Session, test_support::reopen, view_test_support::finish_save};
     use dioxus::{

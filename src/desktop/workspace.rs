@@ -164,6 +164,10 @@ impl Unlocked {
         if !self.editor_is_clear() {
             return;
         }
+        self.select_entry(id);
+    }
+
+    fn select_entry(&mut self, id: String) {
         self.page = Page::Vault;
 
         if let Some(entry) = self.vault.entries().iter().find(|entry| entry.id == id) {
@@ -249,11 +253,14 @@ impl Unlocked {
     }
 
     pub(super) fn record_draft_saved(&mut self) {
-        if let Some(draft) = &mut self.draft {
-            if draft.is_new {
-                self.record_created = self.record_created.wrapping_add(1);
-            }
+        if let Some(draft) = &mut self.draft
+            && draft.is_new
+        {
             draft.is_new = false;
+            let id = draft.entry.id.clone();
+            self.record_created = self.record_created.wrapping_add(1);
+            self.search.clear();
+            self.select_entry(id);
         }
         self.sync.saved();
     }
