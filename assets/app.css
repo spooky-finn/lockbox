@@ -383,7 +383,7 @@ input.switch:disabled { opacity: .45; cursor: default; }
 .workspace.sidebar-resizing, .workspace.sidebar-resizing * { cursor: col-resize !important; user-select: none !important; }
 .sidebar > :not(.tree-scroll) { flex-shrink: 0; }
 .sidebar-heading { display: flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 3px 5px; }
-.sidebar-heading h2 { font-size: 13px; letter-spacing: -.2px; }
+.sidebar-heading h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; letter-spacing: -.2px; }
 .sidebar-heading .count { margin-left: auto; }
 .sidebar-heading .icon-button { width: 28px; height: 28px; min-height: 28px; flex-basis: 28px; padding: 5px; color: var(--muted); }
 .count { padding: 0 4px; min-width: 20px; border-radius: 4px; background: transparent; color: var(--muted); text-align: center; font-size: 11px; font-variant-numeric: tabular-nums; }

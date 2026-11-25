@@ -85,6 +85,8 @@ pub(crate) fn Sidebar() -> Element {
     });
     let language = crate::desktop::i18n::use_language();
     let state = use_context::<Session>();
+    let settings = use_context::<Signal<crate::settings::state::Settings>>();
+    let vault_name = use_memo(move || state.read().vault_name(&settings.read().config));
     let controls = SidebarMove::use_controls();
     let choosing_records = controls.selection.read().is_some();
     let can_drag = use_unlocked_selector(|u| u.page == Page::Vault && can_move(u));
@@ -114,6 +116,9 @@ pub(crate) fn Sidebar() -> Element {
     };
     // Search shows every folder open, so folding has nothing to act on.
     let fold_locked = editing_folder || searching;
+    let vault_name = vault_name()
+        .filter(|name| !name.is_empty())
+        .unwrap_or_else(|| language.text(Text::Vault).to_owned());
 
     rsx! {
         aside { id: "vault-sidebar", class: "sidebar",
@@ -126,7 +131,7 @@ pub(crate) fn Sidebar() -> Element {
             },
             onmounted: move |_| resize.set(Some(document::eval(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/sidebar-resize.js"))))),
             div { class: "sidebar-heading",
-                h2 { {language.text(Text::Vault)} }
+                h2 { title: "{vault_name}", "{vault_name}" }
                 span { class: "count", "{count}" }
                 IconButton { class: "primary", icon: Icon::Plus, label: language.text(Text::NewEntry),
                     disabled: choosing_records || editing_folder || read_only, onclick: move |_| navigate(state, Destination::NewEntry),
