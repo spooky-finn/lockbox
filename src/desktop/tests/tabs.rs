@@ -228,6 +228,84 @@ fn closing_the_last_tab_releases_the_vault_and_closes_the_window() {
 }
 
 #[test]
+fn closing_a_shared_tab_waits_for_remote_acknowledgement() {
+    use crate::vault::{
+        KdfParams, ProfileStore, ProviderConfiguration, SharedProfile, witness::MemoryWitness,
+    };
+    use secrecy::SecretString;
+
+    let dir = tempfile::tempdir().unwrap();
+    let store = ProfileStore::new(Arc::new(MemoryWitness::default()));
+    let mut vault = store
+        .create_shared(
+            dir.path().join("shared.lbx"),
+            &SecretString::from("master".to_owned()),
+            &SecretString::from("recovery".to_owned()),
+            KdfParams {
+                memory_kib: 8192,
+                passes: 1,
+                lanes: 1,
+            },
+            SharedProfile {
+                username: "Alice".into(),
+                space_name: "Team".into(),
+                provider: ProviderConfiguration {
+                    base_url: "https://example.invalid".into(),
+                    bucket: "fixture".into(),
+                    access_key: "fictional".into(),
+                    secret_key: "fictional".into(),
+                },
+            },
+        )
+        .unwrap();
+    let mut entry = crate::records::entry::Entry::new();
+    entry.title = "Saved locally".into();
+    vault.upsert_entry(entry).unwrap();
+
+    let dom = mounted();
+    dom.in_scope(ScopeId::APP, || {
+        let mut state = consume_context::<Session>();
+        state.set(Screen::Unlocked(Box::new(
+            crate::desktop::workspace::Unlocked::new(vault),
+        )));
+        close_tab(0, || {
+            panic!("unacknowledged changes must keep the window open")
+        });
+        assert!(matches!(&*state.peek(), Screen::Unlocked(_)));
+
+        let remaining_receipts = {
+            let Screen::Unlocked(workspace) = &mut *state.write() else {
+                panic!("vault closed before acknowledgement");
+            };
+            let receipts: Vec<_> = workspace
+                .vault
+                .sync_state()
+                .unwrap()
+                .outbox
+                .iter()
+                .copied()
+                .collect();
+            let (first, remaining) = receipts.split_first().unwrap();
+            assert!(!remaining.is_empty());
+            workspace.vault.acknowledge_sync(&[*first], true).unwrap();
+            remaining.to_vec()
+        };
+        finish_pending_closes(|| panic!("partial acknowledgement cannot close the window"));
+
+        if let Screen::Unlocked(workspace) = &mut *state.write() {
+            workspace
+                .vault
+                .acknowledge_sync(&remaining_receipts, true)
+                .unwrap();
+        }
+        let mut closed = false;
+        finish_pending_closes(|| closed = true);
+        assert!(closed);
+        assert!(matches!(&*state.peek(), Screen::Locked(_)));
+    });
+}
+
+#[test]
 fn closing_active_tab_selects_neighbor_and_editing_tab_stays_open() {
     let dom = mounted();
     dom.in_scope(ScopeId::APP, || {

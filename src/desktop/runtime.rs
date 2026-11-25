@@ -110,6 +110,7 @@ pub(crate) fn tick() {
             tick_session(session);
         }
     }
+    crate::desktop::tabs::finish_pending_closes(|| dioxus::desktop::window().close());
     publish_status();
     let now = unix_now();
     if *clock.peek() != now {

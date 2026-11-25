@@ -117,10 +117,42 @@ pub(crate) fn close(index: usize) {
     close_tab(index, || dioxus::desktop::window().close());
 }
 
+pub(super) fn finish_pending_closes(mut close_window: impl FnMut()) {
+    let Some(tabs) = try_consume_context::<Signal<Tabs>>() else {
+        return;
+    };
+    let count = tabs.peek().sessions.len();
+    for index in (0..count).rev() {
+        let session = tabs.peek().sessions[index];
+        let ready = matches!(&*session.peek(), Screen::Unlocked(u)
+            if u.close_after_sync && !sync_pending(&u.vault));
+        if ready {
+            close_tab(index, &mut close_window);
+        }
+    }
+}
+
+fn sync_pending(vault: &crate::vault::Vault) -> bool {
+    vault.has_pending_exchange()
+        || vault
+            .sync_state()
+            .is_some_and(|state| state.intent.is_some() || !state.outbox.is_empty())
+}
+
 fn close_tab(index: usize, close_window: impl FnOnce()) {
     let mut tabs = consume_context::<Signal<Tabs>>();
-    let session = tabs.peek().sessions[index];
+    let mut session = tabs.peek().sessions[index];
     if !session.peek().can_switch_profile() {
+        return;
+    }
+    let waiting = matches!(&*session.peek(), Screen::Unlocked(u) if sync_pending(&u.vault));
+    if waiting {
+        if let Screen::Unlocked(workspace) = &mut *session.write()
+            && !workspace.close_after_sync
+        {
+            workspace.close_after_sync = true;
+            workspace.sync.retry();
+        }
         return;
     }
     if tabs.peek().sessions.len() == 1 {
@@ -128,7 +160,6 @@ fn close_tab(index: usize, close_window: impl FnOnce()) {
             .borrow_mut()
             .clipboard
             .clear_now();
-        let mut session = session;
         session.set(Screen::Locked(Box::new(Locked::new(None))));
         crate::desktop::runtime::publish_status();
         close_window();
@@ -185,6 +216,8 @@ pub(crate) fn TabBar() -> Element {
                     { let screen = session.read();
                       let label = screen.vault_name(&preferences.config)
                         .unwrap_or_else(|| language.text(Text::ChooseSpace).to_owned());
+                      let closing = matches!(&*screen, Screen::Unlocked(u) if u.close_after_sync);
+                      let close_label = language.text(if closing { Text::ClosingAfterSync } else { Text::MenuCloseTab });
                       let (mark, icon, tooltip) = match &*screen {
                         Screen::Unlocked(u) => (u.vault.icon().cloned(), if u.vault.profile_summary().is_some() { Icon::Cloud } else { Icon::Folder },
                             format!("{}\n{}", crate::desktop::window::title(&screen, &preferences.config), u.vault.path().display())),
@@ -195,7 +228,7 @@ pub(crate) fn TabBar() -> Element {
                             span { class: "space-tab-icon", aria_hidden: "true", VaultIcon { icon: mark, fallback: icon } }
                             span { class: "space-tab-label", "{label}" }
                         }
-                        button { class: "space-tab-close quiet", r#type: "button", aria_label: format!("{}: {label}", language.text(Text::MenuCloseTab)), title: format!("{}: {label}", language.text(Text::MenuCloseTab)), disabled: !screen.can_switch_profile(), onclick: move |_| close(index), Symbol { icon: Icon::Close } }
+                        button { class: "space-tab-close quiet", r#type: "button", aria_label: format!("{close_label}: {label}"), title: format!("{close_label}: {label}"), disabled: closing || !screen.can_switch_profile(), onclick: move |_| close(index), Symbol { icon: if closing { Icon::Clock } else { Icon::Close } } }
                       } }
                     }
                 }
