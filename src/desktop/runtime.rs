@@ -186,9 +186,16 @@ fn tick_session(mut state: Session) {
             state.with_mut(|screen| {
                 if let Screen::Unlocked(workspace) = screen {
                     let editing = workspace.is_editing();
+                    let previous_icon = workspace.vault.icon().cloned();
 
                     if let Some(error) = workspace.sync.tick(&mut workspace.vault, editing) {
                         workspace.error = Some(error);
+                    }
+                    if previous_icon.as_ref() != workspace.vault.icon() {
+                        let mut settings = consume_context::<Signal<Settings>>();
+                        if let Err(error) = settings.write().cache_vault_icon(&workspace.vault) {
+                            workspace.error = Some(error);
+                        }
                     }
                     if let Some(profile) = workspace.vault.profile_summary() {
                         let mut settings = consume_context::<Signal<Settings>>();

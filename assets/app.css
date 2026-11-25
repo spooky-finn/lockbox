@@ -226,6 +226,7 @@ h2 { font-size: 15px; font-weight: 600; letter-spacing: -.2px; }
     filter: blur(3px);
     transition: transform 400ms ease, opacity 400ms ease;
 }
+.unlock-vault-icon > :is(.symbol, .vault-icon-image) { width: 50px; height: 50px; }
 .unlock-lock {
     position: relative;
     width: 50px;

@@ -7,6 +7,7 @@ use crate::{
         session::Screen,
         widgets::{symbol::Icon, vault_icon::VaultIcon},
     },
+    settings::state::Settings,
     sync::protocol::{Blob, SPACE_ICON_SIZE, SpaceGlyph, SpaceIcon},
 };
 use dioxus::prelude::*;
@@ -146,6 +147,8 @@ fn apply_icon(mut state: Session, icon: Result<Option<SpaceIcon>, String>) {
             .err();
         if workspace.error.is_none() {
             workspace.sync.saved();
+            let mut settings = consume_context::<Signal<Settings>>();
+            workspace.error = settings.write().cache_vault_icon(&workspace.vault).err();
         }
     }
 }

@@ -3,6 +3,59 @@ use crate::desktop::view_test_support::{mounted, update};
 use crate::settings::actions;
 
 #[test]
+fn unlock_uses_the_saved_vault_icon_after_restart() {
+    use crate::{
+        access::auth::{Locked, Opened},
+        desktop::{
+            context::{BiometricProvider, SecurityHandle},
+            session::Screen,
+        },
+        settings::{config::Config, state::Settings},
+        sync::protocol::{SpaceGlyph, SpaceIcon},
+    };
+    use dioxus::prelude::*;
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut vault = crate::desktop::test_support::unlocked(&dir).vault;
+    vault
+        .set_icon(Some(SpaceIcon::Glyph(SpaceGlyph::Key)))
+        .unwrap();
+
+    let mut dom = mounted();
+    update(&mut dom, |mut state| {
+        let mut settings = consume_context::<Signal<Settings>>();
+        let hardware = consume_context::<BiometricProvider>();
+        let security = consume_context::<SecurityHandle>();
+        let config_path = dir.path().join("config.json");
+        let mut preferences = settings.write();
+        preferences.path = Some(config_path.clone());
+        state.write().open(
+            Opened {
+                vault,
+                with_password: true,
+                recovery_notice: None,
+            },
+            &mut preferences,
+            &*hardware.0,
+            &mut security.borrow_mut(),
+        );
+        preferences.config = Config::load(&config_path);
+        state.set(Screen::locked(&preferences, &*hardware.0));
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("class=\"unlock-vault-icon\""));
+    assert!(html.contains("M16 3a5 5"));
+    assert!(!html.contains("unlock-lock-shackle"));
+
+    update(&mut dom, |mut state| {
+        state.set(Screen::Locked(Box::new(Locked::new(None))));
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(!html.contains("unlock-vault-icon"));
+    assert!(html.contains("unlock-lock-shackle"));
+}
+
+#[test]
 fn arrows_change_the_centered_vault_name_and_clear_the_password() {
     use crate::{
         access::auth::Locked,

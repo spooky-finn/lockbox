@@ -151,6 +151,7 @@ impl Screen {
                     .map(|profile| profile.space_name.to_owned()),
             )
             .err();
+        let icon_error = settings.cache_vault_icon(&opened.vault).err();
         let mut unlocked = Unlocked::new(opened.vault);
         unlocked.touch_id = touch_id;
         if joining {
@@ -165,6 +166,7 @@ impl Screen {
         let errors: Vec<_> = biometric_error
             .into_iter()
             .chain(config_error)
+            .chain(icon_error)
             .chain(opened.recovery_notice)
             .collect();
         unlocked.error = (!errors.is_empty()).then(|| errors.join("; "));

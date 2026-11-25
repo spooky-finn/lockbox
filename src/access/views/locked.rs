@@ -11,6 +11,7 @@ use crate::{
             button::IconButton,
             lock_mark::LockMark,
             symbol::{Icon, Symbol},
+            vault_icon::VaultIcon,
         },
     },
     records::editor::replace_secret,
@@ -43,6 +44,11 @@ pub(crate) fn LockedView() -> Element {
     let base_unlock = !create && !recovering;
     let preferences = settings.read();
     let vault_name = screen.vault_name(&preferences.config);
+    let vault_icon = locked
+        .vault_id
+        .as_ref()
+        .and_then(|id| preferences.config.vault_icons.get(id))
+        .filter(|icon| icon.valid());
     let (previous, next) = if base_unlock {
         profiles::adjacent_profiles(
             &preferences,
@@ -110,9 +116,15 @@ pub(crate) fn LockedView() -> Element {
             div { class: "unlock-content",
                 if base_unlock {
                     div { class: "unlock-emblem", aria_hidden: "true",
-                        div { class: "unlock-lock",
-                            span { class: "unlock-lock-shackle" }
-                            span { class: "unlock-lock-body", span { class: "unlock-lock-face" } }
+                        if let Some(icon) = vault_icon {
+                            div { class: "unlock-vault-icon",
+                                VaultIcon { icon: Some(icon.clone()), fallback: Icon::Lock }
+                            }
+                        } else {
+                            div { class: "unlock-lock",
+                                span { class: "unlock-lock-shackle" }
+                                span { class: "unlock-lock-body", span { class: "unlock-lock-face" } }
+                            }
                         }
                     }
                 } else if !key_setup && !identity_setup && !cloud_password {

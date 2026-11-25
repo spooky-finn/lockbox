@@ -1,0 +1,4 @@
+Vault icon cache
+
+- Local config stores last known icon by stable vault ID for pre-unlock access. Cache contains glyph or normalized raster pixels in plaintext. Encrypted vault remains authoritative.
+- Successful open, icon edits, and sync refresh cache. Icon clear and profile deletion remove entry. Stable ID preserves cache across file rename and prevents reuse when path points to another vault.

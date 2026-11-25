@@ -1,6 +1,7 @@
 //! Preference persistence. Contains no vault, editor or native handles.
 
 use crate::settings::config::Config;
+use crate::vault::Vault;
 use std::path::{Path, PathBuf};
 
 pub(crate) struct Settings {
@@ -66,7 +67,23 @@ impl Settings {
             config.space_names.remove(path);
             config.vault_aliases.remove(path);
             config.vault_appearances.remove(id);
+            config.vault_icons.remove(id);
             config.touch_id.retain(|known| known != id);
+        })
+    }
+
+    pub(crate) fn cache_vault_icon(&mut self, vault: &Vault) -> Result<(), String> {
+        let id = vault.id();
+        let icon = vault.icon();
+        if self.config.vault_icons.get(&id) == icon {
+            return Ok(());
+        }
+        self.update(|config| {
+            if let Some(icon) = icon {
+                config.vault_icons.insert(id, icon.clone());
+            } else {
+                config.vault_icons.remove(&id);
+            }
         })
     }
 

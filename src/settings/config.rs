@@ -2,6 +2,7 @@
 //! Holds only local preferences and vault metadata, never secrets.
 
 use crate::settings::appearance::Appearance;
+use crate::sync::protocol::SpaceIcon;
 use std::{
     collections::BTreeMap,
     fs::{self, OpenOptions},
@@ -20,6 +21,9 @@ pub struct Config {
     /// Local overrides keyed by the vault file's stable ID.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub vault_appearances: BTreeMap<String, Appearance>,
+    /// Last known icons keyed by the vault file's stable ID.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub vault_icons: BTreeMap<String, SpaceIcon>,
     pub last_vault: Option<PathBuf>,
     /// Successfully opened profiles, most recent first. Paths only, no secrets.
     #[serde(default)]
@@ -51,6 +55,7 @@ impl Default for Config {
             language: crate::settings::language::Language::default(),
             appearance: Appearance::default(),
             vault_appearances: BTreeMap::new(),
+            vault_icons: BTreeMap::new(),
             last_vault: None,
             recent_vaults: Vec::new(),
             space_names: Default::default(),

@@ -13,6 +13,11 @@ fn remembered_path_survives_a_restart() {
         website_icons: true,
         space_names: [("/tmp/vault.lbx".into(), "Family".into())].into(),
         vault_aliases: [("/tmp/vault.lbx".into(), "Home".into())].into(),
+        vault_icons: [(
+            "00ff".into(),
+            SpaceIcon::Glyph(crate::sync::protocol::SpaceGlyph::Key),
+        )]
+        .into(),
         appearance: crate::settings::appearance::Appearance::default(),
         vault_appearances: [(
             "00ff".into(),
