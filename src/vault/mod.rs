@@ -82,7 +82,9 @@ pub enum VaultError {
     InvalidParticipantName,
     #[error("{0}")]
     Pairing(&'static str),
-    #[error("Create a new invitation with this member's current access level")]
+    #[error(
+        "Choose the member’s current access level for their additional device. For the owner’s device, use a file invitation."
+    )]
     InvitationRoleMismatch,
     #[error("invalid folder structure: {0}")]
     InvalidFolders(&'static str),
