@@ -66,6 +66,7 @@ pub fn App() -> Element {
             },
             crate::desktop::tabs::TabBar {}
             crate::desktop::browser::BrowserConsent {}
+            crate::desktop::updates::UpdateNotice { locked: locked() }
             div { id: "space-tab-content", class: "space-tab-content", role: "tabpanel", aria_labelledby: "space-tab-{active_tab}",
                 if locked() { LockedView { key: "{active_tab}" } } else { UnlockedView { key: "{active_tab}" } }
             }

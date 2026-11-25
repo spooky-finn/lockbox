@@ -15,6 +15,7 @@ mod sync_review;
 pub(crate) mod tabs;
 pub(crate) mod time;
 mod unlock_spell;
+mod updates;
 pub(crate) mod widgets;
 pub mod window;
 pub(crate) mod workspace;

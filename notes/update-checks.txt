@@ -1,0 +1,5 @@
+Desktop owns release checks. First unlock starts one background request per window. Window keeps result and dismissal across vault switches. No persistent update state.
+
+GitHub API request carries no credentials or vault data. Fixed HTTPS endpoint, no redirects, bounded response and timeout. Compare stable release tag against compiled package version by SemVer precedence. Failed checks leave access and sync unaffected.
+
+Fixed GitHub releases link opens in system browser. Lockbox downloads and installs no updates.

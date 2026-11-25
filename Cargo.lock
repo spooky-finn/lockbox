@@ -3392,6 +3392,7 @@ dependencies = [
  "secrecy",
  "security-framework",
  "security-framework-sys",
+ "semver",
  "serde",
  "serde_jcs",
  "serde_json",

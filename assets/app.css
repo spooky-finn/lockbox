@@ -907,6 +907,8 @@ button.copy-value:focus-visible, button.identifier:focus-visible { outline: 2px 
 .space-tab-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 4px; min-width: 0; max-width: 60%; }
 .space-tab-status { display: flex; flex: 0 0 auto; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 2px 8px; min-width: 0; max-width: min(60%, calc(100% - 72px)); line-height: 1.2; }
 .space-tab-status:empty { display: none; }
+.update-notice { padding: 6px 12px; background: var(--subtle); border-bottom: 1px solid var(--border); }
+.update-notice a { color: var(--accent-ink); }
 .space-tab-content { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
 @media (hover: none) {
     .space-tabs { min-height: 40px; }
