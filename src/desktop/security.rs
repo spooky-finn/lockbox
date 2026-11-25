@@ -20,7 +20,7 @@ pub(crate) struct Security {
 #[derive(Clone, Default, PartialEq)]
 pub(crate) struct Status {
     pub lock_seconds: Option<u64>,
-    pub clipboard_seconds: Option<u64>,
+    pub clipboard_active: bool,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -64,10 +64,7 @@ impl Security {
                 autolock::State::Warning(left) => Some(left.as_secs() + 1),
                 _ => None,
             },
-            clipboard_seconds: self
-                .clipboard
-                .remaining(Instant::now())
-                .map(|left| left.as_secs() + 1),
+            clipboard_active: self.clipboard.remaining(Instant::now()).is_some(),
         }
     }
 

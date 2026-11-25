@@ -64,7 +64,7 @@ fn StatusBar() -> Element {
     let status = use_context::<Signal<Status>>();
     let status = status.read();
 
-    if status.lock_seconds.is_none() && status.clipboard_seconds.is_none() {
+    if status.lock_seconds.is_none() && !status.clipboard_active {
         return rsx! {};
     }
 
@@ -77,8 +77,8 @@ fn StatusBar() -> Element {
                 }
             }
 
-            if let Some(seconds) = status.clipboard_seconds {
-                span { {language.format(Text::CopiedClipboardClearsInS, &[seconds.to_string()])} }
+            if status.clipboard_active {
+                span { {language.text(Text::Copied)} }
             }
         }
     }

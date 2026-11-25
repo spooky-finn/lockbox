@@ -312,7 +312,7 @@ fn clock_status_and_activity_do_not_rerender_session_subscribers() {
         "session subscriber rerendered for an unrelated signal"
     );
     assert!(counts.1.get() > before.1, "clock subscriber did not update");
-    assert!(dioxus_ssr::render(&dom).contains("буфер очистится через"));
+    assert!(dioxus_ssr::render(&dom).contains("Скопировано</span>"));
 }
 
 #[test]
@@ -362,5 +362,5 @@ fn copying_a_record_does_not_rerender_session_subscribers() {
         assert!(runtime::copy(crate::desktop::security::CopyField::Password));
     });
     assert_eq!(counts.0.get(), before);
-    assert!(dioxus_ssr::render(&dom).contains("буфер очистится через"));
+    assert!(dioxus_ssr::render(&dom).contains("Скопировано</span>"));
 }
