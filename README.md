@@ -80,6 +80,8 @@ Lockbox clears Rust secret buffers when locking and removes secret-bearing views
 
 Keep backups of your vault and store recovery words separately. Cloud recovery requires recovery words and bucket access, and restores only published data. After losing all independent copies, you must explicitly trust the available cloud state; its freshness cannot be proven.
 
+If the original bucket is unavailable, use the [S3 loss recovery runbook](docs/s3-loss-recovery.md) to restore live records from a local snapshot into a replacement cloud vault.
+
 A few storage boundaries matter when using Lockbox:
 
 - Record history and Trash retain previous values inside encrypted storage. There is no permanent purge operation.

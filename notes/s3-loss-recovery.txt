@@ -1,0 +1,20 @@
+S3 loss. Replacement-space recovery boundary.
+
+Use record import for desktop recovery from an encrypted local snapshot.
+Source is saved readable entries and folders. Source decryption stays local.
+Read source with snapshot password. Witness remains signing boundary.
+Create separate space, device, epoch keys and signed history. Reuse owner root
+only when trusted. Grant each participant fresh provider access and admission.
+Import copies live values in signed batches. Retry deduplicates matching values.
+Keep old snapshots for history, tombstones, conflict branches and excluded edits.
+
+Same-space controller recovery needs owner root, verified content and dependencies,
+and independently authenticated control head and data frontier. Separate API path.
+Cloud-only recovery needs accessible published objects. Words derive keys.
+
+Current gap. Desktop import takes password only. Phrase unlock can expose readable
+records, but cannot reset password on read-only shared snapshots. Any future bulk
+phrase import should decrypt directly for record import, preserving witness checks
+and keeping original profile state out of the destination.
+
+Operator procedure: docs/s3-loss-recovery.md.
