@@ -333,6 +333,8 @@ fn notes_render_as_selectable_plain_text() {
 fn clock_ticks_update_totp_without_rerendering_the_record_card() {
     use crate::desktop::context::Clock;
     use dioxus::prelude::*;
+    use kuchikiki::traits::TendrilSink;
+
     let mut dom = mounted();
     let before = super::ENTRY_RENDERS.get();
     update(&mut dom, |_| {
@@ -340,6 +342,10 @@ fn clock_ticks_update_totp_without_rerendering_the_record_card() {
         clock.set(59);
     });
     assert_eq!(super::ENTRY_RENDERS.get(), before);
-    let html = dioxus_ssr::render(&dom);
-    assert!(html.contains("max=\"30\" value=\"1\""));
+    let document = kuchikiki::parse_html()
+        .one(dioxus_ssr::render(&dom))
+        .document_node;
+    assert!(document.select_first(".totp-field progress").is_err());
+    let countdown = document.select_first(".totp-countdown").unwrap();
+    assert_eq!(countdown.text_contents(), "1 с");
 }

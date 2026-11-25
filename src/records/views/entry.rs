@@ -198,9 +198,8 @@ fn TotpField() -> Element {
                                 onclick: move |_| { runtime::copy(CopyField::Totp); },
                                 code { class: "totp-code", "{totp::group(&code)}" }
                             }
-                            div { class: "totp-countdown",
-                                progress { aria_label: language.text(Text::CodeValidity), max: "{settings.period}", value: "{totp::seconds_left(settings, now)}" }
-                                span { class: "muted", {language.format(Text::S, &[totp::seconds_left(settings, now).to_string()])} }
+                            span { class: "totp-countdown muted", role: "timer", aria_label: language.text(Text::CodeValidity),
+                                {language.format(Text::S, &[totp::seconds_left(settings, now).to_string()])}
                             }
                         }
                     },
