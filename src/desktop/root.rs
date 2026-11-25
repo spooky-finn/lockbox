@@ -69,6 +69,7 @@ pub fn App() -> Element {
                 crate::desktop::workspace_view::handle_record_shortcut(state, event);
             },
             crate::desktop::tabs::TabBar {}
+            crate::desktop::links::ConfirmationNotice {}
             crate::desktop::browser::BrowserConsent {}
             crate::desktop::updates::UpdateNotice { locked: locked() }
             div { id: "space-tab-content", class: "space-tab-content", role: "tabpanel", aria_labelledby: "space-tab-{active_tab}",

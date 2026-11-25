@@ -1,7 +1,12 @@
 //! Dispatch OS URL events without performing any invitation action on receipt.
 
-use crate::sync::protocol::pairing::{LinkReference, MAX_LINK_BYTES, ManagedLink, Ticket};
+use crate::sync::protocol::pairing::{
+    ConfirmationLink, LinkReference, MAX_LINK_BYTES, ManagedLink, Ticket,
+};
 use std::sync::Mutex;
+
+mod confirmation;
+pub(super) use confirmation::ConfirmationNotice;
 
 // The first window to claim the invitation presents it for review. Bound pending
 // input and preserve the user's first link if another arrives before review.
@@ -13,6 +18,10 @@ pub fn receive(link: &str) {
     }
     if link.starts_with("lockbox://browser/") {
         super::browser::receive(link);
+    } else if link == link.trim()
+        && let Ok(reference) = ConfirmationLink::parse(link)
+    {
+        confirmation::queue(reference);
     } else if valid_invitation(link) {
         INVITATION
             .lock()
