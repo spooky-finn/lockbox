@@ -2,7 +2,7 @@
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Text {
-    MoveRecords,
+    MoveToAnotherVault,
     MoveDestination,
     MoveTab,
     MoveChooseSpace,
@@ -395,7 +395,6 @@ pub(crate) enum Text {
     CreatingVault,
     VaultActions,
     OpenVault,
-    CreateVault2,
     ForgetPath,
     Vault,
     SearchEntriesAndFolders,
@@ -615,7 +614,7 @@ pub(crate) enum Text {
 impl Text {
     pub(super) fn translations(self) -> (&'static str, &'static str) {
         match self {
-            Self::MoveRecords => ("Переместить записи", "Move records"),
+            Self::MoveToAnotherVault => ("Переместить в другое хранилище", "Move to another vault"),
             Self::MoveTab => ("{0} (вкладка {1})", "{0} (tab {1})"),
             Self::MoveDestination => ("Пространство назначения", "Destination space"),
             Self::MoveChooseSpace => ("Выберите пространство", "Choose a space"),
@@ -781,7 +780,7 @@ impl Text {
             Self::SharingStepPrepare => ("Подготовьте устройство", "Prepare your device"),
             Self::SharingStepAccept => ("Примите приглашение", "Accept the invitation"),
             Self::SharingStepConnect => ("Завершите подключение", "Finish connecting"),
-            Self::SharingHintDevice => ("Попросите участника создать запрос через «Подключиться к пространству» и передать вам файл. Откройте его, чтобы проверить устройство.", "Ask the person to create a request using Join a space and send you the file. Open it to check their device."),
+            Self::SharingHintDevice => ("Попросите участника создать запрос через «Подключиться к общему хранилищу» и передать вам файл. Откройте его, чтобы проверить устройство.", "Ask the person to create a request using Join shared vault and send you the file. Open it to check their device."),
             Self::SharingHintInvite => ("Отправьте участнику файл приглашения. Код проверки передайте через второй доверенный канал связи.", "Send the invitation file to the person. Share the verification code through a second trusted channel."),
             Self::SharingHintAdmit => ("Откройте подписанное согласие участника, чтобы подтвердить доступ.", "Open the person's signed consent to approve access."),
             Self::SharingHintPrepare => ("Сохраните запрос подключения и отправьте файл администратору пространства.", "Save your join request and send the file to the space administrator."),
@@ -815,7 +814,7 @@ impl Text {
             Self::SharingDescription => ("Управляйте доступом к общему пространству и подключайте независимые устройства.", "Manage access to the shared space and connect independent devices."),
             Self::SharingThisDevice => ("Это устройство", "This device"),
             Self::SharingExportDevice => ("Создать и сохранить запрос", "Create and save join request"),
-            Self::SharingConnect => ("Подключиться к пространству", "Join a space"),
+            Self::SharingConnect => ("Подключиться к общему хранилищу", "Join shared vault"),
             Self::SharingConnectionSteps => ("Отправьте владельцу файл устройства. Получите приглашение, подпишите согласие и импортируйте подтверждение владельца.", "Send your device file to the owner. Receive an invitation, sign your consent, then import the owner’s confirmation."),
             Self::SharingImportInvitation => ("Открыть приглашение", "Open invitation"),
             Self::SharingImportConfirmation => ("Открыть подтверждение допуска", "Open admission confirmation"),
@@ -905,7 +904,7 @@ impl Text {
             Self::FieldValidationDoesNotConnectToStorj => ("Проверка полей не обращается к Storj.", "Field validation does not connect to Storj."),
             Self::Continue => ("Продолжить", "Continue"),
             Self::FolderLocation => ("Расположение папки", "Folder location"),
-            Self::VaultRoot => ("Корень хранилища", "Vault root"),
+            Self::VaultRoot => ("Корень", "Root"),
             Self::Folder => ("Папка", "Folder"),
             Self::Entries => ("Записей", "Entries"),
             Self::Subfolders => ("Вложенных папок", "Subfolders"),
@@ -1005,8 +1004,7 @@ impl Text {
             Self::WaitingForTouchID => ("Жду Touch ID…", "Waiting for Touch ID…"),
             Self::CreatingVault => ("Создаю хранилище…", "Creating vault…"),
             Self::VaultActions => ("Действия с хранилищем", "Vault actions"),
-            Self::OpenVault => ("Открыть хранилище…", "Open vault…"),
-            Self::CreateVault2 => ("Создать хранилище…", "Create vault…"),
+            Self::OpenVault => ("Открыть хранилище", "Open vault"),
             Self::ForgetPath => ("Забыть путь", "Forget path"),
             Self::Vault => ("Хранилище", "Vault"),
             Self::SearchEntriesAndFolders => ("Поиск записей и папок", "Search entries and folders"),
@@ -1197,7 +1195,7 @@ impl Text {
             Self::RenameRequiresLocalVault => ("переименовать можно только локальное хранилище", "only local vault files can be renamed"),
             Self::VaultRenameSyncFailed => ("Хранилище переименовано, но не удалось синхронизировать изменения на диске: {error}", "Vault renamed, but the directory could not be synced to disk: {error}"),
             Self::YourSpaces => ("Ваши пространства", "Your spaces"),
-            Self::ChooseSpace => ("Выбрать пространство", "Choose a space"),
+            Self::ChooseSpace => ("Выбрать хранилище", "Select vault"),
             Self::SpaceSwitchHint => ("Пространство откроется в отдельной вкладке. Открытые вкладки сохранятся.", "Open a space in its own tab. Your other spaces stay open."),
             Self::SpaceSwitchEditing => ("Сохраните или отмените правки и дождитесь завершения импорта перед переключением.", "Save or cancel your edits and wait for any import to finish before switching."),
             Self::OpenAnotherSpace => ("Открыть другое хранилище…", "Open another vault…"),
@@ -1228,7 +1226,7 @@ impl Text {
 }
 
 pub(super) const CATALOG: &[Text] = &[
-    Text::MoveRecords,
+    Text::MoveToAnotherVault,
     Text::MoveDestination,
     Text::MoveTab,
     Text::MoveChooseSpace,
@@ -1615,7 +1613,6 @@ pub(super) const CATALOG: &[Text] = &[
     Text::CreatingVault,
     Text::VaultActions,
     Text::OpenVault,
-    Text::CreateVault2,
     Text::ForgetPath,
     Text::Vault,
     Text::SearchEntriesAndFolders,

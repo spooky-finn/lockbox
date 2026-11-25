@@ -148,7 +148,7 @@ fn parent_folder_search_excludes_the_current_subtree_and_accepts_clicks() {
         EventData::Focus(SerializedFocusData {}),
     );
     let edits = dom.render_immediate_to_vec().edits;
-    assert_eq!(paths(&dom), ["Корень хранилища", "Email"]);
+    assert_eq!(paths(&dom), ["Корень", "Email"]);
     let email = element(&edits, "directory-parent-option-1");
     let mouse = || EventData::Mouse(SerializedMouseData::default());
     assert!(!send(&dom, email, "mousedown", mouse()));

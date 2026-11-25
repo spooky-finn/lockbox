@@ -71,7 +71,7 @@ fn context_menu_starts_sidebar_selection_and_moves_only_checked_items() {
     let mut dom = VirtualDom::new(fixture);
     let initial = dom.rebuild_to_vec().edits;
     let html = dioxus_ssr::render(&dom);
-    assert!(!html.contains("Move records"));
+    assert!(!html.contains("Move to another vault"));
     assert!(!html.contains("move-tree-checkbox"));
 
     let id = dom.in_scope(ScopeId::APP, || {
@@ -98,7 +98,9 @@ fn context_menu_starts_sidebar_selection_and_moves_only_checked_items() {
     };
     dom.runtime().handle_event("contextmenu", click(), row);
     let menu = element(&dom.render_immediate_to_vec().edits, "id", MENU_ACTION_ID);
-    assert!(!dioxus_ssr::render(&dom).contains("move-tree-checkbox"));
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("Move to another vault"));
+    assert!(!html.contains("move-tree-checkbox"));
     dom.runtime().handle_event("click", click(), menu);
     let selection = dom.render_immediate_to_vec().edits;
     assert!(dioxus_ssr::render(&dom).contains("move-tree-checkbox"));

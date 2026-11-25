@@ -229,7 +229,7 @@ pub(crate) fn MoveSidebar(mut controls: SidebarMove) -> Element {
                             controls.selection.set(Some(selection));
                             notice.set(None);
                         },
-                        {language.text(Text::MoveRecords)}
+                        {language.text(Text::MoveToAnotherVault)}
                     }
                 }
               }
@@ -401,7 +401,7 @@ fn MoveDialog(selection: Selection, onclose: EventHandler<Outcome>) -> Element {
                 event.prevent_default();
                 on_cancel();
             },
-            h2 { id: "move-records-title", {language.text(Text::MoveRecords)} }
+            h2 { id: "move-records-title", {language.text(Text::MoveToAnotherVault)} }
             label { r#for: DESTINATION_ID, {language.text(Text::MoveDestination)} }
             select { id: DESTINATION_ID, value: destination_key, disabled: retry,
                 onchange: move |event| destination.set(event.value()),

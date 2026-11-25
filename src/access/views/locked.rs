@@ -327,7 +327,7 @@ pub(crate) fn LockedView() -> Element {
                 button { r#type: "button", class: "quiet", disabled: busy,
                     onclick: move |_| profiles::begin_create(),
                     Symbol { icon: Icon::FolderPlus }
-                    span { {language.text(Text::CreateVault2)} }
+                    span { {language.text(Text::CreateVault)} }
                 }
 
                 button { r#type: "button", class: "quiet", disabled: busy, onclick: move |_| profiles::begin_join(),
