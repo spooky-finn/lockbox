@@ -773,7 +773,7 @@ impl Text {
             Self::RenewedMailbox => ("Обновлённая ссылка администратора", "Renewed link from the administrator"),
             Self::ChatOwnerHint => ("Отправьте приглашение участнику в личном чате. Одобрите устройство по ссылке подтверждения, которую участник пришлёт в том же чате.", "Send the invitation to the intended person in a private chat. Approve their device using the confirmation they return in the same private chat."),
             Self::ChatJoinHint => ("Нажмите «Подключиться», если получили приглашение от владельца в вашем личном чате.", "Choose Join if you received this invitation from the owner in your private chat."),
-            Self::ChatRoleMismatch => ("Создайте новое приглашение с текущим уровнем доступа этого участника", "Create a new invitation with this member's current access level"),
+            Self::ChatRoleMismatch => ("Для дополнительного устройства участника выберите его текущий уровень доступа. Для устройства владельца используйте приглашение через файл.", "Choose the member’s current access level for their additional device. For the owner’s device, use a file invitation."),
             Self::ChatReturnHint => ("Отправьте ссылку подтверждения владельцу в том же личном чате. Оставьте профиль открытым, пока владелец одобряет устройство.", "Send the confirmation link back to the owner in the same private chat. Keep this profile open while they approve your device."),
             Self::ChatCopyConfirmation => ("Копировать ссылку подтверждения", "Copy confirmation link"),
             Self::ChatPasteConfirmation => ("Ссылка подтверждения от участника", "Confirmation link from the invited person"),
