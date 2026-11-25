@@ -2,6 +2,7 @@ use crate::desktop::i18n::Text;
 use crate::{
     desktop::{
         context::{Session, edit_unlocked, navigate},
+        move_records::{MoveItem, SidebarMove},
         widgets::{
             button::IconButton,
             icons::EntryIcon,
@@ -11,12 +12,19 @@ use crate::{
     },
     records::tree::DisplayNode,
     settings::language::Language,
+    vault::move_records::Selection,
 };
 use dioxus::prelude::*;
 use std::{
     collections::{BTreeSet, HashMap, HashSet},
     rc::Rc,
 };
+
+#[derive(Clone, Copy, PartialEq)]
+struct MoveCheck {
+    checked: bool,
+    inherited: bool,
+}
 
 #[derive(PartialEq)]
 struct RowState {
@@ -25,6 +33,7 @@ struct RowState {
     editing: bool,
     searching: bool,
     can_create: bool,
+    move_check: Option<MoveCheck>,
     language: Language,
 }
 
@@ -43,6 +52,7 @@ struct Navigation {
     searching: bool,
     read_only: bool,
     language: Language,
+    moving: Option<Selection>,
 }
 
 #[derive(Default)]
@@ -138,6 +148,7 @@ impl RenderCache {
         workspace: &Unlocked,
         state: Session,
         language: Language,
+        controls: SidebarMove,
     ) -> Element {
         #[cfg(test)]
         let started = std::time::Instant::now();
@@ -161,6 +172,7 @@ impl RenderCache {
             searching: !workspace.search.trim().is_empty(),
             read_only: workspace.vault.signing_error().is_some(),
             language,
+            moving: (*controls.selection.peek()).clone(),
         };
         let mut dirty = DirtyRows::default();
         let targeted = !fresh
@@ -169,6 +181,7 @@ impl RenderCache {
                     && previous.searching == navigation.searching
                     && previous.read_only == navigation.read_only
                     && previous.language == navigation.language
+                    && previous.moving == navigation.moving
             });
         if targeted {
             let previous = self.navigation.as_ref().unwrap();
@@ -181,7 +194,14 @@ impl RenderCache {
                 self.mark_folder(id, &mut dirty);
             }
         }
-        let (view, changed) = self.branch(&nodes, &navigation, state, targeted.then_some(&dirty));
+        let (view, changed) = self.branch(
+            &nodes,
+            &navigation,
+            state,
+            controls,
+            false,
+            targeted.then_some(&dirty),
+        );
         self.navigation = Some(navigation);
         if fresh || changed {
             self.view = view.unwrap_or_else(|| rsx! {});
@@ -196,6 +216,8 @@ impl RenderCache {
         nodes: &[DisplayNode],
         navigation: &Navigation,
         state: Session,
+        controls: SidebarMove,
+        inherited: bool,
         dirty: Option<&DirtyRows>,
     ) -> (Option<Element>, bool) {
         let editing = navigation.editing;
@@ -232,13 +254,26 @@ impl RenderCache {
                     searching || !navigation.collapsed.contains(id),
                 ),
             };
-            let can_create = folder && !editing && !navigation.read_only;
+            let can_create =
+                folder && !editing && !navigation.read_only && navigation.moving.is_none();
+            let move_check = navigation.moving.as_ref().map(|selection| {
+                let ids = if folder {
+                    &selection.folders
+                } else {
+                    &selection.entries
+                };
+                MoveCheck {
+                    checked: inherited || ids.contains(id),
+                    inherited,
+                }
+            });
             let row = RowState {
                 selected,
                 expanded,
                 editing,
                 searching,
                 can_create,
+                move_check,
                 language,
             };
             if !expanded
@@ -252,9 +287,14 @@ impl RenderCache {
                 self.forget(children);
             }
             let (children_view, children_changed) = match node {
-                DisplayNode::Folder { children, .. } if expanded => {
-                    self.branch(children, navigation, state, dirty)
-                }
+                DisplayNode::Folder { children, .. } if expanded => self.branch(
+                    children,
+                    navigation,
+                    state,
+                    controls,
+                    move_check.is_some_and(|check| check.checked),
+                    dirty,
+                ),
                 _ => (None, false),
             };
             let cache = if folder {
@@ -287,8 +327,16 @@ impl RenderCache {
                     url,
                 } => {
                     let id = id.clone();
+                    let item = MoveItem::Entry(id.clone());
+                    let shortcut = item.clone();
+                    let context_item = item.clone();
                     rsx! {
-                        li { class: "tree-leaf", key: "entry-{id}",
+                        li { class: if move_check.is_some() { "tree-leaf move-tree-leaf" } else { "tree-leaf" }, key: "entry-{id}",
+                            oncontextmenu: move |event| controls.context_menu(state, Some(context_item.clone()), event),
+                            onkeydown: move |event| controls.keyboard_menu(state, shortcut.clone(), event),
+                            if let Some(check) = move_check {
+                                {move_checkbox(controls, item, check, title, language)}
+                            }
                             button { class: if selected { "entry-row selected" } else { "entry-row" },
                                 "data-kind": "entry", "data-id": "{id}",
                                 r#type: "button", aria_current: "{selected}", disabled: editing,
@@ -303,9 +351,14 @@ impl RenderCache {
                     let toggle = id.clone();
                     let select = id.clone();
                     let create_in = id.clone();
+                    let item = MoveItem::Folder(id.clone());
+                    let shortcut = item.clone();
+                    let context_item = item.clone();
                     rsx! {
                         li { class: "tree-folder", key: "folder-{id}",
                             div { class: if selected { "folder-row selected" } else { "folder-row" },
+                                oncontextmenu: move |event| controls.context_menu(state, Some(context_item.clone()), event),
+                                onkeydown: move |event| controls.keyboard_menu(state, shortcut.clone(), event),
                                 button { class: if expanded { "tree-disclosure expanded" } else { "tree-disclosure" },
                                     r#type: "button", disabled: editing || searching,
                                     title: if expanded { language.text(Text::CollapseFolder) } else { language.text(Text::ExpandFolder) },
@@ -313,6 +366,9 @@ impl RenderCache {
                                     aria_expanded: "{expanded}", aria_controls: "folder-{id}",
                                     onclick: move |_| edit_unlocked(state, |u| u.directories.toggle(toggle.clone())),
                                     Symbol { icon: Icon::ChevronRight }
+                                }
+                                if let Some(check) = move_check {
+                                    {move_checkbox(controls, item, check, name, language)}
                                 }
                                 button { class: "folder-label", r#type: "button",
                                     "data-kind": "directory", "data-id": "{id}",
@@ -322,10 +378,12 @@ impl RenderCache {
                                     Symbol { icon: if expanded { Icon::FolderOpen } else { Icon::Folder } }
                                     span { "{name}" }
                                 }
-                                IconButton { class: "quiet folder-new-entry", icon: Icon::Plus,
-                                    label: language.format(Text::NewEntryInFolder, std::slice::from_ref(name)),
-                                    disabled: !can_create,
-                                    onclick: move |_| navigate(state, Destination::NewEntryInFolder(create_in.clone())),
+                                if move_check.is_none() {
+                                    IconButton { class: "quiet folder-new-entry", icon: Icon::Plus,
+                                        label: language.format(Text::NewEntryInFolder, std::slice::from_ref(name)),
+                                        disabled: !can_create,
+                                        onclick: move |_| navigate(state, Destination::NewEntryInFolder(create_in.clone())),
+                                    }
                                 }
                             }
                             if expanded {
@@ -352,6 +410,22 @@ impl RenderCache {
             changed.then(|| rsx! { for view in views { {view} } }),
             changed,
         )
+    }
+}
+
+fn move_checkbox(
+    controls: SidebarMove,
+    item: MoveItem,
+    check: MoveCheck,
+    name: &str,
+    language: Language,
+) -> Element {
+    rsx! {
+        input { class: "move-tree-checkbox", r#type: "checkbox",
+            aria_label: language.format(Text::MoveSelectItem, &[name]),
+            checked: check.checked, disabled: check.inherited,
+            onchange: move |event| controls.set_checked(&item, event.checked()),
+        }
     }
 }
 

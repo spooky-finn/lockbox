@@ -6,6 +6,7 @@ use crate::{
             Session, edit_unlocked, edit_workspace_ui, navigate, use_records_version,
             use_unlocked_selector,
         },
+        move_records::{MoveSidebar, SidebarMove},
         session::Screen,
         widgets::{
             button::IconButton,
@@ -79,6 +80,8 @@ pub(crate) fn Sidebar() -> Element {
     });
     let language = crate::desktop::i18n::use_language();
     let state = use_context::<Session>();
+    let controls = SidebarMove::use_controls();
+    let choosing_records = controls.selection.read().is_some();
     let summary = use_unlocked_selector(|u| {
         (
             u.vault.entries().len(),
@@ -107,15 +110,21 @@ pub(crate) fn Sidebar() -> Element {
 
     rsx! {
         aside { id: "vault-sidebar", class: "sidebar",
+            onkeydown: move |event| {
+                if event.key() == Key::Escape && !event.is_auto_repeating() && controls.dismiss() {
+                    event.prevent_default();
+                    event.stop_propagation();
+                }
+            },
             onmounted: move |_| resize.set(Some(document::eval(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/sidebar-resize.js"))))),
             div { class: "sidebar-heading",
                 h2 { {language.text(Text::Vault)} }
                 span { class: "count", "{count}" }
                 IconButton { class: "primary", icon: Icon::Plus, label: language.text(Text::NewEntry),
-                    disabled: editing_folder || read_only, onclick: move |_| navigate(state, Destination::NewEntry),
+                    disabled: choosing_records || editing_folder || read_only, onclick: move |_| navigate(state, Destination::NewEntry),
                 }
                 IconButton { class: "quiet", icon: Icon::FolderPlus, label: language.text(Text::NewFolder),
-                    disabled: editing_folder || read_only, onclick: move |_| navigate(state, Destination::NewDirectory),
+                    disabled: choosing_records || editing_folder || read_only, onclick: move |_| navigate(state, Destination::NewDirectory),
                 }
             }
             div { class: "search-row",
@@ -130,6 +139,7 @@ pub(crate) fn Sidebar() -> Element {
                 }
             }
             nav { class: "tree-scroll", aria_label: language.text(Text::EntriesAndFolders),
+                oncontextmenu: move |event| controls.context_menu(state, None, event),
                 ul { id: "vault-tree", class: "vault-tree",
                     "data-navigate-records": "{page == Page::Vault}",
                     onmounted: move |_| {
@@ -137,14 +147,16 @@ pub(crate) fn Sidebar() -> Element {
                         navigation.set(Some(eval));
                         spawn(async move {
                             while let Ok(selection) = eval.recv::<TreeAction>().await {
-                                select_tree_row(state, selection);
+                                if !matches!(selection, TreeAction::Close) || !controls.dismiss() {
+                                    select_tree_row(state, selection);
+                                }
                             }
                         });
                     },
-                    TreeContent {}
+                    TreeContent { controls }
                 }
             }
-            crate::desktop::move_records::MoveRecordsButton {}
+            MoveSidebar { controls }
             div { class: "sidebar-footer",
                 IconButton { class: "quiet", icon: Icon::Trash, label: language.text(Text::Trash),
                     disabled: editing_folder, current: (page == Page::Trash).then_some("page"),
@@ -196,7 +208,7 @@ fn SearchBox() -> Element {
 mod tests;
 
 #[component]
-fn TreeContent() -> Element {
+fn TreeContent(controls: SidebarMove) -> Element {
     let state = use_context::<Session>();
     let cache = use_hook(|| std::rc::Rc::new(std::cell::RefCell::new(RenderCache::default())));
     let settings = use_context::<Signal<crate::settings::state::Settings>>();
@@ -251,6 +263,7 @@ fn TreeContent() -> Element {
     let searching = use_memo(move || !query.read().is_empty());
     let tree_view = use_memo(move || {
         let nodes = nodes.read();
+        let _selection = controls.selection.read();
         // Search also changes expansion and empty-state behavior when the
         // resulting hierarchy happens to contain exactly the same rows.
         let _searching = searching.read();
@@ -265,7 +278,7 @@ fn TreeContent() -> Element {
             return rsx! {};
         };
         rsx! {
-            {cache.borrow_mut().render(nodes.clone(), workspace, state, language)}
+            {cache.borrow_mut().render(nodes.clone(), workspace, state, language, controls)}
             if nodes.is_empty() {
                 li { class: "muted empty-list",
                     if workspace.search.trim().is_empty() { {language.text(Text::CreateYourFirstEntryOrFolder)} }

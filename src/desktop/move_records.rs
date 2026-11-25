@@ -7,47 +7,221 @@ use crate::{
         session::Screen,
         tabs::Tabs,
         window,
-        workspace::Unlocked,
+        workspace::{Page, Unlocked},
     },
     records::tree::{self, Node, SortedTopology},
     vault::move_records::{Move, Selection, same_space},
 };
-use dioxus::prelude::*;
+use dioxus::{html::InteractionLocation, prelude::*};
 use std::{collections::BTreeMap, path::PathBuf};
 
-const TRIGGER_ID: &str = "move-records-trigger";
+const MENU_ACTION_ID: &str = "move-records-menu-action";
+const CONTINUE_ID: &str = "move-records-continue";
 const DESTINATION_ID: &str = "move-records-destination";
 const SUBMIT_ID: &str = "move-records-submit";
 
+#[derive(Clone)]
+pub(crate) enum MoveItem {
+    Entry(String),
+    Folder(String),
+}
+
+#[derive(Clone)]
+struct ContextMenu {
+    item: Option<MoveItem>,
+    position: Option<(f64, f64)>,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) struct SidebarMove {
+    pub(crate) selection: Signal<Option<Selection>>,
+    menu: Signal<Option<ContextMenu>>,
+}
+
+impl SidebarMove {
+    pub(crate) fn use_controls() -> Self {
+        Self {
+            selection: use_signal(|| None),
+            menu: use_signal(|| None),
+        }
+    }
+
+    fn open(mut self, state: Session, item: Option<MoveItem>, position: Option<(f64, f64)>) {
+        if self.selection.peek().is_some() {
+            return;
+        }
+        if matches!(&*state.peek(), Screen::Unlocked(u)
+            if u.page == Page::Vault && can_move(u)
+                && (!u.vault.entries().is_empty() || !u.vault.folders().is_empty()))
+        {
+            self.menu.set(Some(ContextMenu { item, position }));
+        }
+    }
+
+    pub(crate) fn context_menu(self, state: Session, item: Option<MoveItem>, event: MouseEvent) {
+        event.prevent_default();
+        event.stop_propagation();
+        let point = event.client_coordinates();
+        self.open(state, item, Some((point.x, point.y)));
+    }
+
+    pub(crate) fn keyboard_menu(self, state: Session, item: MoveItem, event: KeyboardEvent) {
+        if event.key() == Key::ContextMenu
+            || (event.key() == Key::F10 && event.modifiers() == Modifiers::SHIFT)
+        {
+            event.prevent_default();
+            event.stop_propagation();
+            self.open(state, Some(item), None);
+        }
+    }
+
+    pub(crate) fn dismiss(mut self) -> bool {
+        if self.menu.peek().is_some() {
+            self.menu.set(None);
+        } else if self.selection.peek().is_some() {
+            self.selection.set(None);
+        } else {
+            return false;
+        }
+        true
+    }
+
+    pub(crate) fn set_checked(mut self, item: &MoveItem, checked: bool) {
+        if let Some(selection) = self.selection.write().as_mut() {
+            selection.entire_vault = false;
+            check_item(selection, item, checked);
+        }
+    }
+}
+
+fn check_item(selection: &mut Selection, item: &MoveItem, checked: bool) {
+    let (ids, id) = match item {
+        MoveItem::Entry(id) => (&mut selection.entries, id),
+        MoveItem::Folder(id) => (&mut selection.folders, id),
+    };
+    if checked {
+        ids.insert(id.clone());
+    } else {
+        ids.remove(id);
+    }
+}
+
 #[component]
-pub(crate) fn MoveRecordsButton() -> Element {
+pub(crate) fn MoveSidebar(mut controls: SidebarMove) -> Element {
     let language = use_language();
-    let available = crate::desktop::context::use_unlocked_selector(|u| {
-        can_move(u) && !(u.vault.entries().is_empty() && u.vault.folders().is_empty())
-    });
-    let mut open = use_signal(|| false);
+    let state = use_context::<Session>();
+    let available =
+        crate::desktop::context::use_unlocked_selector(|u| u.page == Page::Vault && can_move(u));
+    let mut choosing = use_signal(|| false);
     let mut notice = use_signal(|| None::<String>);
+    let menu = controls.menu.read();
+    let selection = controls.selection.read();
 
     rsx! {
         if let Some(message) = notice.read().as_ref() {
             p { class: "move-notice muted", role: "status", "{message}" }
         }
-        button { id: TRIGGER_ID, class: "quiet", r#type: "button",
-            disabled: available() != Some(true),
-            onclick: move |_| {
-                notice.set(None);
-                open.set(true);
-            },
-            {language.text(Text::MoveRecords)}
+        if let Some(menu) = menu.as_ref().filter(|_| available() == Some(true)) {
+            { let item = menu.item.clone();
+              let style = menu.position.map(|(x, y)| format!("left:{x}px;top:{y}px"));
+              rsx! {
+                button { class: "space-switch-backdrop", r#type: "button", tabindex: "-1",
+                    aria_label: language.text(Text::Cancel),
+                    onclick: move |_| controls.menu.set(None),
+                    oncontextmenu: move |event| {
+                        event.prevent_default();
+                        controls.menu.set(None);
+                    },
+                }
+                div { class: "move-context-menu", id: "move-context-menu", role: "menu", style,
+                    onmounted: move |_| {
+                        let _ = document::eval("
+                            const menu = document.getElementById('move-context-menu');
+                            if (!menu) return;
+                            const active = document.activeElement?.getBoundingClientRect();
+                            menu.style.left = Math.max(4, Math.min(parseFloat(menu.style.left) || active?.left || 4, innerWidth - menu.offsetWidth - 4)) + 'px';
+                            menu.style.top = Math.max(4, Math.min(parseFloat(menu.style.top) || active?.bottom || 4, innerHeight - menu.offsetHeight - 4)) + 'px';
+                            menu.querySelector('button')?.focus({preventScroll: true});
+                        ");
+                    },
+                    button { id: MENU_ACTION_ID, class: "quiet", r#type: "button", role: "menuitem",
+                        onclick: move |_| {
+                            let mut selection = Selection::default();
+                            if let Some(item) = &item {
+                                check_item(&mut selection, item, true);
+                            }
+                            controls.menu.set(None);
+                            controls.selection.set(Some(selection));
+                            notice.set(None);
+                        },
+                        {language.text(Text::MoveRecords)}
+                    }
+                }
+              }
+            }
         }
-        if open() {
-            MoveDialog { onclose: move |message: Option<String>| {
-                let _ = document::eval("document.getElementById('move-records-dialog')?.close()");
-                notice.set(message);
-                open.set(false);
-            } }
+        if let Some(selection) = selection.as_ref() {
+            div { class: "move-sidebar-actions",
+                button { class: "quiet", r#type: "button",
+                    onclick: move |_| {
+                        if let Screen::Unlocked(source) = &*state.peek() {
+                            let selected = if controls.selection.peek().as_ref().is_some_and(|s| s.entire_vault) {
+                                Selection::default()
+                            } else {
+                                select_all(source)
+                            };
+                            controls.selection.set(Some(selected));
+                        }
+                    },
+                    {language.text(if selection.entire_vault { Text::MoveClearSelection } else { Text::MoveSelectAll })}
+                }
+                button { class: "quiet", r#type: "button", onclick: move |_| { controls.dismiss(); },
+                    {language.text(Text::Cancel)}
+                }
+                button { id: CONTINUE_ID, class: "primary", r#type: "button",
+                    disabled: selection.is_empty() || available() != Some(true),
+                    onclick: move |_| choosing.set(true),
+                    {language.text(Text::MoveChooseDestination)}
+                }
+            }
+            if choosing() {
+                MoveDialog { selection: selection.clone(), onclose: move |outcome: Outcome| {
+                    let _ = document::eval("document.getElementById('move-records-dialog')?.close()");
+                    choosing.set(false);
+                    match outcome {
+                        Outcome::Cancelled => {}
+                        Outcome::Interrupted => controls.selection.set(None),
+                        Outcome::Moved(message) => {
+                            controls.selection.set(None);
+                            notice.set(Some(message));
+                        }
+                    }
+                } }
+            }
         }
     }
+}
+
+fn select_all(source: &Unlocked) -> Selection {
+    let mut selection = Selection {
+        entire_vault: true,
+        ..Selection::default()
+    };
+    let topology = SortedTopology::new(&source.vault);
+    for node in tree::project_indexed(&source.vault, "", &topology) {
+        match node {
+            Node::Folder(folder, _) => selection.folders.insert(folder.id.clone()),
+            Node::Record(entry) => selection.entries.insert(entry.id.clone()),
+        };
+    }
+    selection
+}
+
+#[derive(Clone)]
+enum Outcome {
+    Cancelled,
+    Interrupted,
+    Moved(String),
 }
 
 fn can_move(workspace: &Unlocked) -> bool {
@@ -68,26 +242,16 @@ struct Destination {
     path: PathBuf,
     session: Session,
     ready: bool,
+    shared: bool,
 }
 
 #[component]
-fn MoveDialog(onclose: EventHandler<Option<String>>) -> Element {
+fn MoveDialog(selection: Selection, onclose: EventHandler<Outcome>) -> Element {
     let language = use_language();
     let state = use_context::<Session>();
     let tabs = use_context::<Signal<Tabs>>();
     let settings = use_context::<Signal<crate::settings::state::Settings>>();
     let preferences = settings.read();
-    let mut selected = use_signal(|| {
-        let mut selection = Selection::default();
-        if let Screen::Unlocked(source) = &*state.peek() {
-            if let Some(entry) = source.selected_entry() {
-                selection.entries.insert(entry.id.clone());
-            } else if let Some(id) = &source.directories.selected {
-                selection.folders.insert(id.clone());
-            }
-        }
-        selection
-    });
     let mut destination = use_signal(String::new);
     let pending = use_signal(|| None::<Move>);
     let mut error = use_signal(|| None::<String>);
@@ -120,6 +284,7 @@ fn MoveDialog(onclose: EventHandler<Option<String>>) -> Element {
                     path,
                     session,
                     ready: can_move(target),
+                    shared: target.vault.profile_summary().is_some(),
                 }
             })
         })
@@ -141,23 +306,14 @@ fn MoveDialog(onclose: EventHandler<Option<String>>) -> Element {
         .iter()
         .find(|target| target.key == destination_key && target.ready)
         .cloned();
-    let selection = selected.read();
     let retry = pending.read().is_some();
-    let tree = if retry {
-        Vec::new()
-    } else {
-        tree::project_indexed(&source.vault, "", &SortedTopology::new(&source.vault))
+    let on_cancel = move || {
+        onclose.call(if retry {
+            Outcome::Interrupted
+        } else {
+            Outcome::Cancelled
+        })
     };
-    let mut select_all = Selection {
-        entire_vault: true,
-        ..Selection::default()
-    };
-    for node in &tree {
-        match node {
-            Node::Folder(folder, _) => select_all.folders.insert(folder.id.clone()),
-            Node::Record(entry) => select_all.entries.insert(entry.id.clone()),
-        };
-    }
 
     rsx! {
         dialog { id: "move-records-dialog", class: "entry-trash-dialog move-records-dialog",
@@ -168,7 +324,7 @@ fn MoveDialog(onclose: EventHandler<Option<String>>) -> Element {
             onkeydown: move |event| event.stop_propagation(),
             oncancel: move |event| {
                 event.prevent_default();
-                onclose.call(None);
+                on_cancel();
             },
             h2 { id: "move-records-title", {language.text(Text::MoveRecords)} }
             label { r#for: DESTINATION_ID, {language.text(Text::MoveDestination)} }
@@ -182,23 +338,8 @@ fn MoveDialog(onclose: EventHandler<Option<String>>) -> Element {
             if !destinations.iter().any(|target| target.ready) {
                 p { class: "muted", {language.text(Text::MoveOpenSpace)} }
             }
-            p { class: "muted", {language.text(Text::MoveHint)} }
-            if !retry {
-                div { class: "move-selection-actions",
-                    button { class: "quiet", r#type: "button",
-                        onclick: move |_| selected.set(select_all.clone()),
-                        {language.text(Text::MoveSelectAll)}
-                    }
-                    button { class: "quiet", r#type: "button",
-                        onclick: move |_| selected.set(Selection::default()),
-                        {language.text(Text::MoveClearSelection)}
-                    }
-                }
-                ul { class: "move-selection",
-                    for node in tree {
-                        {selection_row(node, false, &selection, selected)}
-                    }
-                }
+            if target.as_ref().is_some_and(|target| target.shared) {
+                p { class: "muted", {language.text(Text::MoveSharedAccess)} }
             }
             if let Some(message) = error.read().as_ref() {
                 p { class: "error", role: "alert", {language.message(message)} }
@@ -207,80 +348,19 @@ fn MoveDialog(onclose: EventHandler<Option<String>>) -> Element {
                 p { class: "muted", {language.text(Text::MoveRetryHint)} }
             }
             div { class: "actions",
-                button { r#type: "button", onclick: move |_| onclose.call(None),
+                button { r#type: "button", onclick: move |_| on_cancel(),
                     {language.text(Text::Cancel)}
                 }
                 button { id: SUBMIT_ID, class: "primary", r#type: "button",
-                    disabled: target.is_none() || !can_move(source) || (selection.entries.is_empty() && selection.folders.is_empty()),
+                    disabled: target.is_none() || !can_move(source) || selection.is_empty(),
                     onclick: move |_| {
                         let Some(target) = &target else { return };
-                        match move_between(state, target, &source_version, &selected.peek(), pending) {
-                            Ok(()) => onclose.call(Some(language.format(Text::MoveComplete, &[&target.title]))),
+                        match move_between(state, target, &source_version, &selection, pending) {
+                            Ok(()) => onclose.call(Outcome::Moved(language.format(Text::MoveComplete, &[&target.title]))),
                             Err(message) => error.set(Some(message)),
                         }
                     },
                     {language.text(if retry { Text::MoveRetry } else { Text::MoveConfirm })}
-                }
-            }
-        }
-    }
-}
-
-fn selection_row(
-    node: Node<'_>,
-    included: bool,
-    selection: &Selection,
-    mut selected: Signal<Selection>,
-) -> Element {
-    let (id, name, username, children) = match node {
-        Node::Folder(folder, children) => (&folder.id, &folder.name, None, Some(children)),
-        Node::Record(entry) => (
-            &entry.id,
-            &entry.title,
-            Some(entry.username.as_str()).filter(|name| !name.is_empty()),
-            None,
-        ),
-    };
-    let is_folder = children.is_some();
-    let checked = included
-        || if is_folder {
-            selection.folders.contains(id)
-        } else {
-            selection.entries.contains(id)
-        };
-    let record_id = id.clone();
-    let key = format!("{is_folder}-{id}");
-
-    rsx! {
-        li { key: "{key}",
-            label {
-                input { r#type: "checkbox", checked, disabled: included,
-                    onchange: move |event| {
-                        let mut selection = selected.write();
-                        selection.entire_vault = false;
-                        let ids = if is_folder { &mut selection.folders } else { &mut selection.entries };
-                        if event.checked() {
-                            ids.insert(record_id.clone());
-                        } else {
-                            ids.remove(&record_id);
-                        }
-                    },
-                }
-                if is_folder {
-                    crate::desktop::widgets::symbol::Symbol { icon: crate::desktop::widgets::symbol::Icon::Folder }
-                }
-                span {
-                    "{name}"
-                    if let Some(username) = username {
-                        span { class: "muted", " · {username}" }
-                    }
-                }
-            }
-            if let Some(children) = children && !children.is_empty() {
-                ul {
-                    for child in children {
-                        {selection_row(child, checked, selection, selected)}
-                    }
                 }
             }
         }

@@ -11,11 +11,17 @@ use crate::{
 use std::collections::{BTreeMap, BTreeSet};
 use zeroize::Zeroize;
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, PartialEq, Eq)]
 pub(crate) struct Selection {
     pub entries: BTreeSet<String>,
     pub folders: BTreeSet<String>,
     pub entire_vault: bool,
+}
+
+impl Selection {
+    pub(crate) fn is_empty(&self) -> bool {
+        self.entries.is_empty() && self.folders.is_empty()
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -62,7 +68,7 @@ impl Move {
         if same_space(source, destination) {
             return Err(MoveError::SameSpace);
         }
-        if selection.entries.is_empty() && selection.folders.is_empty() {
+        if selection.is_empty() {
             return Err(MoveError::EmptySelection);
         }
 

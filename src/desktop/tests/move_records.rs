@@ -1,6 +1,7 @@
 use super::*;
 use crate::{
     desktop::test_support::{add, reopen, unlocked},
+    records::{folder::Folder, views::sidebar::Sidebar},
     settings::{language::Language, state::Settings},
 };
 use dioxus::{
@@ -13,8 +14,20 @@ fn fixture() -> Element {
         use_hook(|| std::rc::Rc::new([tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap()]));
     let source = use_signal(|| {
         let mut workspace = unlocked(&dirs[0]);
-        let id = add(&mut workspace, "Selected login", "fictional user", "");
-        add(&mut workspace, "Leave this login", "fictional user", "");
+        add(&mut workspace, "Selected login", "fictional user", "");
+        let folder = Folder::new("Accounts".into(), None);
+        workspace.vault.save_folder(folder.clone()).unwrap();
+        let child_id = add(&mut workspace, "Inside folder", "fictional user", "");
+        let mut child = workspace
+            .vault
+            .entries()
+            .iter()
+            .find(|entry| entry.id == child_id)
+            .unwrap()
+            .clone();
+        child.folder_id = Some(folder.id.clone());
+        workspace.vault.upsert_entry(child).unwrap();
+        let id = add(&mut workspace, "Leave this login", "fictional user", "");
         workspace.select(id);
         Screen::Unlocked(Box::new(workspace))
     });
@@ -34,39 +47,112 @@ fn fixture() -> Element {
     use_context_provider(|| source);
     use_context_provider(|| tabs);
     use_context_provider(|| settings);
-    rsx! { MoveRecordsButton {} }
+    rsx! { Sidebar {} }
 }
 
-fn element(edits: &[Mutation], name: &str) -> ElementId {
+fn element(edits: &[Mutation], attribute: &str, name: &str) -> ElementId {
     edits
         .iter()
         .find_map(|edit| match edit {
             Mutation::SetAttribute {
-                name: "id",
+                name: key,
                 value: AttributeValue::Text(value),
                 id,
                 ..
-            } if value == name => Some(*id),
+            } if *key == attribute && value == name => Some(*id),
             _ => None,
         })
         .unwrap_or_else(|| panic!("Missing element {name}"))
 }
 
 #[test]
-fn dialog_moves_the_current_record_to_another_unlocked_tab() {
+fn context_menu_starts_sidebar_selection_and_moves_only_checked_items() {
     dioxus::html::set_event_converter(Box::new(SerializedHtmlEventConverter));
     let mut dom = VirtualDom::new(fixture);
-    let trigger = element(&dom.rebuild_to_vec().edits, TRIGGER_ID);
+    let initial = dom.rebuild_to_vec().edits;
+    let html = dioxus_ssr::render(&dom);
+    assert!(!html.contains("Move records"));
+    assert!(!html.contains("move-tree-checkbox"));
+
+    let id = dom.in_scope(ScopeId::APP, || {
+        let source = consume_context::<Session>();
+        let screen = source.peek();
+        let Screen::Unlocked(source) = &*screen else {
+            panic!("locked source")
+        };
+        source
+            .vault
+            .entries()
+            .iter()
+            .find(|entry| entry.title == "Selected login")
+            .unwrap()
+            .id
+            .clone()
+    });
+    let row = element(&initial, "data-id", &id);
     let click = || {
         Event::new(
             EventData::Mouse(SerializedMouseData::default()).into_any(),
             true,
         )
     };
-    dom.runtime().handle_event("click", click(), trigger);
-    let edits = dom.render_immediate_to_vec().edits;
-    let picker = element(&edits, DESTINATION_ID);
-    let submit = element(&edits, SUBMIT_ID);
+    dom.runtime().handle_event("contextmenu", click(), row);
+    let menu = element(&dom.render_immediate_to_vec().edits, "id", MENU_ACTION_ID);
+    assert!(!dioxus_ssr::render(&dom).contains("move-tree-checkbox"));
+    dom.runtime().handle_event("click", click(), menu);
+    let selection = dom.render_immediate_to_vec().edits;
+    assert!(dioxus_ssr::render(&dom).contains("move-tree-checkbox"));
+    assert!(!dioxus_ssr::render(&dom).contains("move-records-dialog"));
+
+    let folder = element(&selection, "aria-label", "Select Accounts to move");
+    dom.runtime().handle_event(
+        "change",
+        Event::new(
+            EventData::Form(SerializedFormData::new("true".into(), vec![])).into_any(),
+            true,
+        ),
+        folder,
+    );
+    dom.render_immediate_to_vec();
+    {
+        use kuchikiki::traits::TendrilSink;
+        let document = kuchikiki::parse_html()
+            .one(dioxus_ssr::render(&dom))
+            .document_node;
+        assert!(
+            document
+                .select_first("input[aria-label='Select Selected login to move'][checked]")
+                .is_ok()
+        );
+        assert!(
+            document
+                .select_first("input[aria-label='Select Inside folder to move'][checked][disabled]")
+                .is_ok()
+        );
+        assert!(
+            document
+                .select_first("input[aria-label='Select Leave this login to move'][checked]")
+                .is_err()
+        );
+    }
+
+    let choose_destination = element(&selection, "id", CONTINUE_ID);
+    dom.runtime()
+        .handle_event("click", click(), choose_destination);
+    let dialog = dom.render_immediate_to_vec().edits;
+    let picker = element(&dialog, "id", DESTINATION_ID);
+    let submit = element(&dialog, "id", SUBMIT_ID);
+    {
+        use kuchikiki::traits::TendrilSink;
+        let document = kuchikiki::parse_html()
+            .one(dioxus_ssr::render(&dom))
+            .document_node;
+        assert!(
+            document
+                .select_first("dialog input[type=checkbox]")
+                .is_err()
+        );
+    }
     let key = dom.in_scope(ScopeId::APP, || {
         let tabs = consume_context::<Signal<Tabs>>();
         let session = tabs.peek().sessions[1];
@@ -93,19 +179,41 @@ fn dialog_moves_the_current_record_to_another_unlocked_tab() {
     assert!(!html.contains("move-records-dialog"));
     dom.in_scope(ScopeId::APP, || {
         let tabs = consume_context::<Signal<Tabs>>();
-        for (session, title) in tabs
-            .peek()
-            .sessions
-            .iter()
-            .zip(["Leave this login", "Selected login"])
-        {
-            let screen = session.peek();
-            let Screen::Unlocked(workspace) = &*screen else {
-                panic!("locked space")
-            };
-            let records = reopen(workspace);
-            assert_eq!(records.entries.len(), 1);
-            assert_eq!(records.entries[0].title, title);
-        }
+        let tabs = tabs.peek();
+        let source = tabs.sessions[0].peek();
+        let Screen::Unlocked(source) = &*source else {
+            panic!("locked source")
+        };
+        assert_eq!(
+            reopen(source)
+                .entries
+                .iter()
+                .map(|entry| entry.title.as_str())
+                .collect::<Vec<_>>(),
+            ["Leave this login"]
+        );
+        let target = tabs.sessions[1].peek();
+        let Screen::Unlocked(target) = &*target else {
+            panic!("locked target")
+        };
+        let moved = reopen(target);
+        assert_eq!(moved.folders[0].name, "Accounts");
+        assert_eq!(
+            moved
+                .entries
+                .iter()
+                .find(|entry| entry.title == "Inside folder")
+                .unwrap()
+                .folder_id
+                .as_ref(),
+            Some(&moved.folders[0].id)
+        );
+        assert!(
+            moved
+                .entries
+                .iter()
+                .any(|entry| entry.title == "Selected login")
+        );
+        assert_eq!(moved.entries.len(), 2);
     });
 }

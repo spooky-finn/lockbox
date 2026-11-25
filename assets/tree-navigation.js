@@ -4,7 +4,7 @@ const workspace = tree.closest(".workspace");
 const entryRows = ".entry-row:not(:disabled)";
 const treeRows = `${entryRows}, .folder-label:not(:disabled)`;
 const nativeControls = "input, textarea, select, [contenteditable]:not([contenteditable=false]), "
-    + "[role=textbox], [role=separator], [role=slider], summary, dialog, [role=dialog]";
+    + "[role=textbox], [role=separator], [role=slider], summary, dialog, [role=dialog], [role=menu]";
 const navigationKeys = new Set(["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Home", "End"]);
 
 function currentRow(rows) {

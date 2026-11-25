@@ -681,13 +681,15 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 99px; }
 .entry-trash-dialog::backdrop { background: rgb(0 0 0 / 45%); }
 .entry-trash-dialog p { overflow-wrap: anywhere; }
 .entry-trash-dialog .actions { justify-content: flex-end; margin-top: 16px; }
-.move-records-dialog { width: min(36rem, calc(100% - 32px)); }
+.move-records-dialog { box-sizing: border-box; }
 .move-records-dialog select { width: 100%; margin: 6px 0; }
-.move-selection-actions { display: flex; gap: 8px; }
-.move-selection { max-height: 42vh; overflow: auto; }
-.move-selection, .move-selection ul { list-style: none; margin: 0; padding-left: 14px; }
-.move-selection label { display: flex; align-items: center; gap: 8px; overflow-wrap: anywhere; padding: 4px 0; }
-.move-selection label input { width: auto; flex: none; }
+.move-context-menu { position: fixed; z-index: 21; padding: 4px; max-width: calc(100vw - 8px); border: 1px solid var(--border); border-radius: var(--button-radius); background: var(--surface); box-shadow: var(--shadow); }
+.move-context-menu button { width: 100%; text-align: left; }
+.move-sidebar-actions { display: grid; grid-template-columns: 1fr auto; gap: 4px; margin: 6px 3px 0; }
+.move-sidebar-actions .primary { grid-column: 1 / -1; }
+.move-tree-leaf { display: flex; align-items: center; gap: 3px; }
+.move-tree-leaf .entry-row { min-width: 0; padding-left: 4px; }
+.move-tree-checkbox { flex: none; width: auto; margin: 0 5px 0 2px; accent-color: var(--accent); }
 .move-notice { padding: 0 8px; overflow-wrap: anywhere; }
 .status { max-width: 100%; min-width: 0; color: var(--muted); font-size: 10px; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 2px 8px; overflow-wrap: anywhere; text-align: end; }
 .mobile-back { display: none; }

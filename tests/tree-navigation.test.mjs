@@ -186,6 +186,17 @@ test("modifiers, inputs, composition, activation keys and disabled rows retain n
     await app.close();
 });
 
+test("context menu focus keeps arrows from selecting records behind it", async () => {
+    const rows = [row(), row()];
+    rows[0].selected = true;
+    const app = fixture(rows);
+    const menuItem = { closest: selector => selector.includes("[role=menu]") ? {} : null };
+    assert.equal(app.key(menuItem, "ArrowDown").prevented, undefined);
+    assert.equal(app.messages.length, 0);
+    assert.ok(rows[0].selected);
+    await app.close();
+});
+
 test("folder arrows request expansion and collapse without toggling selection", async () => {
     const folder = row("folder-label");
     folder.selected = true;
