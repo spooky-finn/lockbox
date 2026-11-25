@@ -19,6 +19,8 @@ the restricted issuer is saved in the encrypted profile. The owner’s existing 
 
 1. Choose the guest's role and an expiry of one or seven days. Send the invitation
    to the intended person in a private conversation where you recognize each other.
+   Chat invitations support Reader and Editor. To add another device for the
+   Owner identity, use a file invitation.
 2. The guest opens the invitation or pastes it into **Join a space**. A new guest
    first sets up their local identity, recovery words and password. They review
    the vault and role, select **Join**, and return their device confirmation link
@@ -35,8 +37,9 @@ the restricted issuer is saved in the encrypted profile. The owner’s existing 
 
 The private chat authenticates both people. Use the reply sent by the intended
 guest. A confirmation link identifies one ticket and one signed device request.
-If the request has yet to arrive, keep both profiles unlocked and retry. A
-forwarded invitation can produce a competing request, but the owner's confirmation
+If the request has yet to arrive, keep both profiles unlocked and ask the
+intended guest to select **Retry connection exchange** to resend their signed request. The original
+confirmation link still works. A forwarded invitation can produce a competing request, but the owner's confirmation
 selects the specific device to approve. Older invitations that ask for a separate
 verification code continue to use the original independent-channel checks.
 

@@ -17,6 +17,7 @@ use std::sync::{
 
 #[derive(Default)]
 struct Memory {
+    single_request_slot: bool,
     messages: Mutex<BTreeMap<(Hash, Slot), Vec<u8>>>,
     request_unavailable_once: AtomicBool,
     ticket_unavailable_once: AtomicBool,
@@ -80,11 +81,11 @@ impl Mailbox for Store {
         {
             return Err(TransportError::Unavailable);
         }
-        self.0
-            .messages
-            .lock()
-            .unwrap()
-            .insert((session, slot), bytes.to_vec());
+        let mut messages = self.0.messages.lock().unwrap();
+        if self.0.single_request_slot && matches!(slot, Slot::Request(_)) {
+            messages.retain(|(id, key), _| *id != session || !matches!(key, Slot::Request(_)));
+        }
+        messages.insert((session, slot), bytes.to_vec());
         Ok(())
     }
     fn requests(&mut self, session: Hash, _: Option<&str>) -> NetworkResult<Page> {
@@ -337,7 +338,10 @@ fn returned_confirmation_waits_for_its_own_request_in_the_background_mailbox() {
     let mut guest = profile(&dir, "Guest");
     let mut other = profile(&dir, "Other");
     let guest_device = guest.device_certificate().unwrap().body.device;
-    let factory: Arc<dyn MailboxFactory> = Arc::new(Factory(Arc::new(Memory::default())));
+    let factory: Arc<dyn MailboxFactory> = Arc::new(Factory(Arc::new(Memory {
+        single_request_slot: true,
+        ..Default::default()
+    })));
     let mut controller = Pairing::new(Some(factory.clone()));
     // This test ends at admission. Provider registration has its own suite.
     controller.credential_due = Instant::now() + Duration::from_secs(600);
@@ -353,10 +357,12 @@ fn returned_confirmation_waits_for_its_own_request_in_the_background_mailbox() {
     guest.join_chat_link(&invite, 1).unwrap();
     other.join_chat_link(&invite, 1).unwrap();
 
-    // The intended guest has a signed request locally. Only the forwarded
-    // invitation holder's request has reached the controller.
+    // The production mailbox has a single request object. The forwarded
+    // invitation holder overwrites it before the controller can poll.
     cycle(&mut recipient, &mut guest, &mut guest_sync);
     let confirmation = guest.confirmation_link().unwrap();
+    cycle(&mut recipient, &mut guest, &mut guest_sync);
+    cycle(&mut forwarded, &mut other, &mut other_sync);
     for _ in 0..3 {
         cycle(&mut forwarded, &mut other, &mut other_sync);
         cycle(&mut controller, &mut owner, &mut owner_sync);
@@ -365,6 +371,9 @@ fn returned_confirmation_waits_for_its_own_request_in_the_background_mailbox() {
     assert!(owner.approve_chat_link(&confirmation, 1).is_err());
     assert_eq!(owner.space_members().unwrap().len(), 1);
 
+    // The guest's Retry republishes the original signed request. The
+    // confirmation already returned through the trusted chat still matches.
+    guest.retry_pairing().unwrap();
     cycle(&mut recipient, &mut guest, &mut guest_sync);
     cycle(&mut controller, &mut owner, &mut owner_sync);
     assert_eq!(owner.issued_links().next().unwrap().requests.len(), 2);
