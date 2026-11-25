@@ -1,0 +1,8 @@
+Vault naming
+
+- Original cloud name anchors S3 object and mailbox prefixes. Invitation routes and recovery capsules keep original name. Rename moves no objects.
+- Owner devices sign encrypted display-name transactions. Replay checks role in author epoch. Causal successor wins. Concurrent renames ordered by ancestry size and hash.
+- Checkpoints carry shared name across membership changes, joins, and recovery. Profile caches last committed name through incomplete history. Missing name falls back to original.
+- Local preferences store aliases by profile path. Alias wins on this device. Empty alias restores shared name or local file stem. Local file rename moves alias with path.
+- Personal identity name stays in encrypted profile. Future contact and recovery artifacts use new name. Existing signatures stay valid.
+- Omitted fields preserve old journal encodings. Clients need rename support before replaying new names.

@@ -12,6 +12,27 @@ fn at(path: &std::path::Path) -> Settings {
 }
 
 #[test]
+fn alias_overrides_shared_renames_until_cleared() {
+    let dir = tempfile::tempdir().unwrap();
+    let config_path = dir.path().join("config.json");
+    let vault_path = dir.path().join("cloud.lbx");
+    let mut settings = at(&config_path);
+    settings
+        .remember_profile(vault_path.clone(), Some("Shared".into()))
+        .unwrap();
+    settings.set_vault_alias(&vault_path, "  Mine  ").unwrap();
+    settings
+        .cache_space_name(&vault_path, "New shared")
+        .unwrap();
+    let mut settings = at(&config_path);
+    assert_eq!(settings.config.vault_name(&vault_path, None), "Mine");
+    settings.set_vault_alias(&vault_path, "  ").unwrap();
+    let saved = at(&config_path);
+    assert_eq!(saved.config.vault_name(&vault_path, None), "New shared");
+    assert_eq!(saved.config.last_vault, Some(vault_path));
+}
+
+#[test]
 fn tabs_keep_each_others_changes() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("config.json");

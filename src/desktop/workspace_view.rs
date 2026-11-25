@@ -154,6 +154,7 @@ fn CreationCelebration() -> Element {
 fn VaultContent() -> Element {
     let language = crate::desktop::i18n::use_language();
     let state = use_context::<Session>();
+    let settings = use_context::<Signal<crate::settings::state::Settings>>();
     let screen = state.read();
     let Screen::Unlocked(unlocked) = &*screen else {
         return rsx! {};
@@ -182,7 +183,7 @@ fn VaultContent() -> Element {
             div { class: "empty-icon", Symbol { icon: Icon::Key } }
             if let Some(profile) = unlocked.vault.profile_summary() {
                 div { class: "profile-summary",
-                    h2 { "{profile.space_name}" }
+                    h2 { {screen.vault_name(&settings.read().config).unwrap_or_default()} }
                     p { {language.format(Text::User, &[profile.username])} }
                     if profile.sync_enabled {
                         p { class: "notice", {language.text(Text::ChangesAreSavedOnThisDeviceAndSyncedThroughStorjWithEncryption)} }

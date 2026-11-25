@@ -167,6 +167,11 @@ impl Vault {
             return Ok(());
         }
 
+        if replay.ready {
+            profile
+                .shared_name
+                .clone_from(&replay.projection.space_name);
+        }
         self.records_changed();
         self.entries = replay.projection.entries();
         self.folders = replay.projection.folders();
@@ -281,7 +286,10 @@ impl Vault {
         self.commit_prepared(prepared)
     }
 
-    fn commit_sync(&mut self, mut transaction: crate::sync::protocol::Transaction) -> Result<()> {
+    pub(super) fn commit_sync(
+        &mut self,
+        mut transaction: crate::sync::protocol::Transaction,
+    ) -> Result<()> {
         use crate::sync::protocol::Machine;
         transaction.authored_at = Some(authored_now());
         let prepared = self.prepare_sync_command(|state, device| {
@@ -468,6 +476,7 @@ impl Vault {
         ));
         let old_space = profile.space.space_id;
         let old_namespace = profile.space.namespace;
+        let old_name = profile.shared_name.take();
         profile.space.space_id = descriptor.space.0;
         profile.space.namespace = descriptor.namespace.0;
 
@@ -476,6 +485,7 @@ impl Vault {
             profile.sync = previous;
             profile.space.space_id = old_space;
             profile.space.namespace = old_namespace;
+            profile.shared_name = old_name;
             return Err(error);
         }
 

@@ -108,5 +108,6 @@ pub(super) fn empty_transaction() -> Transaction {
         mutations: vec![],
         rebased_from: None,
         authored_at: None,
+        space_name: None,
     }
 }

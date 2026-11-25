@@ -25,9 +25,8 @@ pub fn App() -> Element {
         }
     });
     let locked = use_memo(move || matches!(&*state.read(), Screen::Locked(_)));
-    let title = use_memo(move || {
-        crate::desktop::window::title(&state.read(), settings.read().config.language)
-    });
+    let title =
+        use_memo(move || crate::desktop::window::title(&state.read(), &settings.read().config));
     let shown_title = use_hook(|| std::rc::Rc::new(std::cell::RefCell::new(String::new())));
 
     if *shown_title.borrow() != *title.read() {

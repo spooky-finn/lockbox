@@ -22,6 +22,9 @@ pub struct Config {
     /// Display names for cloud profiles, available before password unlock.
     #[serde(default)]
     pub space_names: std::collections::BTreeMap<PathBuf, String>,
+    /// Personal vault names, available only on this installation.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub vault_aliases: std::collections::BTreeMap<PathBuf, String>,
     /// Vaults (by `Vault::id`) whose owner turned Touch ID on.
     #[serde(default)]
     pub touch_id: Vec<String>,
@@ -45,6 +48,7 @@ impl Default for Config {
             last_vault: None,
             recent_vaults: Vec::new(),
             space_names: Default::default(),
+            vault_aliases: Default::default(),
             touch_id: Vec::new(),
             auto_lock_minutes: default_auto_lock(),
             website_icons: false,
@@ -53,6 +57,23 @@ impl Default for Config {
 }
 
 impl Config {
+    pub(crate) fn vault_name(&self, path: &Path, current_name: Option<&str>) -> String {
+        self.vault_aliases
+            .get(path)
+            .map(String::as_str)
+            .or(current_name)
+            .or_else(|| self.space_names.get(path).map(String::as_str))
+            .map_or_else(
+                || {
+                    path.file_stem()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .into_owned()
+                },
+                str::to_owned,
+            )
+    }
+
     /// `~/Library/Application Support/lockbox/config.json` on macOS,
     /// `~/.config/lockbox/config.json` on Linux.
     pub fn default_path() -> Option<PathBuf> {

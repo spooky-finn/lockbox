@@ -148,6 +148,7 @@ pub(crate) fn TabBar() -> Element {
     let language = crate::desktop::i18n::use_language();
     let tabs = use_context::<Signal<Tabs>>();
     let settings = use_context::<Signal<Settings>>();
+    let preferences = settings.read();
     let tabs = tabs.read();
     let active_index = tabs.active;
     let active = tabs.sessions[active_index].read();
@@ -177,14 +178,11 @@ pub(crate) fn TabBar() -> Element {
                 },
                 for (index, session) in tabs.sessions.iter().enumerate() {
                     { let screen = session.read();
-                      let label = match &*screen {
-                        Screen::Unlocked(u) => u.vault.profile_summary().map(|p| p.space_name.to_owned())
-                            .unwrap_or_else(|| u.vault.path().file_stem().unwrap_or_default().to_string_lossy().into_owned()),
-                        Screen::Locked(f) => f.space_name.clone().or_else(|| f.path.as_ref().map(|p| settings.read().config.space_names.get(p).cloned().unwrap_or_else(|| p.file_stem().unwrap_or_default().to_string_lossy().into_owned()))).unwrap_or_else(|| language.text(Text::ChooseSpace).to_owned()),
-                      };
+                      let label = screen.vault_name(&preferences.config)
+                        .unwrap_or_else(|| language.text(Text::ChooseSpace).to_owned());
                       let (icon, tooltip) = match &*screen {
                         Screen::Unlocked(u) => (if u.vault.profile_summary().is_some() { Icon::Cloud } else { Icon::Folder },
-                            format!("{}\n{}", crate::desktop::window::title(&screen, settings.read().config.language), u.vault.path().display())),
+                            format!("{}\n{}", crate::desktop::window::title(&screen, &preferences.config), u.vault.path().display())),
                         Screen::Locked(f) => (Icon::Lock, f.path.as_ref().map(|p| format!("{label}\n{}", p.display())).unwrap_or_else(|| label.clone())),
                       };
                       rsx! { div { key: "{index}", class: if index == tabs.active { "space-tab active" } else { "space-tab" },

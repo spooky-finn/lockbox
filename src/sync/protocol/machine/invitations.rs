@@ -37,7 +37,7 @@ impl Machine {
         Self::offer_named_invitation(state, device, None, recipient, role, expires_at)
     }
 
-    /// Include the authenticated display name used by the provider adapter.
+    /// Include the authenticated storage name used by the provider adapter.
     pub fn offer_named_invitation(
         state: &SyncState,
         device: &DeviceSecret,

@@ -170,6 +170,51 @@ pub(crate) fn rename_local_vault(name: &str) -> Result<(), String> {
     Ok(())
 }
 
+pub(crate) fn rename_shared_vault(name: &str) -> Result<(), String> {
+    let mut state = consume_context::<Session>();
+    let mut settings = consume_context::<Signal<Settings>>();
+    let language = settings.peek().config.language;
+    let mut screen = state.write();
+    if !screen.can_switch_profile() {
+        return Err(language.text(Text::SpaceSwitchEditing).to_owned());
+    }
+    let Screen::Unlocked(workspace) = &mut *screen else {
+        return Err(language.text(Text::UnlockToRenameVault).to_owned());
+    };
+    workspace.vault.rename_shared(name).map_err(|error| {
+        language.format(
+            Text::CouldNotRenameVault,
+            &[language.message(&error.to_string())],
+        )
+    })?;
+    workspace.sync.saved();
+    workspace.error = settings
+        .write()
+        .cache_space_name(workspace.vault.path(), name.trim())
+        .err();
+    Ok(())
+}
+
+pub(crate) fn rename_vault_for_me(name: &str) -> Result<(), String> {
+    let state = consume_context::<Session>();
+    let mut settings = consume_context::<Signal<Settings>>();
+    let language = settings.peek().config.language;
+    let screen = state.peek();
+    if !screen.can_switch_profile() {
+        return Err(language.text(Text::SpaceSwitchEditing).to_owned());
+    }
+    let Screen::Unlocked(workspace) = &*screen else {
+        return Err(language.text(Text::UnlockToRenameVault).to_owned());
+    };
+    let name = name.trim();
+    if !name.is_empty() && !crate::sync::protocol::pairing::valid_name(name) {
+        return Err(language.text(Text::InvalidDisplayName).to_owned());
+    }
+    settings
+        .write()
+        .set_vault_alias(workspace.vault.path(), name)
+}
+
 pub(crate) fn create_from_switcher(joining: bool) {
     if !consume_context::<Session>().peek().can_switch_profile() {
         return;

@@ -259,6 +259,7 @@ impl ProfileStore {
         state.outbox = Machine::control_intent_dependencies(&state)?;
         profile.space.space_id = state.space.0;
         profile.space.namespace = state.namespace.0;
+        profile.shared_name = projection.space_name.clone();
         profile.sync = Some(state);
         profile.enable_cloud_backup(root)?;
         let backup = profile.cloud_backup.as_mut().unwrap();

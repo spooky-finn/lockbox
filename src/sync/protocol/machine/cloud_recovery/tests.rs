@@ -154,6 +154,7 @@ fn recovery_proof_preserves_control_addresses_and_rejects_duplicate_or_noncontro
                 mutations: vec![],
                 rebased_from: None,
                 authored_at: None,
+                space_name: None,
             },
         )
         .unwrap(),
@@ -266,6 +267,7 @@ fn unacknowledged_capsule_retries_exact_bytes_and_acknowledged_snapshot_is_dedup
                 mutations: vec![],
                 rebased_from: None,
                 authored_at: None,
+                space_name: None,
             },
         )
         .unwrap(),

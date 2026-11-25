@@ -75,6 +75,8 @@ fn MoveDialog(onclose: EventHandler<Option<String>>) -> Element {
     let language = use_language();
     let state = use_context::<Session>();
     let tabs = use_context::<Signal<Tabs>>();
+    let settings = use_context::<Signal<crate::settings::state::Settings>>();
+    let preferences = settings.read();
     let mut selected = use_signal(|| {
         let mut selection = Selection::default();
         if let Screen::Unlocked(source) = &*state.peek() {
@@ -113,7 +115,7 @@ fn MoveDialog(onclose: EventHandler<Option<String>>) -> Element {
                 Destination {
                     key: format!("{vault_id}:{path:?}"),
                     tab: index + 1,
-                    title: window::title(&screen, language),
+                    title: window::title(&screen, &preferences.config),
                     vault_id,
                     path,
                     session,

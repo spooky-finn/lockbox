@@ -17,6 +17,7 @@ pub(super) struct PendingExchange {
 struct ReceivedView {
     entries: Vec<Entry>,
     folders: Vec<Folder>,
+    shared_name: Option<String>,
 }
 
 impl ReceivedView {
@@ -25,6 +26,10 @@ impl ReceivedView {
         Self {
             entries: std::mem::replace(&mut vault.entries, self.entries),
             folders: std::mem::replace(&mut vault.folders, self.folders),
+            shared_name: std::mem::replace(
+                &mut vault.profile.as_mut().unwrap().shared_name,
+                self.shared_name,
+            ),
         }
     }
 }
@@ -87,6 +92,7 @@ impl Vault {
         let view = projection.map(|projection| ReceivedView {
             entries: projection.entries(),
             folders: projection.folders(),
+            shared_name: projection.space_name,
         });
         self.commit_received(PendingExchange {
             journal: candidate,

@@ -169,6 +169,9 @@ pub struct Transaction {
     /// Omission preserves the exact canonical encoding of legacy transactions.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub authored_at: Option<u64>,
+    /// A standalone owner-authored change to the shared display name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub space_name: Option<String>,
 }
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -191,6 +194,8 @@ pub struct Record {
 #[serde(deny_unknown_fields)]
 pub struct Projection {
     pub records: Vec<Record>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub space_name: Option<String>,
 }
 
 impl Projection {
@@ -289,6 +294,13 @@ impl Projection {
     }
 
     pub(super) fn validate(&self) -> Result<()> {
+        if self
+            .space_name
+            .as_deref()
+            .is_some_and(|name| !super::pairing::valid_name(name))
+        {
+            return Err(Error::InvalidTransaction);
+        }
         if self.records.len() > 100_000 {
             return Err(Error::ResourceBudgetExceeded);
         }
@@ -354,6 +366,16 @@ impl Transaction {
         // Do not compare with the reader's clock: offline and skewed clocks are valid.
         if self.authored_at.is_some_and(|at| at > 253_402_300_799) {
             return Err(Error::InvalidTransaction);
+        }
+        if let Some(name) = &self.space_name {
+            return if self.mutations.is_empty()
+                && self.rebased_from.is_none()
+                && super::pairing::valid_name(name)
+            {
+                Ok(())
+            } else {
+                Err(Error::InvalidTransaction)
+            };
         }
         if self.mutations.len() > MAX_MUTATIONS {
             return Err(Error::ResourceBudgetExceeded);
@@ -473,6 +495,7 @@ impl Transaction {
             mutations,
             rebased_from: None,
             authored_at: None,
+            space_name: None,
         })
     }
 
@@ -486,6 +509,7 @@ impl Transaction {
             }],
             rebased_from: None,
             authored_at: None,
+            space_name: None,
         }
     }
 }
@@ -529,6 +553,7 @@ pub(super) fn project<'a>(
         }
     }
     Projection {
+        space_name: baseline.space_name.clone(),
         records: versions
             .into_iter()
             .filter_map(|(entity, mut versions)| {

@@ -193,6 +193,9 @@ impl Machine {
 
         let replay = Self::replay_state(state, device)?;
         replay.require_writer()?;
+        if transaction.space_name.is_some() && replay.role != Some(Role::Owner) {
+            return Err(Error::InsufficientRole);
+        }
         Self::prepare_transaction(state, device, transaction, replay, false)
     }
 
@@ -220,6 +223,7 @@ impl Machine {
                 mutations: vec![],
                 rebased_from: None,
                 authored_at: None,
+                space_name: None,
             },
             replay,
             true,
@@ -480,7 +484,10 @@ impl Machine {
                 &signed.body.ciphertext,
                 &canonical(header)?,
             )?;
-            let transaction = decode(&plaintext)?;
+            let transaction: Transaction = decode(&plaintext)?;
+            if transaction.space_name.is_some() {
+                continue;
+            }
             edits.push(ExcludedEdit {
                 hash,
                 author: header.author,
@@ -553,6 +560,7 @@ impl Machine {
                 mutations,
                 rebased_from: Some(excluded),
                 authored_at,
+                space_name: None,
             },
             replay,
             false,

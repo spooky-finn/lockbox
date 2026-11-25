@@ -78,7 +78,45 @@ impl Settings {
             }
             config.space_names.remove(source);
             config.space_names.remove(destination);
+            config.vault_aliases.remove(destination);
+            if let Some(alias) = config.vault_aliases.remove(source) {
+                config
+                    .vault_aliases
+                    .insert(destination.to_path_buf(), alias);
+            }
         })
+    }
+
+    pub(crate) fn cache_space_name(&mut self, path: &Path, name: &str) -> Result<(), String> {
+        self.update(|config| {
+            config
+                .space_names
+                .insert(path.to_path_buf(), name.to_owned());
+        })
+    }
+
+    pub(crate) fn set_vault_alias(&mut self, path: &Path, name: &str) -> Result<(), String> {
+        let name = name.trim();
+        let mut previous = None;
+        let saved = self.update(|config| {
+            previous = if name.is_empty() {
+                config.vault_aliases.remove(path)
+            } else {
+                config
+                    .vault_aliases
+                    .insert(path.to_path_buf(), name.to_owned())
+            };
+        });
+        if saved.is_err() {
+            if let Some(previous) = previous {
+                self.config
+                    .vault_aliases
+                    .insert(path.to_path_buf(), previous);
+            } else {
+                self.config.vault_aliases.remove(path);
+            }
+        }
+        saved
     }
 
     /// Include metadata saved before the recent-profile list was introduced.

@@ -12,6 +12,7 @@ fn remembered_path_survives_a_restart() {
         auto_lock_minutes: 15,
         website_icons: true,
         space_names: [("/tmp/vault.lbx".into(), "Family".into())].into(),
+        vault_aliases: [("/tmp/vault.lbx".into(), "Home".into())].into(),
         appearance: crate::settings::appearance::Appearance::default(),
     };
     config.save(&path).unwrap();

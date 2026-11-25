@@ -72,7 +72,11 @@ pub(crate) struct BootstrapProfile {
     #[serde(default)]
     #[zeroize(skip)]
     pub(crate) participant_names: std::collections::BTreeMap<crate::sync::protocol::Hash, String>,
+    /// Original name used by the storage prefix and pairing routes.
     pub(crate) space_name: String,
+    /// Last verified shared display name, retained while history is incomplete.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) shared_name: Option<String>,
     pub(crate) identity: PublicIdentity,
     device: DeviceKeys,
     pub(crate) space: SpaceKeys,
@@ -180,6 +184,7 @@ impl BootstrapProfile {
             username,
             participant_names: Default::default(),
             space_name,
+            shared_name: None,
             identity,
             device,
             space,
@@ -214,6 +219,10 @@ impl BootstrapProfile {
             && self.root_capsule.validate()
             && !self.username.trim().is_empty()
             && !self.space_name.trim().is_empty()
+            && self
+                .shared_name
+                .as_deref()
+                .is_none_or(crate::sync::protocol::pairing::valid_name)
             && self.sync.as_ref().is_none_or(|sync| {
                 sync.space.0 == self.space.space_id && sync.namespace.0 == self.space.namespace
             })

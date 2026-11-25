@@ -157,6 +157,79 @@ fn delivery(from: &Vault) -> Download {
 }
 
 #[test]
+fn shared_rename_syncs_without_changing_routes_or_closing_the_epoch() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut owner = profile_vault(&dir.path().join("owner.lbx"), "Alice");
+    let editor_path = dir.path().join("editor.lbx");
+    let mut editor = profile_vault(&editor_path, "Bob");
+    share(&mut owner, &mut editor, Role::Editor);
+    assert!(owner.can_rename_shared());
+    assert!(!editor.can_rename_shared());
+    let descriptor = owner.space_descriptor().unwrap();
+    let membership = owner.space_anchor().unwrap();
+
+    owner.rename_shared("  New cloud name  ").unwrap();
+    assert!(owner.space_descriptor().unwrap() == descriptor);
+    assert_eq!(owner.space_anchor().unwrap(), membership);
+    assert_eq!(
+        owner.profile_summary().unwrap().space_name,
+        "New cloud name"
+    );
+    assert_eq!(owner.profile.as_ref().unwrap().space_name, "Team");
+    assert!(matches!(
+        editor.rename_shared("Editor name"),
+        Err(VaultError::Sync(
+            crate::sync::protocol::Error::InsufficientRole
+        ))
+    ));
+    editor
+        .upsert_entry(entry("Concurrent editor record"))
+        .unwrap();
+    owner.receive_sync(delivery(&editor)).unwrap();
+    assert_eq!(owner.entries()[0].title, "Concurrent editor record");
+
+    fs::create_dir(sibling(&editor_path, "tmp")).unwrap();
+    assert!(editor.receive_sync(delivery(&owner)).is_err());
+    assert_eq!(editor.profile_summary().unwrap().space_name, "Team");
+    fs::remove_dir(sibling(&editor_path, "tmp")).unwrap();
+    editor.recover_exchange().unwrap();
+    assert_eq!(
+        editor.profile_summary().unwrap().space_name,
+        "New cloud name"
+    );
+    editor.set_username("  Robert  ").unwrap();
+    drop(editor);
+    let password = SecretString::from("master".to_owned());
+    let editor = Vault::open(&editor_path, &password).unwrap();
+    let summary = editor.profile_summary().unwrap();
+    assert_eq!(summary.space_name, "New cloud name");
+    assert_eq!(summary.username, "Robert");
+    assert_eq!(editor.profile.as_ref().unwrap().space_name, "Team");
+    assert_eq!(owner.profile_summary().unwrap().username, "Alice");
+
+    let mut reader = profile_vault(&dir.path().join("reader.lbx"), "Charlie");
+    share(&mut owner, &mut reader, Role::Reader);
+    assert!(!reader.can_rename_shared());
+    assert_eq!(
+        reader.profile_summary().unwrap().space_name,
+        "New cloud name"
+    );
+    assert_eq!(reader.profile.as_ref().unwrap().space_name, "Team");
+    assert!(matches!(
+        reader.rename_shared("Reader name"),
+        Err(VaultError::Sync(
+            crate::sync::protocol::Error::InsufficientRole
+        ))
+    ));
+    reader.set_username("Charles").unwrap();
+
+    owner.rename_shared("Final name").unwrap();
+    reader.receive_sync(delivery(&owner)).unwrap();
+    assert_eq!(reader.profile_summary().unwrap().space_name, "Final name");
+    assert_eq!(reader.profile_summary().unwrap().username, "Charles");
+}
+
+#[test]
 fn local_event_and_outbox_survive_restart_without_network() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("alice.lbx");
@@ -315,6 +388,7 @@ fn automatic_frontier_folding_uses_durable_intents_before_the_requested_edit() {
                     mutations: vec![],
                     rebased_from: None,
                     authored_at: None,
+                    space_name: None,
                 },
             )
             .unwrap(),

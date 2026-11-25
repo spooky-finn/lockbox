@@ -85,7 +85,10 @@ fn deleted(kind: EntityKind, id: u8, revision: u8) -> Record {
 
 fn projection(mut records: Vec<Record>) -> Projection {
     records.sort_by(|a, b| a.entity.cmp(&b.entity));
-    Projection { records }
+    Projection {
+        records,
+        ..Projection::default()
+    }
 }
 
 #[test]
@@ -107,6 +110,7 @@ fn value_identity_requires_matching_entity_kind_and_id() {
             }],
             rebased_from: None,
             authored_at: None,
+            space_name: None,
         };
         transaction.validate(&Projection::default()).unwrap();
         let other_kind = match kind {
@@ -489,6 +493,7 @@ fn transaction_bases_require_every_head_in_exact_order() {
         .collect(),
         rebased_from: None,
         authored_at: None,
+        space_name: None,
     };
     transaction.validate(&before).unwrap();
     for (index, mutation) in transaction.mutations.iter().enumerate() {

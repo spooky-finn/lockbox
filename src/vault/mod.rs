@@ -58,6 +58,8 @@ pub enum VaultError {
     AlreadyExists(PathBuf),
     #[error("enter a valid vault filename")]
     InvalidVaultFilename,
+    #[error("enter a name of at most 256 bytes with no control characters")]
+    InvalidDisplayName,
     #[error("only local vault files can be renamed")]
     RenameRequiresLocalVault,
     #[error("this is not a lockbox file or it is truncated")]

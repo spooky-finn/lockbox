@@ -45,6 +45,8 @@ pub fn config(first: bool) -> Config {
     let config = Config::new()
         .with_window(window)
         .with_disable_context_menu(true)
+        // The WebView2 file-drop hook replaces the browser's native drag events.
+        .with_disable_drag_drop_handler(cfg!(target_os = "windows"))
         .with_navigation_handler(|_| false);
 
     if first || cfg!(not(target_os = "macos")) {
@@ -197,24 +199,20 @@ fn attach_tab(
 
 /// Native tab and window-list label. Cloud profiles are named after their
 /// space because their files use random names under `~/.lockbox`.
-pub(crate) fn title(screen: &Screen, language: Language) -> String {
+pub(crate) fn title(screen: &Screen, config: &crate::settings::config::Config) -> String {
     let Screen::Unlocked(unlocked) = screen else {
         return "lockbox".into();
     };
 
-    let vault = &unlocked.vault;
-    let (name, kind) = match vault.profile_summary() {
-        Some(profile) => (profile.space_name.to_owned(), Text::TabCloud),
-        None => (
-            vault
-                .path()
-                .file_stem()
-                .map(|name| name.to_string_lossy().into_owned())
-                .unwrap_or_else(|| "lockbox".into()),
-            Text::TabLocal,
-        ),
+    let kind = if unlocked.vault.profile_summary().is_some() {
+        Text::TabCloud
+    } else {
+        Text::TabLocal
     };
-    format!("{name} — {}", language.text(kind))
+    let name = screen
+        .vault_name(config)
+        .unwrap_or_else(|| "lockbox".into());
+    format!("{name} — {}", config.language.text(kind))
 }
 
 #[cfg(test)]

@@ -7,7 +7,7 @@ use crate::{
     },
     desktop::{security::Security, workspace::Unlocked},
     platform::touchid::Biometrics,
-    settings::state::Settings,
+    settings::{config::Config, state::Settings},
 };
 
 pub(crate) enum Screen {
@@ -16,6 +16,25 @@ pub(crate) enum Screen {
 }
 
 impl Screen {
+    pub(crate) fn vault_name(&self, config: &Config) -> Option<String> {
+        match self {
+            Self::Unlocked(workspace) => {
+                let path = workspace.vault.path();
+                let filename = path.file_stem().unwrap_or_default().to_string_lossy();
+                let name = workspace
+                    .vault
+                    .profile_summary()
+                    .map_or(filename.as_ref(), |profile| profile.space_name);
+                Some(config.vault_name(path, Some(name)))
+            }
+            Self::Locked(form) => form
+                .path
+                .as_deref()
+                .map(|path| config.vault_name(path, form.space_name.as_deref()))
+                .or_else(|| form.space_name.clone()),
+        }
+    }
+
     pub(crate) fn can_switch_profile(&self) -> bool {
         match self {
             Self::Unlocked(workspace) => {

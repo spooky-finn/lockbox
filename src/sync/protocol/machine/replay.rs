@@ -229,7 +229,7 @@ impl Machine {
             let baseline: Projection = decode(&plaintext)?;
             baseline.validate()?;
 
-            if index == 0 && !baseline.records.is_empty() {
+            if index == 0 && (!baseline.records.is_empty() || baseline.space_name.is_some()) {
                 return Err(Error::CheckpointMismatch);
             }
 
@@ -404,7 +404,7 @@ impl EpochContext<'_> {
             accepted.keys().copied().collect()
         };
 
-        let projection = project(
+        let mut projection = project(
             baseline,
             included
                 .iter()
@@ -421,9 +421,18 @@ impl EpochContext<'_> {
         });
 
         let mut ordered = record_history.requested().then(Vec::new);
+        let mut latest_name = None;
         // Ancestry validation is required even when display revisions are omitted.
         for hash in &included {
             let depth = ancestry(&accepted[hash].header.parents, &accepted)?.len();
+            // Later causal names have more ancestors. Hash order resolves concurrent
+            // renames across devices belonging to the same owner.
+            let order = (depth, *hash);
+            if let Some(name) = &accepted[hash].transaction.space_name
+                && latest_name.is_none_or(|(current, _)| order > current)
+            {
+                latest_name = Some((order, name));
+            }
             if let Some(ordered) = &mut ordered
                 && accepted[hash]
                     .transaction
@@ -433,6 +442,9 @@ impl EpochContext<'_> {
             {
                 ordered.push((depth, hash));
             }
+        }
+        if let Some((_, name)) = latest_name {
+            projection.space_name = Some(name.clone());
         }
         let history = if let Some(mut ordered) = ordered {
             ordered.sort_by_key(|(depth, hash)| (*depth, **hash));
@@ -572,7 +584,11 @@ fn authenticate_changes<'a>(
             if plaintext.len() > crate::sync::protocol::MAX_TRANSACTION_BYTES {
                 return Err(Error::ResourceBudgetExceeded);
             }
-            decode(&plaintext)
+            let transaction: Transaction = decode(&plaintext)?;
+            if transaction.space_name.is_some() && member.role != Role::Owner {
+                return Err(Error::InsufficientRole);
+            }
+            Ok(transaction)
         };
 
         match check() {

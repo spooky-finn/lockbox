@@ -189,6 +189,22 @@ fn tick_session(mut state: Session) {
                     if let Some(error) = workspace.sync.tick(&mut workspace.vault, editing) {
                         workspace.error = Some(error);
                     }
+                    if let Some(profile) = workspace.vault.profile_summary() {
+                        let mut settings = consume_context::<Signal<Settings>>();
+                        let path = workspace.vault.path();
+                        let changed = settings
+                            .peek()
+                            .config
+                            .space_names
+                            .get(path)
+                            .is_none_or(|name| name != profile.space_name);
+                        if changed
+                            && let Err(error) =
+                                settings.write().cache_space_name(path, profile.space_name)
+                        {
+                            workspace.error = Some(error);
+                        }
+                    }
                 }
             });
         }

@@ -1,6 +1,25 @@
 use crate::sync::protocol::machine::tests::*;
 
 #[test]
+fn signed_editor_transaction_cannot_rename_the_space() {
+    let (mut state, owner) = owner();
+    let (editor, certificate) = identity(2);
+    admit(&mut state, &owner, &editor, certificate, Role::Editor);
+    let replay = Machine::replay(&state, &owner).unwrap();
+    let name = Transaction {
+        space_name: Some("Editor name".into()),
+        ..empty_transaction()
+    };
+    let change = encrypted_change(&state, replay.membership, &editor, 1, None, vec![], &name);
+    let hash = change.hash().unwrap();
+    Machine::receive(&mut state, hash, change.bytes().unwrap()).unwrap();
+    let replay = Machine::replay(&state, &owner).unwrap();
+    assert!(replay.ready);
+    assert_eq!(replay.rejected[&hash], Error::InsufficientRole);
+    assert!(replay.projection.space_name.is_none());
+}
+
+#[test]
 fn reader_knowing_the_epoch_key_still_cannot_write() {
     let (mut state, owner_key) = owner();
     let (reader, certificate) = identity(3);
@@ -13,6 +32,7 @@ fn reader_knowing_the_epoch_key_still_cannot_write() {
                 mutations: vec![],
                 rebased_from: None,
                 authored_at: None,
+                space_name: None,
             }
         ),
         Err(Error::InsufficientRole)
@@ -90,6 +110,7 @@ fn revocation_closes_frontier_and_preserves_late_offline_edits() {
                 mutations: vec![],
                 rebased_from: None,
                 authored_at: None,
+                space_name: None,
             }
         ),
         Err(Error::MissingDependency | Error::UnauthorizedDevice)

@@ -13,13 +13,11 @@ use crate::{
 use dioxus::prelude::*;
 use std::path::Path;
 
-pub(crate) fn profile_name(path: &Path, config: &Config) -> String {
-    config.space_names.get(path).cloned().unwrap_or_else(|| {
-        path.file_stem()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .into_owned()
-    })
+#[derive(Clone, Copy, PartialEq)]
+enum Rename {
+    File,
+    Shared,
+    Alias,
 }
 
 fn close(mut open: Signal<bool>) {
@@ -33,30 +31,33 @@ pub(crate) fn SpaceSwitcher() -> Element {
     let state = use_context::<Session>();
     let mut settings = use_context::<Signal<Settings>>();
     let mut open = use_signal(|| false);
-    let mut rename = use_signal(|| None::<String>);
+    let mut rename = use_signal(|| None::<(Rename, String)>);
     let mut rename_error = use_signal(|| None::<String>);
+    let shared_name = use_memo(move || {
+        if !open() {
+            return None;
+        }
+        let screen = state.read();
+        let Screen::Unlocked(workspace) = &*screen else {
+            return None;
+        };
+        if !screen.can_switch_profile() || !workspace.vault.can_rename_shared() {
+            return None;
+        }
+        workspace
+            .vault
+            .profile_summary()
+            .map(|profile| profile.space_name.to_owned())
+    })();
     let screen = state.read();
     let preferences = settings.read();
     let current = match &*screen {
         Screen::Unlocked(workspace) => Some(workspace.vault.path().to_path_buf()),
         Screen::Locked(form) => form.path.clone(),
     };
-    let name = match &*screen {
-        Screen::Unlocked(workspace) => workspace
-            .vault
-            .profile_summary()
-            .map(|profile| profile.space_name.to_owned())
-            .unwrap_or_else(|| profile_name(workspace.vault.path(), &preferences.config)),
-        Screen::Locked(form) => form
-            .space_name
-            .clone()
-            .or_else(|| {
-                current
-                    .as_deref()
-                    .map(|path| profile_name(path, &preferences.config))
-            })
-            .unwrap_or_else(|| language.text(Text::ChooseSpace).to_owned()),
-    };
+    let name = screen
+        .vault_name(&preferences.config)
+        .unwrap_or_else(|| language.text(Text::ChooseSpace).to_owned());
     let cloud = match &*screen {
         Screen::Unlocked(workspace) => workspace.vault.profile_summary().is_some(),
         Screen::Locked(form) => {
@@ -68,7 +69,12 @@ pub(crate) fn SpaceSwitcher() -> Element {
     };
     let allowed = screen.can_switch_profile();
     let busy = matches!(&*screen, Screen::Locked(form) if form.busy());
-    let can_rename = allowed && !cloud && matches!(&*screen, Screen::Unlocked(_));
+    let can_rename = allowed && matches!(&*screen, Screen::Unlocked(_));
+    let alias = current
+        .as_ref()
+        .and_then(|path| preferences.config.vault_aliases.get(path))
+        .cloned()
+        .unwrap_or_default();
     let filename = current
         .as_deref()
         .and_then(Path::file_name)
@@ -81,6 +87,65 @@ pub(crate) fn SpaceSwitcher() -> Element {
     {
         paths.insert(0, path.clone());
     }
+    let rename_form = if open()
+        && let Some((kind, value)) = rename()
+    {
+        let disabled = !can_rename
+            || match kind {
+                Rename::File => cloud,
+                Rename::Shared => shared_name.is_none(),
+                Rename::Alias => false,
+            };
+        let label = match kind {
+            Rename::File => Text::VaultFilename,
+            Rename::Shared => Text::SharedVaultName,
+            Rename::Alias => Text::PersonalVaultName,
+        };
+        rsx! {
+            form { class: "space-rename-form",
+                onsubmit: move |event| {
+                    event.prevent_default();
+                    if !disabled && let Some((kind, value)) = rename() {
+                        let result = match kind {
+                            Rename::File => profiles::rename_local_vault(&value),
+                            Rename::Shared => profiles::rename_shared_vault(&value),
+                            Rename::Alias => profiles::rename_vault_for_me(&value),
+                        };
+                        match result {
+                            Ok(()) => close(open),
+                            Err(error) => rename_error.set(Some(error)),
+                        }
+                    }
+                },
+                label { r#for: "vault-name", {language.text(label)} }
+                input { id: "vault-name", r#type: "text", value: "{value}", disabled,
+                    autocomplete: "off", autofocus: true,
+                    onmounted: move |event: MountedEvent| async move {
+                        let _ = event.set_focus(true).await;
+                    },
+                    oninput: move |event| {
+                        rename.set(Some((kind, event.value())));
+                        rename_error.set(None);
+                    },
+                }
+                if kind == Rename::Alias {
+                    p { class: "muted", {language.text(Text::PersonalVaultNameHelp)} }
+                }
+                if let Some(error) = rename_error() {
+                    p { class: "error", role: "alert", "{error}" }
+                }
+                div { class: "space-rename-actions",
+                    button { r#type: "button", class: "quiet",
+                        onclick: move |_| { rename.set(None); rename_error.set(None); },
+                        {language.text(Text::Cancel)}
+                    }
+                    button { r#type: "submit", disabled: disabled || (kind != Rename::Alias && value.trim().is_empty()), {language.text(Text::Save)} }
+                }
+            }
+        }
+    } else {
+        rsx! {}
+    };
     rsx! {
         div { class: "space-switcher",
             onkeydown: move |event: KeyboardEvent| {
@@ -137,7 +202,7 @@ pub(crate) fn SpaceSwitcher() -> Element {
                             {
                                 let selected = current.as_ref() == Some(&path);
                                 let is_cloud = preferences.config.space_names.contains_key(&path) || (selected && cloud);
-                                let label = if selected { name.clone() } else { profile_name(&path, &preferences.config) };
+                                let label = if selected { name.clone() } else { preferences.config.vault_name(&path, None) };
                                 let missing = !path.is_file();
                                 let display_path = path.display().to_string();
                                 rsx! {
@@ -161,45 +226,24 @@ pub(crate) fn SpaceSwitcher() -> Element {
                             }
                         }
                     }
-                    if let Some(filename) = rename() {
-                        form { class: "space-rename-form",
-                            onsubmit: move |event| {
-                                event.prevent_default();
-                                if let Some(filename) = rename() {
-                                    match profiles::rename_local_vault(&filename) {
-                                        Ok(()) => close(open),
-                                        Err(error) => rename_error.set(Some(error)),
-                                    }
-                                }
-                            },
-                            label { r#for: "vault-filename", {language.text(Text::VaultFilename)} }
-                            input { id: "vault-filename", r#type: "text", value: "{filename}", disabled: !can_rename,
-                                autocomplete: "off", autofocus: true,
-                                onmounted: move |event: MountedEvent| async move {
-                                    let _ = event.set_focus(true).await;
-                                },
-                                oninput: move |event| {
-                                    rename.set(Some(event.value()));
-                                    rename_error.set(None);
-                                },
-                            }
-                            if let Some(error) = rename_error() {
-                                p { class: "error", role: "alert", "{error}" }
-                            }
-                            div { class: "space-rename-actions",
-                                button { r#type: "button", class: "quiet",
-                                    onclick: move |_| { rename.set(None); rename_error.set(None); },
-                                    {language.text(Text::Cancel)}
-                                }
-                                button { r#type: "submit", disabled: !can_rename || filename.trim().is_empty(), {language.text(Text::Save)} }
-                            }
-                        }
-                    }
+                    {rename_form}
                     div { class: "space-switch-actions",
                         if can_rename && rename().is_none() {
+                            if !cloud {
+                                button { class: "quiet", r#type: "button",
+                                    onclick: move |_| rename.set(Some((Rename::File, filename.clone()))),
+                                    Symbol { icon: Icon::Edit } {language.text(Text::RenameVaultFile)}
+                                }
+                            }
+                            if let Some(shared_name) = shared_name {
+                                button { class: "quiet", r#type: "button",
+                                    onclick: move |_| rename.set(Some((Rename::Shared, shared_name.clone()))),
+                                    Symbol { icon: Icon::Edit } {language.text(Text::RenameSharedVault)}
+                                }
+                            }
                             button { class: "quiet", r#type: "button",
-                                onclick: move |_| rename.set(Some(filename.clone())),
-                                Symbol { icon: Icon::Edit } {language.text(Text::RenameVaultFile)}
+                                onclick: move |_| rename.set(Some((Rename::Alias, alias.clone()))),
+                                Symbol { icon: Icon::Edit } {language.text(Text::RenameVaultForMe)}
                             }
                         }
                         button { class: "quiet", r#type: "button", disabled: !allowed,

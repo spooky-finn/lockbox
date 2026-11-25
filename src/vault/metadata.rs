@@ -1,7 +1,10 @@
-//! Read-only public profile metadata and durable local participant aliases.
+//! Public profile metadata, shared display names and local participant names.
 
 use crate::{
-    sync::{identity::Key, protocol::Hash},
+    sync::{
+        identity::Key,
+        protocol::{Error, Hash, Role, Transaction, pairing::valid_name},
+    },
     vault::{Result, Vault, VaultError},
 };
 
@@ -22,12 +25,67 @@ impl Vault {
         }
         self.profile.as_ref().map(|profile| ProfileSummary {
             username: &profile.username,
-            space_name: &profile.space_name,
+            space_name: profile
+                .shared_name
+                .as_deref()
+                .unwrap_or(&profile.space_name),
             user_id: profile.identity.user_id,
             device_id: profile.identity.device_id,
             space_id: profile.space.space_id,
             sync_enabled: profile.sync.is_some(),
         })
+    }
+
+    pub(crate) fn can_rename_shared(&self) -> bool {
+        self.signing_error().is_none()
+            && self.sync_replay_state().is_ok_and(|replay| {
+                replay.is_some_and(|replay| replay.ready && replay.role == Some(Role::Owner))
+            })
+    }
+
+    pub fn rename_shared(&mut self, name: &str) -> Result<()> {
+        let name = name.trim();
+        if !valid_name(name) {
+            return Err(VaultError::InvalidDisplayName);
+        }
+        self.ensure_exchange_committed()?;
+        self.recover_sync()?;
+        if self
+            .profile_summary()
+            .is_some_and(|profile| profile.space_name == name)
+        {
+            let replay = self.sync_replay_state()?.ok_or(Error::UnauthorizedDevice)?;
+            replay.require_writer()?;
+            if replay.role != Some(Role::Owner) {
+                return Err(Error::InsufficientRole.into());
+            }
+            return self.save();
+        }
+        self.commit_sync(Transaction {
+            mutations: Vec::new(),
+            rebased_from: None,
+            authored_at: None,
+            space_name: Some(name.to_owned()),
+        })
+    }
+
+    /// Changes the personal name used by this profile for future exchanges.
+    pub fn set_username(&mut self, name: &str) -> Result<()> {
+        let name = name.trim();
+        if !valid_name(name) {
+            return Err(VaultError::InvalidDisplayName);
+        }
+        self.ensure_not_display_snapshot()?;
+        let profile = self.profile.as_mut().ok_or(Error::UnauthorizedDevice)?;
+        if profile.username == name {
+            return Ok(());
+        }
+        let previous = std::mem::replace(&mut profile.username, name.to_owned());
+        if let Err(error) = self.save() {
+            self.profile.as_mut().unwrap().username = previous;
+            return Err(error);
+        }
+        Ok(())
     }
 
     pub fn participant_alias(&self, user: Hash) -> Option<&str> {

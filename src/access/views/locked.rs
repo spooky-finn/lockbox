@@ -41,12 +41,7 @@ pub(crate) fn LockedView() -> Element {
     let recovering = locked.recovering;
     let base_unlock = !create && !recovering;
     let preferences = settings.read();
-    let vault_name = locked.space_name.clone().or_else(|| {
-        locked
-            .path
-            .as_deref()
-            .map(|path| crate::desktop::space_switcher::profile_name(path, &preferences.config))
-    });
+    let vault_name = screen.vault_name(&preferences.config);
     let (previous, next) = if base_unlock {
         profiles::adjacent_profiles(
             &preferences,

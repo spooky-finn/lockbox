@@ -66,6 +66,12 @@ pub(crate) fn SettingsView() -> Element {
                     label { r#for: "settings-language", {language.text(Text::InterfaceLanguage)} }
                     LanguageSelect { id: "settings-language" }
                 }
+                if let Some(profile) = unlocked.vault.profile_summary() {
+                    UsernameSetting {
+                        username: profile.username.to_owned(),
+                        disabled: unlocked.saving_draft() || unlocked.vault.signing_error().is_some(),
+                    }
+                }
             }
             AppearanceSection {}
             section { class: "settings-section stack",
@@ -119,6 +125,37 @@ pub(crate) fn SettingsView() -> Element {
                 onclick: move |_| edit_unlocked(state, |u| u.page = Page::Vault),
                 Symbol { icon: Icon::ArrowLeft }
                 {language.text(Text::BackToVault)}
+            }
+        }
+    }
+}
+
+#[component]
+fn UsernameSetting(username: String, disabled: bool) -> Element {
+    let language = use_language();
+    let state = use_context::<Session>();
+    let mut draft = use_signal(|| None::<String>);
+    let name = draft().unwrap_or_else(|| username.clone());
+    rsx! {
+        form { class: "preference-row",
+            onsubmit: move |event: FormEvent| {
+                event.prevent_default();
+                if !disabled && let Some(name) = draft() {
+                    edit_unlocked(state, |workspace| {
+                        workspace.error = workspace.vault.set_username(&name).err().map(|error| error.to_string());
+                        if workspace.error.is_none() {
+                            workspace.sync.saved();
+                            draft.set(None);
+                        }
+                    });
+                }
+            },
+            label { r#for: "settings-username", {language.text(Text::RenameMyName)} }
+            input { id: "settings-username", value: "{name}", disabled, autocomplete: "off",
+                oninput: move |event| draft.set(Some(event.value())),
+            }
+            button { r#type: "submit", disabled: disabled || name.trim().is_empty() || name.trim() == username,
+                {language.text(Text::Save)}
             }
         }
     }

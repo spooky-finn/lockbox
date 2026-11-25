@@ -460,6 +460,7 @@ fn a_pending_receive_commit_cancels_old_work_and_resumes_after_storage_recovers(
                 mutations: vec![],
                 rebased_from: None,
                 authored_at: None,
+                space_name: None,
             },
         )
         .unwrap(),
