@@ -22,6 +22,7 @@ pub(crate) mod workspace;
 pub(crate) mod workspace_view;
 
 pub use root::App;
+pub(crate) use updates::RELEASES_PAGE;
 
 #[cfg(test)]
 #[path = "tests/workflow_support.rs"]

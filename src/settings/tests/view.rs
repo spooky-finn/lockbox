@@ -25,7 +25,8 @@ fn settings_is_a_page_and_returning_restores_the_selected_entry() {
     });
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("settings-page"));
-    assert!(html.contains("id=\"settings-vault-appearance\""));
+    assert!(html.contains("id=\"settings-theme\""));
+    assert!(!html.contains("id=\"settings-vault-appearance\""));
     assert!(html.contains("id=\"settings-vault-icon\""));
     assert!(html.contains("id=\"settings-upload-vault-image\""));
     assert!(html.contains("id=\"settings-vault-filename\""));
@@ -116,7 +117,6 @@ fn appearance_language_and_security_preferences_persist_and_remain_after_lock() 
         consume_context::<Signal<Settings>>().write().path = Some(path.clone());
         actions::set_auto_lock(15);
         actions::set_language(Language::English);
-        actions::set_custom_appearance(true);
         actions::set_theme(ThemeMode::Dark);
         actions::set_theme_preset(ThemePreset::Paper);
     });
@@ -153,7 +153,9 @@ fn appearance_controls_apply_each_preset_and_update_its_preview() {
             config: Config::default(),
             path: None,
         });
-        let state = use_signal(|| Screen::Locked(Box::new(crate::access::auth::Locked::new(None))));
+        let dir = use_hook(|| std::rc::Rc::new(tempfile::tempdir().unwrap()));
+        let state =
+            use_signal(|| Screen::Unlocked(Box::new(crate::desktop::test_support::unlocked(&dir))));
         use_context_provider(|| settings);
         use_context_provider(|| state);
         rsx! { super::AppearanceSection {} }
@@ -203,10 +205,13 @@ fn appearance_controls_apply_each_preset_and_update_its_preview() {
     };
     let appearance = |dom: &VirtualDom| {
         dom.in_scope(ScopeId::APP, || {
-            consume_context::<Signal<Settings>>()
-                .read()
+            let settings = consume_context::<Signal<Settings>>();
+            let state = consume_context::<crate::desktop::context::Session>();
+            let preferences = settings.read();
+            assert_eq!(preferences.config.appearance, Default::default());
+            preferences
                 .config
-                .appearance
+                .appearance_for(state.peek().vault_id().as_deref())
         })
     };
     let render = |dom: &VirtualDom| {

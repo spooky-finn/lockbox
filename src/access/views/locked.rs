@@ -4,6 +4,7 @@ use crate::desktop::profiles;
 use crate::{
     access::auth::{CreationStep, MIN_PASSWORD_CHARS, Mode, StorageKind},
     desktop::{
+        RELEASES_PAGE,
         context::{BiometricProvider, Session, edit_locked},
         session::Screen,
         widgets::{
@@ -325,7 +326,14 @@ pub(crate) fn LockedView() -> Element {
                 }
             }
             if base_unlock {
-                small { class: "unlock-version", {concat!("v", env!("CARGO_PKG_VERSION"))} }
+                a {
+                    class: "unlock-version",
+                    href: RELEASES_PAGE,
+                    target: "_blank",
+                    rel: "noopener noreferrer",
+                    title: language.text(Text::ViewGitHubReleases),
+                    {concat!("v", env!("CARGO_PKG_VERSION"))}
+                }
             }
         }
     }

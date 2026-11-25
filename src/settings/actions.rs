@@ -68,25 +68,6 @@ pub(crate) fn set_website_icons(enabled: bool) {
     }
 }
 
-pub(crate) fn set_custom_appearance(enabled: bool) {
-    let state = consume_context::<Session>();
-    let id = match &*state.peek() {
-        Screen::Unlocked(workspace) => workspace.vault.id(),
-        Screen::Locked(_) => return,
-    };
-
-    update_preferences(|config| {
-        if enabled {
-            config
-                .vault_appearances
-                .entry(id)
-                .or_insert(config.appearance);
-        } else {
-            config.vault_appearances.remove(&id);
-        }
-    });
-}
-
 pub(crate) fn set_theme(theme: ThemeMode) {
     update_appearance(|appearance| appearance.theme = theme);
 }
@@ -96,20 +77,18 @@ pub(crate) fn set_theme_preset(preset: ThemePreset) {
 }
 
 fn update_appearance(change: impl FnOnce(&mut Appearance)) {
-    let settings = consume_context::<Signal<Settings>>();
-    let id = consume_context::<Session>()
-        .peek()
-        .vault_id()
-        .filter(|id| settings.peek().config.vault_appearances.contains_key(id));
+    let state = consume_context::<Session>();
+    let id = match &*state.peek() {
+        Screen::Unlocked(workspace) => workspace.vault.id(),
+        Screen::Locked(_) => return,
+    };
     update_preferences(|config| {
-        let appearance = match id {
-            Some(id) => config
+        change(
+            config
                 .vault_appearances
                 .entry(id)
                 .or_insert(config.appearance),
-            None => &mut config.appearance,
-        };
-        change(appearance);
+        );
     });
 }
 

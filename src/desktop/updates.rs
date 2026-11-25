@@ -7,7 +7,7 @@ use serde::Deserialize;
 use std::time::Duration;
 
 const LATEST_RELEASE_API: &str = "https://api.github.com/repos/spooky-finn/lockbox/releases/latest";
-const RELEASES_PAGE: &str = "https://github.com/spooky-finn/lockbox/releases";
+pub(crate) const RELEASES_PAGE: &str = "https://github.com/spooky-finn/lockbox/releases";
 const MAX_RESPONSE_BYTES: usize = 1024 * 1024;
 
 #[derive(Deserialize)]
