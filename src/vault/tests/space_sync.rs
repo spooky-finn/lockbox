@@ -163,8 +163,8 @@ fn shared_rename_syncs_without_changing_routes_or_closing_the_epoch() {
     let editor_path = dir.path().join("editor.lbx");
     let mut editor = profile_vault(&editor_path, "Bob");
     share(&mut owner, &mut editor, Role::Editor);
-    assert!(owner.can_rename_shared());
-    assert!(!editor.can_rename_shared());
+    assert!(owner.can_edit_shared_metadata());
+    assert!(!editor.can_edit_shared_metadata());
     let descriptor = owner.space_descriptor().unwrap();
     let membership = owner.space_anchor().unwrap();
 
@@ -209,7 +209,7 @@ fn shared_rename_syncs_without_changing_routes_or_closing_the_epoch() {
 
     let mut reader = profile_vault(&dir.path().join("reader.lbx"), "Charlie");
     share(&mut owner, &mut reader, Role::Reader);
-    assert!(!reader.can_rename_shared());
+    assert!(!reader.can_edit_shared_metadata());
     assert_eq!(
         reader.profile_summary().unwrap().space_name,
         "New cloud name"
@@ -227,6 +227,51 @@ fn shared_rename_syncs_without_changing_routes_or_closing_the_epoch() {
     reader.receive_sync(delivery(&owner)).unwrap();
     assert_eq!(reader.profile_summary().unwrap().space_name, "Final name");
     assert_eq!(reader.profile_summary().unwrap().username, "Charles");
+}
+
+#[test]
+fn shared_vault_image_syncs_to_existing_and_new_participants() {
+    use crate::sync::protocol::{Blob, Error, SPACE_ICON_SIZE, SpaceGlyph, SpaceIcon};
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut owner = profile_vault(&dir.path().join("owner.lbx"), "Owner");
+    let editor_path = dir.path().join("editor.lbx");
+    let mut editor = profile_vault(&editor_path, "Editor");
+    share(&mut owner, &mut editor, Role::Editor);
+    let icon = SpaceIcon::Image(Blob(vec![
+        123;
+        (SPACE_ICON_SIZE * SPACE_ICON_SIZE * 4) as usize
+    ]));
+    owner.set_icon(Some(icon.clone())).unwrap();
+    assert!(matches!(
+        editor.set_icon(Some(SpaceIcon::Glyph(SpaceGlyph::Key))),
+        Err(VaultError::Sync(Error::InsufficientRole))
+    ));
+    fs::create_dir(sibling(&editor_path, "tmp")).unwrap();
+    assert!(editor.receive_sync(delivery(&owner)).is_err());
+    assert!(editor.icon().is_none());
+    fs::remove_dir(sibling(&editor_path, "tmp")).unwrap();
+    editor.recover_exchange().unwrap();
+    assert_eq!(editor.icon(), Some(&icon));
+
+    owner.rename_shared("Renamed team").unwrap();
+    let reader_path = dir.path().join("reader.lbx");
+    let mut reader = profile_vault(&reader_path, "Reader");
+    share(&mut owner, &mut reader, Role::Reader);
+    assert_eq!(reader.icon(), Some(&icon));
+    assert_eq!(reader.profile_summary().unwrap().space_name, "Renamed team");
+    assert!(matches!(
+        reader.set_icon(None),
+        Err(VaultError::Sync(Error::InsufficientRole))
+    ));
+    drop(reader);
+
+    let mut reader = Vault::open(&reader_path, &SecretString::from("master".to_owned())).unwrap();
+    assert_eq!(reader.icon(), Some(&icon));
+    owner.set_icon(None).unwrap();
+    reader.receive_sync(delivery(&owner)).unwrap();
+    assert!(reader.icon().is_none());
+    assert_eq!(reader.profile_summary().unwrap().space_name, "Renamed team");
 }
 
 #[test]
@@ -389,6 +434,7 @@ fn automatic_frontier_folding_uses_durable_intents_before_the_requested_edit() {
                     rebased_from: None,
                     authored_at: None,
                     space_name: None,
+                    space_icon: None,
                 },
             )
             .unwrap(),

@@ -3,7 +3,9 @@
 use crate::{
     sync::{
         identity::Key,
-        protocol::{Error, Hash, Role, Transaction, pairing::valid_name},
+        protocol::{
+            Error, Hash, Role, SpaceIcon, SpaceIconChange, Transaction, pairing::valid_name,
+        },
     },
     vault::{Result, Vault, VaultError},
 };
@@ -36,7 +38,7 @@ impl Vault {
         })
     }
 
-    pub(crate) fn can_rename_shared(&self) -> bool {
+    pub(crate) fn can_edit_shared_metadata(&self) -> bool {
         self.signing_error().is_none()
             && self.sync_replay_state().is_ok_and(|replay| {
                 replay.is_some_and(|replay| replay.ready && replay.role == Some(Role::Owner))
@@ -66,7 +68,55 @@ impl Vault {
             rebased_from: None,
             authored_at: None,
             space_name: Some(name.to_owned()),
+            space_icon: None,
         })
+    }
+
+    pub fn icon(&self) -> Option<&SpaceIcon> {
+        if let Some(snapshot) = &self.editor_view {
+            return snapshot.icon.as_ref();
+        }
+        match self.profile.as_ref() {
+            Some(profile) => profile.shared_icon.as_ref(),
+            None => self.local_icon.as_ref(),
+        }
+    }
+
+    pub fn set_icon(&mut self, icon: Option<SpaceIcon>) -> Result<()> {
+        self.ensure_not_display_snapshot()?;
+        if icon.as_ref().is_some_and(|icon| !icon.valid()) {
+            return Err(Error::InvalidTransaction.into());
+        }
+
+        if self.profile.as_ref().is_some() {
+            self.ensure_exchange_committed()?;
+            self.recover_sync()?;
+            if self.icon() == icon.as_ref() {
+                let replay = self.sync_replay_state()?.ok_or(Error::UnauthorizedDevice)?;
+                replay.require_writer()?;
+                if replay.role != Some(Role::Owner) {
+                    return Err(Error::InsufficientRole.into());
+                }
+                return self.save();
+            }
+            return self.commit_sync(Transaction {
+                mutations: Vec::new(),
+                rebased_from: None,
+                authored_at: None,
+                space_name: None,
+                space_icon: Some(icon.map_or(SpaceIconChange::Clear, SpaceIconChange::Set)),
+            });
+        }
+
+        if self.icon() == icon.as_ref() {
+            return Ok(());
+        }
+        let previous = std::mem::replace(&mut self.local_icon, icon);
+        if let Err(error) = self.save() {
+            self.local_icon = previous;
+            return Err(error);
+        }
+        Ok(())
     }
 
     /// Changes the personal name used by this profile for future exchanges.

@@ -11,6 +11,7 @@ use crate::{
         widgets::{
             button::IconButton,
             symbol::{Icon, Symbol},
+            vault_icon::VaultIcon,
         },
         workspace::{Destination, Page},
     },
@@ -87,6 +88,7 @@ pub(crate) fn Sidebar() -> Element {
     let state = use_context::<Session>();
     let settings = use_context::<Signal<crate::settings::state::Settings>>();
     let vault_name = use_memo(move || state.read().vault_name(&settings.read().config));
+    let vault_icon = use_unlocked_selector(|u| u.vault.icon().cloned());
     let controls = SidebarMove::use_controls();
     let choosing_records = controls.selection.read().is_some();
     let can_drag = use_unlocked_selector(|u| u.page == Page::Vault && can_move(u));
@@ -131,6 +133,11 @@ pub(crate) fn Sidebar() -> Element {
             },
             onmounted: move |_| resize.set(Some(document::eval(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/sidebar-resize.js"))))),
             div { class: "sidebar-heading",
+                if let Some(icon) = vault_icon().flatten() {
+                    span { class: "sidebar-vault-icon", aria_hidden: "true",
+                        VaultIcon { icon: Some(icon), fallback: Icon::Folder }
+                    }
+                }
                 h2 { title: "{vault_name}", "{vault_name}" }
                 span { class: "count", "{count}" }
                 IconButton { class: "primary", icon: Icon::Plus, label: language.text(Text::NewEntry),

@@ -25,6 +25,9 @@ fn settings_is_a_page_and_returning_restores_the_selected_entry() {
     });
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("settings-page"));
+    assert!(html.contains("id=\"settings-vault-appearance\""));
+    assert!(html.contains("id=\"settings-vault-icon\""));
+    assert!(html.contains("id=\"settings-upload-vault-image\""));
     assert!(html.contains("id=\"settings-vault-filename\""));
     assert!(html.contains("id=\"settings-personal-vault-name\""));
     assert!(!html.contains("id=\"settings-shared-vault-name\""));
@@ -103,18 +106,27 @@ fn appearance_language_and_security_preferences_persist_and_remain_after_lock() 
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("config.json");
     let mut dom = mounted();
+    let id = dom.in_scope(ScopeId::APP, || {
+        consume_context::<crate::desktop::context::Session>()
+            .peek()
+            .vault_id()
+            .unwrap()
+    });
     update(&mut dom, |_| {
         consume_context::<Signal<Settings>>().write().path = Some(path.clone());
         actions::set_auto_lock(15);
         actions::set_language(Language::English);
+        actions::set_custom_appearance(true);
         actions::set_theme(ThemeMode::Dark);
         actions::set_theme_preset(ThemePreset::Paper);
     });
     let saved = Config::load(&path);
     assert_eq!(saved.language, Language::English);
     assert_eq!(saved.auto_lock_minutes, 15);
-    assert_eq!(saved.appearance.theme, ThemeMode::Dark);
-    assert_eq!(saved.appearance.preset, ThemePreset::Paper);
+    assert_eq!(saved.appearance, Default::default());
+    let appearance = saved.appearance_for(Some(&id));
+    assert_eq!(appearance.theme, ThemeMode::Dark);
+    assert_eq!(appearance.preset, ThemePreset::Paper);
     update(&mut dom, |_| runtime::lock(None));
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("Master password"));
@@ -125,7 +137,7 @@ fn appearance_language_and_security_preferences_persist_and_remain_after_lock() 
     update(&mut dom, |_| actions::set_language(Language::Russian));
     assert!(dioxus_ssr::render(&dom).contains("Мастер-пароль"));
     assert_eq!(Config::load(&path).language, Language::Russian);
-    assert_eq!(Config::load(&path).appearance, saved.appearance);
+    assert_eq!(Config::load(&path).appearance_for(Some(&id)), appearance);
 }
 
 #[test]

@@ -20,6 +20,7 @@ use crate::{
         appearance::{ThemeMode, ThemePreset},
         language::Language,
         state::Settings,
+        vault_icon::VaultIconSetting,
     },
 };
 use dioxus::prelude::*;
@@ -151,11 +152,15 @@ fn VaultNames() -> Element {
         .cloned()
         .unwrap_or_default();
     let disabled = !screen.can_switch_profile();
+    let profile = workspace.vault.profile_summary();
+    let shared = profile.is_some();
+    let editable = !shared || workspace.vault.can_edit_shared_metadata();
     rsx! {
         section { class: "settings-section stack",
             h2 { {language.text(Text::VaultSettings)} }
-            if let Some(profile) = workspace.vault.profile_summary() {
-                if workspace.vault.can_rename_shared() {
+            VaultIconSetting { icon: workspace.vault.icon().cloned(), shared, editable, disabled }
+            if let Some(profile) = profile {
+                if editable {
                     VaultNameSetting { kind: VaultName::Shared, saved: profile.space_name.to_owned(), disabled }
                 }
             } else {
@@ -314,12 +319,36 @@ fn UsernameSetting(username: String, disabled: bool) -> Element {
 fn AppearanceSection() -> Element {
     let language = use_language();
     let settings = use_context::<Signal<Settings>>();
-    let appearance = settings.read().config.appearance;
+    let state = use_context::<Session>();
+    let screen = state.read();
+    let config = &settings.read().config;
+    let id = screen.vault_id();
+    let appearance = config.appearance_for(id.as_deref());
+    let customized = id
+        .as_ref()
+        .is_some_and(|id| config.vault_appearances.contains_key(id));
     let dark = try_use_context::<ResolvedTheme>()
         .map_or_else(|| appearance.theme.is_dark(false), ResolvedTheme::is_dark);
     rsx! {
         section { class: "settings-section stack",
             h2 { id: "settings-appearance", {language.text(Text::Appearance)} }
+            if let Screen::Unlocked(_) = &*screen
+                && let Some(name) = screen.vault_name(config)
+            {
+                div { class: "preference-row",
+                    div { class: "preference-copy",
+                        label { r#for: "settings-vault-appearance", {language.format(Text::CustomizeVaultAppearance, &[name])} }
+                        p { id: "settings-vault-appearance-scope", class: "muted",
+                            if customized { {language.text(Text::VaultAppearanceScope)} }
+                            else { {language.text(Text::DefaultAppearanceScope)} }
+                        }
+                    }
+                    input { id: "settings-vault-appearance", class: "switch", r#type: "checkbox",
+                        aria_describedby: "settings-vault-appearance-scope", checked: customized,
+                        onchange: move |event| actions::set_custom_appearance(event.checked()),
+                    }
+                }
+            }
             div { class: "preference-row",
                 label { r#for: "settings-theme", {language.text(Text::ColorTheme)} }
                 select { id: "settings-theme", value: appearance.theme.code(),

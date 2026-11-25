@@ -3368,6 +3368,7 @@ dependencies = [
  "hkdf",
  "hmac 0.12.1",
  "hpke",
+ "image",
  "kuchikiki",
  "libc",
  "objc2",

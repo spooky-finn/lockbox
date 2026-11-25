@@ -1,7 +1,9 @@
 //! Remembers appearance, language, the last vault and where Touch ID is turned on.
 //! Holds only local preferences and vault metadata, never secrets.
 
+use crate::settings::appearance::Appearance;
 use std::{
+    collections::BTreeMap,
     fs::{self, OpenOptions},
     io::{self, Write},
     path::{Path, PathBuf},
@@ -14,7 +16,10 @@ pub struct Config {
     #[serde(default)]
     pub language: crate::settings::language::Language,
     #[serde(default)]
-    pub appearance: crate::settings::appearance::Appearance,
+    pub appearance: Appearance,
+    /// Local overrides keyed by the vault file's stable ID.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub vault_appearances: BTreeMap<String, Appearance>,
     pub last_vault: Option<PathBuf>,
     /// Successfully opened profiles, most recent first. Paths only, no secrets.
     #[serde(default)]
@@ -44,7 +49,8 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             language: crate::settings::language::Language::default(),
-            appearance: crate::settings::appearance::Appearance::default(),
+            appearance: Appearance::default(),
+            vault_appearances: BTreeMap::new(),
             last_vault: None,
             recent_vaults: Vec::new(),
             space_names: Default::default(),
@@ -57,6 +63,12 @@ impl Default for Config {
 }
 
 impl Config {
+    pub(crate) fn appearance_for(&self, vault_id: Option<&str>) -> Appearance {
+        vault_id
+            .and_then(|id| self.vault_appearances.get(id).copied())
+            .unwrap_or(self.appearance)
+    }
+
     pub(crate) fn vault_name(&self, path: &Path, current_name: Option<&str>) -> String {
         self.vault_aliases
             .get(path)

@@ -1,0 +1,6 @@
+Vault appearance
+
+- Local config owns appearance overrides keyed by stable vault ID from file header. Renames and path aliases keep override. Copies with same ID share override.
+- Active session selects override for both locked and unlocked views. Blank tabs and configs without override use app default. Native window and web view resolve same appearance.
+- Existing appearance becomes inherited default. Customization starts from current default. Disabling removes override.
+- Appearance stays outside vault files, sync protocol, and authentication. Locked view uses header ID as presentation key.

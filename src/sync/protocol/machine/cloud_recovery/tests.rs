@@ -155,6 +155,7 @@ fn recovery_proof_preserves_control_addresses_and_rejects_duplicate_or_noncontro
                 rebased_from: None,
                 authored_at: None,
                 space_name: None,
+                space_icon: None,
             },
         )
         .unwrap(),
@@ -268,6 +269,7 @@ fn unacknowledged_capsule_retries_exact_bytes_and_acknowledged_snapshot_is_dedup
                 rebased_from: None,
                 authored_at: None,
                 space_name: None,
+                space_icon: None,
             },
         )
         .unwrap(),

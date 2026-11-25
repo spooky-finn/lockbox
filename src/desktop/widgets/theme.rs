@@ -1,8 +1,11 @@
 //! Resolve the native light/dark mode and supply palette tokens for the app and previews.
 
-use crate::settings::{
-    appearance::{ThemeMode, ThemePreset},
-    state::Settings,
+use crate::{
+    desktop::context::Session,
+    settings::{
+        appearance::{Appearance, ThemeMode, ThemePreset},
+        state::Settings,
+    },
 };
 
 use dioxus::{
@@ -34,24 +37,27 @@ pub(crate) fn mode_name(dark: bool) -> &'static str {
     if dark { "dark" } else { "light" }
 }
 
-pub(crate) fn use_theme() -> ResolvedTheme {
+pub(crate) fn use_active_appearance() -> Memo<Appearance> {
     let settings = use_context::<Signal<Settings>>();
-    let window = use_window();
-    let mut theme = use_signal(|| window.theme());
-    let dark = use_memo(move || {
+    let session = use_context::<Session>();
+    let vault_id = use_memo(move || session.read().vault_id());
+    use_memo(move || {
         settings
             .read()
             .config
-            .appearance
-            .theme
-            .is_dark(theme() == Theme::Dark)
-    });
+            .appearance_for(vault_id.read().as_deref())
+    })
+}
+
+pub(crate) fn use_theme(appearance: Memo<Appearance>) -> ResolvedTheme {
+    let window = use_window();
+    let mut theme = use_signal(|| window.theme());
+    let dark = use_memo(move || appearance().theme.is_dark(theme() == Theme::Dark));
     let resolved = ResolvedTheme(dark);
     use_context_provider(|| resolved);
     let events = window.clone();
     use_wry_event_handler(move |event, _| {
-        let appearance = settings.peek().config.appearance;
-        if appearance.theme != ThemeMode::System {
+        if appearance.peek().theme != ThemeMode::System {
             return;
         }
         let next = match event {
@@ -77,8 +83,7 @@ pub(crate) fn use_theme() -> ResolvedTheme {
     });
     let native = window.clone();
     use_effect(move || {
-        let appearance = settings.read().config.appearance;
-        let requested = match appearance.theme {
+        let requested = match appearance().theme {
             ThemeMode::System => None,
             ThemeMode::Light => Some(Theme::Light),
             ThemeMode::Dark => Some(Theme::Dark),
@@ -94,7 +99,7 @@ pub(crate) fn use_theme() -> ResolvedTheme {
     });
     use_effect(move || {
         // Match the canvas, including the transparent title bar's backdrop.
-        let (canvas, _) = colors(settings.read().config.appearance.preset, dark());
+        let (canvas, _) = colors(appearance().preset, dark());
         let [red, green, blue] = canvas;
         window.set_background_color(Some((red, green, blue, 255)));
     });

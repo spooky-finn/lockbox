@@ -420,6 +420,7 @@ fn incomplete_bases_and_implicit_restore_are_rejected() {
         rebased_from: None,
         authored_at: None,
         space_name: None,
+        space_icon: None,
         mutations: vec![Mutation {
             entity: entity.clone(),
             bases: vec![],
@@ -437,6 +438,7 @@ fn incomplete_bases_and_implicit_restore_are_rejected() {
         rebased_from: None,
         authored_at: None,
         space_name: None,
+        space_icon: None,
         mutations: vec![Mutation {
             entity: entity.clone(),
             bases: replay.projection.heads(&entity),
@@ -573,6 +575,7 @@ fn invalid_ancestry_is_rejected_instead_of_waiting_forever_in_every_order() {
         rebased_from: None,
         authored_at: None,
         space_name: None,
+        space_icon: None,
     };
     let first = encrypted_change(&state, state.genesis, &device, 1, None, vec![], &invalid);
     let first_hash = first.hash().unwrap();

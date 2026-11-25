@@ -111,6 +111,7 @@ fn value_identity_requires_matching_entity_kind_and_id() {
             rebased_from: None,
             authored_at: None,
             space_name: None,
+            space_icon: None,
         };
         transaction.validate(&Projection::default()).unwrap();
         let other_kind = match kind {
@@ -494,6 +495,7 @@ fn transaction_bases_require_every_head_in_exact_order() {
         rebased_from: None,
         authored_at: None,
         space_name: None,
+        space_icon: None,
     };
     transaction.validate(&before).unwrap();
     for (index, mutation) in transaction.mutations.iter().enumerate() {

@@ -1,0 +1,6 @@
+Vault icons
+
+- Local icon lives inside encrypted vault contents. Shared icon lives in encrypted owner-signed transactions and epoch checkpoints. Local profile config holds no image bytes.
+- Wire carries bundled glyph ID, fixed 64×64 RGBA8 pixels, or explicit clear. Picker bounds file size and dimensions. Normalize pixels before commit. Strip filename, file metadata, and source encoding.
+- Shared changes follow owner authorization and durable signing intents. Causal depth then hash resolves concurrent edits independently of the shared name. Receive commits icon with verified view and rolls its state back on write failure.
+- Checkpoints carry icon to new members and recovered profiles. Legacy encoding omits absent fields. Upgrade all participants before writing an icon transaction.

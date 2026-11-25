@@ -351,6 +351,7 @@ fn history_chunks_serialize_as_the_same_flat_json_array() {
                 entries: &[],
                 history: [&history[..split], &history[split..]],
                 folders: &[],
+                local_icon: None,
                 profile: None,
                 generation: None,
             };

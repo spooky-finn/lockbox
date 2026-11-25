@@ -77,6 +77,10 @@ pub(crate) struct BootstrapProfile {
     /// Last verified shared display name, retained while history is incomplete.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) shared_name: Option<String>,
+    /// Last verified shared icon, retained while history is incomplete.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[zeroize(skip)]
+    pub(crate) shared_icon: Option<crate::sync::protocol::SpaceIcon>,
     pub(crate) identity: PublicIdentity,
     device: DeviceKeys,
     pub(crate) space: SpaceKeys,
@@ -185,6 +189,7 @@ impl BootstrapProfile {
             participant_names: Default::default(),
             space_name,
             shared_name: None,
+            shared_icon: None,
             identity,
             device,
             space,
@@ -223,6 +228,7 @@ impl BootstrapProfile {
                 .shared_name
                 .as_deref()
                 .is_none_or(crate::sync::protocol::pairing::valid_name)
+            && self.shared_icon.as_ref().is_none_or(|icon| icon.valid())
             && self.sync.as_ref().is_none_or(|sync| {
                 sync.space.0 == self.space.space_id && sync.namespace.0 == self.space.namespace
             })

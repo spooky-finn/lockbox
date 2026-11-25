@@ -14,6 +14,14 @@ fn remembered_path_survives_a_restart() {
         space_names: [("/tmp/vault.lbx".into(), "Family".into())].into(),
         vault_aliases: [("/tmp/vault.lbx".into(), "Home".into())].into(),
         appearance: crate::settings::appearance::Appearance::default(),
+        vault_appearances: [(
+            "00ff".into(),
+            Appearance {
+                theme: crate::settings::appearance::ThemeMode::Dark,
+                preset: crate::settings::appearance::ThemePreset::Forest,
+            },
+        )]
+        .into(),
     };
     config.save(&path).unwrap();
     assert_eq!(Config::load(&path), config);
@@ -106,6 +114,10 @@ fn legacy_appearance_keeps_the_preset_and_mode() {
             theme: ThemeMode::Dark,
             preset: ThemePreset::Paper,
         }
+    );
+    assert_eq!(
+        legacy.appearance_for(Some("existing-vault")),
+        legacy.appearance
     );
     assert_eq!(
         serde_json::to_value(legacy.appearance).unwrap(),

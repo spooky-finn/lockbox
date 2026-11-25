@@ -6,7 +6,7 @@ use crate::{
         folder::{self, Folder},
         history::RecordChange,
     },
-    sync::identity::Key,
+    sync::{identity::Key, protocol::SpaceIcon},
     vault::{KdfParams, Result, VaultError, anchor::FileGeneration, profile::BootstrapProfile},
 };
 use argon2::{Algorithm, Argon2, Block, Params, Version};
@@ -42,6 +42,8 @@ pub(super) struct Contents {
     pub(super) history: Vec<RecordChange>,
     #[serde(default)]
     pub(super) folders: Vec<Folder>,
+    #[serde(default)]
+    pub(super) local_icon: Option<SpaceIcon>,
     #[serde(default)]
     pub(super) profile: Option<BootstrapProfile>,
     #[serde(default)]
@@ -146,6 +148,13 @@ pub(super) fn decrypt(data: &[u8], key: &Key) -> Option<Contents> {
     for entry in &contents.entries {
         entry.validate_attachments().ok()?;
     }
+    if contents
+        .local_icon
+        .as_ref()
+        .is_some_and(|icon| !icon.valid() || contents.profile.is_some())
+    {
+        return None;
+    }
 
     if contents.profile.as_ref().is_none_or(|p| p.sync.is_none()) {
         folder::validate(&contents.folders, &contents.entries).ok()?;
@@ -181,6 +190,8 @@ pub(super) struct ContentsRef<'a> {
     pub(super) history: [&'a [RecordChange]; 2],
     #[serde(skip_serializing_if = "<[Folder]>::is_empty")]
     pub(super) folders: &'a [Folder],
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(super) local_icon: Option<&'a SpaceIcon>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(super) profile: Option<&'a BootstrapProfile>,
     #[serde(skip_serializing_if = "Option::is_none")]

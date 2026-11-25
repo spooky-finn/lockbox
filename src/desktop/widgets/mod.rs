@@ -7,3 +7,4 @@ pub(crate) mod lock_mark;
 pub(crate) mod status;
 pub(crate) mod symbol;
 pub(crate) mod theme;
+pub(crate) mod vault_icon;

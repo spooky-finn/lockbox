@@ -215,8 +215,8 @@ revision, including changed fields, author and available time. Closing an unchan
 editor or revealing a password does not create another revision.
 
 **Shared client compatibility:** update every participant before exchanging new
-timestamped revisions. Earlier clients reject the new transaction metadata; this
-version still reads the exact legacy transaction encoding.
+timestamped revisions or setting a shared vault icon. Earlier clients reject the
+new transaction metadata. This version reads the exact legacy transaction encoding.
 
 Deleting moves a record to **Trash** in the sidebar. Restore preserves the record
 ID, secrets and attachments. If its folder was removed, it returns to the root.

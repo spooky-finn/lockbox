@@ -59,6 +59,7 @@ pub(crate) use crate::access::cloud_setup::CloudSetup;
 
 pub(crate) struct Locked {
     pub(crate) path: Option<PathBuf>,
+    pub(crate) vault_id: Option<String>,
     pub(crate) space_name: Option<String>,
     pub(crate) mode: Mode,
     pub(crate) storage_kind: Option<StorageKind>,
@@ -93,12 +94,14 @@ pub(crate) struct Locked {
 
 impl Locked {
     pub(crate) fn new(path: Option<PathBuf>) -> Self {
+        let vault_id = path.as_deref().and_then(|path| Vault::peek_id(path).ok());
         let error = path
             .as_ref()
             .filter(|path| !path.exists())
             .map(|path| format!("File not found: {}", path.display()));
         Self {
             path,
+            vault_id,
             space_name: None,
             mode: Mode::Open,
             storage_kind: None,
@@ -224,12 +227,11 @@ impl Locked {
                 .cloned();
         }
         self.touch_id = self
-            .path
+            .vault_id
             .as_ref()
-            .filter(|path| path.exists())
-            .and_then(|path| Vault::peek_id(path).ok())
             .filter(|id| config.touch_id.contains(id))
-            .filter(|_| touchid::available(biometrics));
+            .filter(|_| touchid::available(biometrics))
+            .cloned();
         self.auto_touch_id = auto && self.touch_id.is_some();
         self
     }

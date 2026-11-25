@@ -193,7 +193,7 @@ impl Machine {
 
         let replay = Self::replay_state(state, device)?;
         replay.require_writer()?;
-        if transaction.space_name.is_some() && replay.role != Some(Role::Owner) {
+        if transaction.updates_space_metadata() && replay.role != Some(Role::Owner) {
             return Err(Error::InsufficientRole);
         }
         Self::prepare_transaction(state, device, transaction, replay, false)
@@ -224,6 +224,7 @@ impl Machine {
                 rebased_from: None,
                 authored_at: None,
                 space_name: None,
+                space_icon: None,
             },
             replay,
             true,
@@ -485,7 +486,7 @@ impl Machine {
                 &canonical(header)?,
             )?;
             let transaction: Transaction = decode(&plaintext)?;
-            if transaction.space_name.is_some() {
+            if transaction.updates_space_metadata() {
                 continue;
             }
             edits.push(ExcludedEdit {
@@ -561,6 +562,7 @@ impl Machine {
                 rebased_from: Some(excluded),
                 authored_at,
                 space_name: None,
+                space_icon: None,
             },
             replay,
             false,

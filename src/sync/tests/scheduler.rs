@@ -461,6 +461,7 @@ fn a_pending_receive_commit_cancels_old_work_and_resumes_after_storage_recovers(
                 rebased_from: None,
                 authored_at: None,
                 space_name: None,
+                space_icon: None,
             },
         )
         .unwrap(),

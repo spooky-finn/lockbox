@@ -383,6 +383,7 @@ impl Vault {
             profile.space_name = name;
         }
         profile.shared_name = replay.projection.space_name;
+        profile.shared_icon = replay.projection.space_icon;
         profile.space.space_id = state.space.0;
         profile.space.namespace = state.namespace.0;
         profile.sync = Some(state);

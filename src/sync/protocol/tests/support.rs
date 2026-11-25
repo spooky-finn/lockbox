@@ -109,5 +109,6 @@ pub(super) fn empty_transaction() -> Transaction {
         rebased_from: None,
         authored_at: None,
         space_name: None,
+        space_icon: None,
     }
 }

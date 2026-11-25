@@ -9,6 +9,7 @@ use crate::{
             button::IconButton,
             status::HeaderStatus,
             symbol::{Icon, Symbol},
+            vault_icon::VaultIcon,
         },
     },
     settings::state::Settings,
@@ -179,14 +180,14 @@ pub(crate) fn TabBar() -> Element {
                     { let screen = session.read();
                       let label = screen.vault_name(&preferences.config)
                         .unwrap_or_else(|| language.text(Text::ChooseSpace).to_owned());
-                      let (icon, tooltip) = match &*screen {
-                        Screen::Unlocked(u) => (if u.vault.profile_summary().is_some() { Icon::Cloud } else { Icon::Folder },
+                      let (mark, icon, tooltip) = match &*screen {
+                        Screen::Unlocked(u) => (u.vault.icon().cloned(), if u.vault.profile_summary().is_some() { Icon::Cloud } else { Icon::Folder },
                             format!("{}\n{}", crate::desktop::window::title(&screen, &preferences.config), u.vault.path().display())),
-                        Screen::Locked(f) => (Icon::Lock, f.path.as_ref().map(|p| format!("{label}\n{}", p.display())).unwrap_or_else(|| label.clone())),
+                        Screen::Locked(f) => (None, Icon::Lock, f.path.as_ref().map(|p| format!("{label}\n{}", p.display())).unwrap_or_else(|| label.clone())),
                       };
                       rsx! { div { key: "{index}", class: if index == tabs.active { "space-tab active" } else { "space-tab" },
                         button { id: "space-tab-{index}", class: "space-tab-select", r#type: "button", role: "tab", aria_label: "{label}", aria_controls: "space-tab-content", tabindex: if index == tabs.active { "0" } else { "-1" }, disabled: busy, aria_selected: (index == tabs.active).to_string(), title: "{tooltip}", onclick: move |_| activate(index),
-                            span { class: "space-tab-icon", aria_hidden: "true", Symbol { icon } }
+                            span { class: "space-tab-icon", aria_hidden: "true", VaultIcon { icon: mark, fallback: icon } }
                             span { class: "space-tab-label", "{label}" }
                         }
                         button { class: "space-tab-close quiet", r#type: "button", aria_label: format!("{}: {label}", language.text(Text::MenuCloseTab)), title: format!("{}: {label}", language.text(Text::MenuCloseTab)), disabled: !screen.can_switch_profile(), onclick: move |_| close(index), Symbol { icon: Icon::Close } }

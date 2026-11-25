@@ -65,6 +65,7 @@ impl Settings {
             }
             config.space_names.remove(path);
             config.vault_aliases.remove(path);
+            config.vault_appearances.remove(id);
             config.touch_id.retain(|known| known != id);
         })
     }

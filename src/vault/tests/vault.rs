@@ -62,6 +62,33 @@ fn saved_entries_open_unchanged() {
 }
 
 #[test]
+fn local_icon_persists_inside_the_vault_and_can_be_cleared() {
+    use crate::sync::protocol::{Blob, SpaceGlyph, SpaceIcon};
+    let dir = tempfile::tempdir().unwrap();
+    let (path, mut vault) = new_vault(&dir);
+    assert!(
+        vault
+            .set_icon(Some(SpaceIcon::Image(Blob(vec![0]))))
+            .is_err()
+    );
+    let icon = SpaceIcon::Glyph(SpaceGlyph::Key);
+    vault.set_icon(Some(icon.clone())).unwrap();
+    assert_eq!(vault.editor_snapshot().icon(), Some(&icon));
+    drop(vault);
+
+    let mut vault = Vault::open(&path, &password("master")).unwrap();
+    assert_eq!(vault.icon(), Some(&icon));
+    vault.set_icon(None).unwrap();
+    drop(vault);
+    assert!(
+        Vault::open(path, &password("master"))
+            .unwrap()
+            .icon()
+            .is_none()
+    );
+}
+
+#[test]
 fn vaults_written_before_folders_open_without_migration() {
     let dir = tempfile::tempdir().unwrap();
     let (path, vault) = new_vault(&dir);

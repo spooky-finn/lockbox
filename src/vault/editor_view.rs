@@ -2,7 +2,7 @@
 
 use crate::{
     records::entry::Entry,
-    sync::identity::Key,
+    sync::{identity::Key, protocol::SpaceIcon},
     vault::{ProfileSummary, Result, Vault, VaultError, anchor},
 };
 use zeroize::Zeroizing;
@@ -14,6 +14,7 @@ pub(super) struct EditorView {
     signing_error: Option<anchor::Error>,
     pending_uploads: Option<usize>,
     has_certificate: bool,
+    pub(super) icon: Option<SpaceIcon>,
 }
 
 impl EditorView {
@@ -95,6 +96,7 @@ impl Vault {
             history: Default::default(),
             saved_entries: Default::default(),
             folders: self.folders.clone(),
+            local_icon: None,
             profile: None.into(),
             pending_exchange: None,
             editor_view: Some(EditorView {
@@ -102,6 +104,7 @@ impl Vault {
                 signing_error: self.signing_error(),
                 pending_uploads: self.pending_uploads(),
                 has_certificate: self.has_device_certificate(),
+                icon: self.icon().cloned(),
             }),
             _profile_lock: None,
             witnesses: self.witnesses.clone(),

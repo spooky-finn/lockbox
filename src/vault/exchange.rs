@@ -3,7 +3,7 @@
 
 use crate::{
     records::{entry::Entry, folder::Folder},
-    sync::protocol::{Error, Machine, Projection, SyncState},
+    sync::protocol::{Error, Machine, Projection, SpaceIcon, SyncState},
     vault::{Result, Vault, VaultError},
 };
 
@@ -18,18 +18,18 @@ struct ReceivedView {
     entries: Vec<Entry>,
     folders: Vec<Folder>,
     shared_name: Option<String>,
+    shared_icon: Option<SpaceIcon>,
 }
 
 impl ReceivedView {
     fn install(self, vault: &mut Vault) -> Self {
         vault.records_changed();
+        let profile = vault.profile.as_mut().unwrap();
         Self {
             entries: std::mem::replace(&mut vault.entries, self.entries),
             folders: std::mem::replace(&mut vault.folders, self.folders),
-            shared_name: std::mem::replace(
-                &mut vault.profile.as_mut().unwrap().shared_name,
-                self.shared_name,
-            ),
+            shared_name: std::mem::replace(&mut profile.shared_name, self.shared_name),
+            shared_icon: std::mem::replace(&mut profile.shared_icon, self.shared_icon),
         }
     }
 }
@@ -93,6 +93,7 @@ impl Vault {
             entries: projection.entries(),
             folders: projection.folders(),
             shared_name: projection.space_name,
+            shared_icon: projection.space_icon,
         });
         self.commit_received(PendingExchange {
             journal: candidate,

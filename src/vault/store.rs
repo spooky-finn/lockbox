@@ -101,6 +101,7 @@ impl ProfileStore {
         profile.space.space_id = journal.space.0;
         profile.space.namespace = journal.namespace.0;
         profile.shared_name = projection.space_name.clone();
+        profile.shared_icon = projection.space_icon.clone();
         profile.sync = Some(journal);
         profile.enable_authority();
         let mut vault = Vault::create_profile_snapshot(

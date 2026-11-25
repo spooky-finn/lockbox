@@ -40,6 +40,7 @@ mod invitation;
 mod machine;
 mod model;
 pub(crate) mod pairing;
+mod space_icon;
 mod wire;
 
 pub use crypto::{Certificate, DeviceSecret, Signed};
@@ -55,6 +56,7 @@ pub use model::{
     Action, Entity, EntityKind, Mutation, Projection, Record, Revision, Role, Transaction, Value,
     Version,
 };
+pub use space_icon::{SPACE_ICON_SIZE, SpaceGlyph, SpaceIcon, SpaceIconChange};
 pub(crate) use wire::canonical_eq;
 pub use wire::{Blob, Counter, Hash, Object, canonical, decode};
 

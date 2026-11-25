@@ -1,7 +1,11 @@
 use super::*;
 use crate::desktop::profiles;
-use crate::desktop::{context::Clock, runtime, security::Status};
+use crate::desktop::{context::Clock, runtime, security::Status, view_test_support::update};
 use crate::platform::touchid::tests::FakeBiometrics;
+use crate::settings::{
+    actions,
+    appearance::{ThemeMode, ThemePreset},
+};
 use std::{
     cell::RefCell,
     rc::Rc,
@@ -27,13 +31,60 @@ fn fixture() -> Element {
     use_context_provider(|| Clock(clock));
     use_context_provider(|| BiometricProvider(Arc::new(FakeBiometrics::default())));
     use_context_provider(|| Rc::new(RefCell::new(crate::desktop::test_support::security())));
-    rsx! { TabBar {} }
+    let appearance = crate::desktop::widgets::theme::use_active_appearance()();
+    rsx! { div { "data-mode": appearance.theme.code(), "data-preset": appearance.preset.code(), TabBar {} } }
 }
 
 fn mounted() -> VirtualDom {
     let mut dom = VirtualDom::new(fixture);
     dom.rebuild_in_place();
     dom
+}
+
+#[test]
+fn each_tab_uses_its_vault_appearance_when_unlocked_and_locked() {
+    let mut dom = mounted();
+    let second_dir = tempfile::tempdir().unwrap();
+    let set_custom = |mode, preset| {
+        actions::set_custom_appearance(true);
+        actions::set_theme(mode);
+        actions::set_theme_preset(preset);
+    };
+    let assert_appearance = |dom: &VirtualDom, mode: ThemeMode, preset: ThemePreset| {
+        let html = dioxus_ssr::render(dom);
+        assert!(html.contains(&format!("data-mode=\"{}\"", mode.code())));
+        assert!(html.contains(&format!("data-preset=\"{}\"", preset.code())));
+    };
+
+    update(&mut dom, |_| {
+        actions::set_theme_preset(ThemePreset::Paper);
+        set_custom(ThemeMode::Dark, ThemePreset::Forest);
+        new_tab();
+    });
+    assert_appearance(&dom, ThemeMode::System, ThemePreset::Paper);
+
+    update(&mut dom, |mut state| {
+        let second = crate::desktop::test_support::unlocked(&second_dir);
+        *state.write() = Screen::Unlocked(Box::new(second));
+        set_custom(ThemeMode::Light, ThemePreset::Ocean);
+    });
+    assert_appearance(&dom, ThemeMode::Light, ThemePreset::Ocean);
+
+    update(&mut dom, |_| {
+        activate(0);
+        actions::set_custom_appearance(false);
+    });
+    assert_appearance(&dom, ThemeMode::System, ThemePreset::Paper);
+
+    update(&mut dom, |_| {
+        set_custom(ThemeMode::Dark, ThemePreset::Forest);
+        profiles::rename_local_vault("Renamed").unwrap();
+        runtime::lock(None);
+    });
+    assert_appearance(&dom, ThemeMode::Dark, ThemePreset::Forest);
+
+    update(&mut dom, |_| activate(1));
+    assert_appearance(&dom, ThemeMode::Light, ThemePreset::Ocean);
 }
 
 #[test]

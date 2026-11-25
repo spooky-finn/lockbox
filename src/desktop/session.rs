@@ -16,6 +16,13 @@ pub(crate) enum Screen {
 }
 
 impl Screen {
+    pub(crate) fn vault_id(&self) -> Option<String> {
+        match self {
+            Self::Unlocked(workspace) => Some(workspace.vault.id()),
+            Self::Locked(form) => form.vault_id.clone(),
+        }
+    }
+
     pub(crate) fn vault_name(&self, config: &Config) -> Option<String> {
         match self {
             Self::Unlocked(workspace) => {

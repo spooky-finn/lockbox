@@ -171,6 +171,9 @@ impl Vault {
             profile
                 .shared_name
                 .clone_from(&replay.projection.space_name);
+            profile
+                .shared_icon
+                .clone_from(&replay.projection.space_icon);
         }
         self.records_changed();
         self.entries = replay.projection.entries();
@@ -477,6 +480,7 @@ impl Vault {
         let old_space = profile.space.space_id;
         let old_namespace = profile.space.namespace;
         let old_name = profile.shared_name.take();
+        let old_icon = profile.shared_icon.take();
         profile.space.space_id = descriptor.space.0;
         profile.space.namespace = descriptor.namespace.0;
 
@@ -486,6 +490,7 @@ impl Vault {
             profile.space.space_id = old_space;
             profile.space.namespace = old_namespace;
             profile.shared_name = old_name;
+            profile.shared_icon = old_icon;
             return Err(error);
         }
 

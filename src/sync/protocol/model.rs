@@ -1,6 +1,8 @@
 use crate::{
     records::{entry::Entry, folder::Folder, totp},
-    sync::protocol::{Error, Hash, MAX_MUTATIONS, Result, wire::sorted_unique},
+    sync::protocol::{
+        Error, Hash, MAX_MUTATIONS, Result, SpaceIcon, SpaceIconChange, wire::sorted_unique,
+    },
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -172,6 +174,9 @@ pub struct Transaction {
     /// A standalone owner-authored change to the shared display name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub space_name: Option<String>,
+    /// A standalone owner-authored update or removal of the shared icon.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub space_icon: Option<SpaceIconChange>,
 }
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -196,6 +201,8 @@ pub struct Projection {
     pub records: Vec<Record>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub space_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub space_icon: Option<SpaceIcon>,
 }
 
 impl Projection {
@@ -298,6 +305,7 @@ impl Projection {
             .space_name
             .as_deref()
             .is_some_and(|name| !super::pairing::valid_name(name))
+            || self.space_icon.as_ref().is_some_and(|icon| !icon.valid())
         {
             return Err(Error::InvalidTransaction);
         }
@@ -361,16 +369,28 @@ fn trim_whitespace(value: &str) -> &str {
 }
 
 impl Transaction {
+    pub(super) fn updates_space_metadata(&self) -> bool {
+        self.space_name.is_some() || self.space_icon.is_some()
+    }
+
     pub(super) fn validate(&self, before: &Projection) -> Result<()> {
         // Keep dates within 1970–9999 and safely representable in canonical JSON.
         // Do not compare with the reader's clock: offline and skewed clocks are valid.
         if self.authored_at.is_some_and(|at| at > 253_402_300_799) {
             return Err(Error::InvalidTransaction);
         }
-        if let Some(name) = &self.space_name {
+        if self.updates_space_metadata() {
             return if self.mutations.is_empty()
                 && self.rebased_from.is_none()
-                && super::pairing::valid_name(name)
+                && self
+                    .space_name
+                    .as_deref()
+                    .is_none_or(super::pairing::valid_name)
+                && self
+                    .space_icon
+                    .as_ref()
+                    .and_then(SpaceIconChange::icon)
+                    .is_none_or(SpaceIcon::valid)
             {
                 Ok(())
             } else {
@@ -496,6 +516,7 @@ impl Transaction {
             rebased_from: None,
             authored_at: None,
             space_name: None,
+            space_icon: None,
         })
     }
 
@@ -510,6 +531,7 @@ impl Transaction {
             rebased_from: None,
             authored_at: None,
             space_name: None,
+            space_icon: None,
         }
     }
 }
@@ -554,6 +576,7 @@ pub(super) fn project<'a>(
     }
     Projection {
         space_name: baseline.space_name.clone(),
+        space_icon: baseline.space_icon.clone(),
         records: versions
             .into_iter()
             .filter_map(|(entity, mut versions)| {
