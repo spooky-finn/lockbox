@@ -48,10 +48,10 @@ with open(sys.argv[1], "wb") as output:
     }, output)
 PY
     plutil -lint "$app/Contents/Info.plist"
-    # Ad-hoc signatures need no Apple credentials. Distribution is not notarized.
-    codesign --force --sign - "$app/Contents/MacOS/lockbox-storj-issuer"
-    codesign --force --sign - "$app/Contents/MacOS/lockbox-browser-host"
-    codesign --force --sign - "$app"
+    signing_identity=${LOCKBOX_MACOS_SIGN_IDENTITY:--}
+    codesign --force --sign "$signing_identity" "$app/Contents/MacOS/lockbox-storj-issuer"
+    codesign --force --sign "$signing_identity" "$app/Contents/MacOS/lockbox-browser-host"
+    codesign --force --sign "$signing_identity" "$app"
     codesign --verify --deep --strict "$app"
     ditto -c -k --sequesterRsrc --keepParent "$app" "$output/lockbox-$version-$target.zip"
     ;;

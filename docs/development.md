@@ -16,6 +16,24 @@ The first command launches the desktop app; the second runs two fictional shared
 profiles through an in-memory provider. See the [documentation guide](README.md)
 for implemented sync behavior, release plans and the protocol proposal.
 
+## Stable local macOS signing
+
+In Keychain Access, use Certificate Assistant → Create a Certificate. Name it
+`Lockbox Local Signing`, choose **Self Signed Root** and **Code Signing**, and
+keep the signing identity in your login keychain. Use the same identity for
+future installs so macOS can recognize the updated app.
+
+```sh
+security find-identity -p codesigning
+LOCKBOX_MACOS_SIGN_IDENTITY='Lockbox Local Signing' \
+  bash scripts/install-macos-release.sh /Applications
+codesign -d -r- /Applications/Lockbox.app
+```
+
+The first switch from ad hoc signing can trigger a new Keychain authorization
+prompt. When the variable is unset, the packager uses ad hoc signing. A local
+self-signed certificate does not provide Developer ID or notarization.
+
 ## Formatting and validation
 
 ```sh
