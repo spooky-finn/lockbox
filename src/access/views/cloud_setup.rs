@@ -41,41 +41,51 @@ pub(crate) fn CloudSetupView() -> Element {
                 edit_locked(state, |locked| locked.continue_cloud());
             },
             fieldset { disabled: locked.busy(), style: "border:0;padding:0;margin:0;min-width:0;display:contents",
-            p { class: "muted", {language.text(Text::ConnectYourStorjStorage)} }
-            button { r#type: "button", class: "setup-button", onclick: move |_| show_help.set(true), {language.text(Text::HowToSetUpStorj)} }
-            if !locked.cloud_recovery.restoring {
-            label { r#for: "cloud-username", {language.text(Text::Username)} }
-            input { id: "cloud-username", value: "{locked.cloud.username}", autocomplete: "off",
-                oninput: move |event| edit_locked(state, |locked| locked.cloud.username = event.value()), }
-            if !locked.joining {
-                label { r#for: "cloud-space", {language.text(Text::VaultName)} }
-                input { id: "cloud-space", value: "{locked.cloud.space_name}", autocomplete: "off",
-                    oninput: move |event| edit_locked(state, |locked| locked.cloud.space_name = event.value()), }
-            }
-            }
-            label { r#for: "cloud-url", "Base URL" }
-            input { id: "cloud-url", r#type: "url", value: "{locked.cloud.base_url}", placeholder: "https://…", autocomplete: "off",
-                oninput: move |event| edit_locked(state, |locked| locked.cloud.base_url = event.value()), }
-            label { r#for: "cloud-bucket", "Bucket" }
-            input { id: "cloud-bucket", value: "{locked.cloud.bucket}", autocomplete: "off", placeholder: "lockbox-team",
-                autocapitalize: "none", spellcheck: "false", "autocorrect": "off",
-                oninput: move |event| edit_locked(state, |locked| locked.cloud.bucket = event.value()), }
-            label { r#for: "cloud-access", "Access Key" }
-            input { id: "cloud-access", r#type: "password", value: locked.cloud.access_key.as_str(), autocomplete: "off",
-                oninput: move |event| {
-                    let value = Zeroizing::new(event.value());
-                    edit_locked(state, |locked| replace_secret(&mut locked.cloud.access_key, &value));
-                }, }
-            label { r#for: "cloud-secret", "Secret Key" }
-            input { id: "cloud-secret", r#type: "password", value: locked.cloud.secret_key.as_str(), autocomplete: "off",
-                oninput: move |event| {
-                    let value = Zeroizing::new(event.value());
-                    edit_locked(state, |locked| replace_secret(&mut locked.cloud.secret_key, &value));
-                }, }
-            if !locked.cloud_recovery.restoring {
-                p { class: "muted", {language.text(Text::FieldValidationDoesNotConnectToStorj)} }
-            }
-            button { r#type: "submit", class: "setup-button", {language.text(Text::Continue)} }
+                if locked.joining {
+                    label { r#for: "setup-invitation", {language.text(Text::LinkPaste)} }
+                    textarea { id: "setup-invitation", rows: 2, maxlength: crate::sync::protocol::pairing::MAX_LINK_BYTES as i64,
+                        autocomplete: "off", spellcheck: "false", value: locked.invitation_link.as_deref().unwrap_or_default(),
+                        oninput: move |event| edit_locked(state, |locked| locked.invitation_link = Some(event.value())), }
+                }
+                if !locked.managed_join() {
+                    p { class: "muted", {language.text(Text::ConnectYourStorjStorage)} }
+                    button { r#type: "button", class: "setup-button", onclick: move |_| show_help.set(true), {language.text(Text::HowToSetUpStorj)} }
+                }
+                if !locked.cloud_recovery.restoring {
+                    label { r#for: "cloud-username", {language.text(Text::Username)} }
+                    input { id: "cloud-username", value: "{locked.cloud.username}", autocomplete: "off",
+                        oninput: move |event| edit_locked(state, |locked| locked.cloud.username = event.value()), }
+                    if !locked.joining {
+                        label { r#for: "cloud-space", {language.text(Text::VaultName)} }
+                        input { id: "cloud-space", value: "{locked.cloud.space_name}", autocomplete: "off",
+                            oninput: move |event| edit_locked(state, |locked| locked.cloud.space_name = event.value()), }
+                    }
+                }
+                if !locked.managed_join() {
+                    label { r#for: "cloud-url", "Base URL" }
+                    input { id: "cloud-url", r#type: "url", value: "{locked.cloud.base_url}", placeholder: "https://…", autocomplete: "off",
+                        oninput: move |event| edit_locked(state, |locked| locked.cloud.base_url = event.value()), }
+                    label { r#for: "cloud-bucket", "Bucket" }
+                    input { id: "cloud-bucket", value: "{locked.cloud.bucket}", autocomplete: "off", placeholder: "lockbox-team",
+                        autocapitalize: "none", spellcheck: "false", "autocorrect": "off",
+                        oninput: move |event| edit_locked(state, |locked| locked.cloud.bucket = event.value()), }
+                    label { r#for: "cloud-access", "Access Key" }
+                    input { id: "cloud-access", r#type: "password", value: locked.cloud.access_key.as_str(), autocomplete: "off",
+                        oninput: move |event| {
+                            let value = Zeroizing::new(event.value());
+                            edit_locked(state, |locked| replace_secret(&mut locked.cloud.access_key, &value));
+                        }, }
+                    label { r#for: "cloud-secret", "Secret Key" }
+                    input { id: "cloud-secret", r#type: "password", value: locked.cloud.secret_key.as_str(), autocomplete: "off",
+                        oninput: move |event| {
+                            let value = Zeroizing::new(event.value());
+                            edit_locked(state, |locked| replace_secret(&mut locked.cloud.secret_key, &value));
+                        }, }
+                    if !locked.cloud_recovery.restoring {
+                        p { class: "muted", {language.text(Text::FieldValidationDoesNotConnectToStorj)} }
+                    }
+                }
+                button { r#type: "submit", class: "setup-button", {language.text(Text::Continue)} }
             }
             if locked.cloud_recovery.restoring && !locked.cloud_recovery.spaces.is_empty() {
                 p { {language.text(Text::CloudRestoreSelect)} }

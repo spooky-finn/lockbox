@@ -14,8 +14,26 @@ use aws_sdk_s3::{
 use tokio::runtime::Runtime;
 use zeroize::Zeroizing;
 
+pub(crate) mod invite;
+pub(crate) mod issuer;
 pub(crate) mod pairing;
 mod transport;
+
+fn object_prefix(space_name: &str) -> Result<String> {
+    if space_name.trim().is_empty()
+        || space_name.len() > 256
+        || space_name.chars().any(char::is_control)
+    {
+        return Err(TransportError::InvalidResponse);
+    }
+    // Keep names in one S3 key segment. Escape literal percent signs first
+    // so names containing escape sequences cannot alias another space.
+    let mut segment = space_name.replace('%', "%25").replace('/', "%2F");
+    if matches!(segment.as_str(), "." | "..") {
+        segment = segment.replace('.', "%2E");
+    }
+    Ok(format!("spaces/{segment}/objects/"))
+}
 
 /// Client bound to one space name. Protocol namespaces remain in sync state;
 /// the provider prefix comes from the name supplied at construction.
@@ -121,18 +139,7 @@ impl Storj {
         region: &str,
         https_only: bool,
     ) -> Result<Self> {
-        if space_name.trim().is_empty()
-            || space_name.len() > 256
-            || space_name.chars().any(char::is_control)
-        {
-            return Err(TransportError::InvalidResponse);
-        }
-        // Keep names in one S3 key segment. Escape literal percent signs first
-        // so names containing escape sequences cannot alias another space.
-        let mut segment = space_name.replace('%', "%25").replace('/', "%2F");
-        if matches!(segment.as_str(), "." | "..") {
-            segment = segment.replace('.', "%2E");
-        }
+        let prefix = object_prefix(space_name)?;
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
@@ -162,7 +169,7 @@ impl Storj {
             client,
             runtime,
             bucket: bucket.into(),
-            prefix: format!("spaces/{segment}/objects/"),
+            prefix,
         })
     }
 }

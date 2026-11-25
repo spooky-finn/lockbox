@@ -3348,7 +3348,7 @@ dependencies = [
 
 [[package]]
 name = "lockbox"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "arboard",
  "argon2",
@@ -3364,6 +3364,7 @@ dependencies = [
  "dioxus-ssr",
  "dirs",
  "ed25519-dalek",
+ "flate2",
  "getrandom 0.3.4",
  "hkdf",
  "hmac 0.12.1",
@@ -3374,6 +3375,7 @@ dependencies = [
  "objc2",
  "objc2-foundation",
  "objc2-local-authentication",
+ "percent-encoding",
  "rand_core 0.9.5",
  "reqwest",
  "resvg",

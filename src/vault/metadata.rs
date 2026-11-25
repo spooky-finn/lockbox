@@ -21,6 +21,16 @@ pub struct ProfileSummary<'a> {
 }
 
 impl Vault {
+    pub(crate) fn awaiting_member_storage(&self) -> bool {
+        self.profile.as_ref().is_some_and(|profile| {
+            let provider = &profile.provider;
+            provider.base_url.is_empty()
+                && provider.bucket.is_empty()
+                && provider.access_key.is_empty()
+                && provider.secret_key.is_empty()
+        })
+    }
+
     pub fn profile_summary(&self) -> Option<ProfileSummary<'_>> {
         if let Some(snapshot) = &self.editor_view {
             return snapshot.profile_summary();

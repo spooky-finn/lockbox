@@ -6,7 +6,48 @@ certificate. This implementation remains separate from the broader
 [protocol proposal](lockbox-protocol.md). The desktop implements the invitation
 and member-management flows below; other production release gates remain open.
 
-## Desktop workflow
+## Automatic storage access with Storj
+
+Sync the owner vault once so its signed genesis object is available on Storj.
+In **Sharing and participants**, expand **Automatic storage access for invited devices**
+and enter a Storj Access Grant for the same project, bucket, vault path and Storj
+encryption passphrase. The desktop uses the bundled issuer helper and checks the
+stored genesis against the local copy. It derives an issuer restricted to the
+vault’s sync objects and checks revocation with a disposable child grant. Only
+the restricted issuer is saved in the encrypted profile. The owner’s existing S3 credential must also allow GET and PUT on
+`spaces/<escaped space name>/invite-v1/` for the invitation mailbox.
+
+1. Create a one-day or seven-day invitation. Send the link to the guest and deliver
+   the verification code through a second trusted channel.
+2. The guest opens the link or pastes it into **Join a space**. A new guest sets
+   up their local identity, recovery words and password. The managed link supplies
+   the mailbox routes. The guest verifies the independent code and sends their request.
+3. The owner compares the guest's identity and device IDs through the second channel,
+   selects the role, and approves. The guest reviews the role and confirms.
+4. After admission, the owner registers a separate restricted grant for that device,
+   verifies the resulting credentials against the vault genesis, signs the storage
+   details and encrypts them to the approved device. The guest's profile commits
+   the credential together with the joined vault. Ordinary sync can then start.
+
+The signed `lockbox://pair/` link includes expiring bearer URLs for eight objects.
+Anyone holding it can use those mailbox routes until their expiry. The three guest
+PUT routes accept fixed-size payloads. Another holder can disrupt delivery by
+overwriting a pending request or consuming bandwidth. Only the matched device
+can decrypt its storage credential. For an already admitted device whose mailbox
+has expired, the owner can renew mailbox access for a day. Paste the renewed link
+into the pending connection under **Invitation mailbox expired?**.
+
+Each managed device receives GET, PUT and LIST for this vault's sync objects.
+Storj grants exclude deletes, other vaults, and the recovery and pairing paths.
+Lockbox enforces Reader and Editor rights on signed changes. Storage access allows
+uploading bytes even for a Reader. The owner’s unlocked issuing profile retains a
+per-device revocation handle after invitation history is cleared. When that profile
+observes device removal, it retries provider revocation until Storj acknowledges it.
+Vault removal and epoch rotation take effect independently. Keep the issuing
+profile for revocation. If it is lost, revoke its parent access in Storj to cut off
+its descendants and reprovision remaining devices as needed.
+
+## Joining with independently provisioned storage
 
 **Invite with a link** is the primary desktop flow. The owner opens **Sharing
 and participants** from an unlocked cloud profile. A new participant selects
@@ -30,8 +71,8 @@ The local profile is never copied or uploaded to admit another device.
    space name and independent code, then verifies the pinned control proof before
    sending a device-signed, encrypted request containing username and complete
    device certificate.
-   Links are pasted into Lockbox; OS/browser URL-handler registration is not
-   required or claimed by this implementation.
+   Installed macOS bundles and Linux Debian packages handle invitation links.
+   Portable builds also accept pasted links.
    Pending downloads survive restart. **Edit link or code** returns to the form
    with the entered values so a typo can be corrected before any request is sent.
    Previously issued `lockbox://invite/...` links remain accepted.
@@ -69,7 +110,7 @@ normal member management. Completed links can be removed from the local list
 after their terminal status has been published. Removing history cannot make an
 unknown/consumed ticket authorise another admission.
 
-## Storage and trust boundaries for links
+## Storage and trust boundaries for independently provisioned links
 
 Short links contain the base64url-encoded space name and complete 256-bit ticket
 hash (43 base64url characters), not the ticket itself. A space named `Team`

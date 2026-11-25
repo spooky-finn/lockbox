@@ -3,7 +3,7 @@
 
 use crate::{
     sync::protocol::{
-        Admission, AdmissionReceipt, Error, Hash, Invitation, Machine,
+        Admission, Error, Hash, Invitation, Machine,
         pairing::{ClosedReason, Closure, Contact, Envelope, Joined, Kind, Slot},
     },
     vault::{Result, Vault, profile::pairing::PairingState},
@@ -110,7 +110,7 @@ impl Vault {
                 }
                 self.verify_invitation_response(&consent, now)?;
                 let receipt = self.admit_invitation(consent, now)?;
-                if !self.has_delivery(session, Slot::Receipt(request)) {
+                if link.managed.is_none() && !self.has_delivery(session, Slot::Receipt(request)) {
                     let frame = Envelope::seal(
                         &link.ticket,
                         request,
@@ -239,13 +239,12 @@ impl Vault {
                 Ok(())
             }
             Slot::Receipt(id) if id == request && link.consented => {
-                let receipt: AdmissionReceipt =
-                    frame.open(&link.ticket, request, Kind::Receipt, &device)?;
+                let (receipt, provider) = Self::managed_receipt(&link, request, &frame, &device)?;
                 if Some(receipt.id()) != link.offer.as_ref().map(Invitation::id) {
                     return Err(Error::InvalidInvitation.into());
                 }
                 self.verify_join_receipt(&receipt)?;
-                self.join_invitation(receipt.clone())?;
+                self.join_with_storage(receipt.clone(), provider)?;
                 let ack = Joined::create(
                     &link.ticket,
                     request,

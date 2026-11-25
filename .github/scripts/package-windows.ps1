@@ -9,6 +9,9 @@ if ($hostTarget -ne 'x86_64-pc-windows-msvc') { throw "Unexpected target: $hostT
 $stage = Join-Path $env:RUNNER_TEMP "lockbox-$version-windows"
 $output = 'target/release-assets'
 New-Item -ItemType Directory -Path $stage, $output -Force | Out-Null
+$env:CGO_ENABLED = '0'
+go -C tools/storj-issuer build -mod=readonly -trimpath '-ldflags=-s -w' -o (Join-Path $stage 'lockbox-storj-issuer.exe') .
+if ($LASTEXITCODE -ne 0) { throw 'Storj issuer build failed' }
 Copy-Item target/release/lockbox.exe $stage
 Copy-Item assets/LICENSE-simple-icons.md, assets/DISCLAIMER-simple-icons.md $stage
 # Some WebView2 configurations use a dynamic loader instead of the static loader.

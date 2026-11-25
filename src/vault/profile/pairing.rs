@@ -2,7 +2,7 @@
 
 use crate::sync::protocol::{
     Blob, Hash, Invitation, Role,
-    pairing::{ClosedReason, Closure, Contact, LinkReference, Slot, Ticket},
+    pairing::{ClosedReason, Closure, Contact, LinkReference, ManagedLink, Slot, Ticket},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -10,6 +10,10 @@ use std::collections::{BTreeMap, BTreeSet};
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct PairingState {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub issuer: Option<String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub device_grants: BTreeMap<Hash, String>,
     pub issued: BTreeMap<Hash, IssuedLink>,
     pub joining: BTreeMap<Hash, JoiningLink>,
     pub outgoing: Vec<Delivery>,
@@ -30,6 +34,8 @@ pub(crate) struct ResolvingLink {
 #[serde(deny_unknown_fields)]
 pub(crate) struct IssuedLink {
     pub ticket: Ticket,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub managed: Option<ManagedLink>,
     pub requests: BTreeMap<Hash, Contact>,
     pub rejected: BTreeSet<Hash>,
     pub approval: Option<Approval>,
@@ -48,6 +54,8 @@ pub(crate) struct Approval {
 #[serde(deny_unknown_fields)]
 pub(crate) struct JoiningLink {
     pub ticket: Ticket,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub managed: Option<ManagedLink>,
     pub proof_verified: bool,
     pub request: Option<Contact>,
     pub offer: Option<Invitation>,
@@ -70,10 +78,19 @@ impl PairingState {
     pub const MAX_REQUESTS: usize = 32;
 
     pub fn is_empty(&self) -> bool {
-        self.issued.is_empty()
+        self.device_grants.is_empty()
+            && self.issuer.is_none()
+            && self.issued.is_empty()
             && self.joining.is_empty()
             && self.outgoing.is_empty()
             && self.resolving.is_none()
+    }
+
+    pub fn uses_managed_links(&self) -> bool {
+        self.issuer.is_some()
+            || !self.device_grants.is_empty()
+            || self.joining.values().any(|l| l.managed.is_some())
+            || self.issued.values().any(|l| l.managed.is_some())
     }
 
     pub fn uses_short_links(&self) -> bool {
@@ -82,6 +99,15 @@ impl PairingState {
                 .outgoing
                 .iter()
                 .any(|delivery| matches!(delivery.slot, Slot::Ticket(_)))
+    }
+
+    fn valid_mailbox(ticket: &Ticket, managed: Option<&ManagedLink>) -> bool {
+        match managed {
+            Some(link) => {
+                link.verify_mailbox().is_ok() && link.body.ticket.hash().ok() == ticket.hash().ok()
+            }
+            None => ticket.verify_ticket().is_ok(),
+        }
     }
 
     pub fn validate(&self) -> bool {
@@ -95,11 +121,12 @@ impl PairingState {
                         .values()
                         .any(|link| !link.joined && link.closed.is_none())
             })
+            && (self.device_grants.is_empty() || self.issuer.is_some())
             && self.outgoing.len() <= 256
             && self.issued.iter().all(|(id, link)| {
                 *id == link.ticket.body.id
                     && link.requests.len() <= Self::MAX_REQUESTS
-                    && link.ticket.verify_ticket().is_ok()
+                    && Self::valid_mailbox(&link.ticket, link.managed.as_ref())
                     && link.requests.iter().all(|(hash, request)| {
                         request.hash().ok() == Some(*hash)
                             && request.verify_contact(&link.ticket).is_ok()
@@ -116,7 +143,7 @@ impl PairingState {
             })
             && self.joining.iter().all(|(id, link)| {
                 *id == link.ticket.body.id
-                    && link.ticket.verify_ticket().is_ok()
+                    && Self::valid_mailbox(&link.ticket, link.managed.as_ref())
                     && link
                         .request
                         .as_ref()
@@ -143,5 +170,23 @@ impl PairingState {
                     }
             })
             && crate::serialization::canonical_size(self).is_ok_and(|size| size <= 64 * 1024 * 1024)
+    }
+}
+
+impl Drop for PairingState {
+    fn drop(&mut self) {
+        use zeroize::Zeroize;
+        self.issuer.zeroize();
+        for grant in self.device_grants.values_mut() {
+            grant.zeroize();
+        }
+    }
+}
+impl IssuedLink {
+    pub fn public_link(&self) -> crate::sync::protocol::Result<String> {
+        match &self.managed {
+            Some(managed) => managed.link(),
+            None => Ok(self.ticket.reference()?.link()),
+        }
     }
 }

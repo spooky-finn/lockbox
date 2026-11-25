@@ -82,6 +82,7 @@ pub(crate) fn use_runtime() -> Session {
                 let _ =
                     tokio::time::timeout(Duration::from_millis(100), save_wake.notified()).await;
                 tick();
+                crate::desktop::links::present_invitation();
             }
         }
     });

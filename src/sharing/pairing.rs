@@ -34,6 +34,14 @@ struct Reply {
 }
 
 pub(crate) struct Pairing {
+    setup: Option<Worker<crate::vault::Result<crate::vault::pairing::VerifiedIssuer>>>,
+    credential_worker: Option<(
+        PathBuf,
+        Hash,
+        Worker<crate::vault::Result<crate::vault::pairing::CredentialResult>>,
+    )>,
+    credential_due: Instant,
+    credential_round: usize,
     worker: Option<(Scope, Worker<NetworkResult<Reply>>)>,
     factory: Option<Arc<dyn MailboxFactory>>,
     due: Instant,
@@ -54,7 +62,11 @@ impl Default for Pairing {
 impl Pairing {
     pub fn new(factory: Option<Arc<dyn MailboxFactory>>) -> Self {
         Self {
+            setup: None,
             worker: None,
+            credential_worker: None,
+            credential_due: Instant::now(),
+            credential_round: 0,
             factory,
             due: Instant::now(),
             round: 0,
@@ -66,16 +78,44 @@ impl Pairing {
         }
     }
 
+    pub(crate) fn checking_issuer(&self) -> bool {
+        self.setup.is_some()
+    }
+
+    pub(crate) fn configure_issuer(
+        &mut self,
+        vault: &Vault,
+        grant: &str,
+    ) -> crate::vault::Result<()> {
+        if self.setup.is_none() {
+            let task = vault.prepare_issuer_setup(grant)?;
+            self.setup = Some(Worker::spawn(move |_| task.verify()));
+        }
+        Ok(())
+    }
+
     pub fn wake(&mut self) {
         self.due = Instant::now();
     }
 
     pub fn suspend(&mut self) {
         self.worker = None;
+        self.credential_worker = None;
+        self.setup = None;
         self.wake();
     }
 
     pub fn needs_tick(&self, vault: &Vault, editing: bool) -> bool {
+        if !editing
+            && vault.signing_error().is_none()
+            && (self.setup.as_ref().is_some_and(Worker::is_finished)
+                || self
+                    .credential_worker
+                    .as_ref()
+                    .is_some_and(|(_, _, worker)| worker.is_finished()))
+        {
+            return true;
+        }
         !editing
             && vault.has_pairing()
             && vault.signing_error().is_none()
@@ -109,6 +149,35 @@ impl Pairing {
         sync: &mut SpaceSync,
         now: u64,
     ) -> crate::vault::Result<()> {
+        if let Some(result) = self.setup.as_mut().and_then(Worker::take) {
+            self.setup = None;
+            vault.configure_invite_issuer(result.map_err(|_| TransportError::Unavailable)??)?;
+            self.days = self.days.min(7);
+        }
+        if let Some((path, device, worker)) = &mut self.credential_worker {
+            if path != vault.path()
+                || vault
+                    .device_certificate()
+                    .is_none_or(|c| c.body.device != *device)
+            {
+                self.credential_worker = None;
+            } else if let Some(result) = worker.take() {
+                self.credential_worker = None;
+                self.credential_due = Instant::now() + Duration::from_secs(15);
+                vault.finish_credential_task(result.map_err(|_| TransportError::Unavailable)??)?;
+            }
+        } else if Instant::now() >= self.credential_due && vault.has_invite_issuer() {
+            self.credential_due = Instant::now() + Duration::from_secs(3);
+            let round = self.credential_round;
+            self.credential_round = round.wrapping_add(1);
+            if let Some(task) = vault.next_credential_task(round)? {
+                self.credential_worker = Some((
+                    vault.path().to_owned(),
+                    vault.device_certificate().unwrap().body.device,
+                    Worker::spawn(move |_| task.execute()),
+                ));
+            }
+        }
         if let Some((scope, worker)) = &mut self.worker {
             if scope.profile != vault.path()
                 || vault

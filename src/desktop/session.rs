@@ -133,6 +133,7 @@ impl Screen {
         security: &mut Security,
     ) {
         let joining = matches!(self, Self::Locked(form) if form.joining)
+            || opened.vault.awaiting_member_storage()
             || opened.vault.pairing_waits_to_join()
             || opened.vault.joining_link().is_some_and(|link| !link.joined)
             || opened
@@ -153,6 +154,11 @@ impl Screen {
         let mut unlocked = Unlocked::new(opened.vault);
         unlocked.touch_id = touch_id;
         if joining {
+            if let Self::Locked(form) = self
+                && let Some(link) = form.invitation_link.take()
+            {
+                unlocked.sharing.links.link = link;
+            }
             unlocked.sharing.joining = true;
             unlocked.open_sharing();
         }

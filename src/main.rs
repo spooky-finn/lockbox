@@ -1,6 +1,9 @@
 fn main() {
-    for link in std::env::args().skip(1) {
-        lockbox::desktop::browser::receive(&link);
+    for link in std::env::args_os()
+        .skip(1)
+        .filter_map(|arg| arg.into_string().ok())
+    {
+        lockbox::desktop::links::receive(&link);
     }
     // Dioxus defaults to DEBUG in development, including verbose AWS SDK traces.
     let _ = dioxus::logger::init(dioxus::logger::tracing::Level::INFO);

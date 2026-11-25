@@ -715,3 +715,133 @@ fn schema_seven_links_gain_short_delivery_without_changing_the_signed_invitation
         8
     );
 }
+
+#[test]
+fn managed_invitation_delivers_storage_only_after_exact_device_consent_and_revokes_after_removal() {
+    use super::managed::{CredentialResult, CredentialTask};
+    use crate::sync::transport::storj::issuer::MemberCredentials;
+    use zeroize::Zeroizing;
+    let directory = tempfile::tempdir().unwrap();
+    let store = ProfileStore::new(Arc::new(MemoryWitness::default()));
+    let owner_path = directory.path().join("owner.lbx");
+    let guest_path = directory.path().join("guest.lbx");
+    let mut owner = profile(&store, &owner_path, "Owner");
+    let mut guest = profile(&store, &guest_path, "Alice");
+    let device = guest.device_certificate().unwrap().body.device;
+    owner.profile.as_mut().unwrap().pairing.issuer = Some("test-only-parent".into());
+    guest.profile.as_mut().unwrap().provider = crate::vault::ProviderConfiguration {
+        base_url: String::new(),
+        bucket: String::new(),
+        access_key: String::new(),
+        secret_key: String::new(),
+    };
+    let now = 1;
+    let id = owner.create_link(now, 1).unwrap();
+    let mut mailbox = Messages::new();
+    round(&mut owner, &mut mailbox, now);
+    let link = owner.export_link(id, false).unwrap();
+    assert!(link.starts_with("lockbox://pair/"));
+    assert!(link.len() < 2600, "fixture link length {}", link.len());
+    let parsed = ManagedLink::parse(&link).unwrap();
+    let public = String::from_utf8(canonical(&parsed).unwrap()).unwrap();
+    for private in [
+        "fictional-secret",
+        "test-only-parent",
+        "test-only-device-secret",
+    ] {
+        assert!(!public.contains(private));
+    }
+    let code = owner.export_link(id, true).unwrap();
+    assert!(guest.request_link(&link, &"0".repeat(64), now).is_err());
+    guest.request_link(&link, &code, now).unwrap();
+    pump(&mut owner, &mut guest, &mut mailbox, now);
+    let request = guest
+        .joining_link()
+        .unwrap()
+        .request
+        .as_ref()
+        .unwrap()
+        .hash()
+        .unwrap();
+    owner
+        .approve_link_request(id, request, Role::Reader, true, now)
+        .unwrap();
+    pump(&mut owner, &mut guest, &mut mailbox, now);
+    assert!(owner.next_credential_task(0).unwrap().is_none());
+    assert!(guest.awaiting_member_storage());
+    guest.consent_link(id, now).unwrap();
+    pump(&mut owner, &mut guest, &mut mailbox, now);
+    assert!(!guest.joining_link().unwrap().joined);
+    // A registered grant is represented by a persisted revocation handle. The
+    // Go SDK scope and remote registration adapter are exercised separately.
+    owner
+        .profile
+        .as_mut()
+        .unwrap()
+        .pairing
+        .device_grants
+        .insert(device, "test-only-child".into());
+    owner.save_pairing().unwrap();
+    assert!(
+        matches!(owner.next_credential_task(0).unwrap(),Some(CredentialTask::Register{device:target,..}) if target == device)
+    );
+    let result = |target| {
+        CredentialResult::Registered(
+            id,
+            request,
+            target,
+            MemberCredentials {
+                endpoint: "https://gateway.storjshare.io".into(),
+                access: Zeroizing::new("device-access".into()),
+                secret: Zeroizing::new("test-only-device-secret".into()),
+            },
+        )
+    };
+    assert!(
+        owner
+            .finish_credential_task(result(Hash::default()))
+            .is_err()
+    );
+    assert!(!owner.has_delivery(id, Slot::Receipt(request)));
+    owner.finish_credential_task(result(device)).unwrap();
+    owner.renew_mailbox(id).unwrap();
+    guest
+        .resume_managed_mailbox(id, &owner.export_link(id, false).unwrap())
+        .unwrap();
+    pump(&mut owner, &mut guest, &mut mailbox, now);
+    assert!(guest.joining_link().unwrap().joined);
+    assert_eq!(owner.space_members().unwrap().len(), 2);
+    let encrypted_receipt = &mailbox[&(
+        parsed.body.ticket.body.space_name,
+        id,
+        Slot::Receipt(request),
+    )];
+    assert!(!String::from_utf8_lossy(encrypted_receipt).contains("test-only-device-secret"));
+    drop(guest);
+    let restored = store
+        .open(guest_path, &SecretString::from("test master".to_owned()))
+        .unwrap();
+    assert_eq!(
+        restored.profile.as_ref().unwrap().provider.secret_key,
+        "test-only-device-secret"
+    );
+    owner.forget_link(id).unwrap();
+    let members = owner
+        .space_members()
+        .unwrap()
+        .into_iter()
+        .filter(|(c, _)| c.body.device != device)
+        .collect();
+    owner.set_space_members(members).unwrap();
+    drop(owner);
+    let mut owner = store
+        .open(owner_path, &SecretString::from("test master".to_owned()))
+        .unwrap();
+    assert!(
+        matches!(owner.next_credential_task(0).unwrap(), Some(CredentialTask::Revoke{device:target,..}) if target == device)
+    );
+    owner
+        .finish_credential_task(CredentialResult::Revoked(device))
+        .unwrap();
+    assert!(owner.next_credential_task(0).unwrap().is_none());
+}

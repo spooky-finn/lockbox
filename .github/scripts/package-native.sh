@@ -15,11 +15,14 @@ stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
 mkdir -p "$output"
 
+issuer="$stage/lockbox-storj-issuer"
+CGO_ENABLED=0 go -C tools/storj-issuer build -mod=readonly -trimpath -ldflags="-s -w" -o "$issuer" .
+
 case "$target" in
   *-apple-darwin)
     app="$stage/Lockbox.app"
     mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
-    install -m 755 target/release/lockbox target/release/lockbox-browser-host "$app/Contents/MacOS/"
+    install -m 755 target/release/lockbox target/release/lockbox-browser-host "$issuer" "$app/Contents/MacOS/"
     install -m 644 assets/lockbox.icns assets/LICENSE-simple-icons.md assets/DISCLAIMER-simple-icons.md \
       "$app/Contents/Resources/"
     python3 - "$app/Contents/Info.plist" "$version" <<'PY'
@@ -46,6 +49,7 @@ with open(sys.argv[1], "wb") as output:
 PY
     plutil -lint "$app/Contents/Info.plist"
     # Ad-hoc signatures need no Apple credentials. Distribution is not notarized.
+    codesign --force --sign - "$app/Contents/MacOS/lockbox-storj-issuer"
     codesign --force --sign - "$app/Contents/MacOS/lockbox-browser-host"
     codesign --force --sign - "$app"
     codesign --verify --deep --strict "$app"
@@ -56,7 +60,7 @@ PY
     mkdir -p "$package/DEBIAN" "$package/usr/bin" \
       "$package/usr/share/applications" "$package/usr/share/icons/hicolor/scalable/apps" \
       "$package/usr/share/doc/lockbox" "$stage/debian"
-    install -m 755 target/release/lockbox target/release/lockbox-browser-host "$package/usr/bin/"
+    install -m 755 target/release/lockbox target/release/lockbox-browser-host "$issuer" "$package/usr/bin/"
     strip --strip-unneeded "$package/usr/bin/lockbox" "$package/usr/bin/lockbox-browser-host"
     install -m 644 assets/lockbox-mark.svg "$package/usr/share/icons/hicolor/scalable/apps/lockbox.svg"
     install -m 644 assets/LICENSE-simple-icons.md assets/DISCLAIMER-simple-icons.md \
@@ -100,9 +104,10 @@ Description: Local-first password manager
  Local encrypted vaults and experimental shared-vault synchronization.
 EOF
     dpkg-deb --root-owner-group --build "$package" "$output/lockbox_${version}_amd64.deb"
+    dpkg-deb --fsys-tarfile "$output/lockbox_${version}_amd64.deb" | tar -tf - ./usr/bin/lockbox-storj-issuer >/dev/null
     portable="$stage/lockbox-$version-$target"
     mkdir -p "$portable"
-    cp "$package/usr/bin/lockbox" "$package/usr/bin/lockbox-browser-host" \
+    cp "$package/usr/bin/lockbox-storj-issuer" "$package/usr/bin/lockbox" "$package/usr/bin/lockbox-browser-host" \
       "$package/usr/share/doc/lockbox/"* "$portable/"
     cat > "$portable/README.txt" <<EOF
 Lockbox $version — Linux x86_64; Ubuntu 22.04 / Linux Mint 21.1 or newer.
@@ -114,6 +119,7 @@ Native browser host: /usr/bin/lockbox-browser-host after installing the .deb.
 Browser host registration remains a separate setup step; see ext/README.md.
 EOF
     tar -C "$stage" -czf "$output/lockbox-$version-$target.tar.gz" "$(basename "$portable")"
+    tar -tzf "$output/lockbox-$version-$target.tar.gz" "$(basename "$portable")/lockbox-storj-issuer" >/dev/null
     ;;
   *)
     printf 'Unsupported release target: %s\n' "$target" >&2

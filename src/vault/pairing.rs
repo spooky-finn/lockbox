@@ -7,7 +7,8 @@ use crate::{
         protocol::{
             Error, Hash, Machine, Role, canonical,
             pairing::{
-                ClosedReason, Closure, Contact, Envelope, Kind, LinkReference, Slot, Ticket,
+                ClosedReason, Closure, Contact, Envelope, Kind, LinkReference, ManagedLink, Slot,
+                Ticket,
             },
         },
         transport::{pairing::MailboxFactory, storj::pairing::Factory},
@@ -23,6 +24,8 @@ use std::{
 };
 
 mod delivery;
+mod managed;
+pub(crate) use managed::{CredentialResult, VerifiedIssuer};
 mod receive;
 
 #[cfg(test)]
@@ -68,6 +71,7 @@ impl Vault {
         link.closed.is_none()
             && [Slot::Bootstrap, Slot::Ticket(hash)]
                 .into_iter()
+                .filter(|slot| link.managed.is_none() || *slot == Slot::Bootstrap)
                 .all(|slot| {
                     self.profile
                         .as_ref()
@@ -107,7 +111,7 @@ impl Vault {
                     "Wait for the invitation to finish uploading",
                 ));
             }
-            Ok(link.ticket.reference()?.link())
+            Ok(link.public_link()?)
         }
     }
 
@@ -166,6 +170,17 @@ impl Vault {
             &profile.space_name,
             expires,
         )?;
+        let managed = if profile.pairing.issuer.is_some() {
+            if days > 7 {
+                return Err(VaultError::Pairing(
+                    "Automatic storage invitations expire within seven days",
+                ));
+            }
+            Some(Self::create_managed_mailbox(profile, &ticket, days)?)
+        } else {
+            None
+        };
+        let needs_ticket = managed.is_none();
         let proof = Machine::pairing_proof(profile.sync.as_ref().unwrap(), &ticket)?;
         let id = ticket.body.id;
         let hash = ticket.hash()?;
@@ -175,6 +190,7 @@ impl Vault {
             id,
             IssuedLink {
                 ticket,
+                managed,
                 requests: BTreeMap::new(),
                 rejected: BTreeSet::new(),
                 approval: None,
@@ -182,7 +198,9 @@ impl Vault {
             },
         );
         self.queue_pairing(id, Slot::Bootstrap, proof)?;
-        self.queue_pairing(id, Slot::Ticket(hash), bytes)?;
+        if needs_ticket {
+            self.queue_pairing(id, Slot::Ticket(hash), bytes)?;
+        }
         self.save_pairing()?;
         Ok(id)
     }
@@ -235,17 +253,33 @@ impl Vault {
                 "Finish or cancel the current connection first",
             ));
         }
+        if link.trim().starts_with("lockbox://pair/") {
+            let managed = ManagedLink::parse(link)?;
+            return self.stage_link(managed.body.ticket.clone(), supplied, now, Some(managed));
+        }
         self.stage_link_ticket(Ticket::parse_link(link)?, supplied, now)
     }
 
     fn stage_link_ticket(&mut self, ticket: Ticket, supplied: Hash, now: u64) -> Result<Hash> {
+        self.stage_link(ticket, supplied, now, None)
+    }
+
+    fn stage_link(
+        &mut self,
+        ticket: Ticket,
+        supplied: Hash,
+        now: u64,
+        managed: Option<ManagedLink>,
+    ) -> Result<Hash> {
         if supplied != ticket.verification_code()? {
             return Err(VaultError::Pairing(
                 "The administrator's verification code does not match the link",
             ));
         }
         let profile = self.profile.as_ref().ok_or(Error::UnauthorizedDevice)?;
-        Self::check_pairing_storage(profile, &ticket)?;
+        if managed.is_none() || !profile.provider.base_url.is_empty() {
+            Self::check_pairing_storage(profile, &ticket)?;
+        }
         let id = ticket.body.id;
         if let Some(existing) = profile.pairing.joining.get(&id) {
             if existing.ticket.hash()? != ticket.hash()? {
@@ -278,6 +312,7 @@ impl Vault {
             id,
             JoiningLink {
                 ticket,
+                managed,
                 proof_verified: false,
                 request: None,
                 offer: None,
@@ -573,7 +608,8 @@ impl Vault {
                 continue;
             }
             let hash = link.ticket.hash()?;
-            if !self.has_delivery(link.ticket.body.id, Slot::Ticket(hash)) {
+            if link.managed.is_none() && !self.has_delivery(link.ticket.body.id, Slot::Ticket(hash))
+            {
                 self.queue_pairing(
                     link.ticket.body.id,
                     Slot::Ticket(hash),
@@ -689,6 +725,9 @@ impl Vault {
 
     pub(crate) fn pairing_factory(&self, ticket: &Ticket) -> Result<Arc<dyn MailboxFactory>> {
         let profile = self.profile.as_ref().ok_or(Error::UnauthorizedDevice)?;
+        if let Some(factory) = Self::managed_mailbox_factory(profile, ticket) {
+            return Ok(factory);
+        }
         Self::check_pairing_storage(profile, ticket)?;
         self.pairing_storage_factory(&ticket.body.space_name)
     }

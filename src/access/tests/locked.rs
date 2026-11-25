@@ -494,3 +494,121 @@ fn saved_identity_requires_unlock_and_never_offers_key_generation() {
     });
     assert!(dioxus_ssr::render(&dom).contains("storage-choices"));
 }
+
+#[test]
+fn managed_invitation_uses_username_and_still_requires_a_local_password() {
+    use crate::{
+        access::auth::CreationStep,
+        desktop::context::edit_locked,
+        sync::protocol::pairing::ManagedLink,
+        sync::transport::storj::invite::Owner,
+        vault::{
+            KdfParams, ProfileStore, ProviderConfiguration, SharedProfile, witness::MemoryWitness,
+        },
+    };
+    use secrecy::SecretString;
+    let dir = tempfile::tempdir().unwrap();
+    let store = ProfileStore::new(std::sync::Arc::new(MemoryWitness::default()));
+    let endpoint = "https://gateway.storjshare.io";
+    let mut owner = store
+        .create_shared(
+            dir.path().join("owner.lbx"),
+            &SecretString::from("master".to_owned()),
+            &SecretString::from("recovery".to_owned()),
+            KdfParams {
+                memory_kib: 8192,
+                passes: 1,
+                lanes: 1,
+            },
+            SharedProfile {
+                username: "Owner".into(),
+                space_name: "Team".into(),
+                provider: ProviderConfiguration {
+                    base_url: endpoint.into(),
+                    bucket: "fixture".into(),
+                    access_key: "fixture-access".into(),
+                    secret_key: "fixture-secret".into(),
+                },
+            },
+        )
+        .unwrap();
+    let id = owner.create_link(0, 1).unwrap();
+    let ticket = owner.issued_links().next().unwrap().ticket.clone();
+    let grant = Owner::new(
+        endpoint,
+        "fixture",
+        "Team",
+        "fixture-access",
+        "fixture-secret",
+        id,
+    )
+    .unwrap()
+    .grant(std::time::Duration::from_secs(3600))
+    .unwrap();
+    let link = ManagedLink::create(ticket, grant, &owner.test_profile().unwrap().sync_secret())
+        .unwrap()
+        .link()
+        .unwrap();
+    let mut dom = mounted();
+    update(&mut dom, |_| profiles::begin_join());
+    update(&mut dom, |state| {
+        edit_locked(state, |form| {
+            form.invitation_link = Some(link.clone());
+            form.continue_cloud();
+            assert!(form.creation_step == CreationStep::EncryptionKey);
+            form.words_saved = true;
+            form.continue_key_setup();
+            form.continue_cloud();
+            assert!(form.creation_step == CreationStep::Sync);
+        })
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("id=\"setup-invitation\""));
+    assert!(html.contains("id=\"cloud-username\""));
+    for input in ["cloud-url", "cloud-bucket", "cloud-access", "cloud-secret"] {
+        assert!(!html.contains(&format!("id=\"{input}\"")));
+    }
+    update(&mut dom, |state| {
+        edit_locked(state, |form| {
+            form.cloud.username = "Guest".into();
+            form.invitation_link = Some("lockbox://pair/invalid".into());
+            form.continue_cloud();
+            assert!(form.creation_step == CreationStep::Sync);
+            form.invitation_link = Some(link);
+            form.continue_cloud();
+            assert!(form.creation_step == CreationStep::Password);
+            assert!(!form.validate_creation());
+            form.password.push_str("test master password");
+            form.repeat.push_str("test master password");
+            form.path = Some(dir.path().join("guest.lbx"));
+            // Ignore credentials typed before the managed link was pasted.
+            form.cloud.base_url = endpoint.into();
+            form.cloud.bucket = "previous-bucket".into();
+            form.cloud.access_key.push_str("previous-access");
+            form.cloud.secret_key.push_str("previous-secret");
+            form.submit();
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+            let hardware =
+                std::sync::Arc::new(crate::platform::touchid::tests::FakeBiometrics::default());
+            let opened = loop {
+                if let Some(opened) = form.poll(hardware.clone()) {
+                    break opened;
+                }
+                assert!(form.error.is_none(), "{:?}", form.error);
+                assert!(std::time::Instant::now() < deadline);
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            };
+            assert!(opened.vault.awaiting_member_storage());
+            use crate::desktop::{session::Screen, test_support::security};
+            let mut restart = Screen::Locked(Box::new(crate::access::auth::Locked::new(None)));
+            let mut settings = crate::settings::state::Settings {
+                config: Default::default(),
+                path: None,
+            };
+            restart.open(opened, &mut settings, hardware.as_ref(), &mut security());
+            assert!(
+                matches!(restart, Screen::Unlocked(workspace) if workspace.sharing.joining && workspace.page == crate::desktop::workspace::Page::Sharing)
+            );
+        })
+    });
+}

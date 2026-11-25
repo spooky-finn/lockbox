@@ -308,3 +308,23 @@ fn switching_profile_discards_a_pending_short_ticket_download() {
     assert!(!replacement.has_pairing());
     assert_eq!(replacement.space_members().unwrap().len(), 1);
 }
+
+#[test]
+fn failed_issuer_verification_is_polled_without_an_invitation_and_can_retry() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut owner = profile(&directory, "Owner");
+    let mut links = Pairing::default();
+    let mut sync = SpaceSync::default();
+    assert!(!owner.has_pairing());
+    links.setup = Some(Worker::ready(Err(TransportError::Unavailable.into())));
+    assert!(links.needs_tick(&owner, false));
+    assert!(links.tick(&mut owner, &mut sync, false, 1).is_some());
+    assert!(!links.checking_issuer());
+    assert!(!owner.has_invite_issuer());
+    links
+        .configure_issuer(&owner, "test-invalid-grant")
+        .unwrap();
+    assert!(links.checking_issuer());
+    links.suspend();
+    assert!(!links.checking_issuer());
+}

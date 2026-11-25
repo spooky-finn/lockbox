@@ -25,6 +25,8 @@ enum Command {
     Retry,
     Dismiss(Hash),
     Forget(Hash),
+    Renew(Hash),
+    Resume(Hash),
 }
 
 fn act(command: Command) {
@@ -73,6 +75,12 @@ fn act(command: Command) {
                         u.sharing.links.link.clear();
                         u.sharing.links.code.clear();
                     }
+                }
+                Command::Renew(session) => u.vault.renew_mailbox(session)?,
+                Command::Resume(session) => {
+                    u.vault
+                        .resume_managed_mailbox(session, &u.sharing.links.link)?;
+                    u.sharing.links.link.clear();
                 }
                 Command::Forget(session) => u.vault.forget_link(session)?,
             }
@@ -126,11 +134,29 @@ fn OwnerLinks(blocked: bool) -> Element {
     let Screen::Unlocked(u) = &*screen else {
         return rsx! {};
     };
+    let mut access_grant = use_signal(|| zeroize::Zeroizing::new(String::new()));
+    let checking = u.sharing.links.checking_issuer();
+    let managed = u.vault.has_invite_issuer();
     let has_active = u.vault.issued_links().any(|link| link.closed.is_none());
     rsx! {
         section { class: "settings-section stack", aria_label: language.text(Text::LinkInvitations),
             h2 { {language.text(Text::LinkInvitations)} }
             p { class: "muted", {language.text(Text::LinkOwnerHint)} }
+            if !managed {
+                details { class: "sharing-file-options",
+                    summary { {language.text(Text::AutomaticStorage)} }
+                    label { r#for: "invite-grant", {language.text(Text::InviteGrant)} }
+                    input { id: "invite-grant", r#type:"password", autocomplete:"off", spellcheck:"false",
+                        value: access_grant.read().as_str(), disabled: blocked || checking,
+                        oninput: move |event| access_grant.set(zeroize::Zeroizing::new(event.value())) }
+                    button { disabled: blocked || checking || access_grant.read().is_empty(), onclick: move |_| {
+                        edit_unlocked(state, |u| {
+                            let grant = std::mem::take(&mut *access_grant.write());
+                            u.error = u.sharing.links.configure_issuer(&u.vault, &grant).err().map(|e|e.to_string());
+                        });
+                    }, {language.text(if checking {Text::CheckingStorageGrant} else {Text::EnableAutomaticStorage})} }
+                }
+            }
             for link in u.vault.issued_links() {
                 LinkCard { key: "{link.ticket.body.id}", session: link.ticket.body.id, blocked }
             }
@@ -143,7 +169,7 @@ fn OwnerLinks(blocked: bool) -> Element {
                     onchange: move |event| edit_unlocked(state, |u| { if let Ok(days @ (1 | 7 | 30)) = event.value().parse() { u.sharing.links.days = days; } }),
                     option { value: "1", {language.text(Text::SharingOneDay)} }
                     option { value: "7", {language.text(Text::SharingSevenDays)} }
-                    option { value: "30", {language.text(Text::SharingThirtyDays)} }
+                    if !managed { option { value: "30", {language.text(Text::SharingThirtyDays)} } }
                 }
             }
             button { class: if has_active { "quiet" } else { "primary" }, disabled: blocked, onclick: move |_| act(Command::Create), {language.text(Text::LinkCreate)} }
@@ -190,7 +216,7 @@ fn LinkCard(session: Hash, blocked: bool) -> Element {
                     details { class: "sharing-message-preview",
                         summary { {language.text(Text::LinkShow)} }
                         if ready {
-                            pre { class: "sharing-message", "{link.ticket.reference().map(|reference| reference.link()).unwrap_or_default()}" }
+                            pre { class: "sharing-message", "{link.public_link().unwrap_or_default()}" }
                         }
                         p { {language.text(Text::SharingVerificationCode)} }
                         code { class: "sharing-code", "{link.ticket.verification_code().map(|code| code.to_string()).unwrap_or_default()}" }
@@ -198,6 +224,13 @@ fn LinkCard(session: Hash, blocked: bool) -> Element {
                     if ready && link.requests.is_empty() { p { role: "status", {language.text(Text::LinkWaitingRequests)} } }
                 } else {
                     p { role: "status", {language.text(Text::LinkApprovedWaiting)} }
+                    if link.managed.is_some() && link.approval.as_ref().and_then(|a| a.invitation).is_some_and(|id| matches!(u.vault.invitation_status(id,0), Ok(crate::vault::InvitationStatus::Admitted))) {
+                        details {
+                            summary { {language.text(Text::ExpiredMailbox)} }
+                            button { disabled: blocked, onclick: move |_| act(Command::Renew(session)), {language.text(Text::RenewMailbox)} }
+                            button { disabled: blocked, onclick: move |_| copied.set(verification::copy(state, language, CopyTarget::Link(session))), {language.text(Text::LinkCopy)} }
+                        }
+                    }
                 }
                 for (request, _) in link.requests.iter().filter(|(request, _)| !link.rejected.contains(request)) {
                     RequestCard { key: "{session}:{request}", session, request: *request, blocked }
@@ -293,6 +326,15 @@ fn JoinLink(blocked: bool) -> Element {
                 button { class: "quiet", disabled: blocked, onclick: move |_| { if let Some(session) = session { act(Command::Dismiss(session)); } }, {language.text(Text::LinkEdit)} }
             } else if let Some(link) = u.vault.joining_link() {
                 p { "{link.ticket.body.space_name}" }
+                if link.managed.is_some() && link.consented && link.closed.is_none() {
+                    details {
+                        summary { {language.text(Text::ExpiredMailbox)} }
+                        label { r#for:"renewed-invite", {language.text(Text::RenewedMailbox)} }
+                        textarea { id:"renewed-invite", maxlength: crate::sync::protocol::pairing::MAX_LINK_BYTES as i64,
+                            value: u.sharing.links.link.as_str(), oninput: move |event| edit_unlocked(state, |u| u.sharing.links.link = event.value()) }
+                        button { disabled: blocked || u.sharing.links.link.trim().is_empty(), onclick: move |_| { if let Some(id) = session { act(Command::Resume(id)); } }, {language.text(Text::LinkRetry)} }
+                    }
+                }
                 if link.joined {
                     p { role: "status", {language.text(Text::SharingConnectedHint)} }
                 } else if let Some(reason) = link.closed {

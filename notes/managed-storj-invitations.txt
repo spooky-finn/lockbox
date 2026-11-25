@@ -1,0 +1,7 @@
+Storj invitation trust boundaries
+
+- Controller signs ticket and eight session-specific S3 routes. Independent ticket code pins controller. Guest PUT signs fixed content length. Bearer can disrupt mailbox availability until expiry.
+- Signed request binds device certificate. Controller checks exact device independently. Signed consent and admission receipt authorize membership. Provider grants carry no membership authority.
+- Setup narrows parent grant to vault objects, verifies genesis, checks child revocation. Encrypted profile stores narrowed issuer. Restricted child grant stored per device before registration. Registration retries share revocation handle. Child covers sync object prefix, excludes delete. Signed credential delivery binds ticket, request, control head. HPKE binds recipient device.
+- Device removal rotates vault epoch. Issuing profile reconciles child grants against current membership and retries provider revocation. Grant handles outlive invite history. Offline issuer delays storage revocation. Losing issuer requires parent revocation at Storj.
+- Guest commits received provider credentials and joined vault in one profile write. Receipt retry and completion acknowledgement use same admitted session. Renewed mailbox routes preserve ticket and admission deadline.

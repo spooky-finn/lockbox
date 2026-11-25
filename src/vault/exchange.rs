@@ -233,6 +233,11 @@ impl Vault {
             .as_ref()
             .ok_or(crate::sync::protocol::Error::UnauthorizedDevice)?;
         let configuration = &profile.provider;
+        if configuration.base_url.is_empty() {
+            return Err(crate::vault::VaultError::Pairing(
+                "Waiting for the administrator to grant storage access",
+            ));
+        }
         Ok(std::sync::Arc::new(
             crate::sync::transport::storj::StorjFactory::new(
                 &configuration.base_url,

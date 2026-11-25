@@ -30,6 +30,10 @@ def main():
                     raise SystemExit(f"Corrupt archive: {path.name}")
                 if path.name.endswith("-x86_64-pc-windows-msvc.zip") and "lockbox.exe" not in archive.namelist():
                     raise SystemExit("Windows archive must include lockbox.exe.")
+                if path.name.endswith("-x86_64-pc-windows-msvc.zip"):
+                    archive.getinfo("lockbox-storj-issuer.exe")
+                if path.name.endswith("-apple-darwin.zip"):
+                    archive.getinfo("Lockbox.app/Contents/MacOS/lockbox-storj-issuer")
                 if path.name.startswith(("lockbox-chrome-", "lockbox-firefox-")):
                     manifest = json.loads(archive.read("manifest.json"))
                     if manifest["version"] != version:

@@ -202,6 +202,9 @@ class ReleaseAssetTests(unittest.TestCase):
             archive.writestr("manifest.json", json.dumps({"version": version}))
             if name.endswith("-x86_64-pc-windows-msvc.zip"):
                 archive.writestr("lockbox.exe", b"fixture")
+                archive.writestr("lockbox-storj-issuer.exe", b"fixture")
+            if name.endswith("-apple-darwin.zip"):
+                archive.writestr("Lockbox.app/Contents/MacOS/lockbox-storj-issuer", b"fixture")
 
     def invoke(self):
         with patch("sys.argv", ["verify-release-assets.py", str(self.root), "0.1.0"]):

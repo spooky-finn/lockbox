@@ -342,6 +342,14 @@ impl Vault {
     /// Complete a previously accepted invitation. A receipt pins its signed
     /// control head, including a recovery profile's independent minimum anchor.
     pub fn join_invitation(&mut self, receipt: AdmissionReceipt) -> Result<()> {
+        self.join_with_storage(receipt, None)
+    }
+
+    pub(super) fn join_with_storage(
+        &mut self,
+        receipt: AdmissionReceipt,
+        provider: Option<super::ProviderConfiguration>,
+    ) -> Result<()> {
         self.ensure_profile_writable()?;
         self.ensure_sharing_view()?;
         let profile = self.profile.as_ref().ok_or(Error::UnauthorizedDevice)?;
@@ -362,6 +370,9 @@ impl Vault {
         if let Some(control) = record.joined {
             if control != receipt.control() {
                 return Err(Error::InvitationUsed.into());
+            }
+            if let Some(config) = provider {
+                self.profile.as_mut().unwrap().provider = config;
             }
             return self.save_inner(false);
         }
@@ -384,6 +395,9 @@ impl Vault {
         }
         profile.shared_name = replay.projection.space_name;
         profile.shared_icon = replay.projection.space_icon;
+        if let Some(config) = provider {
+            profile.provider = config;
+        }
         profile.space.space_id = state.space.0;
         profile.space.namespace = state.namespace.0;
         profile.sync = Some(state);
@@ -458,7 +472,8 @@ impl Vault {
     pub(super) fn ensure_joinable(&self, expected: &SpaceDescriptor) -> Result<()> {
         let profile = self.profile.as_ref().ok_or(Error::UnauthorizedDevice)?;
         let state = profile.sync.as_ref().ok_or(Error::UnauthorizedDevice)?;
-        if !self.entries.is_empty()
+        if profile.pairing.issuer.is_some()
+            || !self.entries.is_empty()
             || !self.folders.is_empty()
             || state.intent.is_some()
             || profile

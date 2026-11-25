@@ -66,6 +66,7 @@ pub(crate) struct Locked {
     pub(crate) cloud: CloudSetup,
     pub(crate) creation_step: CreationStep,
     pub(crate) joining: bool,
+    pub(crate) invitation_link: Option<String>,
     pub(crate) cloud_recovery: CloudRecoverySetup,
     pub(crate) password: Zeroizing<String>,
     pub(crate) repeat: Zeroizing<String>,
@@ -108,6 +109,7 @@ impl Locked {
             cloud: CloudSetup::default(),
             creation_step: CreationStep::EncryptionKey,
             joining: false,
+            invitation_link: None,
             cloud_recovery: CloudRecoverySetup::default(),
             password: secret_buffer(),
             repeat: secret_buffer(),
@@ -191,6 +193,7 @@ impl Locked {
         }
         self.edit_sync_setup();
         self.joining = joining;
+        self.invitation_link = None;
         self.cloud_recovery = CloudRecoverySetup::default();
         self.recovering = false;
         self.storage_kind = joining.then_some(StorageKind::Cloud);
@@ -255,6 +258,26 @@ impl Locked {
         }));
     }
 
+    pub(crate) fn managed_join(&self) -> bool {
+        self.joining
+            && self
+                .invitation_link
+                .as_deref()
+                .is_some_and(|link| link.trim().starts_with("lockbox://pair/"))
+    }
+
+    fn validate_cloud_setup(&self) -> Result<(), &'static str> {
+        if self.managed_join() {
+            crate::sync::protocol::pairing::ManagedLink::parse(
+                self.invitation_link.as_deref().unwrap_or_default(),
+            )
+            .map_err(|_| "Invalid invitation link")?;
+            self.cloud.validate_names()
+        } else {
+            self.cloud.validate()
+        }
+    }
+
     pub(crate) fn continue_cloud(&mut self) {
         if self.mode != Mode::Create
             || self.creation_step != CreationStep::Sync
@@ -264,7 +287,7 @@ impl Locked {
             return;
         }
 
-        match self.cloud.validate() {
+        match self.validate_cloud_setup() {
             Ok(()) => {
                 self.error = None;
                 if self.cloud_recovery.restoring {
@@ -441,7 +464,7 @@ impl Locked {
         let error = self
             .storage_kind
             .filter(|kind| *kind == StorageKind::Cloud)
-            .and_then(|_| self.cloud.validate().err().map(str::to_owned))
+            .and_then(|_| self.validate_cloud_setup().err().map(str::to_owned))
             .or_else(|| self.new_password_error());
         self.error = error;
         self.error.is_none() && self.validate_recovery_key()
@@ -535,11 +558,15 @@ impl Locked {
                 SharedProfile {
                     username: self.cloud.username.trim().to_owned(),
                     space_name: self.cloud.space_name.trim().to_owned(),
-                    provider: ProviderConfiguration {
-                        base_url: self.cloud.base_url.clone(),
-                        bucket: self.cloud.bucket.clone(),
-                        access_key: self.cloud.access_key.to_string(),
-                        secret_key: self.cloud.secret_key.to_string(),
+                    provider: if self.managed_join() {
+                        ProviderConfiguration::default()
+                    } else {
+                        ProviderConfiguration {
+                            base_url: self.cloud.base_url.clone(),
+                            bucket: self.cloud.bucket.clone(),
+                            access_key: self.cloud.access_key.to_string(),
+                            secret_key: self.cloud.secret_key.to_string(),
+                        }
                     },
                 },
                 self.identity.clone(),

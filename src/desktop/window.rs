@@ -46,7 +46,7 @@ pub fn config(first: bool) -> Config {
             .with_custom_event_handler(|event, _| {
                 if let dioxus::desktop::tao::event::Event::Opened { urls } = event {
                     for url in urls {
-                        crate::desktop::browser::receive(url.as_str());
+                        crate::desktop::links::receive(url.as_str());
                     }
                 }
             })

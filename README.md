@@ -26,7 +26,7 @@ appearance modes and ten themes with live previews.
 
 Each device maintains an encrypted local profile. Record and folder edits are saved locally before synchronization. Devices exchange encrypted, signed events through the configured bucket and verify signatures, membership, permissions, and causal dependencies before applying changes.
 
-Invitations require participant verification and approval of a specific device. Each participant supplies their own bucket credentials; invitation links do not contain bucket credentials or vault keys. Membership changes rotate the encryption epoch key. Concurrent record versions remain available for review until resolved.
+Invitations require participant verification and approval of a specific device. Owners can enable **Automatic storage access for invited devices** with a Storj Access Grant. A guest opens the invitation, verifies the owner and confirms the offered role. Lockbox delivers the device’s storage credential inside the encrypted admission exchange. Owners using S3 credentials alone can invite participants who already have bucket access. Membership changes rotate the encryption epoch key. Concurrent record versions remain available for review until resolved.
 
 The bucket acts as a transport for encrypted data. Clients perform encryption, verification, and conflict handling. See the [sync engine guide](docs/sync-engine.md) for the implemented behavior and the [invitation guide](docs/sync-invitations.md) for joining and access management.
 
@@ -53,6 +53,14 @@ For an optimized build:
 cargo build --locked --release --bin lockbox
 ./target/release/lockbox
 ```
+
+Packaged releases include the helper used by vault owners to enable automatic Storj invitations. For a source build, install Go 1.25 and build the helper next to the desktop executable. On macOS, the helper requires macOS 12 or later.
+
+```sh
+go -C tools/storj-issuer build -mod=readonly -trimpath -o ../../target/debug/lockbox-storj-issuer .
+```
+
+Use `target/release` for an optimized build and append `.exe` on Windows.
 
 Browser integration requires an app bundle and a native messaging relay. Follow the separate [Chrome and Firefox setup guide](ext/README.md).
 
@@ -92,7 +100,7 @@ Read the [detailed usage guide](docs/usage.md), [profile protection guide](docs/
 
 ## Platform support
 
-macOS has the primary documented desktop workflow, including Touch ID and Keychain integration. Other platforms do not have equivalent documented integration coverage. The supplied browser deep-link installer is macOS-only; the browser bridge does not implement Windows support.
+macOS has the primary documented desktop workflow, including Touch ID and Keychain integration. Other platforms do not have equivalent documented integration coverage. Invitation links open directly from the installed macOS app or Linux .deb. For Linux tarballs and the Windows portable ZIP, paste the invitation link into Lockbox’s join form. The supplied browser deep-link installer is macOS-only; the browser bridge does not implement Windows support.
 
 GitHub releases provide macOS Apple Silicon/Intel app bundles, Linux x64 `.deb`
 and tarballs, and Windows x64 portable ZIPs (requires WebView2 Evergreen Runtime).

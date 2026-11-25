@@ -16,20 +16,7 @@ pub(crate) struct CloudSetup {
 impl CloudSetup {
     /// Syntax validation only: no network requests or credential verification.
     pub(crate) fn validate(&self) -> Result<(), &'static str> {
-        for (name, error) in [
-            (
-                &self.username,
-                "Enter a username (up to 256 bytes, without control characters)",
-            ),
-            (
-                &self.space_name,
-                "Enter a vault name (up to 256 bytes, without control characters)",
-            ),
-        ] {
-            if name.trim().is_empty() || name.len() > 256 || name.chars().any(char::is_control) {
-                return Err(error);
-            }
-        }
+        self.validate_names()?;
         provider::validate(
             &self.base_url,
             &self.bucket,
@@ -44,6 +31,24 @@ impl CloudSetup {
             FieldError::AccessKey => "Enter an Access Key without spaces or control characters",
             FieldError::SecretKey => "Enter a Secret Key without spaces or control characters",
         })
+    }
+
+    pub(crate) fn validate_names(&self) -> Result<(), &'static str> {
+        for (name, error) in [
+            (
+                &self.username,
+                "Enter a username (up to 256 bytes, without control characters)",
+            ),
+            (
+                &self.space_name,
+                "Enter a vault name (up to 256 bytes, without control characters)",
+            ),
+        ] {
+            if name.trim().is_empty() || name.len() > 256 || name.chars().any(char::is_control) {
+                return Err(error);
+            }
+        }
+        Ok(())
     }
 }
 

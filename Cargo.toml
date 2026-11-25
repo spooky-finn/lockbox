@@ -1,6 +1,6 @@
 [package]
 name = "lockbox"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2024"
 license = "GPL-3.0-only"
 publish = false
@@ -37,6 +37,8 @@ thiserror = "2"
 # hpke disables dalek defaults; explicitly retain private-key wiping.
 x25519-dalek = { version = "=2.0.1", default-features = false, features = ["static_secrets", "zeroize"] }
 url = "2"
+percent-encoding = "2"
+flate2 = "1"
 kuchikiki = "=0.8.8-speedreader"
 zeroize = { version = "1.8", features = ["derive", "serde"] }
 rmcp = { version = "3.8.0", features = ["server"] }

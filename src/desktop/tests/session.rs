@@ -125,7 +125,9 @@ fn joining_opens_sharing_and_survives_a_session_lock() {
     };
     let fake = FakeBiometrics::default();
     let mut native = security();
-    let mut screen = Screen::Locked(Box::new(Locked::begin_join()));
+    let mut form = Locked::begin_join();
+    form.invitation_link = Some("invitation draft".into());
+    let mut screen = Screen::Locked(Box::new(form));
     screen.open(
         Opened {
             vault: workspace.vault,
@@ -141,6 +143,8 @@ fn joining_opens_sharing_and_survives_a_session_lock() {
     };
     assert!(workspace.page == crate::desktop::workspace::Page::Sharing);
     assert!(workspace.sharing.joining);
+    assert_eq!(workspace.sharing.links.link, "invitation draft");
+    assert!(workspace.sharing.links.code.is_empty());
     screen.lock(&settings, &fake, &mut native, None);
     let Screen::Locked(form) = &screen else {
         panic!("not locked")

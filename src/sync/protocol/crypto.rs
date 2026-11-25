@@ -53,9 +53,9 @@ pub(super) fn verify<T: Serialize>(signed: &Signed<T>, key: &Key, domain: &[u8])
         .map_err(|_| Error::InvalidSignature)
 }
 
-fn signing_bytes<T: Serialize>(body: &T, domain: &[u8]) -> Result<Vec<u8>> {
-    let mut bytes = domain.to_vec();
-    serde_jcs::to_writer(&mut bytes, body).map_err(|_| Error::InvalidEncoding)?;
+fn signing_bytes<T: Serialize>(body: &T, domain: &[u8]) -> Result<Zeroizing<Vec<u8>>> {
+    let mut bytes = Zeroizing::new(domain.to_vec());
+    serde_jcs::to_writer(&mut *bytes, body).map_err(|_| Error::InvalidEncoding)?;
     Ok(bytes)
 }
 

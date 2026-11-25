@@ -7,6 +7,9 @@ use super::{
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
+mod managed;
+pub(crate) use managed::{ManagedLink, SignedStorage};
+
 const LINK_PREFIX: &str = "lockbox://invite/";
 const SHORT_LINK_PREFIX: &str = "lockbox://i/";
 pub(crate) const MAX_LINK_BYTES: usize = 16 * 1024;
@@ -318,7 +321,7 @@ impl Envelope {
         recipient: &Certificate,
         value: &T,
     ) -> Result<Self> {
-        let bytes = canonical(value)?;
+        let bytes = zeroize::Zeroizing::new(canonical(value)?);
         if bytes.len() > super::MAX_INVITATION_BYTES {
             return Err(Error::ResourceBudgetExceeded);
         }
