@@ -64,3 +64,8 @@ objc2-local-authentication = "0.3"
 security-framework = { version = "3", features = ["OSX_10_15"] }
 core-foundation = "0.10"
 security-framework-sys = { version = "2.17", features = ["OSX_10_15"] }
+
+[patch.crates-io]
+# selectors 0.24 requires phf_generator 0.8 through phf_codegen. Use the
+# upstream generator with patched rand until the HTML parser stack moves off it.
+phf_generator = { path = "vendor/phf_generator" }
