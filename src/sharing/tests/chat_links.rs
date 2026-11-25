@@ -87,6 +87,7 @@ fn chat_invitation_opens_as_preview_and_only_the_returned_device_can_be_approved
     let html = dioxus_ssr::render(&guest_dom);
     let primary = html.split("Connect using files").next().unwrap();
     assert!(primary.contains("Copy confirmation link"));
+    assert!(primary.contains("Retry connection exchange"));
     assert!(primary.contains("same private chat"));
     assert!(!primary.contains("second channel"));
     assert!(!primary.contains("Confirm and connect"));

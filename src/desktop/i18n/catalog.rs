@@ -777,7 +777,7 @@ impl Text {
             Self::ChatReturnHint => ("Отправьте ссылку подтверждения владельцу в том же личном чате. Оставьте профиль открытым, пока владелец одобряет устройство.", "Send the confirmation link back to the owner in the same private chat. Keep this profile open while they approve your device."),
             Self::ChatCopyConfirmation => ("Копировать ссылку подтверждения", "Copy confirmation link"),
             Self::ChatPasteConfirmation => ("Ссылка подтверждения от участника", "Confirmation link from the invited person"),
-            Self::ChatMissingRequest => ("Заявка этого устройства ещё не получена. Оставьте профиль открытым или повторите проверку.", "This device’s request hasn’t arrived yet. Keep this profile open or retry."),
+            Self::ChatMissingRequest => ("Заявка этого устройства ещё не получена. Оставьте оба профиля разблокированными и попросите участника нажать «Повторить подключение по ссылке».", "This device’s request hasn’t arrived yet. Keep both profiles unlocked and ask the invited person to select Retry connection exchange."),
             Self::ChatInvalidConfirmation => ("Не удалось проверить подтверждение для этого приглашения.", "This confirmation could not be verified for this invitation."),
             Self::ChatInvalidInvitation => ("Не удалось проверить ссылку приглашения. Вставьте полную ссылку владельца.", "This invitation could not be verified. Paste the owner’s full invitation link."),
             Self::ChatApproved => ("Устройство одобрено. Ожидаем завершения подключения.", "Device approved. Waiting for the connection to finish."),
