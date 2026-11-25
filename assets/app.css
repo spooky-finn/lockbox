@@ -147,7 +147,6 @@ h2 { font-size: 15px; font-weight: 600; letter-spacing: -.2px; }
 .unlock-form { display: flex; flex-direction: column; gap: 12px; width: 240px; max-width: 100%; margin-top: 28px; }
 .lock-screen.recovery-screen { display: flex; flex-direction: column; gap: 24px; }
 .recovery-screen .unlock-content { flex: 0 0 auto; }
-.recovery-screen .lock-actions { margin-top: auto; }
 .recovery-screen .unlock-form { width: 100%; }
 .recovery-screen .unlock-content > .notice { margin: 12px 0; font-size: 12px; }
 .recovery-label { margin-top: 6px; font-weight: 600; text-align: left; }
@@ -185,8 +184,8 @@ h2 { font-size: 15px; font-weight: 600; letter-spacing: -.2px; }
 .unlock-input > .unlock-submit:hover:not(:disabled) { color: var(--lock-ink); background: var(--control); }
 .unlock-feedback { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 340px; margin-top: 18px; font-size: 12px; }
 .unlock-feedback .muted { color: var(--lock-secondary); }
-.lock-actions { align-self: flex-end; flex: 0 0 auto; display: flex; flex-direction: column; align-items: stretch; gap: 4px; max-width: 100%; }
-.lock-actions > button { justify-content: flex-start; padding: 8px 12px; color: var(--lock-secondary); text-align: left; font-size: 13px; }
+.lock-actions { align-self: center; flex: 0 0 auto; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; max-width: 100%; }
+.lock-actions > button { justify-content: center; min-height: 32px; padding: 4px 8px; color: var(--lock-secondary); text-align: center; font-size: 12px; }
 .lock-actions > button > .symbol { width: 16px; height: 16px; flex: 0 0 16px; }
 .lock-actions > button > span { overflow-wrap: anywhere; }
 .lock-actions > button:hover:not(:disabled), .lock-actions > button:focus-visible { color: var(--lock-ink); background: var(--control); }
@@ -331,28 +330,6 @@ h2 { font-size: 15px; font-weight: 600; letter-spacing: -.2px; }
     font-size: 12px;
 }
 .base-unlock .unlock-options .symbol { width: 14px; height: 14px; flex-basis: 14px; }
-.base-unlock .lock-actions {
-    align-self: center;
-    flex-flow: row wrap;
-    justify-content: center;
-    gap: 2px 6px;
-}
-.base-unlock .lock-actions > button {
-    justify-content: center;
-    min-height: 32px;
-    padding: 4px 8px;
-    text-align: center;
-    font-size: 12px;
-}
-.base-unlock .lock-actions > button > .symbol { display: none; }
-@media (max-width: 520px) {
-    .base-unlock .lock-actions {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        width: 100%;
-        max-width: 340px;
-    }
-}
 @keyframes unlock-enter {
     from { opacity: .75; transform: translateY(6px); }
     to { opacity: 1; transform: translateY(0); }
@@ -496,7 +473,6 @@ input.switch:disabled { opacity: .45; cursor: default; }
 
 .sharing-check { display: flex; align-items: flex-start; gap: 10px; font-size: 12px; line-height: 1.6; }
 .settings-back { align-self: flex-start; }
-.lock-actions select { max-width: 95px; min-height: 30px; border-color: transparent; background: transparent; color: var(--lock-secondary); font-size: 11px; cursor: pointer; }
 
 /* Credentials */
 .detail { min-width: 0; min-height: 0; overflow: auto; padding: 16px 20px 20px; background: var(--surface); }
@@ -789,7 +765,6 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 99px; }
 @media (max-height: 620px) {
     .lock-screen { padding-bottom: 16px; }
     .unlock-content { flex: 0 0 auto; }
-    .lock-actions { margin-top: auto; }
 }
 
 .storage-choices { display: flex; flex-direction: column; gap: 12px; width: 100%; margin-top: 24px; }
@@ -799,7 +774,6 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 99px; }
 .cloud-setup { display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 20px; text-align: left; }
 .cloud-setup input { width: 100%; padding: 10px 12px; border: 1px solid var(--lock-secondary); border-radius: 8px; background: var(--control); color: var(--lock-ink); }
 .lock-screen:has(.cloud-setup) { overflow-y: auto; }
-.lock-screen:has(.cloud-setup) .lock-actions { margin-top: 24px; }
 .setup-button { padding: 10px 14px; border: 1px solid var(--lock-secondary); border-radius: var(--button-radius); color: var(--lock-ink); background: var(--control); cursor: pointer; }
 .setup-button:focus-visible { outline: 2px solid var(--lock-ink); outline-offset: 2px; }
 .storj-guide { white-space: pre-wrap; font: inherit; line-height: 1.5; }

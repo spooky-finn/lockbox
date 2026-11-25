@@ -299,25 +299,29 @@ pub(crate) fn LockedView() -> Element {
                     }
                 }
             }
-            nav { class: "lock-actions", aria_label: language.text(Text::VaultActions),
+            div { role: "group", class: "lock-actions", aria_label: language.text(Text::VaultActions),
                 button { r#type: "button", class: "quiet", disabled: busy, autofocus: base_unlock && !ready,
                     onclick: move |_| profiles::pick_vault(false),
+                    title: language.text(Text::OpenVault),
                     Symbol { icon: Icon::FolderOpen }
-                    span { {language.text(Text::OpenVault)} }
+                    span { {language.text(Text::VaultActionOpen)} }
                 }
                 button { r#type: "button", class: "quiet", disabled: busy,
                     onclick: move |_| profiles::begin_create(),
+                    title: language.text(Text::CreateVault),
                     Symbol { icon: Icon::FolderPlus }
-                    span { {language.text(Text::CreateVault)} }
+                    span { {language.text(Text::VaultActionCreate)} }
                 }
 
                 button { r#type: "button", class: "quiet", disabled: busy, onclick: move |_| profiles::begin_join(),
+                    title: language.text(Text::SharingConnect),
                     Symbol { icon: Icon::Cloud }
-                    span { {language.text(Text::SharingConnect)} }
+                    span { {language.text(Text::VaultActionJoin)} }
                 }
                 button { r#type: "button", class: "quiet", disabled: busy, onclick: move |_| profiles::begin_cloud_restore(),
+                    title: language.text(Text::CloudRestore),
                     Symbol { icon: Icon::Reset }
-                    span { {language.text(Text::CloudRestore)} }
+                    span { {language.text(Text::VaultActionRecover)} }
                 }
             }
         }
