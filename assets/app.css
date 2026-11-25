@@ -900,7 +900,7 @@ button.copy-value:focus-visible, button.identifier:focus-visible { outline: 2px 
 .space-tab { position: relative; display: flex; align-items: center; flex: 0 1 auto; min-width: 88px; max-width: 184px; height: 28px; padding: 0 4px; color: var(--muted); transition: color 120ms; }
 .space-tab + .space-tab::before { content: ""; position: absolute; top: 6px; bottom: 6px; left: 0; width: 1px; background: var(--border); pointer-events: none; }
 .space-tab:hover, .space-tab.active { color: var(--ink); }
-.space-tabs .space-tab-select { display: flex; justify-content: flex-start; flex: 1; min-width: 0; min-height: 0; height: 26px; gap: 6px; padding: 0 5px; border: 0; border-radius: var(--custom-radius, 4px); background: transparent; box-shadow: none; font-size: 11px; font-weight: 500; line-height: 1; text-align: left; }
+.space-tabs .space-tab-select { display: flex; justify-content: flex-start; flex: 1; min-width: 0; min-height: 0; height: 26px; gap: 6px; padding: 0 5px; border: 0; border-radius: 0; background: transparent; box-shadow: none; font-size: 11px; font-weight: 500; line-height: 1; text-align: left; }
 .space-tabs .space-tab.active .space-tab-select { font-weight: 600; }
 .space-tabs .space-tab-select:hover:not(:disabled) { background: transparent; box-shadow: none; }
 .space-tab-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
