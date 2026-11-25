@@ -380,6 +380,7 @@ input.switch:disabled { opacity: .45; cursor: default; }
 .tree-branch { margin: 1px 0 2px 8px; padding-left: 9px; border-left: 1px solid var(--separator); }
 .tree-folder, .tree-leaf { min-width: 0; }
 .entry-row { display: block; width: 100%; min-height: 25px; border: 1px solid transparent; background: transparent; text-align: left; padding: 4px 8px 4px 18px; margin: 1px 0; border-radius: var(--button-radius); box-shadow: none; font-size: 12px; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.entry-row { transition: none; }
 .entry-row:has(> .entry-icon) { display: flex; align-items: center; justify-content: flex-start; gap: 7px; padding-left: 12px; }
 .entry-row > .entry-icon { width: 16px; height: 16px; flex: 0 0 16px; border-radius: var(--custom-radius, 4px); font-size: 10px; box-shadow: none; }
 .entry-row > .entry-icon svg { width: 72%; height: 72%; }
@@ -389,7 +390,9 @@ input.switch:disabled { opacity: .45; cursor: default; }
 .entry-row.selected:hover:not(:disabled), .folder-row.selected:hover { background: var(--active-item); box-shadow: none; }
 .folder-row.selected .tree-disclosure, .folder-row.selected .folder-label > .symbol { color: var(--active-item-text); }
 .folder-row.selected .folder-label { font-weight: 600; }
-.entry-row.selected:focus-visible, .folder-row.selected .folder-label:focus-visible { outline: none; }
+.entry-row:focus-visible, .folder-label:focus-visible { outline: none; }
+/* Keep the focus cue stable while the selected row is updated. */
+.entry-row:focus-visible > .entry-row-title, .folder-label:focus-visible > span { text-decoration: underline; text-underline-offset: 2px; }
 .folder-row.selected .tree-disclosure:focus-visible { outline-color: var(--active-item-text); outline-offset: -3px; }
 .folder-row { display: flex; align-items: center; min-width: 0; min-height: 26px; padding: 0 3px; border: 1px solid transparent; border-radius: var(--button-radius); margin: 1px 0; }
 .tree-disclosure, .folder-label { background: transparent; border: 0; box-shadow: none; min-height: 24px; padding: 0; border-radius: var(--button-radius); }
