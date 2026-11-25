@@ -114,6 +114,10 @@ pub(crate) fn same_path(left: &Path, right: &Path) -> bool {
 }
 
 pub(crate) fn close(index: usize) {
+    close_tab(index, || dioxus::desktop::window().close());
+}
+
+fn close_tab(index: usize, close_window: impl FnOnce()) {
     let mut tabs = consume_context::<Signal<Tabs>>();
     let session = tabs.peek().sessions[index];
     if !session.peek().can_switch_profile() {
@@ -127,6 +131,7 @@ pub(crate) fn close(index: usize) {
         let mut session = session;
         session.set(Screen::Locked(Box::new(Locked::new(None))));
         crate::desktop::runtime::publish_status();
+        close_window();
         return;
     }
     if index == tabs.peek().active {

@@ -196,7 +196,7 @@ fn closing_tabs_drops_vaults_and_keeps_the_active_session_bound() {
             _ => unreachable!(),
         };
         new_tab();
-        close(0);
+        close_tab(0, || panic!("another tab should keep the window open"));
         let tabs = consume_context::<Signal<Tabs>>();
         assert_eq!(tabs.peek().sessions.len(), 1);
         assert_eq!(tabs.peek().active, 0);
@@ -204,9 +204,26 @@ fn closing_tabs_drops_vaults_and_keeps_the_active_session_bound() {
         let reopened =
             crate::vault::Vault::open(path, &secrecy::SecretString::from("master".to_owned()));
         assert!(reopened.is_ok(), "closed tab must release vault lock");
-        close(0);
-        assert_eq!(tabs.peek().sessions.len(), 1);
-        assert!(matches!(&*state.peek(), Screen::Locked(f) if f.path.is_none()));
+    });
+}
+
+#[test]
+fn closing_the_last_tab_releases_the_vault_and_closes_the_window() {
+    let dom = mounted();
+    dom.in_scope(ScopeId::APP, || {
+        let state = consume_context::<Session>();
+        let path = match &*state.peek() {
+            Screen::Unlocked(u) => u.vault.path().to_path_buf(),
+            _ => unreachable!(),
+        };
+        let mut window_closed = false;
+        close_tab(0, || {
+            let reopened =
+                crate::vault::Vault::open(path, &secrecy::SecretString::from("master".to_owned()));
+            assert!(reopened.is_ok(), "vault must close before the window");
+            window_closed = true;
+        });
+        assert!(window_closed, "the window should close with its last tab");
     });
 }
 
@@ -219,10 +236,10 @@ fn closing_active_tab_selects_neighbor_and_editing_tab_stays_open() {
             u.start_new();
         }
         new_tab();
-        close(0);
+        close_tab(0, || panic!("the editing tab should stay open"));
         let tabs = consume_context::<Signal<Tabs>>();
         assert_eq!(tabs.peek().sessions.len(), 2);
-        close(1);
+        close_tab(1, || panic!("another tab should keep the window open"));
         assert_eq!(tabs.peek().sessions.len(), 1);
         assert!(matches!(&*state.peek(), Screen::Unlocked(u) if u.draft.is_some()));
     });
