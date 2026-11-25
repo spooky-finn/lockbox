@@ -874,6 +874,7 @@ button.copy-value:focus-visible, button.identifier:focus-visible { outline: 2px 
 .draft .password-value::placeholder { letter-spacing: normal; }
 .draft.entry-detail .fields input:not([type=checkbox]):not([type=range]), .draft.entry-detail .fields textarea,
 .draft.entry-detail input.entry-title-input { width: 100%; min-width: 0; margin: 0; padding: 4px 0; border: 0; border-radius: 0; background: transparent; font: inherit; }
+.draft.entry-detail .fields #entry-password { width: auto; flex: 0 1 auto; }
 .draft.entry-detail input.entry-title-input { height: auto; min-height: 26px; padding: 0; font-size: 20px; line-height: 1.25; font-weight: 650; letter-spacing: -.4px; }
 .draft.entry-detail .fields textarea { min-height: 26px; line-height: 1.5; }
 .entry-options { margin-top: 16px; }

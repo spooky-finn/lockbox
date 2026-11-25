@@ -23,6 +23,13 @@ fn selected_entry_hides_secrets_and_escapes_user_text() {
     assert!(html.contains("Код TOTP"));
 
     let document = kuchikiki::parse_html().one(html).document_node;
+    assert_eq!(
+        document
+            .select_first(".password-value")
+            .unwrap()
+            .text_contents(),
+        "••••••••"
+    );
     for selector in [
         "dd > button.copy-value.field-value",
         "dd > button.copy-value + button[aria-pressed]",
@@ -32,6 +39,21 @@ fn selected_entry_hides_secrets_and_escapes_user_text() {
         assert!(document.select_first(selector).is_ok(), "{selector}");
     }
     assert!(document.select_first(".field-copy").is_err());
+}
+
+#[test]
+fn empty_password_displays_a_dash_without_masking_dots() {
+    use kuchikiki::traits::TendrilSink;
+
+    let mut dom = mounted();
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| u.vault.test_entries_mut()[0].password.clear());
+    });
+    let document = kuchikiki::parse_html()
+        .one(dioxus_ssr::render(&dom))
+        .document_node;
+    let password = document.select_first(".password-value").unwrap();
+    assert_eq!(password.text_contents(), "—");
 }
 
 #[test]

@@ -48,6 +48,11 @@ pub(crate) fn DraftView() -> Element {
     let name_label = language.text(Text::Name);
     let username_label = language.text(Text::Username2);
     let password_label = language.text(Text::Password);
+    let password_size = if entry.password.is_empty() {
+        password_label.chars().count()
+    } else {
+        entry.password.chars().count()
+    };
     let url_label = language.text(Text::Url);
     let note_label = language.text(Text::Note);
     rsx! {
@@ -76,7 +81,7 @@ pub(crate) fn DraftView() -> Element {
                     input { onkeydown: move |event| finish_on_enter(state, event), id: "entry-username", class: "field-value", placeholder: username_label, aria_label: username_label, onmounted: move |event| async move { if focus_field == Some(Field::Username) { let _ = event.data.set_focus(true).await; } }, autocomplete: "off", value: "{entry.username}", oninput: move |e| set_field(state, Field::Username, e.value()) }
                 }
                 div { class: "field-row",
-                    input { onkeydown: move |event| finish_on_enter(state, event), id: "entry-password", class: "field-value password-value", placeholder: password_label, aria_label: password_label, onmounted: move |event| async move { if focus_field == Some(Field::Password) { let _ = event.data.set_focus(true).await; } }, r#type: if draft.show_password { "text" } else { "password" }, autocomplete: "off",
+                    input { onkeydown: move |event| finish_on_enter(state, event), id: "entry-password", class: "field-value password-value", placeholder: password_label, aria_label: password_label, onmounted: move |event| async move { if focus_field == Some(Field::Password) { let _ = event.data.set_focus(true).await; } }, r#type: if draft.show_password { "text" } else { "password" }, autocomplete: "off", size: "{password_size}",
                         value: "{entry.password}", oninput: move |e| set_field(state, Field::Password, e.value()) }
                     IconButton { icon: if draft.show_password { Icon::EyeOff } else { Icon::Eye },
                         label: if draft.show_password { language.text(Text::HidePassword) } else { language.text(Text::ShowPassword) }, pressed: Some(draft.show_password),

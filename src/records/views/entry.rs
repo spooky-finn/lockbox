@@ -31,7 +31,9 @@ pub(crate) fn EntryView() -> Element {
         return rsx! {};
     };
     // Never capture an Entry or secret in an event handler; resolve it at click time.
-    let password = if unlocked.show_password {
+    let password = if entry.password.is_empty() {
+        "—"
+    } else if unlocked.show_password {
         entry.password.as_str()
     } else {
         "••••••••"
