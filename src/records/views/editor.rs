@@ -61,7 +61,6 @@ pub(crate) fn DraftView() -> Element {
             div { class: "detail-heading",
                 EntryIcon { title: entry.title.clone(), slug: entry.icon.clone(), url: entry.url.clone(), large: true }
                 div { class: "detail-title",
-                    p { class: "detail-kind", "{password_label}" }
                     input { onkeydown: move |event| finish_on_enter(state, event), id: "entry-title", class: "entry-title-input", placeholder: name_label, aria_label: name_label, required: true, onmounted: move |event| async move { if focus_field == Some(Field::Title) { let _ = event.data.set_focus(true).await; } },
                         value: "{entry.title}", oninput: move |e| set_field(state, Field::Title, e.value()) }
                 }
