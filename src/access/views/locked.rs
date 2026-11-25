@@ -324,6 +324,9 @@ pub(crate) fn LockedView() -> Element {
                     span { {language.text(Text::VaultActionRecover)} }
                 }
             }
+            if base_unlock {
+                small { class: "unlock-version", {concat!("v", env!("CARGO_PKG_VERSION"))} }
+            }
         }
     }
 }
