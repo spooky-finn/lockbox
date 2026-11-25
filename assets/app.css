@@ -933,10 +933,14 @@ button.copy-value:focus-visible, button.identifier:focus-visible { outline: 2px 
 .draft.entry-detail .totp-editor > .error { grid-column: 1 / -1; }
 @media (max-width: 600px) { .draft.entry-detail .entry-icon.large { width: 32px; height: 32px; flex-basis: 32px; } }
 
-/* Compact space tabs sit below the native title bar. */
 .space-tabs { position: relative; display: flex; align-items: center; gap: 4px; min-height: 34px; padding: 2px 8px; border-bottom: 1px solid var(--separator); flex-shrink: 0; background: var(--subtle); user-select: none; }
-.app.macos .space-tabs { min-height: 38px; padding-left: 80px; }
-.space-tabs-window-controls { display: none; }
+/* AppKit buttons keep their native size when the web view zooms. */
+.space-tabs.macos {
+    --window-controls-width: calc(80px / var(--interface-zoom, 1));
+    min-height: max(34px, calc(34px / var(--interface-zoom, 1)));
+    padding-left: var(--window-controls-width);
+}
+.space-tabs-window-controls { position: absolute; inset: 0 auto 0 0; width: var(--window-controls-width); }
 .space-tab-list { display: flex; align-items: center; gap: 0; min-width: min(64px, 18vw); overflow-x: auto; scrollbar-width: none; }
 .space-tab-list::-webkit-scrollbar { display: none; }
 .space-tab { position: relative; display: flex; align-items: center; flex: 0 1 auto; min-width: 88px; max-width: 184px; height: 28px; padding: 0 4px; color: var(--muted); transition: color 120ms; }
@@ -963,7 +967,7 @@ button.copy-value:focus-visible, button.identifier:focus-visible { outline: 2px 
 .space-tab-status:empty { display: none; }
 .space-tab-content { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
 @media (hover: none) {
-    .space-tabs, .app.macos .space-tabs { min-height: 40px; }
+    .space-tabs { min-height: 40px; }
     .space-tab { height: 32px; }
     .space-tabs .space-tab-select { height: 30px; }
     .space-tabs .space-tab-close { width: 26px; height: 28px; flex-basis: 26px; opacity: 1; pointer-events: auto; }

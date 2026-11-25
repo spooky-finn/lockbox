@@ -1,8 +1,4 @@
-//! Native windows and macOS tabs.
-//!
-//! Every tab is a separate window with its own `VirtualDom`, so each one has an
-//! independent vault, auto-lock timer and sync worker. macOS groups the windows
-//! into native tabs through a shared tabbing identifier.
+//! Native windows, the application menu, and interface zoom.
 
 use crate::{
     desktop::{App, i18n::Text, session::Screen},
@@ -20,8 +16,6 @@ use dioxus::prelude::*;
 pub(crate) const NEW_TAB: &str = "lockbox-new-tab";
 pub(crate) const CLOSE_TAB: &str = "lockbox-close-tab";
 pub(crate) const NEW_WINDOW: &str = "lockbox-new-window";
-#[cfg(target_os = "macos")]
-const TABBING_ID: &str = "lockbox";
 
 /// Configuration of every lockbox window. The application menu is global on
 /// macOS, so only the first window installs it.
@@ -37,10 +31,9 @@ pub fn config(first: bool) -> Config {
         window
             .with_titlebar_transparent(true)
             .with_title_hidden(true)
-            // Let AppKit reserve space for the title bar and native tab strip.
-            // Full-size content extends underneath both, obscuring the app header.
-            .with_fullsize_content_view(false)
-            .with_tabbing_identifier(TABBING_ID)
+            // Space tabs share the title bar with the native window buttons.
+            .with_fullsize_content_view(true)
+            .with_automatic_window_tabbing(false)
     };
     let config = Config::new()
         .with_window(window)
@@ -151,51 +144,17 @@ pub(crate) fn use_interface_zoom() {
     });
 }
 
-/// Opens an empty locked window; as a tab of the current one when `tab` is set.
-pub(crate) fn open(tab: bool) {
-    let current = dioxus::desktop::window();
-    let pending = current.new_window(VirtualDom::new(App), config(false));
+/// Opens a separate locked window.
+pub(crate) fn open() {
+    let pending = dioxus::desktop::window().new_window(VirtualDom::new(App), config(false));
     spawn(async move {
-        let Ok(created) = pending.try_resolve().await else {
-            return;
-        };
-
-        #[cfg(target_os = "macos")]
-        if tab {
-            attach_tab(&current.window, &created.window);
+        if let Ok(created) = pending.try_resolve().await {
+            created.window.set_focus();
         }
-
-        #[cfg(not(target_os = "macos"))]
-        let _ = tab;
-        created.window.set_focus();
     });
 }
 
-/// `addTabbedWindow` groups the windows regardless of the user's
-/// "Prefer tabs when opening documents" system setting.
-#[cfg(target_os = "macos")]
-fn attach_tab(
-    host: &dioxus::desktop::tao::window::Window,
-    tab: &dioxus::desktop::tao::window::Window,
-) {
-    use dioxus::desktop::tao::platform::macos::WindowExtMacOS;
-    use objc2::{msg_send, runtime::AnyObject};
-
-    const NS_WINDOW_ABOVE: isize = 1;
-    let host = host.ns_window().cast::<AnyObject>();
-    let tab = tab.ns_window().cast::<AnyObject>();
-
-    if host.is_null() || tab.is_null() || host == tab {
-        return;
-    }
-
-    // SAFETY: both pointers are live NSWindow objects owned by tao on the main thread.
-    unsafe {
-        let _: () = msg_send![&*host, addTabbedWindow: &*tab, ordered: NS_WINDOW_ABOVE];
-    }
-}
-
-/// Native tab and window-list label. Cloud profiles are named after their
+/// Window-list and tab tooltip label. Cloud profiles are named after their
 /// space because their files use random names under `~/.lockbox`.
 pub(crate) fn title(screen: &Screen, config: &crate::settings::config::Config) -> String {
     let Screen::Unlocked(unlocked) = screen else {

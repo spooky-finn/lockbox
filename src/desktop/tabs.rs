@@ -155,7 +155,7 @@ pub(crate) fn TabBar() -> Element {
     let busy = matches!(&*active, Screen::Locked(f) if f.busy())
         || matches!(&*active, Screen::Unlocked(u) if u.import.busy());
     rsx! {
-        nav { class: "space-tabs", aria_label: language.text(Text::YourSpaces),
+        nav { class: if cfg!(target_os = "macos") { "space-tabs macos" } else { "space-tabs" }, aria_label: language.text(Text::YourSpaces),
             if cfg!(target_os = "macos") {
                 div { class: "space-tabs-window-controls", aria_hidden: "true",
                     onmousedown: move |_| dioxus::desktop::window().drag(),

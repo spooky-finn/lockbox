@@ -41,7 +41,7 @@ pub(crate) fn use_runtime() -> Session {
     use_context_provider(|| Clock(clock));
     use_context_provider(|| status);
 
-    // Wry delivers every window's events to every tab: act only on our own.
+    // Wry delivers events for all windows: act only on our own.
     let own_window = dioxus::desktop::window().id();
     dioxus::desktop::use_wry_event_handler(move |event, _| {
         use dioxus::desktop::tao::event::{Event, WindowEvent};
@@ -56,7 +56,7 @@ pub(crate) fn use_runtime() -> Session {
             _ => {}
         }
     });
-    // The menu bar is shared too; the focused tab handles its commands.
+    // The focused window handles commands from the shared menu bar.
     dioxus::desktop::use_muda_event_handler(move |event| {
         if !dioxus::desktop::window().is_focused() {
             return;
@@ -69,7 +69,7 @@ pub(crate) fn use_runtime() -> Session {
                 let active = tabs.peek().active;
                 crate::desktop::tabs::close(active);
             }
-            crate::desktop::window::NEW_WINDOW => crate::desktop::window::open(false),
+            crate::desktop::window::NEW_WINDOW => crate::desktop::window::open(),
             _ => {}
         }
     });

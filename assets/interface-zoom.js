@@ -25,7 +25,9 @@ const zoom = event => {
 
     event.preventDefault();
     event.stopPropagation();
-    dioxus.send(scales[level]);
+    const scale = scales[level];
+    document.documentElement.style.setProperty("--interface-zoom", scale);
+    dioxus.send(scale);
 };
 
 window.addEventListener("keydown", zoom, true);
