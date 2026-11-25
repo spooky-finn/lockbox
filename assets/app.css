@@ -430,6 +430,13 @@ input.switch:disabled { opacity: .45; cursor: default; }
 }
 .tree-disclosure:hover:not(:disabled), .folder-label:hover:not(:disabled) { background: transparent; box-shadow: none; }
 .tree-disclosure:active:not(:disabled), .folder-label:active:not(:disabled), .entry-row:active:not(:disabled) { transform: none; }
+.sidebar[data-tree-can-drag="true"] :is(.entry-row, .folder-label):not(:disabled) { cursor: grab; }
+.vault-root-drop { display: none; margin: 0 3px 3px; padding: 4px 8px; border: 1px dashed var(--separator); border-radius: var(--button-radius); color: var(--muted); font-size: 12px; }
+.sidebar.tree-dragging[data-tree-can-drag="true"] > .vault-root-drop { display: block; }
+.sidebar.tree-dragging { cursor: grabbing; }
+.sidebar.tree-dragging :is(.entry-row, .folder-label):not(:disabled) { cursor: grabbing; }
+.tree-drag-source { opacity: .6; }
+.folder-row.tree-drop-target, .vault-root-drop.tree-drop-target { outline: 2px solid var(--accent); outline-offset: -2px; }
 .tree-empty { padding: 8px 18px; color: var(--muted); font-size: 11px; font-style: italic; }
 .entry-icon { width: 24px; height: 24px; flex: 0 0 24px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 5%), 0 2px 4px rgb(0 0 0 / 5%); }
 .entry-icon svg { width: 60%; height: 60%; }

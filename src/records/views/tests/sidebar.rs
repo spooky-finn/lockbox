@@ -1,4 +1,4 @@
-use super::{TreeAction, select_tree_row};
+use super::{TreeAction, TreeDrop, move_in_vault, select_tree_row};
 use crate::{
     desktop::{
         context::edit_unlocked,
@@ -8,6 +8,113 @@ use crate::{
     records::{entry::Entry, folder::Folder},
 };
 use dioxus::prelude::*;
+
+fn tree_drop(kind: &str, id: &str, parent: Option<&str>) -> TreeDrop {
+    serde_json::from_value(
+        serde_json::json!({ "item": { "kind": kind, "id": id }, "parent": parent }),
+    )
+    .unwrap()
+}
+
+#[test]
+fn tree_drops_persist_entry_and_folder_moves_and_reveal_the_destination() {
+    use crate::desktop::test_support::reopen;
+
+    let mut dom = mounted();
+    update(&mut dom, |state| {
+        let target = Folder::new("Target".into(), None);
+        let source = Folder::new("Source".into(), None);
+        let child = Folder::new("Child".into(), Some(source.id.clone()));
+        let mut id = String::new();
+        edit_unlocked(state, |u| {
+            for folder in [&target, &source, &child] {
+                u.vault.save_folder(folder.clone()).unwrap();
+            }
+            u.directories.collapsed.insert(target.id.clone());
+            id = u.selected.clone().unwrap();
+        });
+
+        move_in_vault(state, tree_drop("entry", &id, Some(&target.id)));
+        {
+            let Screen::Unlocked(u) = &*state.peek() else {
+                panic!("locked")
+            };
+            let entry = &reopen(u).entries[0];
+            assert_eq!(entry.id, id);
+            assert_eq!(entry.password, "private-test-password");
+            assert_eq!(entry.folder_id.as_ref(), Some(&target.id));
+            assert_eq!(u.directories.selected.as_ref(), Some(&target.id));
+            assert!(!u.directories.collapsed.contains(&target.id));
+        }
+
+        move_in_vault(state, tree_drop("folder", &source.id, Some(&target.id)));
+        move_in_vault(state, tree_drop("entry", &id, None));
+        let Screen::Unlocked(u) = &*state.peek() else {
+            panic!("locked")
+        };
+        let saved = reopen(u);
+        assert!(saved.entries[0].folder_id.is_none());
+        assert!(u.directories.selected.is_none());
+        assert_eq!(
+            saved
+                .folders
+                .iter()
+                .find(|f| f.id == source.id)
+                .unwrap()
+                .parent_id
+                .as_ref(),
+            Some(&target.id)
+        );
+        assert_eq!(
+            saved
+                .folders
+                .iter()
+                .find(|f| f.id == child.id)
+                .unwrap()
+                .parent_id
+                .as_ref(),
+            Some(&source.id)
+        );
+    });
+}
+
+#[test]
+fn tree_drops_reject_cycles_and_leave_an_open_draft_alone() {
+    let mut dom = mounted();
+    let parent = Folder::new("Parent".into(), None);
+    let child = Folder::new("Child".into(), Some(parent.id.clone()));
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| {
+            u.vault.save_folder(parent.clone()).unwrap();
+            u.vault.save_folder(child.clone()).unwrap();
+        });
+        move_in_vault(state, tree_drop("folder", &parent.id, Some(&child.id)));
+        edit_unlocked(state, |u| {
+            assert!(u.vault.folders()[0].parent_id.is_none());
+            assert!(
+                u.error
+                    .as_deref()
+                    .unwrap()
+                    .contains("A folder cannot contain itself")
+            );
+            u.start_edit();
+            u.draft.as_mut().unwrap().entry.title = "Unsaved change".into();
+        });
+    });
+    assert!(dioxus_ssr::render(&dom).contains("data-tree-can-drag=\"false\""));
+    update(&mut dom, |state| {
+        let id = match &*state.peek() {
+            Screen::Unlocked(u) => u.selected.clone().unwrap(),
+            Screen::Locked(_) => panic!("locked"),
+        };
+        move_in_vault(state, tree_drop("entry", &id, Some(&child.id)));
+        let Screen::Unlocked(u) = &*state.peek() else {
+            panic!("locked")
+        };
+        assert_eq!(u.draft.as_ref().unwrap().entry.title, "Unsaved change");
+        assert!(u.selected_entry().unwrap().folder_id.is_none());
+    });
+}
 
 #[test]
 fn keyboard_selection_opens_records_and_preserves_folder_disclosure() {

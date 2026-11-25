@@ -45,8 +45,6 @@ pub fn config(first: bool) -> Config {
     let config = Config::new()
         .with_window(window)
         .with_disable_context_menu(true)
-        // The WebView2 file-drop hook replaces the browser's native drag events.
-        .with_disable_drag_drop_handler(cfg!(target_os = "windows"))
         .with_navigation_handler(|_| false);
 
     if first || cfg!(not(target_os = "macos")) {

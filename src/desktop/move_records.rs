@@ -1,16 +1,22 @@
-//! Desktop coordination for moving records between unlocked tabs.
+//! Desktop coordination for moving records within and between vaults.
 
 use crate::{
     desktop::{
-        context::Session,
+        context::{Session, edit_unlocked},
         i18n::{Text, use_language},
         session::Screen,
         tabs::Tabs,
         window,
         workspace::{Page, Unlocked},
     },
-    records::tree::{self, Node, SortedTopology},
-    vault::move_records::{Move, Selection, same_space},
+    records::{
+        folder::Hierarchy,
+        tree::{self, Node, SortedTopology},
+    },
+    vault::{
+        self,
+        move_records::{Move, Selection, same_space},
+    },
 };
 use dioxus::{html::InteractionLocation, prelude::*};
 use std::{collections::BTreeMap, path::PathBuf};
@@ -20,10 +26,75 @@ const CONTINUE_ID: &str = "move-records-continue";
 const DESTINATION_ID: &str = "move-records-destination";
 const SUBMIT_ID: &str = "move-records-submit";
 
-#[derive(Clone)]
+#[derive(Clone, serde::Deserialize)]
+#[serde(tag = "kind", content = "id", rename_all = "lowercase")]
 pub(crate) enum MoveItem {
     Entry(String),
     Folder(String),
+}
+
+#[derive(serde::Deserialize)]
+pub(crate) struct TreeDrop {
+    item: MoveItem,
+    parent: Option<String>,
+}
+
+pub(crate) fn move_in_vault(state: Session, action: TreeDrop) {
+    crate::desktop::runtime::record_activity();
+    edit_unlocked(state, |workspace| {
+        if workspace.page == Page::Vault
+            && can_move(workspace)
+            && let Err(error) = reparent(workspace, action)
+        {
+            workspace.error = Some(format!("Could not save: {error}"));
+        }
+    });
+}
+
+fn reparent(workspace: &mut Unlocked, TreeDrop { item, parent }: TreeDrop) -> vault::Result<()> {
+    let vault = &mut workspace.vault;
+    if let Some(parent) = &parent
+        && !vault.folders().iter().any(|folder| &folder.id == parent)
+    {
+        return Ok(());
+    }
+
+    match item {
+        MoveItem::Entry(id) => {
+            let Some(entry) = vault.entries().iter().find(|entry| entry.id == id) else {
+                return Ok(());
+            };
+            if entry.folder_id == parent {
+                return Ok(());
+            }
+            let mut entry = entry.clone();
+            entry.folder_id.clone_from(&parent);
+            vault.upsert_entry(entry)?;
+            if workspace.selected.as_ref() == Some(&id) {
+                workspace.directories.selected.clone_from(&parent);
+            }
+        }
+        MoveItem::Folder(id) => {
+            let Some(folder) = vault.folders().iter().find(|folder| folder.id == id) else {
+                return Ok(());
+            };
+            if folder.parent_id == parent {
+                return Ok(());
+            }
+            let mut folder = folder.clone();
+            folder.parent_id.clone_from(&parent);
+            vault.save_folder(folder)?;
+        }
+    }
+
+    if let Some(parent) = parent {
+        for folder in Hierarchy::new(vault.folders()).lineage(&parent) {
+            workspace.directories.collapsed.remove(&folder.id);
+        }
+    }
+    workspace.sync.saved();
+    workspace.error = None;
+    Ok(())
 }
 
 #[derive(Clone)]
@@ -44,6 +115,10 @@ impl SidebarMove {
             selection: use_signal(|| None),
             menu: use_signal(|| None),
         }
+    }
+
+    pub(crate) fn is_busy(self) -> bool {
+        self.selection.read().is_some() || self.menu.read().is_some()
     }
 
     fn open(mut self, state: Session, item: Option<MoveItem>, position: Option<(f64, f64)>) {
@@ -224,7 +299,7 @@ enum Outcome {
     Moved(String),
 }
 
-fn can_move(workspace: &Unlocked) -> bool {
+pub(crate) fn can_move(workspace: &Unlocked) -> bool {
     workspace.editor_is_clear()
         && !workspace.import.busy()
         && !workspace.sharing.busy()

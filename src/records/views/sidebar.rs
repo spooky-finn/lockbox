@@ -6,7 +6,7 @@ use crate::{
             Session, edit_unlocked, edit_workspace_ui, navigate, use_records_version,
             use_unlocked_selector,
         },
-        move_records::{MoveSidebar, SidebarMove},
+        move_records::{MoveSidebar, SidebarMove, TreeDrop, can_move, move_in_vault},
         session::Screen,
         widgets::{
             button::IconButton,
@@ -70,6 +70,8 @@ pub(crate) fn Sidebar() -> Element {
     let cleanup = resize.clone();
     let navigation = use_hook(|| std::rc::Rc::new(std::cell::Cell::new(None::<document::Eval>)));
     let navigation_cleanup = navigation.clone();
+    let drag = use_hook(|| std::rc::Rc::new(std::cell::Cell::new(None::<document::Eval>)));
+    let drag_cleanup = drag.clone();
     use_drop(move || {
         if let Some(eval) = cleanup.take() {
             let _ = eval.send(());
@@ -77,11 +79,16 @@ pub(crate) fn Sidebar() -> Element {
         if let Some(eval) = navigation_cleanup.take() {
             let _ = eval.send(());
         }
+        if let Some(eval) = drag_cleanup.take() {
+            let _ = eval.send(());
+        }
     });
     let language = crate::desktop::i18n::use_language();
     let state = use_context::<Session>();
     let controls = SidebarMove::use_controls();
     let choosing_records = controls.selection.read().is_some();
+    let can_drag = use_unlocked_selector(|u| u.page == Page::Vault && can_move(u));
+    let can_drag = can_drag() == Some(true) && !controls.is_busy();
     let summary = use_unlocked_selector(|u| {
         (
             u.vault.entries().len(),
@@ -110,6 +117,7 @@ pub(crate) fn Sidebar() -> Element {
 
     rsx! {
         aside { id: "vault-sidebar", class: "sidebar",
+            "data-tree-can-drag": "{can_drag}",
             onkeydown: move |event| {
                 if event.key() == Key::Escape && !event.is_auto_repeating() && controls.dismiss() {
                     event.prevent_default();
@@ -152,10 +160,20 @@ pub(crate) fn Sidebar() -> Element {
                                 }
                             }
                         });
+                        let mut eval = document::eval(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/tree-drag.js")));
+                        drag.set(Some(eval));
+                        spawn(async move {
+                            while let Ok(action) = eval.recv::<TreeDrop>().await {
+                                if !controls.is_busy() {
+                                    move_in_vault(state, action);
+                                }
+                            }
+                        });
                     },
                     TreeContent { controls }
                 }
             }
+            div { class: "vault-root-drop", "data-drop-root": "true", {language.text(Text::VaultRoot)} }
             MoveSidebar { controls }
             div { class: "sidebar-footer",
                 IconButton { class: "quiet", icon: Icon::Trash, label: language.text(Text::Trash),

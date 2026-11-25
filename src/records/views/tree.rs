@@ -357,6 +357,7 @@ impl RenderCache {
                     rsx! {
                         li { class: "tree-folder", key: "folder-{id}",
                             div { class: if selected { "folder-row selected" } else { "folder-row" },
+                                "data-drop-folder": "{id}",
                                 oncontextmenu: move |event| controls.context_menu(state, Some(context_item.clone()), event),
                                 onkeydown: move |event| controls.keyboard_menu(state, shortcut.clone(), event),
                                 button { class: if expanded { "tree-disclosure expanded" } else { "tree-disclosure" },
