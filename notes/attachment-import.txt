@@ -1,0 +1,7 @@
+Attachment import
+
+- Dioxus desktop supplies native paths for current file drop. Rust checks
+  target vault and draft before reading files.
+- Picker and drop share bounded regular-file reader and entry validation.
+  Failed batch discards its additions. Accepted batch schedules draft
+  autosave once. Existing entry encryption and sync own persistence.

@@ -73,6 +73,7 @@ fn attachment_controls_render_names_and_sizes_without_file_contents() {
     });
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("Добавить файл"));
+    assert!(html.contains("Перетащите файлы сюда"));
     assert!(html.contains("Удалить файл"));
     assert!(html.contains("test-file.txt"));
     assert!(!html.contains("never render file contents"));
@@ -83,6 +84,90 @@ fn attachment_controls_render_names_and_sizes_without_file_contents() {
     assert!(html.contains("test-file.txt"));
     assert!(html.contains("Сохранить файл"));
     assert!(!html.contains("never render file contents"));
+}
+
+#[test]
+fn dropping_files_applies_the_batch_and_autosaves_the_attachments() {
+    use dioxus::dioxus_core::Mutation;
+    use dioxus::html::{
+        EventData, SerializedDataTransfer, SerializedDragData, SerializedFileData,
+        SerializedHtmlEventConverter,
+    };
+    use std::path::Path;
+
+    dioxus::html::set_event_converter(Box::new(SerializedHtmlEventConverter));
+    let dir = tempfile::tempdir().unwrap();
+    let first = dir.path().join("first.bin");
+    let second = dir.path().join("second.bin");
+    std::fs::write(&first, [0, 255]).unwrap();
+    std::fs::write(&second, [42]).unwrap();
+
+    let mut dom = mounted();
+    dom.in_scope(ScopeId::APP, || {
+        edit_unlocked(consume_context(), |u| u.start_edit())
+    });
+    let changes = dom.render_immediate_to_vec();
+    let target = changes
+        .edits
+        .iter()
+        .find_map(|edit| match edit {
+            Mutation::NewEventListener { name, id } if name == "drop" => Some(*id),
+            _ => None,
+        })
+        .expect("editor has a drop listener");
+    let drop_files = |dom: &VirtualDom, paths: &[&Path]| {
+        let files = paths
+            .iter()
+            .map(|path| SerializedFileData {
+                path: path.to_path_buf(),
+                ..SerializedFileData::empty()
+            })
+            .collect();
+        let event = Event::new(
+            EventData::Drag(SerializedDragData {
+                mouse: Default::default(),
+                data_transfer: SerializedDataTransfer {
+                    items: vec![],
+                    files,
+                    effect_allowed: "all".into(),
+                    drop_effect: "copy".into(),
+                },
+            })
+            .into_any(),
+            true,
+        );
+        dom.runtime().handle_event("drop", event.clone(), target);
+        assert!(!event.default_action_enabled());
+    };
+
+    drop_files(&dom, &[&first, &dir.path().join("missing.bin")]);
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| {
+            let draft = u.draft.as_ref().unwrap();
+            assert!(draft.entry.attachments.is_empty());
+            assert!(draft.autosave_at.is_none());
+            assert!(u.error.is_some());
+        });
+    });
+    drop_files(&dom, &[&first, &second]);
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| {
+            assert!(u.error.is_none());
+            assert!(u.draft.as_ref().unwrap().autosave_at.is_some());
+            u.autosave_draft().unwrap();
+            let saved = crate::desktop::test_support::reopen(u);
+            let files = &saved.entries[0].attachments;
+            assert_eq!(files.len(), 2);
+            assert_eq!(
+                (&*files[0].name, files[0].data.as_slice()),
+                ("first.bin", &[0, 255][..])
+            );
+            assert_eq!(
+                (&*files[1].name, files[1].data.as_slice()),
+                ("second.bin", &[42][..])
+            );
+        });
+    });
 }
 
 #[test]

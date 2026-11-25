@@ -1,9 +1,10 @@
-//! Native pickers for vault imports and attachment transfers.
+//! Native pickers and dropped-file imports.
 //! Delayed results recheck the target vault and record before file access.
 //! Vault decryption runs in the session's import worker.
 
 use crate::desktop::{context::Session, session::Screen};
 use dioxus::prelude::*;
+use std::path::Path;
 
 pub(crate) fn choose_import_file() {
     let mut state = consume_context::<Session>();
@@ -46,17 +47,22 @@ pub(crate) fn add_attachment() {
     // A blocking native dialog can re-enter Dioxus with its callback borrowed.
     spawn(async move {
         if let Some(path) = rfd::AsyncFileDialog::new().pick_file().await {
-            finish_add_attachment(state, &vault_path, &draft_id, path.path());
+            finish_add_attachments(state, &vault_path, &draft_id, [path.path()]);
         }
     });
 }
 
-fn finish_add_attachment(
+pub(crate) fn finish_add_attachments(
     mut state: Session,
-    vault_path: &std::path::Path,
+    vault_path: &Path,
     draft_id: &str,
-    path: &std::path::Path,
+    paths: impl IntoIterator<Item = impl AsRef<Path>>,
 ) {
+    let mut paths = paths.into_iter().peekable();
+    if paths.peek().is_none() {
+        return;
+    }
+
     let mut screen = state.write();
     let Screen::Unlocked(u) = &mut *screen else {
         return;
@@ -70,17 +76,23 @@ fn finish_add_attachment(
     if draft.entry.id != draft_id {
         return;
     }
-    u.error = (|| {
-        let (name, mut data) = crate::records::attachments::read(path)?;
-        draft
-            .entry
-            .add_attachment(name, std::mem::take(&mut *data))
-            .map_err(str::to_owned)
-    })()
-    .err();
-    if u.error.is_none() {
-        draft.schedule_autosave();
+    let original_count = draft.entry.attachments.len();
+    for path in paths {
+        let result =
+            crate::records::attachments::read(path.as_ref()).and_then(|(name, mut data)| {
+                draft
+                    .entry
+                    .add_attachment(name, std::mem::take(&mut *data))
+                    .map_err(str::to_owned)
+            });
+        if let Err(error) = result {
+            draft.entry.attachments.truncate(original_count);
+            u.error = Some(error);
+            return;
+        }
     }
+    u.error = None;
+    draft.schedule_autosave();
 }
 
 pub(crate) fn export_attachment(id: &str) {
@@ -112,10 +124,10 @@ pub(crate) fn export_attachment(id: &str) {
 
 fn finish_export_attachment(
     mut state: Session,
-    vault_path: &std::path::Path,
+    vault_path: &Path,
     entry_id: &str,
     id: &str,
-    path: &std::path::Path,
+    path: &Path,
 ) {
     let mut screen = state.write();
     let Screen::Unlocked(u) = &mut *screen else {

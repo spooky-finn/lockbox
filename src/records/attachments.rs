@@ -1,7 +1,7 @@
 //! Explicit file import/export; vault persistence never writes plaintext attachments.
 use crate::{platform::files::create_new_private, records::entry::MAX_ATTACHMENT_BYTES};
 use std::{
-    fs::File,
+    fs::OpenOptions,
     io::{Read, Write},
     path::Path,
 };
@@ -13,7 +13,15 @@ pub(crate) fn read(path: &Path) -> Result<(String, Zeroizing<Vec<u8>>), String> 
         .and_then(|n| n.to_str())
         .ok_or("Invalid attachment file name")?
         .to_owned();
-    let file = File::open(path).map_err(|e| e.to_string())?;
+    let mut options = OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        // Opening a FIFO must not block before the regular-file check.
+        options.custom_flags(libc::O_NONBLOCK);
+    }
+    let file = options.open(path).map_err(|e| e.to_string())?;
 
     if !file.metadata().map_err(|e| e.to_string())?.is_file() {
         return Err("Select a regular file".into());

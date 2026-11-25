@@ -18,7 +18,7 @@ use crate::{
         views::{folder_select::FolderSelect, generator::GeneratorView, totp::TotpEditor},
     },
 };
-use dioxus::prelude::*;
+use dioxus::{html::HasFileData, prelude::*};
 
 pub(crate) fn finish_on_enter(state: Session, event: KeyboardEvent) {
     if !event.is_composing() && !event.is_auto_repeating() && event.key() == Key::Enter {
@@ -126,8 +126,29 @@ pub(crate) fn DraftView() -> Element {
                         }
                     }
                 }
-                IconButton { icon: Icon::Plus, label: language.text(Text::AddAttachment),
-                    onclick: move |_| dialogs::add_attachment(),
+                div { class: "attachment-drop",
+                    ondragover: move |event: DragEvent| event.prevent_default(),
+                    ondrop: {
+                        let vault_path = unlocked.vault.path().to_path_buf();
+                        let draft_id = entry.id.clone();
+                        move |event: DragEvent| {
+                            event.prevent_default();
+                            // Desktop keeps the last native paths even for later non-file drags.
+                            if event.data_transfer().files().is_empty() {
+                                return;
+                            }
+                            let paths = event
+                                .files()
+                                .into_iter()
+                                .map(|file| file.path())
+                                .filter(|path| path.is_absolute());
+                            dialogs::finish_add_attachments(state, &vault_path, &draft_id, paths);
+                        }
+                    },
+                    IconButton { icon: Icon::Plus, label: language.text(Text::AddAttachment),
+                        onclick: move |_| dialogs::add_attachment(),
+                    }
+                    span { class: "muted", {language.text(Text::DropAttachments)} }
                 }
             }
             fieldset { class: "stack",

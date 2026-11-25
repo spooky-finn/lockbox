@@ -26,12 +26,12 @@ fn attachment_dialog_results_recheck_selection_and_vault_before_io() {
             )
         };
         // A different profile or draft must not receive a delayed picker result.
-        super::finish_add_attachment(state, &source, &entry_id, &source);
-        super::finish_add_attachment(state, &vault_path, "stale draft", &source);
+        super::finish_add_attachments(state, &source, &entry_id, [&source]);
+        super::finish_add_attachments(state, &vault_path, "stale draft", [&source]);
         edit_unlocked(state, |u| {
             assert!(u.draft.as_ref().unwrap().entry.attachments.is_empty())
         });
-        super::finish_add_attachment(state, &vault_path, &entry_id, &source);
+        super::finish_add_attachments(state, &vault_path, &entry_id, [&source]);
         let file_id = {
             let screen = state.peek();
             let Screen::Unlocked(u) = &*screen else {
@@ -50,7 +50,7 @@ fn attachment_dialog_results_recheck_selection_and_vault_before_io() {
         assert_eq!(std::fs::read(&destination).unwrap(), [0, 255, 42]);
         runtime::lock(None);
         let locked_destination = dir.path().join("locked.bin");
-        super::finish_add_attachment(state, &vault_path, &entry_id, &source);
+        super::finish_add_attachments(state, &vault_path, &entry_id, [&source]);
         super::finish_export_attachment(
             state,
             &vault_path,

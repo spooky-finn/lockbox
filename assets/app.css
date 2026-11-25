@@ -626,6 +626,7 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 99px; }
 .attachment-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .attachment-size { color: var(--muted); font-size: 11px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .attachment-row .icon-button { color: var(--muted); }
+.attachment-drop { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px dashed var(--border); border-radius: var(--button-radius); }
 .sync-status { max-width: 100%; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 2px 8px; color: var(--muted); font-size: 11px; text-align: end; }
 .sync-status.notice { color: var(--notice); }
 .sync-status p { min-width: 0; margin: 0; overflow-wrap: anywhere; }
