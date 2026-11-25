@@ -1,5 +1,4 @@
 use super::field_label::FieldLabel;
-use crate::desktop::context::navigate;
 use crate::desktop::i18n::Text;
 use crate::records::dialogs;
 
@@ -61,7 +60,6 @@ pub(crate) fn EntryView() -> Element {
                     IconButton { class: "quiet", icon: Icon::Edit, label: language.text(Text::Edit), disabled: unlocked.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.start_edit()) }
                     IconButton { class: "danger quiet entry-trash-trigger", icon: Icon::Trash, label: language.text(Text::Delete), disabled: unlocked.vault.signing_error().is_some(), onclick: move |_| edit_unlocked(state, |u| u.confirm_delete = true) }
                 }
-                IconButton { class: "quiet entry-dismiss", icon: Icon::Close, label: language.text(Text::CloseEditor), onclick: move |_| navigate(state, crate::desktop::workspace::Destination::Close) }
             }
             dl { class: "fields",
                 div { class: "field-row",

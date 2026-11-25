@@ -943,7 +943,6 @@ button.copy-value:focus-visible, button.identifier:focus-visible { outline: 2px 
 .record-read .notes-row { padding-block: 10px 12px; }
 
 /* Native-scale record controls keep reading and editing on the same grid. */
-.entry-detail .detail-heading > .entry-dismiss { color: var(--muted); flex-shrink: 0; }
 .entry-detail .detail-heading .entry-actions .icon-button { width: 26px; height: 26px; min-height: 26px; flex-basis: 26px; padding: 5px; }
 .entry-detail .field-row button.copy-value { min-height: 26px; padding-block: 2px; }
 .entry-detail .field-row .icon-button { width: 28px; height: 28px; min-height: 28px; flex-basis: 28px; padding: 5px; }
