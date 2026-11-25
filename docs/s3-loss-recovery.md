@@ -34,7 +34,7 @@ control and data anchor. The desktop procedure below creates a separate space.
    or bring back entries deleted in the chosen source.
 
 Bulk import requires the master password that protected the selected file when
-it was saved. If you have only recovery words, the file's **Forgot?** action can
+it was saved. If you have only recovery words, the file's **Recovery** action can
 open a snapshot with a recovery slot. A read-only shared backup keeps its original
 password, which the bulk importer still requires. Preserve the readable backup
 and manually copy approved records into the new vault if needed. See

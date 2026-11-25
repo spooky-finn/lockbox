@@ -691,7 +691,7 @@ impl Text {
             Self::RecoveryWordsSaved => ("Я сохранил мнемонику", "I saved my mnemonic"),
             Self::ResetPasswordAndUnlock => ("Сбросить пароль и открыть", "Reset password and unlock"),
             Self::BackToPasswordUnlock => ("Вернуться к вводу пароля", "Back to password unlock"),
-            Self::ForgotMasterPassword => ("Забыли?", "Forgot?"),
+            Self::ForgotMasterPassword => ("Восстановление", "Recovery"),
             Self::InvalidRecoveryWords => ("Введите корректную мнемонику", "Enter a valid mnemonic"),
             Self::SaveRecoveryWordsFirst => ("Сохраните мнемонику перед продолжением", "Save your mnemonic before continuing"),
             Self::WrongRecoveryWords => ("Мнемоника не подходит к этому хранилищу", "Mnemonic does not match this vault"),
