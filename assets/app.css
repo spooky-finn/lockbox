@@ -184,7 +184,7 @@ h2 { font-size: 15px; font-weight: 600; letter-spacing: -.2px; }
 .unlock-input > .unlock-submit:hover:not(:disabled) { color: var(--lock-ink); background: var(--control); }
 .unlock-feedback { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 340px; margin-top: 18px; font-size: 12px; }
 .unlock-feedback .muted { color: var(--lock-secondary); }
-.lock-actions { align-self: center; flex: 0 0 auto; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; max-width: 100%; }
+.lock-actions { align-self: center; flex: 0 0 auto; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; max-width: 100%; }
 .lock-actions > button { justify-content: center; min-height: 32px; padding: 4px 8px; color: var(--lock-secondary); text-align: center; font-size: 12px; }
 .lock-actions > button > .symbol { width: 16px; height: 16px; flex: 0 0 16px; }
 .lock-actions > button > span { overflow-wrap: anywhere; }

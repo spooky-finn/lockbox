@@ -324,15 +324,15 @@ pub(crate) fn LockedView() -> Element {
                     Symbol { icon: Icon::Reset }
                     span { {language.text(Text::VaultActionRecover)} }
                 }
-            }
-            if base_unlock {
-                a {
-                    class: "unlock-version",
-                    href: RELEASES_PAGE,
-                    target: "_blank",
-                    rel: "noopener noreferrer",
-                    title: language.text(Text::ViewGitHubReleases),
-                    {concat!("v", env!("CARGO_PKG_VERSION"))}
+                if base_unlock {
+                    a {
+                        class: "unlock-version",
+                        href: RELEASES_PAGE,
+                        target: "_blank",
+                        rel: "noopener noreferrer",
+                        title: language.text(Text::ViewGitHubReleases),
+                        {concat!("v", env!("CARGO_PKG_VERSION"))}
+                    }
                 }
             }
         }
