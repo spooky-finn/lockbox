@@ -6,7 +6,7 @@ use super::{
     invitations::{encode_history, metadata_state},
 };
 use crate::sync::protocol::{
-    Blob, Counter, DeviceSecret, Error, Hash, Invitation, Result, canonical, crypto,
+    Blob, Counter, DeviceSecret, Error, Hash, Invitation, Result, Role, canonical, crypto,
     pairing::{TICKET_DOMAIN, Ticket, TicketBody, proof_hash},
 };
 
@@ -18,6 +18,7 @@ impl Machine {
         bucket: &str,
         space_name: &str,
         expires_at: u64,
+        chat_role: Option<Role>,
     ) -> Result<Ticket> {
         state.require_idle()?;
         Self::replay_state(state, device)?.require_ready()?;
@@ -46,6 +47,7 @@ impl Machine {
                     bucket: bucket.to_owned(),
                     space_name: space_name.to_owned(),
                     expires_at: Counter(expires_at),
+                    chat_role,
                 },
                 &device.signer(),
                 TICKET_DOMAIN,

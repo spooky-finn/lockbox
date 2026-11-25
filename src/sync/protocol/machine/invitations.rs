@@ -46,6 +46,18 @@ impl Machine {
         role: Role,
         expires_at: Option<u64>,
     ) -> Result<Invitation> {
+        Self::offer_with_id(state, device, space_name, recipient, role, expires_at, None)
+    }
+
+    pub(crate) fn offer_with_id(
+        state: &SyncState,
+        device: &DeviceSecret,
+        space_name: Option<&str>,
+        recipient: Signed<Certificate>,
+        role: Role,
+        expires_at: Option<u64>,
+        id: Option<Hash>,
+    ) -> Result<Invitation> {
         if space_name.is_some_and(|name| {
             name.trim().is_empty() || name.len() > 256 || name.chars().any(char::is_control)
         }) {
@@ -56,22 +68,18 @@ impl Machine {
 
         replay.require_ready()?;
         with_history(state, |history| {
-            let (anchor, current) = history.tip();
+            let (anchor, _) = history.tip();
             let device_id = device.id();
 
-            if current.body.controller != device_id {
-                return Err(Error::InsufficientRole);
-            }
-            validate_recipient(&recipient, role, &current.body)?;
-
-            if was_admitted(&history.chain, recipient.body.device) {
-                return Err(Error::RetiredDevice);
-            }
+            check_recipient(history, device_id, &recipient, role)?;
             let offer = InviteOffer {
                 descriptor: state.descriptor(),
                 space_name: space_name.map(str::to_owned),
                 anchor,
-                id: Hash(*crypto::random32()?),
+                id: match id {
+                    Some(id) => id,
+                    None => Hash(*crypto::random32()?),
+                },
                 author: device_id,
                 recipient,
                 role,
@@ -84,6 +92,27 @@ impl Machine {
             };
             result.bytes()?;
             Ok(result)
+        })
+    }
+
+    /// Additional devices inherit their member's current role.
+    pub(crate) fn invitation_recipient_role(
+        state: &SyncState,
+        controller: Hash,
+        recipient: &Signed<Certificate>,
+        proposed: Role,
+    ) -> Result<Role> {
+        with_history(state, |history| {
+            let role = history
+                .tip()
+                .1
+                .body
+                .members
+                .iter()
+                .find(|m| m.certificate.body.user == recipient.body.user)
+                .map_or(proposed, |m| m.role);
+            check_recipient(history, controller, recipient, role)?;
+            Ok(role)
         })
     }
 
@@ -396,6 +425,23 @@ fn verify_offer(
     validate_recipient(&body.recipient, body.role, anchor)?;
 
     if was_admitted(&ancestors[..=index], body.recipient.body.device) {
+        return Err(Error::RetiredDevice);
+    }
+    Ok(())
+}
+
+fn check_recipient(
+    history: &ControlHistory<'_>,
+    controller: Hash,
+    recipient: &Signed<Certificate>,
+    role: Role,
+) -> Result<()> {
+    let (_, current) = history.tip();
+    if current.body.controller != controller {
+        return Err(Error::InsufficientRole);
+    }
+    validate_recipient(recipient, role, &current.body)?;
+    if was_admitted(&history.chain, recipient.body.device) {
         return Err(Error::RetiredDevice);
     }
     Ok(())

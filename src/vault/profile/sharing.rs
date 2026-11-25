@@ -3,7 +3,7 @@
 
 use crate::{
     serialization::canonical_size,
-    sync::protocol::{Admission, AdmissionReceipt, Hash, Invitation},
+    sync::protocol::{Admission, AdmissionReceipt, Hash, Invitation, pairing::ConfirmationLink},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -42,6 +42,8 @@ pub(crate) struct SharingState {
 #[serde(deny_unknown_fields)]
 pub(crate) struct IssuedInvitation {
     pub(crate) invitation: Invitation,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) chat_confirmation: Option<ConfirmationLink>,
     pub(crate) cancelled: bool,
     pub(crate) admission: Option<Admission>,
     pub(crate) receipt: Option<AdmissionReceipt>,
@@ -67,6 +69,9 @@ impl SharingState {
         self.issued.len() + self.accepted.len() <= Self::MAX_RECORDS
             && self.issued.iter().all(|(id, record)| {
                 *id == record.invitation.id()
+                    && record
+                        .chat_confirmation
+                        .is_none_or(|c| c.offer_id().ok() == Some(*id))
                     && record.admission.as_ref().is_none_or(|a| a.id() == *id)
                     && record
                         .receipt

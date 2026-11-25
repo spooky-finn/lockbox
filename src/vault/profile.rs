@@ -206,7 +206,7 @@ impl BootstrapProfile {
 
     pub(crate) fn validate(&self) -> bool {
         ((self.schema_version == 1 && self.sync.is_none())
-            || ((2..=9).contains(&self.schema_version)
+            || ((2..=10).contains(&self.schema_version)
                 && self.sync.is_some()
                 && self.certificate.is_some()))
             && (self.schema_version >= 4 || self.sharing.is_empty())
@@ -214,6 +214,13 @@ impl BootstrapProfile {
             && (self.schema_version >= 7 || self.pairing.is_empty())
             && (self.schema_version >= 8 || !self.pairing.uses_short_links())
             && (self.schema_version >= 9 || !self.pairing.uses_managed_links())
+            && (self.schema_version >= 10
+                || (!self.pairing.uses_chat_links()
+                    && self
+                        .sharing
+                        .issued
+                        .values()
+                        .all(|r| r.chat_confirmation.is_none())))
             && self.pairing.validate()
             && self.control_approvals.len() <= 128
             && self
@@ -252,7 +259,7 @@ impl BootstrapProfile {
     }
 
     pub(crate) fn requires_witness(&self) -> bool {
-        (3..=9).contains(&self.schema_version)
+        (3..=10).contains(&self.schema_version)
     }
 
     pub(crate) fn enable_sharing(&mut self) {
@@ -260,13 +267,13 @@ impl BootstrapProfile {
     }
 
     pub(crate) fn enable_pairing(&mut self) {
-        self.schema_version = self
-            .schema_version
-            .max(if self.pairing.uses_managed_links() {
-                9
-            } else {
-                8
-            });
+        self.schema_version = self.schema_version.max(if self.pairing.uses_chat_links() {
+            10
+        } else if self.pairing.uses_managed_links() {
+            9
+        } else {
+            8
+        });
     }
 
     pub(crate) fn enable_authority(&mut self) {

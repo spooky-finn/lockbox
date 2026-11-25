@@ -6,7 +6,10 @@ use crate::{
         Admission, Error, Hash, Invitation, Machine,
         pairing::{ClosedReason, Closure, Contact, Envelope, Joined, Kind, Slot},
     },
-    vault::{Result, Vault, profile::pairing::PairingState},
+    vault::{
+        Result, Vault,
+        profile::pairing::{JoiningLink, PairingState},
+    },
 };
 
 impl Vault {
@@ -151,6 +154,38 @@ impl Vault {
         }
     }
 
+    pub(super) fn verify_link_offer(&self, link: &JoiningLink, offer: &Invitation) -> Result<()> {
+        Machine::verify_pairing_invitation(&link.ticket, offer)?;
+        let recipient = self
+            .device_certificate()
+            .ok_or(Error::UnauthorizedDevice)?
+            .hash()?;
+        if offer.recipient().hash()? != recipient
+            || offer.expires_at() != Some(link.ticket.body.expires_at.0)
+            || offer.offer.body.author != link.ticket.body.controller.body.device
+        {
+            return Err(Error::InvalidInvitation.into());
+        }
+        if let Some(role) = link.ticket.body.chat_role {
+            let confirmation = link.confirmation()?;
+            if offer.id() != confirmation.offer_id()?
+                || offer.role() != role
+                || offer.space_name() != Some(link.ticket.body.space_name.as_str())
+                || link
+                    .request
+                    .as_ref()
+                    .ok_or(Error::MissingDependency)?
+                    .body
+                    .certificate
+                    .hash()?
+                    != recipient
+            {
+                return Err(Error::InvalidInvitation.into());
+            }
+        }
+        Ok(())
+    }
+
     fn receive_link_reply(
         &mut self,
         session: Hash,
@@ -210,18 +245,14 @@ impl Vault {
         match slot {
             Slot::Offer(id) if id == request => {
                 let offer: Invitation = frame.open(&link.ticket, request, Kind::Offer, &device)?;
-                Machine::verify_pairing_invitation(&link.ticket, &offer)?;
-                if offer.recipient().hash()?
-                    != self
-                        .device_certificate()
-                        .ok_or(Error::UnauthorizedDevice)?
-                        .hash()?
-                    || offer.expires_at() != Some(link.ticket.body.expires_at.0)
-                    || offer.offer.body.author != link.ticket.body.controller.body.device
-                    || link
-                        .offer
-                        .as_ref()
-                        .is_some_and(|previous| previous.id() != offer.id())
+                self.verify_link_offer(&link, &offer)?;
+                if link.ticket.body.chat_role.is_some() && now >= link.ticket.body.expires_at.0 {
+                    return Err(Error::InvitationExpired.into());
+                }
+                if link
+                    .offer
+                    .as_ref()
+                    .is_some_and(|previous| previous.id() != offer.id())
                 {
                     return Err(Error::InvalidInvitation.into());
                 }

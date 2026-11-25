@@ -7,8 +7,8 @@ use crate::{
         protocol::{
             Error, Hash, Machine, Role, canonical,
             pairing::{
-                ClosedReason, Closure, Contact, Envelope, Kind, LinkReference, ManagedLink, Slot,
-                Ticket,
+                ClosedReason, Closure, ConfirmationLink, Contact, Envelope, Kind, LinkReference,
+                ManagedLink, Slot, Ticket,
             },
         },
         transport::{pairing::MailboxFactory, storj::pairing::Factory},
@@ -31,6 +31,25 @@ mod receive;
 #[cfg(test)]
 #[path = "tests/pairing.rs"]
 mod tests;
+
+impl JoiningLink {
+    fn confirmation(&self) -> Result<ConfirmationLink> {
+        let ticket = self.ticket.hash()?;
+        if !self.proof_verified
+            || self.ticket.body.chat_role.is_none()
+            || self.managed.is_none()
+            || self.chat_join != Some(ticket)
+        {
+            return Err(Error::InvalidInvitation.into());
+        }
+        let request = self.request.as_ref().ok_or(Error::MissingDependency)?;
+        request.verify_contact(&self.ticket)?;
+        Ok(ConfirmationLink {
+            ticket,
+            request: request.hash()?,
+        })
+    }
+}
 
 impl Vault {
     pub(crate) fn issued_links(&self) -> impl Iterator<Item = &IssuedLink> {
@@ -152,6 +171,22 @@ impl Vault {
     }
 
     pub(crate) fn create_link(&mut self, now: u64, days: u64) -> Result<Hash> {
+        self.create_pairing_link(now, days, None)
+    }
+
+    pub(crate) fn create_chat_link(&mut self, now: u64, days: u64, role: Role) -> Result<Hash> {
+        if !self.has_invite_issuer() || role == Role::Owner {
+            return Err(Error::InvalidInvitation.into());
+        }
+        self.create_pairing_link(now, days, Some(role))
+    }
+
+    fn create_pairing_link(
+        &mut self,
+        now: u64,
+        days: u64,
+        chat_role: Option<Role>,
+    ) -> Result<Hash> {
         self.ensure_profile_writable()?;
         self.ensure_sync_projection()?;
         if !matches!(days, 1 | 7 | 30) {
@@ -169,6 +204,7 @@ impl Vault {
             &profile.provider.bucket,
             &profile.space_name,
             expires,
+            chat_role,
         )?;
         let managed = if profile.pairing.issuer.is_some() {
             if days > 7 {
@@ -203,6 +239,28 @@ impl Vault {
         }
         self.save_pairing()?;
         Ok(id)
+    }
+
+    pub(crate) fn join_chat_link(&mut self, link: &str, now: u64) -> Result<Hash> {
+        self.ensure_profile_writable()?;
+        self.ensure_sharing_view()?;
+        if self.resolving_link().is_some() {
+            return Err(VaultError::Pairing(
+                "Finish or cancel the current connection first",
+            ));
+        }
+        let managed = ManagedLink::parse(link)?;
+        self.stage_link(managed.body.ticket.clone(), None, now, Some(managed))
+    }
+
+    pub(crate) fn confirmation_link(&self) -> Result<ConfirmationLink> {
+        self.ensure_profile_writable()?;
+        let link = self.joining_link().ok_or(Error::InvalidInvitation)?;
+        if link.closed.is_some() || link.joined || self.profile.as_ref().unwrap().pairing.needs_save
+        {
+            return Err(Error::InvalidInvitation.into());
+        }
+        link.confirmation()
     }
 
     pub(crate) fn request_link(&mut self, link: &str, code: &str, now: u64) -> Result<Hash> {
@@ -255,34 +313,52 @@ impl Vault {
         }
         if link.trim().starts_with("lockbox://pair/") {
             let managed = ManagedLink::parse(link)?;
-            return self.stage_link(managed.body.ticket.clone(), supplied, now, Some(managed));
+            return self.stage_link(
+                managed.body.ticket.clone(),
+                Some(supplied),
+                now,
+                Some(managed),
+            );
         }
         self.stage_link_ticket(Ticket::parse_link(link)?, supplied, now)
     }
 
     fn stage_link_ticket(&mut self, ticket: Ticket, supplied: Hash, now: u64) -> Result<Hash> {
-        self.stage_link(ticket, supplied, now, None)
+        self.stage_link(ticket, Some(supplied), now, None)
     }
 
     fn stage_link(
         &mut self,
         ticket: Ticket,
-        supplied: Hash,
+        supplied: Option<Hash>,
         now: u64,
         managed: Option<ManagedLink>,
     ) -> Result<Hash> {
-        if supplied != ticket.verification_code()? {
-            return Err(VaultError::Pairing(
-                "The administrator's verification code does not match the link",
-            ));
-        }
+        let chat_join = match (ticket.body.chat_role, supplied) {
+            (Some(_), None) if managed.is_some() => Some(ticket.hash()?),
+            (None, Some(code)) if code == ticket.verification_code()? => None,
+            (None, Some(_)) => {
+                return Err(VaultError::Pairing(
+                    "The administrator's verification code does not match the link",
+                ));
+            }
+            _ => return Err(Error::InvalidInvitation.into()),
+        };
         let profile = self.profile.as_ref().ok_or(Error::UnauthorizedDevice)?;
         if managed.is_none() || !profile.provider.base_url.is_empty() {
             Self::check_pairing_storage(profile, &ticket)?;
         }
         let id = ticket.body.id;
         if let Some(existing) = profile.pairing.joining.get(&id) {
-            if existing.ticket.hash()? != ticket.hash()? {
+            if chat_join.is_some() {
+                if existing.closed.is_some() || existing.joined {
+                    return Err(Error::InvitationUsed.into());
+                }
+                if now >= ticket.body.expires_at.0 {
+                    return Err(Error::InvitationExpired.into());
+                }
+            }
+            if existing.ticket.hash()? != ticket.hash()? || existing.chat_join != chat_join {
                 return Err(Error::InvalidInvitation.into());
             }
             self.profile.as_mut().unwrap().pairing.resolving = None;
@@ -313,6 +389,7 @@ impl Vault {
             JoiningLink {
                 ticket,
                 managed,
+                chat_join,
                 proof_verified: false,
                 request: None,
                 offer: None,
@@ -340,12 +417,61 @@ impl Vault {
                 "Compare both user and device IDs through a second channel first",
             ));
         }
-        let profile = self.profile.as_ref().ok_or(Error::UnauthorizedDevice)?;
-        let link = profile
-            .pairing
-            .issued
-            .get(&session)
+        let link = self
+            .profile
+            .as_ref()
+            .and_then(|p| p.pairing.issued.get(&session))
             .ok_or(Error::InvalidInvitation)?;
+        if link.ticket.body.chat_role.is_some() {
+            return Err(Error::InvalidInvitation.into());
+        }
+        self.review_request(link, request, role, now)?;
+        self.reserve_link_request(session, request, role, now)
+    }
+
+    pub(crate) fn review_chat_link(
+        &self,
+        confirmation: &ConfirmationLink,
+        now: u64,
+    ) -> Result<(&IssuedLink, &Contact)> {
+        let link = self
+            .issued_links()
+            .find(|l| l.ticket.hash().ok() == Some(confirmation.ticket))
+            .ok_or(Error::InvalidInvitation)?;
+        let role = link.ticket.body.chat_role.ok_or(Error::InvalidInvitation)?;
+        let contact = self.review_request(link, confirmation.request, role, now)?;
+        let managed = link.managed.as_ref().ok_or(Error::InvalidInvitation)?;
+        managed.verify_mailbox()?;
+        if managed.body.ticket.hash()? != confirmation.ticket {
+            return Err(Error::InvalidInvitation.into());
+        }
+        Ok((link, contact))
+    }
+
+    pub(crate) fn approve_chat_link(
+        &mut self,
+        confirmation: &ConfirmationLink,
+        now: u64,
+    ) -> Result<()> {
+        self.ensure_profile_writable()?;
+        self.ensure_sync_projection()?;
+        let (link, _) = self.review_chat_link(confirmation, now)?;
+        self.reserve_link_request(
+            link.ticket.body.id,
+            confirmation.request,
+            link.ticket.body.chat_role.ok_or(Error::InvalidInvitation)?,
+            now,
+        )
+    }
+
+    fn review_request<'a>(
+        &self,
+        link: &'a IssuedLink,
+        request: Hash,
+        role: Role,
+        now: u64,
+    ) -> Result<&'a Contact> {
+        let profile = self.profile.as_ref().ok_or(Error::UnauthorizedDevice)?;
         if link.closed.is_some() {
             return Err(Error::InvitationUsed.into());
         }
@@ -354,23 +480,9 @@ impl Vault {
         }
         if link.ticket.body.descriptor
             != self.space_descriptor().ok_or(Error::UnauthorizedDevice)?
-            || self.space_controller()? != profile.sync_secret().id()
+            || link.ticket.body.controller.body.device != profile.sync_secret().id()
         {
             return Err(Error::InsufficientRole.into());
-        }
-        let contact = link
-            .requests
-            .get(&request)
-            .ok_or(Error::InvalidInvitation)?;
-        contact.verify_contact(&link.ticket)?;
-        let members = self.space_members()?;
-        if members.iter().any(|(certificate, current_role)| {
-            certificate.body.user == contact.body.certificate.body.user && *current_role != role
-        }) || Machine::was_member(
-            self.sync_state().unwrap(),
-            contact.body.certificate.body.device,
-        )? {
-            return Err(Error::InvalidInvitation.into());
         }
         if link.rejected.contains(&request)
             || link
@@ -380,11 +492,38 @@ impl Vault {
         {
             return Err(Error::InvitationUsed.into());
         }
-        if role == Role::Owner
-            && contact.body.certificate.body.user != link.ticket.body.controller.body.user
-        {
-            return Err(Error::InsufficientRole.into());
+        let contact = link
+            .requests
+            .get(&request)
+            .ok_or(Error::MissingDependency)?;
+        contact.verify_contact(&link.ticket)?;
+        if contact.hash()? != request {
+            return Err(Error::InvalidInvitation.into());
         }
+        let current_role = Machine::invitation_recipient_role(
+            self.sync_state().ok_or(Error::UnauthorizedDevice)?,
+            link.ticket.body.controller.body.device,
+            &contact.body.certificate,
+            role,
+        )?;
+        if current_role != role {
+            return Err(if link.ticket.body.chat_role.is_some() {
+                VaultError::InvitationRoleMismatch
+            } else {
+                Error::InvalidInvitation.into()
+            });
+        }
+        Ok(contact)
+    }
+
+    fn reserve_link_request(
+        &mut self,
+        session: Hash,
+        request: Hash,
+        role: Role,
+        now: u64,
+    ) -> Result<()> {
+        let contact = &self.profile.as_ref().unwrap().pairing.issued[&session].requests[&request];
         let user = contact.body.certificate.body.user;
         let name = contact.body.username.clone();
         let profile = self.profile.as_mut().unwrap();
@@ -545,7 +684,7 @@ impl Vault {
             return Err(Error::InvitationExpired.into());
         }
         let offer = joining.offer.as_ref().ok_or(Error::MissingDependency)?;
-        Machine::verify_pairing_invitation(&joining.ticket, offer)?;
+        self.verify_link_offer(&joining, offer)?;
         let consent = self.accept_invitation(offer.clone(), &joining.ticket.body.descriptor)?;
         let request = joining
             .request
@@ -625,10 +764,15 @@ impl Vault {
                 let offer = match approval.invitation {
                     Some(id) => self.export_invitation(id)?,
                     None => {
-                        let offer = self.issue_invitation(
+                        let chat = link.ticket.body.chat_role.map(|_| ConfirmationLink {
+                            ticket: hash,
+                            request: approval.request,
+                        });
+                        let offer = self.issue_link_offer(
                             request.body.certificate.clone(),
                             approval.role,
                             Some(link.ticket.body.expires_at.0),
+                            chat,
                         )?;
                         self.profile
                             .as_mut()
@@ -684,11 +828,13 @@ impl Vault {
                 self.save_pairing()?;
                 continue;
             }
-            if link.closed.is_some()
-                || link.joined
-                || !link.proof_verified
-                || link.request.is_some()
-            {
+            if link.closed.is_some() || link.joined || !link.proof_verified {
+                continue;
+            }
+            if link.request.is_some() {
+                if link.chat_join.is_some() && link.offer.is_some() && !link.consented {
+                    self.consent_link(link.ticket.body.id, now)?;
+                }
                 continue;
             }
             let profile = self.profile.as_ref().unwrap();

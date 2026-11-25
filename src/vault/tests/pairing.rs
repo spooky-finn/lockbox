@@ -845,3 +845,273 @@ fn managed_invitation_delivers_storage_only_after_exact_device_consent_and_revok
         .unwrap();
     assert!(owner.next_credential_task(0).unwrap().is_none());
 }
+
+#[test]
+fn chat_consent_is_bound_to_the_signed_terms_and_exact_returned_request_after_restart() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = ProfileStore::new(Arc::new(MemoryWitness::default()));
+    let owner_path = directory.path().join("owner.lbx");
+    let guest_path = directory.path().join("guest.lbx");
+    let mut owner = profile(&store, &owner_path, "Owner");
+    let mut guest = profile(&store, &guest_path, "Alice");
+    let mut other = profile(&store, &directory.path().join("other.lbx"), "Alice");
+    assert!(owner.create_chat_link(0, 1, Role::Reader).is_err());
+    owner.profile.as_mut().unwrap().pairing.issuer = Some("test-only-parent".into());
+    assert!(owner.create_chat_link(0, 1, Role::Owner).is_err());
+    let session = owner.create_chat_link(0, 1, Role::Reader).unwrap();
+    let another = owner.create_chat_link(0, 1, Role::Reader).unwrap();
+    let mut mailbox = Messages::new();
+    round(&mut owner, &mut mailbox, 0);
+    let url = owner.export_link(session, false).unwrap();
+    let signed = ticket(&owner, session);
+    assert_eq!(signed.body.chat_role, Some(Role::Reader));
+    let mut tampered = signed.clone();
+    tampered.body.chat_role = Some(Role::Editor);
+    assert!(tampered.verify_ticket().is_err());
+    let code = signed.verification_code().unwrap().to_string();
+    assert!(guest.request_link(&url, &code, 0).is_err());
+    assert!(
+        guest
+            .request_link(&signed.link().unwrap(), &code, 0)
+            .is_err()
+    );
+    assert!(guest.join_chat_link(&signed.link().unwrap(), 0).is_err());
+    assert!(guest.joining_link().is_none());
+    guest.join_chat_link(&url, 0).unwrap();
+    assert!(guest.join_chat_link(&url, 86400).is_err());
+    let persisted = serde_json::to_value(guest.profile.as_ref().unwrap()).unwrap();
+    assert_eq!(persisted["schema_version"], 10);
+    let mut downgraded = persisted.clone();
+    downgraded["schema_version"] = 9.into();
+    let downgraded: crate::vault::profile::BootstrapProfile =
+        serde_json::from_value(downgraded).unwrap();
+    assert!(!downgraded.validate());
+    let mut missing_consent = persisted;
+    missing_consent["pairing"]["joining"][session.to_string()]
+        .as_object_mut()
+        .unwrap()
+        .remove("chat_join");
+    let missing_consent: crate::vault::profile::BootstrapProfile =
+        serde_json::from_value(missing_consent).unwrap();
+    assert!(!missing_consent.validate());
+    other.join_chat_link(&url, 0).unwrap();
+    round(&mut guest, &mut mailbox, 0);
+    let confirmation = guest.confirmation_link().unwrap();
+    assert_eq!(
+        ConfirmationLink::parse(&confirmation.link()).unwrap(),
+        confirmation
+    );
+    for bad in [
+        format!("{}/", confirmation.link()),
+        confirmation.link().to_uppercase(),
+        format!("{}?name=Alice", confirmation.link()),
+    ] {
+        assert!(ConfirmationLink::parse(&bad).is_err());
+    }
+    assert!(owner.review_chat_link(&confirmation, 0).is_err());
+    pump(&mut owner, &mut other, &mut mailbox, 1);
+    let competing = other.confirmation_link().unwrap();
+    assert_ne!(competing.request, confirmation.request);
+    assert!(owner.approve_chat_link(&confirmation, 1).is_err());
+    pump(&mut owner, &mut guest, &mut mailbox, 1);
+    let wrong_ticket = ConfirmationLink {
+        ticket: ticket(&owner, another).hash().unwrap(),
+        ..confirmation
+    };
+    assert!(owner.approve_chat_link(&wrong_ticket, 1).is_err());
+    assert!(
+        owner
+            .approve_link_request(session, confirmation.request, Role::Reader, true, 1)
+            .is_err()
+    );
+    assert!(owner.review_chat_link(&confirmation, 86400).is_err());
+    let (_, contact) = owner.review_chat_link(&confirmation, 1).unwrap();
+    assert_eq!(
+        contact.body.certificate.hash().unwrap(),
+        guest.device_certificate().unwrap().hash().unwrap()
+    );
+    assert_eq!(owner.space_members().unwrap().len(), 1);
+
+    // An independently valid offer to the same device with the same terms lacks
+    // the controller's signature on this exact ticket/request pair.
+    let unrelated = owner
+        .issue_invitation(
+            guest.device_certificate().unwrap().clone(),
+            Role::Reader,
+            Some(86400),
+        )
+        .unwrap();
+    let seal_offer = |offer: &Invitation| {
+        Envelope::seal(
+            &signed,
+            confirmation.request,
+            Kind::Offer,
+            &offer.recipient().body,
+            offer,
+        )
+        .unwrap()
+        .bytes()
+        .unwrap()
+    };
+    assert!(
+        guest
+            .receive_pairing(
+                session,
+                Slot::Offer(confirmation.request),
+                &seal_offer(&unrelated),
+                1
+            )
+            .is_err()
+    );
+    let cert = guest.device_certificate().unwrap().clone();
+    let signed_offer = |role, deadline, id| {
+        Machine::offer_with_id(
+            owner.sync_state().unwrap(),
+            &owner.profile.as_ref().unwrap().sync_secret(),
+            Some(&signed.body.space_name),
+            cert.clone(),
+            role,
+            Some(deadline),
+            Some(id),
+        )
+        .unwrap()
+    };
+    let correct_id = confirmation.offer_id().unwrap();
+    for (role, deadline, id, arrival) in [
+        (Role::Editor, 86400, correct_id, 1),
+        (Role::Reader, 86401, correct_id, 1),
+        (Role::Reader, 86400, wrong_ticket.offer_id().unwrap(), 1),
+        (Role::Reader, 86400, competing.offer_id().unwrap(), 1),
+        (Role::Reader, 86400, correct_id, 86400),
+    ] {
+        let bytes = seal_offer(&signed_offer(role, deadline, id));
+        assert!(
+            guest
+                .receive_pairing(session, Slot::Offer(confirmation.request), &bytes, arrival)
+                .is_err()
+        );
+    }
+    assert!(guest.joining_link().unwrap().offer.is_none());
+    owner.approve_chat_link(&confirmation, 1).unwrap();
+    assert!(owner.approve_chat_link(&competing, 1).is_err());
+
+    drop(owner);
+    drop(guest);
+    let password = SecretString::from("test master".to_owned());
+    let mut owner = store.open(&owner_path, &password).unwrap();
+    let mut guest = store.open(&guest_path, &password).unwrap();
+    assert_eq!(guest.confirmation_link().unwrap(), confirmation);
+    round(&mut owner, &mut mailbox, 2);
+    round(&mut guest, &mut mailbox, 2);
+    assert!(guest.joining_link().unwrap().offer.is_some());
+    drop(guest);
+    let mut guest = store.open(&guest_path, &password).unwrap();
+    pump(&mut owner, &mut guest, &mut mailbox, 2);
+    assert!(guest.joining_link().unwrap().consented);
+    let members = owner.space_members().unwrap();
+    assert_eq!(members.len(), 2);
+    assert!(members.iter().any(|(c, role)| c.body.device
+        == guest.device_certificate().unwrap().body.device
+        && *role == Role::Reader));
+    assert!(!other.joining_link().unwrap().consented);
+}
+
+#[test]
+fn legacy_managed_ticket_requires_the_original_two_channel_verification() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = ProfileStore::new(Arc::new(MemoryWitness::default()));
+    let mut owner = profile(&store, &directory.path().join("owner.lbx"), "Owner");
+    let mut guest = profile(&store, &directory.path().join("guest.lbx"), "Guest");
+    owner.profile.as_mut().unwrap().pairing.issuer = Some("test-only-parent".into());
+    let id = owner.create_link(0, 1).unwrap();
+    let legacy = ticket(&owner, id);
+    assert!(
+        !serde_json::to_value(&legacy.body)
+            .unwrap()
+            .as_object()
+            .unwrap()
+            .contains_key("chat_role")
+    );
+    let url = owner.issued_links().next().unwrap().public_link().unwrap();
+    assert!(guest.join_chat_link(&url, 0).is_err());
+    assert!(guest.joining_link().is_none());
+    guest
+        .request_link(&url, &legacy.verification_code().unwrap().to_string(), 0)
+        .unwrap();
+    pump(&mut owner, &mut guest, &mut Messages::new(), 0);
+    let request = guest
+        .joining_link()
+        .unwrap()
+        .request
+        .as_ref()
+        .unwrap()
+        .hash()
+        .unwrap();
+    assert!(guest.confirmation_link().is_err());
+    assert!(
+        owner
+            .approve_chat_link(
+                &ConfirmationLink {
+                    ticket: legacy.hash().unwrap(),
+                    request
+                },
+                0
+            )
+            .is_err()
+    );
+    assert!(owner.issued_links().next().unwrap().approval.is_none());
+}
+
+#[test]
+fn additional_device_needs_a_chat_ticket_matching_its_existing_member_role() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = ProfileStore::new(Arc::new(MemoryWitness::default()));
+    let mut owner = profile(&store, &directory.path().join("owner.lbx"), "Owner");
+    let mut member = profile(&store, &directory.path().join("member.lbx"), "Member");
+    crate::vault::sharing_tests::admit(&mut owner, &mut member, Role::Editor);
+    let root = member
+        .profile
+        .as_ref()
+        .unwrap()
+        .unlock_root(&SecretString::from("test recovery".to_owned()))
+        .unwrap();
+    let (device, certificate) = crate::sync::protocol::DeviceSecret::generate(&root).unwrap();
+    owner.profile.as_mut().unwrap().pairing.issuer = Some("test-only-parent".into());
+    for role in [Role::Reader, Role::Editor] {
+        let session = owner.create_chat_link(0, 1, role).unwrap();
+        let ticket = ticket(&owner, session);
+        let contact = Contact::create(&ticket, "New laptop", certificate.clone(), &device).unwrap();
+        let confirmation = ConfirmationLink {
+            ticket: ticket.hash().unwrap(),
+            request: contact.hash().unwrap(),
+        };
+        let frame = Envelope::seal(
+            &ticket,
+            confirmation.request,
+            Kind::Request,
+            &ticket.body.controller.body,
+            &contact,
+        )
+        .unwrap();
+        owner
+            .receive_pairing(
+                session,
+                Slot::Request(confirmation.request),
+                &frame.bytes().unwrap(),
+                1,
+            )
+            .unwrap();
+        if role == Role::Reader {
+            assert!(matches!(
+                owner.review_chat_link(&confirmation, 1),
+                Err(VaultError::InvitationRoleMismatch)
+            ));
+            assert!(matches!(
+                owner.approve_chat_link(&confirmation, 1),
+                Err(VaultError::InvitationRoleMismatch)
+            ));
+        } else {
+            owner.approve_chat_link(&confirmation, 1).unwrap();
+        }
+    }
+}

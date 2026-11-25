@@ -1,7 +1,7 @@
 //! Link contact envelopes. Existing addressed consent remains the only admission path.
 
 use super::{
-    Blob, Certificate, Counter, DeviceSecret, Error, Hash, Result, Signed, SpaceDescriptor,
+    Blob, Certificate, Counter, DeviceSecret, Error, Hash, Result, Role, Signed, SpaceDescriptor,
     canonical, crypto, wire,
 };
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
@@ -86,9 +86,47 @@ pub(crate) struct TicketBody {
     pub bucket: String,
     pub space_name: String,
     pub expires_at: Counter,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chat_role: Option<Role>,
 }
 
 pub(crate) type Ticket = Signed<TicketBody>;
+
+/// Returned through the trusted conversation. Both hashes identify exact signed objects.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ConfirmationLink {
+    pub ticket: Hash,
+    pub request: Hash,
+}
+
+impl ConfirmationLink {
+    const PREFIX: &str = "lockbox://confirm/";
+
+    pub fn link(&self) -> String {
+        format!("{}{}/{}", Self::PREFIX, self.ticket, self.request)
+    }
+
+    pub fn parse(value: &str) -> Result<Self> {
+        let value = value.trim();
+        if value.len() != Self::PREFIX.len() + 64 + 1 + 64 {
+            return Err(Error::InvalidEncoding);
+        }
+        let (ticket, request) = value
+            .strip_prefix(Self::PREFIX)
+            .and_then(|s| s.split_once('/'))
+            .ok_or(Error::InvalidInvitation)?;
+        Ok(Self {
+            ticket: ticket.parse()?,
+            request: request.parse()?,
+        })
+    }
+
+    // Existing addressed offers authenticate their ID with the controller signature.
+    pub(crate) fn offer_id(&self) -> Result<Hash> {
+        Hash::digest_canonical(b"lockbox.pairing.chat-offer\0", self)
+    }
+}
 
 /// Public locator. Its complete ticket hash pins the downloaded signed document;
 /// storage credentials and the independent verification code remain separate.
@@ -204,7 +242,8 @@ impl Ticket {
         body.controller.verify()?;
         let endpoint = url::Url::parse(&body.endpoint).map_err(|_| Error::InvalidInvitation)?;
         let bucket = body.bucket.as_bytes();
-        if body.controller.body.root_key != body.descriptor.owner_root
+        if body.chat_role == Some(Role::Owner)
+            || body.controller.body.root_key != body.descriptor.owner_root
             || !valid_name(&body.space_name)
             || body.endpoint.len() > 2048
             || body

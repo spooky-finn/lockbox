@@ -56,6 +56,9 @@ pub(crate) struct JoiningLink {
     pub ticket: Ticket,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub managed: Option<ManagedLink>,
+    /// Set only by explicit Join after opening a signed managed chat link.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chat_join: Option<Hash>,
     pub proof_verified: bool,
     pub request: Option<Contact>,
     pub offer: Option<Invitation>,
@@ -93,6 +96,16 @@ impl PairingState {
             || self.issued.values().any(|l| l.managed.is_some())
     }
 
+    pub fn uses_chat_links(&self) -> bool {
+        self.issued
+            .values()
+            .any(|l| l.ticket.body.chat_role.is_some())
+            || self
+                .joining
+                .values()
+                .any(|l| l.ticket.body.chat_role.is_some())
+    }
+
     pub fn uses_short_links(&self) -> bool {
         self.resolving.is_some()
             || self
@@ -106,7 +119,7 @@ impl PairingState {
             Some(link) => {
                 link.verify_mailbox().is_ok() && link.body.ticket.hash().ok() == ticket.hash().ok()
             }
-            None => ticket.verify_ticket().is_ok(),
+            None => ticket.body.chat_role.is_none() && ticket.verify_ticket().is_ok(),
         }
     }
 
@@ -133,6 +146,11 @@ impl PairingState {
                     })
                     && link.approval.as_ref().is_none_or(|approval| {
                         link.requests.contains_key(&approval.request)
+                            && link
+                                .ticket
+                                .body
+                                .chat_role
+                                .is_none_or(|role| approval.role == role)
                             && !link.rejected.contains(&approval.request)
                             && matches!(approval.role, Role::Reader | Role::Editor | Role::Owner)
                     })
@@ -144,6 +162,12 @@ impl PairingState {
             && self.joining.iter().all(|(id, link)| {
                 *id == link.ticket.body.id
                     && Self::valid_mailbox(&link.ticket, link.managed.as_ref())
+                    && link.chat_join
+                        == link
+                            .ticket
+                            .body
+                            .chat_role
+                            .and_then(|_| link.ticket.hash().ok())
                     && link
                         .request
                         .as_ref()

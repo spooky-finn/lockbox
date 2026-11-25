@@ -4,7 +4,7 @@
 use crate::{
     sync::protocol::{
         Admission, AdmissionReceipt, Certificate, Error, Hash, Invitation, Machine, Role, Signed,
-        SpaceDescriptor, canonical, canonical_eq,
+        SpaceDescriptor, canonical, canonical_eq, pairing::ConfirmationLink,
     },
     vault::{
         InvitationStatus, Result, Vault,
@@ -148,13 +148,24 @@ impl Vault {
         role: Role,
         expires_at: Option<u64>,
     ) -> Result<Invitation> {
+        self.issue_link_offer(recipient, role, expires_at, None)
+    }
+
+    pub(super) fn issue_link_offer(
+        &mut self,
+        recipient: Signed<Certificate>,
+        role: Role,
+        expires_at: Option<u64>,
+        chat: Option<ConfirmationLink>,
+    ) -> Result<Invitation> {
         self.ensure_profile_writable()?;
         self.ensure_sync_projection()?;
         let profile = self.profile.as_ref().ok_or(Error::UnauthorizedDevice)?;
         let state = profile.sync.as_ref().ok_or(Error::UnauthorizedDevice)?;
         let recipient_bytes = canonical(&recipient)?;
         let existing = profile.sharing.issued.values().find(|record| {
-            !record.cancelled
+            record.chat_confirmation == chat
+                && !record.cancelled
                 && record.admission.is_none()
                 && record.invitation.descriptor() == &state.descriptor()
                 && crate::serialization::canonical_matches(
@@ -169,13 +180,18 @@ impl Vault {
             Some(record) => record.invitation.clone(),
             None => {
                 Self::sharing_capacity(&profile.sharing)?;
-                Machine::offer_named_invitation(
+                let offer_id = chat.map(|c| c.offer_id()).transpose()?;
+                if offer_id.is_some_and(|id| profile.sharing.issued.contains_key(&id)) {
+                    return Err(Error::InvitationUsed.into());
+                }
+                Machine::offer_with_id(
                     state,
                     &profile.sync_secret(),
                     Some(&profile.space_name),
                     recipient,
                     role,
                     expires_at,
+                    offer_id,
                 )?
             }
         };
@@ -185,6 +201,7 @@ impl Vault {
                 .entry(invitation.id())
                 .or_insert_with(|| IssuedInvitation {
                     invitation: invitation.clone(),
+                    chat_confirmation: chat,
                     cancelled: false,
                     admission: None,
                     receipt: None,
