@@ -18,7 +18,7 @@ Check wrong-ticket references, out-of-order requests, competing devices, restart
 
 ## Tasks
 
-- [ ] Add optional signed chat role to TicketBody and canonical ConfirmationLink in sync/protocol/pairing. Implement role-bound creation, explicit trusted Join, confirmation lookup and approval, and exact-term automatic consent in vault/pairing. Exercise both legacy and trusted paths in vault/tests/pairing.rs.
-- [ ] In sharing/views/links, add owner role at issuance, guest Join with signed preview, guest confirmation copy and owner confirmation paste/review. Add English and Russian strings and view regressions.
-- [ ] In desktop/links route native confirmation to the issuing owner's sharing screen, preserving pending input across unlock; cover wrong profile, locked owner and absence of approval on open.
-- [ ] Update invitation documentation. Review all three integrations, run cargo test --locked and cargo clippy --locked --all-targets -- -D warnings, and verify formatting.
+- [x] Add optional signed chat role to TicketBody and canonical ConfirmationLink in sync/protocol/pairing. Implement role-bound creation, explicit trusted Join, confirmation lookup and approval, and exact-term automatic consent in vault/pairing. Exercise both legacy and trusted paths in vault/tests/pairing.rs.
+- [x] In sharing/views/links, add owner role at issuance, guest Join with signed preview, guest confirmation copy and owner confirmation paste/review. Add English and Russian strings and view regressions.
+- [x] In desktop/links route native confirmation to the issuing owner's sharing screen, preserving pending input across unlock; cover wrong profile, locked owner and absence of approval on open.
+- [x] Update invitation documentation. Review all three integrations, run cargo test --locked and cargo clippy --locked --all-targets -- -D warnings, and verify formatting.
