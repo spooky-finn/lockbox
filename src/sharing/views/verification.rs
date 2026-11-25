@@ -15,6 +15,7 @@ use dioxus::prelude::*;
 #[derive(Clone, Copy)]
 pub(super) enum CopyTarget {
     Identity,
+    Confirmation,
     InvitationCode,
     Link(crate::sync::protocol::Hash),
     LinkCode(crate::sync::protocol::Hash),
@@ -40,6 +41,13 @@ pub(super) fn copy(state: Session, language: Language, target: CopyTarget) -> bo
     edit_unlocked(state, |unlocked| {
         let text = match target {
             CopyTarget::Identity => message(unlocked, language),
+            CopyTarget::Confirmation => match unlocked.vault.confirmation_link() {
+                Ok(confirmation) => Some(confirmation.link()),
+                Err(error) => {
+                    unlocked.error = Some(error.to_string());
+                    None
+                }
+            },
             CopyTarget::InvitationCode => unlocked
                 .sharing
                 .output

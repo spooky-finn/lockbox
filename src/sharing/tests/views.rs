@@ -94,7 +94,7 @@ fn short_link_copy_waits_for_upload_and_recipient_can_edit_a_pending_download() 
     assert!(html.contains("id=\"pairing-link\""));
 }
 
-fn vault(directory: &tempfile::TempDir, name: &str) -> Vault {
+pub(super) fn vault(directory: &tempfile::TempDir, name: &str) -> Vault {
     ProfileStore::new(Arc::new(MemoryWitness::default()))
         .create_shared(
             directory.path().join(format!("{name}.lbx")),

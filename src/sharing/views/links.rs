@@ -10,14 +10,21 @@ use crate::{
         role_text,
         verification::{self, CopyTarget, DeviceVerification},
     },
-    sync::protocol::{Hash, Role, pairing::ClosedReason},
+    sync::protocol::{
+        Error, Hash, Role,
+        pairing::{ClosedReason, ConfirmationLink},
+    },
 };
 use dioxus::prelude::*;
 
-#[derive(Clone, Copy)]
+mod chat;
+use chat::{ConfirmationReview, JoinDraft, ReturnConfirmation};
+
 enum Command {
-    Create,
+    Create(Role),
     Request,
+    Join(String),
+    ApproveChat(ConfirmationLink),
     Approve(Hash, Hash, Role, bool),
     Reject(Hash, Hash),
     Cancel(Hash),
@@ -40,16 +47,35 @@ fn act(command: Command) {
         u.sharing.links.suspend();
         u.error = (|| -> crate::vault::Result<()> {
             match command {
-                Command::Create => {
-                    u.vault.create_link(now, u.sharing.links.days)?;
+                Command::Create(role) => {
+                    if u.vault.has_invite_issuer() {
+                        u.vault.create_chat_link(now, u.sharing.links.days, role)?;
+                    } else {
+                        u.vault.create_link(now, u.sharing.links.days)?;
+                    }
                 }
-                Command::Request => {
-                    u.vault
-                        .request_link(&u.sharing.links.link, &u.sharing.links.code, now)?;
+                Command::Request | Command::Join(_) => {
+                    if let Command::Join(reviewed) = command {
+                        if reviewed != u.sharing.links.link {
+                            return Err(Error::InvalidInvitation.into());
+                        }
+                        u.vault.join_chat_link(&reviewed, now)?;
+                    } else {
+                        u.vault
+                            .request_link(&u.sharing.links.link, &u.sharing.links.code, now)?;
+                    }
                     u.sharing.joining = true;
                     u.sharing.links.link.clear();
                     u.sharing.links.code.clear();
                     u.sync.suspend();
+                }
+                Command::ApproveChat(reviewed) => {
+                    if ConfirmationLink::parse(&u.sharing.links.confirmation)? != reviewed {
+                        return Err(Error::InvalidInvitation.into());
+                    }
+                    u.sync.suspend();
+                    u.vault.approve_chat_link(&reviewed, now)?;
+                    u.sharing.links.confirmation.clear();
                 }
                 Command::Approve(session, request, role, verified) => {
                     u.sync.suspend();
@@ -134,6 +160,7 @@ fn OwnerLinks(blocked: bool) -> Element {
     let Screen::Unlocked(u) = &*screen else {
         return rsx! {};
     };
+    let mut role = use_signal(|| Role::Reader);
     let mut access_grant = use_signal(|| zeroize::Zeroizing::new(String::new()));
     let checking = u.sharing.links.checking_issuer();
     let managed = u.vault.has_invite_issuer();
@@ -141,7 +168,7 @@ fn OwnerLinks(blocked: bool) -> Element {
     rsx! {
         section { class: "settings-section stack", aria_label: language.text(Text::LinkInvitations),
             h2 { {language.text(Text::LinkInvitations)} }
-            p { class: "muted", {language.text(Text::LinkOwnerHint)} }
+            p { class: "muted", {language.text(if managed { Text::ChatOwnerHint } else { Text::LinkOwnerHint })} }
             if !managed {
                 details { class: "sharing-file-options",
                     summary { {language.text(Text::AutomaticStorage)} }
@@ -157,8 +184,19 @@ fn OwnerLinks(blocked: bool) -> Element {
                     }, {language.text(if checking {Text::CheckingStorageGrant} else {Text::EnableAutomaticStorage})} }
                 }
             }
+            if !u.sharing.links.confirmation.is_empty() || u.vault.issued_links().any(|l| l.ticket.body.chat_role.is_some() && l.closed.is_none()) {
+                ConfirmationReview { blocked }
+            }
             for link in u.vault.issued_links() {
                 LinkCard { key: "{link.ticket.body.id}", session: link.ticket.body.id, blocked }
+            }
+            if managed {
+                label { r#for: "link-role", {language.text(Text::SharingAccessRole)} }
+                select { id: "link-role", value: if role() == Role::Editor { "editor" } else { "reader" }, disabled: blocked,
+                    onchange: move |event| role.set(if event.value() == "editor" { Role::Editor } else { Role::Reader }),
+                    option { value: "reader", {language.text(Text::SharingReader)} }
+                    option { value: "editor", {language.text(Text::SharingEditor)} }
+                }
             }
             details { class: "sharing-file-options",
                 summary { {language.text(Text::SharingExpiry)} ": "
@@ -172,7 +210,7 @@ fn OwnerLinks(blocked: bool) -> Element {
                     if !managed { option { value: "30", {language.text(Text::SharingThirtyDays)} } }
                 }
             }
-            button { class: if has_active { "quiet" } else { "primary" }, disabled: blocked, onclick: move |_| act(Command::Create), {language.text(Text::LinkCreate)} }
+            button { class: if has_active { "quiet" } else { "primary" }, disabled: blocked, onclick: move |_| act(Command::Create(role())), {language.text(Text::LinkCreate)} }
         }
     }
 }
@@ -209,21 +247,25 @@ fn LinkCard(session: Hash, blocked: bool) -> Element {
                             button { class: "quiet", disabled: blocked, onclick: move |_| act(Command::Retry), {language.text(Text::LinkRetryUpload)} }
                         }
                     }
-                    p { class: "muted", {language.text(Text::LinkCodeHint)} }
-                    div { class: "actions sharing-actions",
-                        button { class: "quiet", onclick: move |_| copied.set(verification::copy(state, language, CopyTarget::LinkCode(session))), {language.text(Text::SharingCopyCode)} }
-                    }
-                    details { class: "sharing-message-preview",
-                        summary { {language.text(Text::LinkShow)} }
-                        if ready {
-                            pre { class: "sharing-message", "{link.public_link().unwrap_or_default()}" }
+                    if let Some(role) = link.ticket.body.chat_role {
+                        p { {language.text(role_text(role))} }
+                    } else {
+                        p { class: "muted", {language.text(Text::LinkCodeHint)} }
+                        div { class: "actions sharing-actions",
+                            button { class: "quiet", onclick: move |_| copied.set(verification::copy(state, language, CopyTarget::LinkCode(session))), {language.text(Text::SharingCopyCode)} }
                         }
-                        p { {language.text(Text::SharingVerificationCode)} }
-                        code { class: "sharing-code", "{link.ticket.verification_code().map(|code| code.to_string()).unwrap_or_default()}" }
+                        details { class: "sharing-message-preview",
+                            summary { {language.text(Text::LinkShow)} }
+                            if ready {
+                                pre { class: "sharing-message", "{link.public_link().unwrap_or_default()}" }
+                            }
+                            p { {language.text(Text::SharingVerificationCode)} }
+                            code { class: "sharing-code", "{link.ticket.verification_code().map(|code| code.to_string()).unwrap_or_default()}" }
+                        }
+                        if ready && link.requests.is_empty() { p { role: "status", {language.text(Text::LinkWaitingRequests)} } }
                     }
-                    if ready && link.requests.is_empty() { p { role: "status", {language.text(Text::LinkWaitingRequests)} } }
                 } else {
-                    p { role: "status", {language.text(Text::LinkApprovedWaiting)} }
+                    p { role: "status", {language.text(if link.ticket.body.chat_role.is_some() { Text::ChatApproved } else { Text::LinkApprovedWaiting })} }
                     if link.managed.is_some() && link.approval.as_ref().and_then(|a| a.invitation).is_some_and(|id| matches!(u.vault.invitation_status(id,0), Ok(crate::vault::InvitationStatus::Admitted))) {
                         details {
                             summary { {language.text(Text::ExpiredMailbox)} }
@@ -232,8 +274,10 @@ fn LinkCard(session: Hash, blocked: bool) -> Element {
                         }
                     }
                 }
-                for (request, _) in link.requests.iter().filter(|(request, _)| !link.rejected.contains(request)) {
-                    RequestCard { key: "{session}:{request}", session, request: *request, blocked }
+                if link.ticket.body.chat_role.is_none() {
+                    for (request, _) in link.requests.iter().filter(|(request, _)| !link.rejected.contains(request)) {
+                        RequestCard { key: "{session}:{request}", session, request: *request, blocked }
+                    }
                 }
                 button { class: "quiet", disabled: blocked, onclick: move |_| act(Command::Cancel(session)), {language.text(Text::LinkCancel)} }
             }
@@ -341,7 +385,16 @@ fn JoinLink(blocked: bool) -> Element {
                     p { role: "status", {language.text(closed_text(reason))} }
                     button { class: "primary", disabled: blocked, onclick: move |_| { if let Some(session) = session { act(Command::Dismiss(session)); } }, {language.text(Text::LinkTryAnother)} }
                 } else {
-                    if !link.proof_verified {
+                    if let Some(role) = link.ticket.body.chat_role {
+                        p { {language.text(role_text(role))} }
+                        if link.consented {
+                            p { role: "status", {language.text(Text::LinkConnecting)} }
+                        } else if link.request.is_some() && link.proof_verified {
+                            ReturnConfirmation {}
+                        } else {
+                            p { role: "status", {language.text(Text::LinkChecking)} }
+                        }
+                    } else if !link.proof_verified {
                         p { role: "status", {language.text(Text::LinkChecking)} }
                     } else if let Some(offer) = &link.offer {
                         if link.consented {
@@ -354,25 +407,14 @@ fn JoinLink(blocked: bool) -> Element {
                     } else {
                         p { role: "status", {language.text(Text::LinkWaitingApproval)} }
                     }
-                    DeviceVerification {}
+                    if link.ticket.body.chat_role.is_none() { DeviceVerification {} }
                     button { class: "quiet", disabled: blocked, onclick: move |_| act(Command::Retry), {language.text(Text::LinkRetry)} }
                     if !link.consented {
                         button { class: "quiet", disabled: blocked, onclick: move |_| { if let Some(session) = session { act(Command::Dismiss(session)); } }, {language.text(Text::LinkWithdraw)} }
                     }
                 }
             } else {
-                p { class: "muted", {language.text(Text::LinkJoinHint)} }
-                label { r#for: "pairing-link", {language.text(Text::LinkPaste)} }
-                textarea { id: "pairing-link", rows: 3, maxlength: crate::sync::protocol::pairing::MAX_LINK_BYTES as i64,
-                    autocomplete: "off", spellcheck: "false", value: u.sharing.links.link.as_str(), disabled: blocked,
-                    oninput: move |event| edit_unlocked(state, |u| u.sharing.links.link = event.value()),
-                }
-                label { r#for: "pairing-code", {language.text(Text::SharingVerificationCode)} }
-                input { id: "pairing-code", maxlength: 64, autocomplete: "off", spellcheck: "false", value: u.sharing.links.code.as_str(), disabled: blocked,
-                    oninput: move |event| edit_unlocked(state, |u| u.sharing.links.code = event.value()),
-                }
-                p { class: "muted", {language.text(Text::LinkCodeHint)} }
-                button { class: "primary", disabled: blocked || u.sharing.links.link.trim().is_empty() || u.sharing.links.code.trim().is_empty(), onclick: move |_| act(Command::Request), {language.text(Text::LinkSendRequest)} }
+                JoinDraft { blocked }
             }
         }
     }
@@ -386,3 +428,7 @@ fn closed_text(reason: ClosedReason) -> Text {
         ClosedReason::Rejected => Text::LinkRejected,
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/chat_links.rs"]
+mod tests;

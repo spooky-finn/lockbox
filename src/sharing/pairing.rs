@@ -49,6 +49,7 @@ pub(crate) struct Pairing {
     cursors: BTreeMap<Hash, Option<String>>,
     seen: BTreeMap<Hash, BTreeSet<Hash>>,
     pub link: String,
+    pub confirmation: String,
     pub code: String,
     pub days: u64,
 }
@@ -73,6 +74,7 @@ impl Pairing {
             cursors: BTreeMap::new(),
             seen: BTreeMap::new(),
             link: String::new(),
+            confirmation: String::new(),
             code: String::new(),
             days: 7,
         }
