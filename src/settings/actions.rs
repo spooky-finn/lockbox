@@ -77,7 +77,7 @@ pub(crate) fn set_theme_preset(preset: ThemePreset) {
 }
 
 pub(crate) fn set_border_radius(radius: Option<u8>) {
-    update_appearance(|appearance| appearance.border_radius = radius);
+    update_preferences(|config| config.appearance.border_radius = radius);
 }
 
 fn update_appearance(change: impl FnOnce(&mut Appearance)) {

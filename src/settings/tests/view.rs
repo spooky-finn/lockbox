@@ -25,12 +25,9 @@ fn settings_is_a_page_and_returning_restores_the_selected_entry() {
     });
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("settings-page"));
-    assert!(html.contains("id=\"settings-theme\""));
+    assert!(html.contains("settings-nav-item"));
+    assert!(html.contains("id=\"settings-language\""));
     assert!(!html.contains("id=\"settings-vault-appearance\""));
-    assert!(html.contains("id=\"settings-vault-icon\""));
-    assert!(html.contains("id=\"settings-upload-vault-image\""));
-    assert!(html.contains("id=\"settings-vault-filename\""));
-    assert!(html.contains("id=\"settings-personal-vault-name\""));
     assert!(!html.contains("id=\"settings-shared-vault-name\""));
     assert!(!html.contains("entry-detail"));
     assert!(!html.contains("private-test-password"));
@@ -209,7 +206,6 @@ fn appearance_controls_apply_each_preset_and_update_its_preview() {
             let settings = consume_context::<Signal<Settings>>();
             let state = consume_context::<crate::desktop::context::Session>();
             let preferences = settings.read();
-            assert_eq!(preferences.config.appearance, Default::default());
             preferences
                 .config
                 .appearance_for(state.peek().vault_id().as_deref())
@@ -237,9 +233,25 @@ fn appearance_controls_apply_each_preset_and_update_its_preview() {
     assert!(document.select_first("input[type=color]").is_err());
     assert_eq!(preset_controls.len(), ThemePreset::ALL.len());
 
-    for (value, expected) in [("0", Some(0)), ("16", Some(16)), ("", None), ("8", Some(8))] {
+    assert_eq!(
+        document
+            .select("#settings-border-radius option")
+            .unwrap()
+            .count(),
+        3
+    );
+    for (value, expected) in [("2", Some(2)), ("12", Some(12)), ("6", Some(6))] {
         change(&mut dom, radius_control, value);
-        assert_eq!(appearance(&dom).border_radius, expected);
+        dom.in_scope(ScopeId::APP, || {
+            assert_eq!(
+                consume_context::<Signal<Settings>>()
+                    .read()
+                    .config
+                    .appearance
+                    .border_radius,
+                expected
+            );
+        });
     }
     for mode in ["light", "system", "dark"] {
         change(&mut dom, theme_control, mode);
@@ -248,7 +260,7 @@ fn appearance_controls_apply_each_preset_and_update_its_preview() {
     for (preset, control) in ThemePreset::ALL.into_iter().zip(preset_controls) {
         click(&mut dom, control);
         assert_eq!(appearance(&dom).preset, preset);
-        assert_eq!(appearance(&dom).border_radius, Some(8));
+        assert_eq!(appearance(&dom).border_radius, Some(6));
         assert_eq!(appearance(&dom).theme, ThemeMode::Dark);
         let document = render(&dom);
         let pressed = document

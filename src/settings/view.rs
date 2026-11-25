@@ -43,7 +43,25 @@ fn LanguageSelect(id: &'static str) -> Element {
 }
 
 #[component]
-pub(crate) fn SettingsView() -> Element {
+pub(crate) fn SettingsSidebar(mut section: Signal<u8>) -> Element {
+    let language = use_language();
+    let state = use_context::<Session>();
+    rsx! {
+        aside { class: "sidebar settings-sidebar",
+            button { class: "quiet settings-nav-back", r#type: "button", onclick: move |_| edit_unlocked(state, |u| u.page = Page::Vault),
+                Symbol { icon: Icon::ArrowLeft } {language.text(Text::BackToVault)}
+            }
+            nav { aria_label: language.text(Text::Settings),
+                for (index, label) in [(0, Text::General), (1, Text::VaultSettings), (2, Text::Appearance), (3, Text::Security), (4, Text::ImportVault)] {
+                    button { class: "quiet settings-nav-item", r#type: "button", aria_current: if section() == index { "page" } else { "false" }, onclick: move |_| section.set(index), {language.text(label)} }
+                }
+            }
+        }
+    }
+}
+
+#[component]
+pub(crate) fn SettingsView(section: Signal<u8>) -> Element {
     let language = use_language();
     let state = use_context::<Session>();
     let settings = use_context::<Signal<Settings>>();
@@ -62,7 +80,7 @@ pub(crate) fn SettingsView() -> Element {
                 }
             }
             p { class: "muted", {language.text(Text::SettingsAreSavedAutomaticallyAndAppliedImmediately)} }
-            section { class: "settings-section stack",
+            if section() == 0 { section { class: "settings-section stack",
                 h2 { {language.text(Text::General)} }
                 div { class: "preference-row",
                     label { r#for: "settings-language", {language.text(Text::InterfaceLanguage)} }
@@ -75,9 +93,10 @@ pub(crate) fn SettingsView() -> Element {
                     }
                 }
             }
-            VaultNames {}
-            AppearanceSection {}
-            section { class: "settings-section stack",
+            }
+            if section() == 1 { VaultNames {} }
+            if section() == 2 { AppearanceSection {} }
+            if section() == 3 { section { class: "settings-section stack",
                 h2 { {language.text(Text::Security)} }
                 div { class: "preference-row",
                     div { class: "preference-copy",
@@ -123,12 +142,8 @@ pub(crate) fn SettingsView() -> Element {
                     p { class: "muted", {language.text(Text::TouchIDIsUnavailableOnThisDevice)} }
                 }
             }
-            ImportSection {}
-            button { class: "quiet settings-back", r#type: "button",
-                onclick: move |_| edit_unlocked(state, |u| u.page = Page::Vault),
-                Symbol { icon: Icon::ArrowLeft }
-                {language.text(Text::BackToVault)}
             }
+            if section() == 4 { ImportSection {} }
         }
     }
 }
@@ -349,21 +364,18 @@ fn AppearanceSection() -> Element {
             }
             div { class: "preference-row",
                 label { r#for: "settings-border-radius", {language.text(Text::BorderRadius)} }
-                select { id: "settings-border-radius", value: appearance.border_radius.map(|r| r.to_string()).unwrap_or_default(),
+                select { id: "settings-border-radius", value: match config.appearance.border_radius.unwrap_or(6) { 0..=3 => "2", 4..=9 => "6", _ => "12" },
                     onchange: move |event| {
-                        let value = event.value();
-                        if value.is_empty() {
-                            actions::set_border_radius(None);
-                        } else if let Ok(radius) = value.parse::<u8>() {
+                        if let Ok(radius @ (2 | 6 | 12)) = event.value().parse::<u8>() {
                             actions::set_border_radius(Some(radius));
                         }
                     },
-                    option { value: "", selected: appearance.border_radius.is_none(), {language.text(Text::ThemeDefault)} }
-                    for radius in 0u8..=16 {
-                        option { value: "{radius}", selected: appearance.border_radius == Some(radius), "{radius} px" }
-                    }
+                    option { value: "2", {language.text(Text::CornersSquare)} }
+                    option { value: "6", {language.text(Text::CornersSemiRounded)} }
+                    option { value: "12", {language.text(Text::CornersRounded)} }
                 }
             }
+
             div { id: "settings-presets", class: "theme-grid", role: "group", aria_labelledby: "settings-appearance",
                 for preset in ThemePreset::ALL {
                     ThemeCard { key: "{preset.code()}", preset, dark, selected: appearance.preset == preset }

@@ -55,6 +55,7 @@ pub(crate) fn UnlockedView() -> Element {
         return rsx! {};
     };
 
+    let settings_section = use_signal(|| 0u8);
     let records_open = matches!(layout.page, Page::History | Page::Trash);
     let settings_open = layout.page == Page::Settings;
     let sharing_open = layout.page == Page::Sharing;
@@ -74,7 +75,7 @@ pub(crate) fn UnlockedView() -> Element {
         }
         div { class: if has_detail { "workspace has-detail" } else { "workspace" },
             onkeydown: move |event| handle_record_shortcut(state, event),
-            Sidebar {}
+            if settings_open { crate::settings::view::SettingsSidebar { section: settings_section } } else { Sidebar {} }
             section { class: "detail",
                 if !records_open && (settings_open || sharing_open || (!editing && has_detail)) {
                     IconButton { class: "mobile-back quiet", icon: Icon::ArrowLeft,
@@ -91,7 +92,7 @@ pub(crate) fn UnlockedView() -> Element {
 
                 if let Some(error) = &layout.error { p { class: "error", role: "alert", {language.message(error)} } }
                 if let Some(error) = layout.protection_error { ProtectionNotice { error } }
-                if settings_open { crate::settings::view::SettingsView {} }
+                if settings_open { crate::settings::view::SettingsView { section: settings_section } }
                 else if sharing_open { crate::sharing::views::SharingView {} }
                 else if records_open { crate::records::views::history::RecordsView { key: "{layout.selected:?}:{layout.page == Page::Trash}" } }
                 else { VaultContent {} }
