@@ -328,3 +328,62 @@ fn failed_issuer_verification_is_polled_without_an_invitation_and_can_retry() {
     links.suspend();
     assert!(!links.checking_issuer());
 }
+
+#[test]
+fn returned_confirmation_waits_for_its_own_request_in_the_background_mailbox() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut owner = profile(&dir, "Owner");
+    owner.test_profile_mut().unwrap().pairing.issuer = Some("test-only-issuer".into());
+    let mut guest = profile(&dir, "Guest");
+    let mut other = profile(&dir, "Other");
+    let guest_device = guest.device_certificate().unwrap().body.device;
+    let factory: Arc<dyn MailboxFactory> = Arc::new(Factory(Arc::new(Memory::default())));
+    let mut controller = Pairing::new(Some(factory.clone()));
+    // This test ends at admission. Provider registration has its own suite.
+    controller.credential_due = Instant::now() + Duration::from_secs(600);
+    let mut recipient = Pairing::new(Some(factory.clone()));
+    let mut forwarded = Pairing::new(Some(factory));
+    let mut owner_sync = SpaceSync::default();
+    let mut guest_sync = SpaceSync::default();
+    let mut other_sync = SpaceSync::default();
+
+    let session = owner.create_chat_link(0, 1, Role::Editor).unwrap();
+    cycle(&mut controller, &mut owner, &mut owner_sync);
+    let invite = owner.export_link(session, false).unwrap();
+    guest.join_chat_link(&invite, 1).unwrap();
+    other.join_chat_link(&invite, 1).unwrap();
+
+    // The intended guest has a signed request locally. Only the forwarded
+    // invitation holder's request has reached the controller.
+    cycle(&mut recipient, &mut guest, &mut guest_sync);
+    let confirmation = guest.confirmation_link().unwrap();
+    for _ in 0..3 {
+        cycle(&mut forwarded, &mut other, &mut other_sync);
+        cycle(&mut controller, &mut owner, &mut owner_sync);
+    }
+    assert_eq!(owner.issued_links().next().unwrap().requests.len(), 1);
+    assert!(owner.approve_chat_link(&confirmation, 1).is_err());
+    assert_eq!(owner.space_members().unwrap().len(), 1);
+
+    cycle(&mut recipient, &mut guest, &mut guest_sync);
+    cycle(&mut controller, &mut owner, &mut owner_sync);
+    assert_eq!(owner.issued_links().next().unwrap().requests.len(), 2);
+    assert!(owner.review_chat_link(&confirmation, 1).is_ok());
+    assert!(owner.issued_links().next().unwrap().approval.is_none());
+
+    owner.approve_chat_link(&confirmation, 1).unwrap();
+    for _ in 0..5 {
+        cycle(&mut controller, &mut owner, &mut owner_sync);
+        cycle(&mut recipient, &mut guest, &mut guest_sync);
+        cycle(&mut forwarded, &mut other, &mut other_sync);
+    }
+    assert!(guest.joining_link().unwrap().consented);
+    assert!(!other.joining_link().unwrap().consented);
+    let members = owner.space_members().unwrap();
+    assert_eq!(members.len(), 2);
+    assert!(
+        members
+            .iter()
+            .any(|(c, r)| c.body.device == guest_device && *r == Role::Editor)
+    );
+}
