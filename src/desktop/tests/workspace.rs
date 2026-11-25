@@ -1,6 +1,26 @@
 use crate::desktop::test_support::{add, reopen, unlocked};
 
 #[test]
+fn new_entry_defaults_to_root_with_a_folder_selected() {
+    use crate::{desktop::workspace::Destination, records::folder::Folder};
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut workspace = unlocked(&dir);
+    let folder = Folder::new("Work".into(), None);
+    let folder_id = folder.id.clone();
+    workspace.vault.save_folder(folder).unwrap();
+    workspace.select_directory(Some(folder_id.clone()));
+    assert_eq!(workspace.directories.selected.as_ref(), Some(&folder_id));
+
+    workspace.navigate(Destination::NewEntry);
+    let draft = &mut workspace.draft.as_mut().unwrap().entry;
+    assert_eq!(draft.folder_id, None);
+    draft.title = "New record".into();
+    workspace.save_draft().unwrap();
+    assert_eq!(reopen(&workspace).entries[0].folder_id, None);
+}
+
+#[test]
 fn creation_event_requires_a_successful_first_save() {
     let dir = tempfile::tempdir().unwrap();
     let mut workspace = unlocked(&dir);

@@ -15,8 +15,10 @@ fn add_folder(workspace: &mut Unlocked, name: &str, parent: Option<String>) -> S
 }
 
 fn add_record(workspace: &mut Unlocked, title: &str) -> String {
+    let folder_id = workspace.directories.selected.clone();
     workspace.start_new();
     let draft = &mut workspace.draft.as_mut().unwrap().entry;
+    draft.folder_id = folder_id;
     draft.title = title.into();
     draft.password = "kept-secret".into();
     let id = draft.id.clone();

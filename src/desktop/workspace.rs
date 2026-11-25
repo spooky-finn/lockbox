@@ -183,7 +183,7 @@ impl Unlocked {
     }
 
     pub(crate) fn start_new(&mut self) {
-        self.start_new_in(self.directories.selected.clone());
+        self.start_new_in(None);
     }
 
     fn start_new_in(&mut self, folder_id: Option<String>) {
