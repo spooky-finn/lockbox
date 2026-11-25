@@ -51,8 +51,6 @@ pub(crate) fn LockedView() -> Element {
     } else {
         (None, None)
     };
-    let keyboard_previous = previous.clone();
-    let keyboard_next = next.clone();
     let cloud_restore = locked.cloud_recovery.restoring;
     let busy_status = if !busy {
         None
@@ -67,7 +65,7 @@ pub(crate) fn LockedView() -> Element {
     };
     let ready = identity_setup
         || create_password
-        || !create && locked.path.as_ref().is_some_and(|path| path.exists());
+        || !create && locked.path.as_ref().is_some_and(|path| path.is_file());
     let touch_id = ready && !create && locked.touch_id.is_some();
     let filename = locked
         .space_name
@@ -108,20 +106,6 @@ pub(crate) fn LockedView() -> Element {
     };
     rsx! {
         section { class: if base_unlock { "lock-screen base-unlock" } else if key_setup || identity_setup || cloud_password || recovering { "lock-screen recovery-screen" } else { "lock-screen" }, aria_label: language.text(if key_setup { Text::EncryptionKeySetup } else { Text::UnlockVault }),
-            onkeydown: move |event: KeyboardEvent| {
-                if busy || event.is_composing() || !event.modifiers().is_empty() {
-                    return;
-                }
-                let target = match event.key() {
-                    Key::ArrowLeft => &keyboard_previous,
-                    Key::ArrowRight => &keyboard_next,
-                    _ => return,
-                };
-                if let Some(stop) = target {
-                    event.prevent_default();
-                    profiles::select_stop(stop.clone());
-                }
-            },
             if base_unlock {
                 div { class: "locked-space-switcher", crate::desktop::space_switcher::SpaceSwitcher {} }
             }
@@ -145,9 +129,9 @@ pub(crate) fn LockedView() -> Element {
                     }
                 }
                 div { class: "unlock-heading",
-                    if let Some(stop) = previous {
-                        IconButton { class: "quiet", icon: Icon::ArrowLeft, label: language.text(Text::PreviousVault), disabled: busy,
-                            onclick: move |_| profiles::select_stop(stop.clone()),
+                    if let Some(path) = previous {
+                        IconButton { class: "quiet unlock-previous", icon: Icon::ArrowLeft, label: language.text(Text::PreviousVault), disabled: busy,
+                            onclick: move |_| profiles::select_profile(path.clone()),
                         }
                     }
                     h1 { class: "unlock-title", aria_live: base_unlock.then_some("polite"),
@@ -159,15 +143,15 @@ pub(crate) fn LockedView() -> Element {
                         else if create && locked.joining { {language.text(Text::SharingConnect)} }
                         else if create { {language.text(Text::CreateAVault)} }
                         else if let Some(name) = vault_name { "{name}" }
-                        else { {language.text(Text::YourPasswordsLockedAway)} }
+                        else { {language.text(Text::ChooseSpace)} }
                     }
-                    if let Some(stop) = next {
-                        IconButton { class: "quiet", icon: Icon::ArrowRight, label: language.text(Text::NextVault), disabled: busy,
-                            onclick: move |_| profiles::select_stop(stop.clone()),
+                    if let Some(path) = next {
+                        IconButton { class: "quiet unlock-next", icon: Icon::ArrowRight, label: language.text(Text::NextVault), disabled: busy,
+                            onclick: move |_| profiles::select_profile(path.clone()),
                         }
                     }
                 }
-                if create || recovering || !ready {
+                if create || recovering || (!ready && locked.path.is_some()) {
                     p { class: "unlock-description", title: "{path}",
                         if cloud_restore && key_setup { {language.text(Text::CloudRestoreWordsHint)} }
                         else if cloud_restore && sync_setup { {language.text(Text::CloudRestoreHint)} }
@@ -179,7 +163,7 @@ pub(crate) fn LockedView() -> Element {
                         else if cloud_password { {language.text(Text::ChooseAMasterPasswordToProtectYourLocalProfile)} }
                         else if create && locked.path.is_none() { {language.text(Text::ChooseAVaultType)} }
                         else if create { {language.format(Text::ChooseAMasterPasswordForTheNewVault, std::slice::from_ref(&filename))} }
-                        else { {language.text(Text::OpenAVaultOrCreateOneToStoreYourPasswords)} }
+                        else { {language.text(Text::SpaceFileMissing)} }
                     }
                 }
 

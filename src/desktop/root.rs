@@ -10,6 +10,12 @@ const CSS: &str = include_str!("../../assets/app.css");
 pub fn App() -> Element {
     let state = runtime::use_runtime();
     crate::desktop::window::use_interface_zoom();
+    dioxus_core::use_hook_with_cleanup(
+        || document::eval(include_str!("../../assets/unlock-navigation.js")),
+        |navigation| {
+            let _ = navigation.send(());
+        },
+    );
     let tabs = use_context::<Signal<crate::desktop::tabs::Tabs>>();
     let active_tab = tabs.read().active;
     let theme = theme::use_theme();

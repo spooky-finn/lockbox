@@ -16,30 +16,26 @@ fn settings_with(dir: &Path, names: &[&str]) -> (Settings, Vec<PathBuf>) {
     (Settings { config, path: None }, paths)
 }
 
-fn vault(path: &Path) -> Option<CarouselStop> {
-    Some(CarouselStop::Vault(path.to_path_buf()))
-}
-
 #[test]
-fn carousel_walks_every_known_vault_then_the_open_or_create_page() {
+fn carousel_wraps_between_vaults() {
     let dir = tempfile::tempdir().unwrap();
     let (settings, paths) = settings_with(dir.path(), &["a.lbx", "b.lbx", "c.lbx"]);
 
     assert_eq!(
         adjacent_profiles(&settings, None, &[]),
-        (vault(&paths[2]), vault(&paths[0]))
+        (Some(paths[2].clone()), Some(paths[0].clone()))
     );
     assert_eq!(
         adjacent_profiles(&settings, Some(&paths[0]), &[]),
-        (Some(CarouselStop::Add), vault(&paths[1]))
+        (Some(paths[2].clone()), Some(paths[1].clone()))
     );
     assert_eq!(
         adjacent_profiles(&settings, Some(&paths[1]), &[]),
-        (vault(&paths[0]), vault(&paths[2]))
+        (Some(paths[0].clone()), Some(paths[2].clone()))
     );
     assert_eq!(
         adjacent_profiles(&settings, Some(&paths[2]), &[]),
-        (vault(&paths[1]), Some(CarouselStop::Add))
+        (Some(paths[1].clone()), Some(paths[0].clone()))
     );
 }
 
@@ -50,7 +46,7 @@ fn carousel_skips_vaults_open_in_other_tabs() {
 
     assert_eq!(
         adjacent_profiles(&settings, None, std::slice::from_ref(&paths[0])),
-        (vault(&paths[1]), vault(&paths[1]))
+        (Some(paths[1].clone()), Some(paths[1].clone()))
     );
     assert_eq!(adjacent_profiles(&settings, None, &paths), (None, None));
 }
@@ -66,6 +62,6 @@ fn missing_files_are_left_out() {
 
     assert_eq!(
         adjacent_profiles(&settings, Some(&paths[0]), &[]),
-        (Some(CarouselStop::Add), Some(CarouselStop::Add))
+        (None, None)
     );
 }

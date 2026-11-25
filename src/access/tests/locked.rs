@@ -10,8 +10,8 @@ fn arrows_change_the_centered_vault_name_and_clear_the_password() {
         settings::{language::Language, state::Settings},
     };
     use dioxus::{
-        dioxus_core::Mutation,
-        html::{EventData, SerializedHtmlEventConverter, SerializedKeyboardData},
+        dioxus_core::{AttributeValue, Mutation},
+        html::{EventData, SerializedHtmlEventConverter, SerializedMouseData},
         prelude::*,
     };
     dioxus::html::set_event_converter(Box::new(SerializedHtmlEventConverter));
@@ -36,14 +36,22 @@ fn arrows_change_the_centered_vault_name_and_clear_the_password() {
         consume_context::<Session>().set(Screen::Locked(Box::new(form)));
     });
     let changes = dom.render_immediate_to_vec();
-    let keydown = changes
-        .edits
-        .iter()
-        .find_map(|edit| match edit {
-            Mutation::NewEventListener { name, id } if name == "keydown" => Some(*id),
-            _ => None,
-        })
-        .unwrap();
+    let arrow = |direction: &str| {
+        let class = format!("icon-button quiet unlock-{direction}");
+        changes
+            .edits
+            .iter()
+            .find_map(|edit| match edit {
+                Mutation::SetAttribute {
+                    name: "class",
+                    value: AttributeValue::Text(value),
+                    id,
+                    ..
+                } if *value == class => Some(*id),
+                _ => None,
+            })
+            .unwrap()
+    };
     let heading = |dom: &VirtualDom, name: &str| {
         let html = dioxus_ssr::render(dom);
         assert!(html.contains(&format!(
@@ -51,25 +59,17 @@ fn arrows_change_the_centered_vault_name_and_clear_the_password() {
         )));
     };
     heading(&dom, "Personal");
-    for (key, code, path, name) in [
-        (Key::ArrowRight, Code::ArrowRight, &cloud, "Design team"),
-        (Key::ArrowLeft, Code::ArrowLeft, &local, "Personal"),
+    for (direction, path, name) in [
+        ("next", &cloud, "Design team"),
+        ("next", &local, "Personal"),
+        ("previous", &cloud, "Design team"),
+        ("previous", &local, "Personal"),
     ] {
         let event = Event::new(
-            EventData::Keyboard(SerializedKeyboardData::new(
-                key,
-                code,
-                Location::Standard,
-                false,
-                Modifiers::empty(),
-                false,
-            ))
-            .into_any(),
+            EventData::Mouse(SerializedMouseData::default()).into_any(),
             true,
         );
-        dom.runtime()
-            .handle_event("keydown", event.clone(), keydown);
-        assert!(!event.default_action_enabled());
+        dom.runtime().handle_event("click", event, arrow(direction));
         dom.render_immediate_to_vec();
         heading(&dom, name);
         dom.in_scope(ScopeId::APP, || {
@@ -82,6 +82,36 @@ fn arrows_change_the_centered_vault_name_and_clear_the_password() {
             assert!(form.password.is_empty());
         });
     }
+}
+
+#[test]
+fn arrows_return_when_another_tab_releases_a_vault() {
+    use crate::{
+        access::auth::Locked,
+        desktop::{session::Screen, tabs},
+        settings::state::Settings,
+    };
+    use dioxus::prelude::*;
+
+    let mut dom = crate::desktop::view_test_support::mounted_with_header();
+    let dir = tempfile::tempdir().unwrap();
+    let first = dir.path().join("first.lbx");
+    let second = dir.path().join("second.lbx");
+    std::fs::write(&first, []).unwrap();
+    std::fs::write(&second, []).unwrap();
+    update(&mut dom, |mut state| {
+        consume_context::<Signal<Settings>>()
+            .write()
+            .config
+            .recent_vaults = vec![first.clone(), second.clone()];
+        state.set(Screen::Locked(Box::new(Locked::new(Some(first)))));
+        tabs::new_tab();
+        state.set(Screen::Locked(Box::new(Locked::new(Some(second)))));
+    });
+    assert!(!dioxus_ssr::render(&dom).contains("unlock-next"));
+
+    update(&mut dom, |_| tabs::close(0));
+    assert!(dioxus_ssr::render(&dom).contains("unlock-next"));
 }
 
 #[test]
