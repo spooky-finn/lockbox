@@ -35,6 +35,8 @@ impl ThemeMode {
 pub struct Appearance {
     pub theme: ThemeMode,
     pub preset: ThemePreset,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub border_radius: Option<u8>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

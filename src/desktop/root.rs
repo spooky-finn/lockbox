@@ -22,7 +22,10 @@ pub fn App() -> Element {
     let theme = theme::use_theme(active_appearance);
     let settings = use_context::<Signal<crate::settings::state::Settings>>();
     let appearance = active_appearance();
-    let appearance_style = theme::preset_style(appearance.preset, theme.is_dark());
+    let mut appearance_style = theme::preset_style(appearance.preset, theme.is_dark());
+    if let Some(radius) = appearance.border_radius {
+        appearance_style.push_str(&format!("--custom-radius:{radius}px;"));
+    }
     let language = crate::desktop::i18n::use_language();
     let activity = use_hook(|| std::rc::Rc::new(std::cell::Cell::new(None::<document::Eval>)));
     let cleanup = activity.clone();

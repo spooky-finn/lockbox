@@ -347,6 +347,23 @@ fn AppearanceSection() -> Element {
                     }
                 }
             }
+            div { class: "preference-row",
+                label { r#for: "settings-border-radius", {language.text(Text::BorderRadius)} }
+                select { id: "settings-border-radius", value: appearance.border_radius.map(|r| r.to_string()).unwrap_or_default(),
+                    onchange: move |event| {
+                        let value = event.value();
+                        if value.is_empty() {
+                            actions::set_border_radius(None);
+                        } else if let Ok(radius) = value.parse::<u8>() {
+                            actions::set_border_radius(Some(radius));
+                        }
+                    },
+                    option { value: "", selected: appearance.border_radius.is_none(), {language.text(Text::ThemeDefault)} }
+                    for radius in 0u8..=16 {
+                        option { value: "{radius}", selected: appearance.border_radius == Some(radius), "{radius} px" }
+                    }
+                }
+            }
             div { id: "settings-presets", class: "theme-grid", role: "group", aria_labelledby: "settings-appearance",
                 for preset in ThemePreset::ALL {
                     ThemeCard { key: "{preset.code()}", preset, dark, selected: appearance.preset == preset }

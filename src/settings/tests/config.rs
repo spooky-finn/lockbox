@@ -19,6 +19,7 @@ fn remembered_path_survives_a_restart() {
             Appearance {
                 theme: crate::settings::appearance::ThemeMode::Dark,
                 preset: crate::settings::appearance::ThemePreset::Forest,
+                border_radius: Some(8),
             },
         )]
         .into(),
@@ -113,6 +114,7 @@ fn legacy_appearance_keeps_the_preset_and_mode() {
         Appearance {
             theme: ThemeMode::Dark,
             preset: ThemePreset::Paper,
+            border_radius: None,
         }
     );
     assert_eq!(
@@ -134,7 +136,11 @@ fn every_preset_and_mode_survives_a_restart() {
     for preset in ThemePreset::ALL {
         for theme in [ThemeMode::System, ThemeMode::Light, ThemeMode::Dark] {
             let config = Config {
-                appearance: Appearance { theme, preset },
+                appearance: Appearance {
+                    theme,
+                    preset,
+                    ..Default::default()
+                },
                 ..Config::default()
             };
             config.save(&path).unwrap();

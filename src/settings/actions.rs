@@ -76,6 +76,10 @@ pub(crate) fn set_theme_preset(preset: ThemePreset) {
     update_appearance(|appearance| appearance.preset = preset);
 }
 
+pub(crate) fn set_border_radius(radius: Option<u8>) {
+    update_appearance(|appearance| appearance.border_radius = radius);
+}
+
 fn update_appearance(change: impl FnOnce(&mut Appearance)) {
     let state = consume_context::<Session>();
     let id = match &*state.peek() {

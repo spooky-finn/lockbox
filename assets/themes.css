@@ -2,9 +2,9 @@
 [data-preset] {
     --theme-font: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
     --heading-font: var(--theme-font);
-    --button-radius: 3px;
-    --field-radius: 3px;
-    --panel-radius: 4px;
+    --button-radius: var(--custom-radius, 3px);
+    --field-radius: var(--custom-radius, 3px);
+    --panel-radius: var(--custom-radius, 4px);
     --rule: color-mix(in srgb, var(--accent) 10%, transparent);
     --accent-line: color-mix(in srgb, var(--accent) 44%, transparent);
     --lock-focus-shadow: color-mix(in srgb, var(--lock-focus) 45%, transparent);
@@ -28,63 +28,63 @@
     --pattern: repeating-linear-gradient(transparent 0 23px, var(--rule) 23px 24px);
     --sheet-edge: var(--border);
     --sheet-shadow: 0 3px 0 -1px var(--control), 0 4px 0 -1px var(--border);
-    --panel-radius: 6px;
+    --panel-radius: var(--custom-radius, 6px);
 }
 [data-preset="forest"] {
     --pattern: radial-gradient(circle, var(--rule) 1px, transparent 1px);
     --pattern-size: 12px 12px;
     --sheet-edge: var(--border);
-    --panel-radius: 10px 3px 3px 10px;
+    --panel-radius: var(--custom-radius, 10px 3px 3px 10px);
     --sheet-shadow: -3px 0 var(--accent-line);
 }
 [data-preset="ocean"] {
     --pattern: linear-gradient(var(--rule) 1px, transparent 1px), linear-gradient(90deg, var(--rule) 1px, transparent 1px);
     --pattern-size: 28px 28px;
     --sheet-edge: var(--accent-line);
-    --button-radius: 0px;
-    --field-radius: 0px;
-    --panel-radius: 0px;
+    --button-radius: var(--custom-radius, 0px);
+    --field-radius: var(--custom-radius, 0px);
+    --panel-radius: var(--custom-radius, 0px);
 }
 [data-preset="slate"] {
     --pattern: linear-gradient(var(--rule) 1px, transparent 1px), linear-gradient(90deg, var(--rule) 1px, transparent 1px);
     --pattern-size: 8px 8px;
     --sheet-edge: var(--border);
-    --button-radius: 1px;
-    --field-radius: 1px;
-    --panel-radius: 1px;
+    --button-radius: var(--custom-radius, 1px);
+    --field-radius: var(--custom-radius, 1px);
+    --panel-radius: var(--custom-radius, 1px);
 }
 [data-preset="amber"] {
     --pattern: radial-gradient(circle, var(--rule) .7px, transparent 1px), radial-gradient(circle at 25% 75%, var(--rule) .7px, transparent 1px);
     --pattern-size: 7px 9px, 11px 13px;
     --sheet-edge: var(--accent-line);
     --sheet-rule: dashed;
-    --panel-radius: 8px;
+    --panel-radius: var(--custom-radius, 8px);
 }
 [data-preset="rose"] {
     --pattern: repeating-linear-gradient(transparent 0 23px, var(--rule) 23px 24px);
     --sheet-edge: var(--border);
     --heading-font: "Iowan Old Style", Georgia, serif;
-    --panel-radius: 3px 9px 9px 3px;
+    --panel-radius: var(--custom-radius, 3px 9px 9px 3px);
 }
 [data-preset="teal"] {
     --sheet-edge: var(--border);
     --sheet-shadow: 0 3px 0 -1px var(--control), 0 4px 0 -1px var(--border), 0 6px 0 -2px var(--control), 0 7px 0 -2px var(--border);
-    --button-radius: 7px;
-    --field-radius: 7px;
-    --panel-radius: 9px;
+    --button-radius: var(--custom-radius, 7px);
+    --field-radius: var(--custom-radius, 7px);
+    --panel-radius: var(--custom-radius, 9px);
 }
 [data-preset="plum"] {
     --heading-font: "Iowan Old Style", Palatino, Georgia, serif;
     --sheet-edge: var(--border);
     --sheet-shadow: 0 4px 12px rgb(0 0 0 / 9%);
-    --button-radius: 6px;
-    --field-radius: 6px;
-    --panel-radius: 14px;
+    --button-radius: var(--custom-radius, 6px);
+    --field-radius: var(--custom-radius, 6px);
+    --panel-radius: var(--custom-radius, 14px);
 }
 [data-preset="indigo"] {
-    --button-radius: 0px;
-    --field-radius: 0px;
-    --panel-radius: 0px;
+    --button-radius: var(--custom-radius, 0px);
+    --field-radius: var(--custom-radius, 0px);
+    --panel-radius: var(--custom-radius, 0px);
     --sheet-edge: var(--accent-line);
     --pattern: repeating-linear-gradient(transparent 0 4px, var(--rule) 4px 5px);
 }

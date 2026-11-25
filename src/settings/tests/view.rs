@@ -164,14 +164,15 @@ fn appearance_controls_apply_each_preset_and_update_its_preview() {
     dioxus::html::set_event_converter(Box::new(SerializedHtmlEventConverter));
     let mut dom = VirtualDom::new(fixture);
     let changes = dom.rebuild_to_vec();
-    let theme_control = changes
+    let [theme_control, radius_control]: [_; 2] = changes
         .edits
         .iter()
         .filter_map(|edit| match edit {
             Mutation::NewEventListener { name, id } if name == "change" => Some(*id),
             _ => None,
         })
-        .next()
+        .collect::<Vec<_>>()
+        .try_into()
         .unwrap();
     let preset_controls = changes
         .edits
@@ -236,6 +237,10 @@ fn appearance_controls_apply_each_preset_and_update_its_preview() {
     assert!(document.select_first("input[type=color]").is_err());
     assert_eq!(preset_controls.len(), ThemePreset::ALL.len());
 
+    for (value, expected) in [("0", Some(0)), ("16", Some(16)), ("", None), ("8", Some(8))] {
+        change(&mut dom, radius_control, value);
+        assert_eq!(appearance(&dom).border_radius, expected);
+    }
     for mode in ["light", "system", "dark"] {
         change(&mut dom, theme_control, mode);
         assert_eq!(appearance(&dom).theme.code(), mode);
@@ -243,6 +248,7 @@ fn appearance_controls_apply_each_preset_and_update_its_preview() {
     for (preset, control) in ThemePreset::ALL.into_iter().zip(preset_controls) {
         click(&mut dom, control);
         assert_eq!(appearance(&dom).preset, preset);
+        assert_eq!(appearance(&dom).border_radius, Some(8));
         assert_eq!(appearance(&dom).theme, ThemeMode::Dark);
         let document = render(&dom);
         let pressed = document
