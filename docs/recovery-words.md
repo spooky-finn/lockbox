@@ -8,11 +8,11 @@ any space, even if connection setup is cancelled. Later Create and Join flows
 unlock and reuse this identity; they do not offer key regeneration. Switching
 between Create and Join also preserves the selected words during first setup.
 The app generates 128 bits of operating-system randomness and the BIP39 checksum.
-It never derives these words from the master password. Save the words in order before creating
+It never derives these words from the passphrase. Save the words in order before creating
 the vault; they are hidden until requested and are not retained in space files.
 Going back to sync settings preserves the confirmed phrase and clears typed
 passwords. The native local-file picker also preserves the chosen recovery key.
-The master password remains the everyday unlock credential. No additional
+The passphrase remains the everyday unlock credential. No additional
 BIP39 passphrase is used, so the 12 words alone reproduce the recovery keys.
 
 The local `identity.key` beside the preferences file holds the root key and, when
@@ -21,7 +21,7 @@ XChaCha20-Poly1305 with authenticated headers and independent password/recovery
 key slots. Files are private to the OS user. Concurrent setup cannot overwrite
 an existing identity. Forgetting a vault path does not remove the identity.
 The identity password is separate from individual space-file passwords. Its
-**Forgot master password?** action uses the same original words to reset only the
+**Recovery** action uses the same original words to reset only the
 identity password, preserving the root and leaving space passwords unchanged.
 
 An existing shared profile can supply its original root when first starting
@@ -32,11 +32,11 @@ silently reassigned. Adoption cannot reconstruct words from a root key: if the
 original words exist, recovering the identity with them saves them for future
 space recovery slots. An older random root has no corresponding recovery words.
 
-On the lock screen, select **Forgot master password?**, enter the words, and
-choose and confirm a new master password. The original password is not needed.
+On the lock screen, select **Recovery**, enter the words, and
+choose and confirm a new passphrase. The original passphrase is not needed.
 Recovery preserves the user identity, device, records, and Touch ID data key.
-For cloud profiles, the new password also protects the root capsule. Previous
-backup files retain the password they had when saved.
+For cloud profiles, the new passphrase also protects the root capsule. Previous
+backup files retain the passphrase they had when saved.
 
 Local password recovery requires the vault file or a backup. Enrolled owner cloud
 profiles also support [cloud-only recovery](cloud-recovery.txt): original words,

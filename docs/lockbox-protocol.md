@@ -88,7 +88,7 @@ Readers can export known secrets. Copy prevention is outside cryptographic model
 ## 2 Current implementation
 
 [src/vault/mod.rs](../src/vault/mod.rs) encrypts entire JSON vault with
-XChaCha20-Poly1305. Master password passes Argon2id and HKDF. Header authenticated
+XChaCha20-Poly1305. Passphrase passes Argon2id and HKDF. Header authenticated
 as associated data. New local vaults write v4 and shared profiles write v5;
 v1/v2/v3 files remain readable. Attachments are encrypted with their entries.
 Save uses temporary file, filesystem synchronization, rename, previous backup.
@@ -273,7 +273,7 @@ K_checkpoint = HKDF-SHA256(
 ```
 
 `\0` denotes one zero byte. IDs and context in these formulas are decoded raw
-bytes, not hex text. Distinct fixed prefixes separate purposes. Master password
+bytes, not hex text. Distinct fixed prefixes separate purposes. Passphrase
 does not derive shared space keys; changing it only rewraps local profile.
 
 Nonce generated once while preparing immutable encrypted object. Retry resends
@@ -1579,7 +1579,7 @@ to lost device's unrelated HPKE key.
 | Loss | Required recovery |
 |---|---|
 | Ordinary device lost | Owner removes certificate; new device gets fresh keys and admission |
-| Master password lost but trusted session still open | Explicit export or local rewrapping procedure; preserve secret confirmation rules |
+| Passphrase lost but trusted session still open | Explicit export or local rewrapping procedure; preserve secret confirmation rules |
 | Control device lost | Owner root, verified current anchor, and recoverable current content |
 | Root secret lost but device works | Existing admitted work continues; new certificates and root recovery may be unavailable |
 | Content keys lost, root survives | Obtain explicit encrypted data export from trusted participant or usable content backup |

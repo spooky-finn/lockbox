@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use zeroize::Zeroizing;
 
-/// The master password is required again this long after it was last typed.
+/// The passphrase is required again this long after it was last typed.
 pub const PASSWORD_EVERY_SECS: u64 = 7 * 24 * 60 * 60;
 
 const REASON: &str = "unlock lockbox";
@@ -22,9 +22,9 @@ pub enum TouchIdError {
     Failed(String),
     #[error("Touch ID is not enabled for this vault")]
     NoKey,
-    #[error("7 days have passed since the last master password entry — enter it again")]
+    #[error("7 days have passed since the last passphrase entry — enter it again")]
     Expired,
-    #[error("system fingerprints have changed — enter the master password")]
+    #[error("system fingerprints have changed — enter the passphrase")]
     FingersChanged,
     #[error("keychain: {0}")]
     Keychain(String),
@@ -124,7 +124,7 @@ pub fn enable(
     save(biometrics, vault_id, key, now, fingers)
 }
 
-/// After the master password was typed: stores a fresh key, restarting the 7 days.
+/// After the passphrase was typed: stores a fresh key, restarting the 7 days.
 pub fn refresh(
     biometrics: &dyn Biometrics,
     vault_id: &str,

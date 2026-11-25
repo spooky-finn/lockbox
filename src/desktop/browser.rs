@@ -102,7 +102,7 @@ pub(crate) fn BrowserConsent() -> Element {
                 strong { "Browser autofill" }
                 p { "Requested website: " code { "{origin}" } }
                 if locked {
-                    p { "Unlock Lockbox below to choose an account. Your master password stays in this app." }
+                    p { "Unlock Lockbox below to choose an account. Your passphrase stays in this app." }
                 } else if entries.is_empty() {
                     p { "No accounts match this exact website in the current vault." }
                 } else {

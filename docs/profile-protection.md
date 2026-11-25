@@ -105,11 +105,11 @@ Call `ProfileStore::restore_device` with `DeviceRecovery`:
 ```rust,ignore
 let recovered = profiles.restore_device(
     new_path,
-    &new_master_password,
+    &new_passphrase,
     kdf,
     DeviceRecovery {
         source: &readable_backup,
-        recovery_password: &backup_master_password,
+        recovery_password: &backup_passphrase,
         descriptor: authenticated_descriptor,
         control_anchor: authenticated_control_hash,
         configuration: SharedProfile {
@@ -121,7 +121,7 @@ let recovered = profiles.restore_device(
 )?;
 ```
 
-For profiles created through the desktop app, the master password also opens the
+For profiles created through the desktop app, the passphrase also opens the
 root capsule, which retains its own Argon2id salt. Older profiles and API callers
 may use a separate recovery password; supply that original password instead.
 Normal password or Touch ID unlock does not automatically open root authority.
@@ -182,6 +182,6 @@ testing or independent security review.
 
 New desktop profiles use BIP39-derived roots and v8 password/recovery key slots.
 The 12 words and the profile file recover readable contents without the old
-master password. Writable installations can set a new password; imported or
+passphrase. Writable installations can set a new passphrase; imported or
 rolled-back profiles retain read-only protection. See [recovery words](recovery-words.md)
 for the user flow, key derivation, file layout, and compatibility rules.

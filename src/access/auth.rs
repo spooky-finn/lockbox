@@ -473,10 +473,10 @@ impl Locked {
     fn new_password_error(&self) -> Option<String> {
         if self.password.chars().count() < MIN_PASSWORD_CHARS {
             Some(format!(
-                "Master password: at least {MIN_PASSWORD_CHARS} characters"
+                "Passphrase: at least {MIN_PASSWORD_CHARS} characters"
             ))
         } else if *self.password != *self.repeat {
-            Some("Passwords do not match".into())
+            Some("Passphrases do not match".into())
         } else {
             None
         }
@@ -512,7 +512,7 @@ impl Locked {
         };
 
         if self.password.is_empty() {
-            self.error = Some("Enter master password".into());
+            self.error = Some("Enter passphrase".into());
             return;
         }
 
@@ -580,7 +580,7 @@ impl Locked {
                 Vault::open_with_recovery_phrase(&path, phrase).and_then(|vault| {
                     if vault.signing_error().is_some() {
                         with_password = false;
-                        recovery_notice = Some("Recovered read-only access. This backup must be admitted as a new device before its password can be reset.".into());
+                        recovery_notice = Some("Recovered read-only access. This backup must be admitted as a new device before its passphrase can be reset.".into());
                         Ok(vault)
                     } else {
                         vault.reset_password_with_phrase(phrase, &password)

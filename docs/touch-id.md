@@ -30,7 +30,7 @@ app signing identity: another process that obtains the envelope can request
 authentication on the same Mac, but still needs a fingerprint to decrypt it.
 
 Adding or removing enrolled fingerprints invalidates access. The application
-also checks the saved enrollment state and requires the master password after
+also checks the saved enrollment state and requires the passphrase after
 seven days. That seven-day check is application policy, not an enclave expiry.
 Password unlock refreshes the encrypted envelope without a biometric prompt:
 encryption needs only the enclave public key. The root signing-key capsule
@@ -45,7 +45,7 @@ The separate `lockbox.profile-witness.v1` service is unaffected.
 Obsolete `lockbox.touch-id.v2` data protection Keychain items are also deleted
 when the running build has access. Unsigned builds ignore the missing-entitlement
 error for deleting those already protected items; they never read them.
-After upgrading, unlock each vault with its master password to create a new
+After upgrading, unlock each vault with its passphrase to create a new
 encrypted envelope if Touch ID was enabled. Migration cannot revoke keys an
 attacker copied from older unprotected storage.
 

@@ -49,7 +49,7 @@ fn picked_files_get_the_vault_extension() {
 #[test]
 fn new_password_flows_preserve_error_order_and_count_unicode_characters() {
     let directory = tempfile::tempdir().unwrap();
-    let minimum = "Master password: at least 12 characters";
+    let minimum = "Passphrase: at least 12 characters";
     let phrase_error = crate::access::mnemonic::RecoveryPhrase::parse("")
         .err()
         .unwrap()
@@ -64,11 +64,11 @@ fn new_password_flows_preserve_error_order_and_count_unicode_characters() {
                 if flow == "create" {
                     minimum
                 } else {
-                    "Enter master password"
+                    "Enter passphrase"
                 },
             ),
             (short.as_str(), "different", minimum),
-            (enough.as_str(), "different", "Passwords do not match"),
+            (enough.as_str(), "different", "Passphrases do not match"),
             (enough.as_str(), enough.as_str(), phrase_error.as_str()),
         ] {
             let path = directory.path().join("vault.lbx");

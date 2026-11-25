@@ -4,7 +4,7 @@ The extension is a proxy for the desktop app. It sends the selected HTTPS origin
 opens Lockbox through a `lockbox://browser/fill?request=…` deep link, and fills the
 one login explicitly approved in Lockbox. Unlocking, Touch ID, vault files,
 account selection and editing stay in the desktop app. The extension has no
-master-password input, vault file access, password generator or vault session.
+passphrase input, vault file access, password generator or vault session.
 
 ## Install on macOS
 
@@ -124,7 +124,7 @@ unambiguous. Shadow DOM and username-only steps require manual entry.
 ## Security boundary
 
 - Deep links carry a random one-use identifier, never the website's password,
-  master password, vault path or a callback URL. The website origin comes from
+  passphrase, vault path or a callback URL. The website origin comes from
   the browser-owned native request through the local connection.
 - The relay has no vault APIs. Old unlock/generate/credential requests are rejected.
 - A private owner-only directory holds random Unix sockets. The desktop proves

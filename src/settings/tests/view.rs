@@ -126,13 +126,13 @@ fn appearance_language_and_security_preferences_persist_and_remain_after_lock() 
     assert_eq!(appearance.preset, ThemePreset::Paper);
     update(&mut dom, |_| runtime::lock(None));
     let html = dioxus_ssr::render(&dom);
-    assert!(html.contains("Master password"));
+    assert!(html.contains("Passphrase"));
     assert!(!html.contains("id=\"space-switch-trigger\""));
     assert!(!html.contains("locked-language"));
     assert!(!html.contains("Interface language"));
     assert!(html.contains("Unlock"));
     update(&mut dom, |_| actions::set_language(Language::Russian));
-    assert!(dioxus_ssr::render(&dom).contains("Мастер-пароль"));
+    assert!(dioxus_ssr::render(&dom).contains("Парольная фраза"));
     assert_eq!(Config::load(&path).language, Language::Russian);
     assert_eq!(Config::load(&path).appearance_for(Some(&id)), appearance);
 }
@@ -288,12 +288,12 @@ fn changing_language_preserves_user_data_and_existing_errors() {
     update(&mut dom, |state| {
         edit_unlocked(state, |u| {
             u.vault.test_entries_mut()[0].title = "Работа".into();
-            u.error = Some("Could not save: incorrect master password".into());
+            u.error = Some("Could not save: incorrect passphrase".into());
         });
         actions::set_language(Language::English);
     });
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("Работа"));
-    assert!(html.contains("Could not save: incorrect master password"));
+    assert!(html.contains("Could not save: incorrect passphrase"));
     assert!(html.contains("Copy password"));
 }

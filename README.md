@@ -16,7 +16,7 @@ Lockbox runs as a Rust desktop application built with Dioxus. Team synchronizati
 - **Handle concurrent edits.** Review conflicting versions and resolve them explicitly.
 - **Organize credentials.** Use folders, attach files, inspect record history, and restore entries from Trash.
 - **Fill browser logins.** Chrome and Firefox companions request account selection and approval in the desktop app before filling an exact HTTPS origin.
-- **Unlock with Touch ID.** Use macOS biometric access after setting it up with your master password.
+- **Unlock with Touch ID.** Use macOS biometric access after setting it up with your passphrase.
 - **Recover access.** New shared profiles provide 12 recovery words, with local and cloud recovery workflows.
 
 English and Russian interfaces are available, along with system, light, and dark
@@ -68,7 +68,7 @@ Browser integration requires an app bundle and a native messaging relay. Follow 
 
 1. Open Lockbox and choose a local vault or shared mode.
 2. For shared mode, enter your Storj connection details, user name, and vault name. Follow the [Storj setup guide](docs/storj-setup.en.txt).
-3. Set a strong master password. Save the 12 recovery words provided for a new shared profile in a secure place.
+3. Set a strong passphrase. Save the 12 recovery words provided for a new shared profile in a secure place.
 4. Add your login records, TOTP secrets, and folders.
 5. To share access, open **Participants and access**, create an invitation, and verify the participant through a separate channel before approving their device.
 

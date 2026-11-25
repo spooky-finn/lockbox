@@ -72,11 +72,11 @@ pub enum VaultError {
     InvalidKdfParams,
     #[error("file exceeds supported resource limits")]
     ResourceLimit,
-    #[error("incorrect master password")]
+    #[error("incorrect passphrase")]
     WrongPassword,
     #[error("vault file is corrupted")]
     Corrupted,
-    #[error("saved key does not match this file — open the vault with the master password")]
+    #[error("saved key does not match this file — open the vault with the passphrase")]
     KeyMismatch,
     #[error("participant name must contain at most 256 bytes and no control characters")]
     InvalidParticipantName,

@@ -9,7 +9,7 @@
 Нажмите на имя пространства в левом верхнем углу приложения. Переключатель
 доступен также на экране разблокировки. В списке показаны ранее открытые
 локальные хранилища и облачные пространства; текущее отмечено галочкой.
-Выберите другое пространство и разблокируйте его мастер-паролем или Touch ID,
+Выберите другое пространство и разблокируйте его парольной фразой или Touch ID,
 если он настроен. Прежнее хранилище при переходе блокируется.
 
 Через этот же список можно открыть другой `.lbx`, создать хранилище или
@@ -30,7 +30,7 @@ behavior, recovery and release plans.
 Chrome and Firefox extensions open the desktop app through a deep link. Unlock
 with the normal password or Touch ID flow, then choose an exact-origin account
 to fill. The extension only proxies the request and fills the approved login;
-master passwords and vault files stay in the desktop app. See the
+passphrases and vault files stay in the desktop app. See the
 [installation and security guide](../ext/README.md).
 
 ## Website icon privacy and resource limits
@@ -73,17 +73,17 @@ The complete Argon2 working memory is wiped after use.
 12 словам и доступу к bucket без старого `.lbx`. Выберите пространство, новый
 локальный пароль и явно подтвердите доверие к доступной облачной версии.
 Восстановление создаёт новое устройство владельца и отзывает прежний контроллер.
-Существующий профиль сначала откройте мастер-паролем и дождитесь завершения
+Существующий профиль сначала откройте парольной фразой и дождитесь завершения
 синхронизации, чтобы создать капсулу восстановления. Credentials нужны также для
 префикса `recovery/v1/`. Восстанавливаются только опубликованные данные;
 свежесть облачной версии после потери всех независимых копий доказать нельзя.
 Подробности и ограничения: [cloud recovery](cloud-recovery.txt).
 
 В создании хранилища выберите многопользовательский режим, заполните настройки
-Storj, имя пользователя и имя хранилища. После проверки полей задайте мастер-пароль
+Storj, имя пользователя и имя хранилища. После проверки полей задайте парольную фразу
 (не менее 12 символов) и сохраните 12 слов восстановления. Приложение создаст
 локальный профиль `.lbx`. Слова и файл или его резервная копия восстановят доступ
-без старого мастер-пароля через «Забыли мастер-пароль?». Отмена выбора файла не создаёт ключи.
+без старой парольной фразы через «Восстановление». Отмена выбора файла не создаёт ключи.
 
 Корневой Ed25519-ключ пользователя выводится из 12 слов BIP39 (SLIP-0010).
 Приложение создаёт независимые случайные Ed25519-ключи устройства,
@@ -93,7 +93,7 @@ HPKE X25519-ключ устройства, случайные ID простра�
 
 Имена, credentials и ключи устройства хранятся внутри зашифрованного файла v8
 (Argon2id, HKDF-SHA256, XChaCha20-Poly1305). Корневой ключ дополнительно
-зашифрован тем же мастер-паролем с независимой солью. Открытие профиля
+зашифрован той же парольной фразой с независимой солью. Открытие профиля
 паролем или Touch ID не расшифровывает корневой ключ автоматически.
 Старые профили сохраняют прежние пароли и не получают слова автоматически.
 Подробнее: [слова восстановления и формат v8](recovery-words.md).
@@ -172,7 +172,7 @@ ownership and extension rules.
 
 ## Как защищены данные
 
-- Мастер-пароль → Argon2id (256 МиБ, 3 прохода) → HKDF → ключ
+- Парольная фраза → Argon2id (256 МиБ, 3 прохода) → HKDF → ключ
   XChaCha20-Poly1305. Шифруется всё содержимое целиком, заголовок файла
   тоже защищён от подмены.
 - Сохранение атомарное: временный файл → fsync → переименование;
@@ -208,7 +208,7 @@ offline devices and incorrect clocks can disagree. Revision order and conflict
 resolution remain causal, never timestamp-based. Older shared revisions without
 timestamps are labelled as having an unknown time; dates are not inferred. Local history
 records save times and labels the editor as “Local user”; it does not authenticate
-individual people sharing a master password.
+individual people sharing a passphrase.
 
 The record editor saves automatically after a short pause and preserves each saved
 revision, including changed fields, author and available time. Closing an unchanged

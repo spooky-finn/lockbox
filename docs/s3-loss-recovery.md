@@ -33,7 +33,7 @@ control and data anchor. The desktop procedure below creates a separate space.
    Bulk importing a second snapshot can add conflicting values as separate entries
    or bring back entries deleted in the chosen source.
 
-Bulk import requires the master password that protected the selected file when
+Bulk import requires the passphrase that protected the selected file when
 it was saved. If you have only recovery words, the file's **Recovery** action can
 open a snapshot with a recovery slot. A read-only shared backup keeps its original
 password, which the bulk importer still requires. Preserve the readable backup
@@ -55,15 +55,15 @@ after its recovered content passes the verification below.
    bucket in its own field. Lockbox's documented cloud setup targets Storj.
    [Lockbox Storj setup](storj-setup.en.txt) · [Storj credentials](https://storj.dev/dcs/api/s3/credentials)
 2. Choose **Create vault…** and complete the identity prompt. Select **Multiple
-   users**, enter the new bucket and credentials, and set a master password for
+   users**, enter the new bucket and credentials, and set a passphrase for
    the replacement. Choose a distinct vault name so participants can identify it.
    The desktop may reuse the owner's saved identity while creating a fresh space
    and device. If the owner's root key or recovery words were exposed, set up a
    fresh owner identity on a clean installation before creating the replacement.
-   Keep the replacement master password and its recovery words available to the
+   Keep the replacement passphrase and its recovery words available to the
    owner.
 3. Open **Settings → Import vault** in the replacement. Select the working
-   `.lbx` copy, enter that snapshot's master password, and choose **Import**.
+   `.lbx` copy, enter that snapshot's passphrase, and choose **Import**.
    Lockbox reads the source locally and saves batches as ordinary signed changes
    in the replacement. The new bucket receives encrypted sync objects. Keep the
    `.lbx` files in private backup storage.

@@ -170,9 +170,9 @@ pub(crate) fn LockedView() -> Element {
                         else if identity_unlock { {language.text(Text::UnlockIdentityHint)} }
                         else if identity_setup { {language.text(Text::ProtectIdentityHint)} }
                         else if create && locked.joining && !cloud_password { {language.text(Text::SharingJoinSetup)} }
-                        else if cloud_password { {language.text(Text::ChooseAMasterPasswordToProtectYourLocalProfile)} }
+                        else if cloud_password { {language.text(Text::ChooseAPassphraseToProtectYourLocalProfile)} }
                         else if create && locked.path.is_none() { {language.text(Text::ChooseAVaultType)} }
-                        else if create { {language.format(Text::ChooseAMasterPasswordForTheNewVault, std::slice::from_ref(&filename))} }
+                        else if create { {language.format(Text::ChooseAPassphraseForTheNewVault, std::slice::from_ref(&filename))} }
                         else { {language.text(Text::SpaceFileMissing)} }
                     }
                 }
@@ -224,10 +224,10 @@ pub(crate) fn LockedView() -> Element {
 
                 if ready {
                     form { class: "unlock-form", aria_busy: (base_unlock && busy).then_some("true"), onsubmit: submit,
-                        label { class: "sr-only", r#for: "master-password", {language.text(if recovering { Text::NewMasterPassword } else { Text::MasterPassword })} }
+                        label { class: "sr-only", r#for: "master-password", {language.text(if recovering { Text::NewPassphrase } else { Text::Passphrase })} }
                         div { class: "unlock-input",
                             input { id: "master-password", r#type: "password", autocomplete: "off", autofocus: true,
-                                placeholder: language.text(if recovering { Text::NewMasterPassword } else { Text::MasterPassword }),
+                                placeholder: language.text(if recovering { Text::NewPassphrase } else { Text::Passphrase }),
                                 disabled: busy, value: locked.password.as_str(),
                                 oninput: move |event| {
                                     let value = Zeroizing::new(event.value());
@@ -241,10 +241,10 @@ pub(crate) fn LockedView() -> Element {
                         }
 
                         if (create && !identity_unlock) || recovering {
-                            label { class: "sr-only", r#for: "repeat-password", {language.text(Text::RepeatMasterPassword)} }
+                            label { class: "sr-only", r#for: "repeat-password", {language.text(Text::RepeatPassphrase)} }
                             div { class: "unlock-input",
                                 input { id: "repeat-password", r#type: "password", autocomplete: "off", disabled: busy,
-                                    placeholder: language.text(Text::RepeatPassword), value: locked.repeat.as_str(),
+                                    placeholder: language.text(Text::RepeatPassphrase), value: locked.repeat.as_str(),
                                     oninput: move |event| {
                                         let value = Zeroizing::new(event.value());
                                         edit_locked(state, |locked| replace_secret(&mut locked.repeat, &value));
@@ -263,7 +263,7 @@ pub(crate) fn LockedView() -> Element {
                             super::recovery_words::RecoveryWordsInput { readonly: false, disabled: busy }
                         }
                         if recovering {
-                            button { id: "recovery-submit", r#type: "submit", class: "setup-button", disabled: busy, {language.text(Text::ResetPasswordAndUnlock)} }
+                            button { id: "recovery-submit", r#type: "submit", class: "setup-button", disabled: busy, {language.text(Text::ResetPassphraseAndUnlock)} }
                         }
                         if cloud_password {
                             if cloud_restore {
@@ -295,14 +295,14 @@ pub(crate) fn LockedView() -> Element {
                         }
                         button { r#type: "button", class: "quiet", disabled: busy,
                             onclick: move |_| edit_locked(state, |locked| locked.toggle_recovery()),
-                            {language.text(if recovering { Text::BackToPasswordUnlock } else { Text::ForgotMasterPassword })}
+                            {language.text(if recovering { Text::BackToPassphraseUnlock } else { Text::ForgotPassphrase })}
                         }
                     }
                 }
 
                 if weak_password || locked.notice.is_some() || busy_status.is_some() || locked.error.is_some() {
                     div { class: "unlock-feedback", aria_live: "polite",
-                        if weak_password { p { class: "notice", {language.format(Text::PasswordsShorterThanCharactersAreEasierToGuess, &[MIN_PASSWORD_CHARS.to_string()])} } }
+                        if weak_password { p { class: "notice", {language.format(Text::PassphrasesShorterThanCharactersAreEasierToGuess, &[MIN_PASSWORD_CHARS.to_string()])} } }
                         if let Some(notice) = &locked.notice { p { class: "notice", role: "status", {language.message(notice)} } }
                         if let Some(status) = busy_status {
                             p { role: "status", class: "muted", {language.text(status)} }

@@ -85,7 +85,7 @@ fn write_reply(writer: &mut impl Write, reply: &Reply<'_>) -> io::Result<()> {
     writer.flush()
 }
 
-/// EOF cancels in-flight consent; no vault or master password enters this process.
+/// EOF cancels in-flight consent; no vault or passphrase enters this process.
 pub fn run() -> io::Result<()> {
     let (sender, receiver) = std::sync::mpsc::sync_channel(1);
     std::thread::spawn(move || {

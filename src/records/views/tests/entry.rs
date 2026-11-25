@@ -43,7 +43,7 @@ fn showing_then_locking_removes_the_entry_and_password() {
     assert!(dioxus_ssr::render(&dom).contains("private-test-password"));
     update(&mut dom, |_| runtime::lock(None));
     let html = dioxus_ssr::render(&dom);
-    assert!(html.contains("Мастер-пароль"));
+    assert!(html.contains("Парольная фраза"));
     assert!(!html.contains("private-test-password"));
     assert!(!html.contains("alice"));
     assert!(!html.contains("entry-detail"));

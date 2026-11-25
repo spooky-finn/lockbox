@@ -20,8 +20,8 @@ private enum StorageError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .invalidEnvelope: return "Invalid Touch ID storage — enter the master password"
-        case .unavailable: return "Secure Enclave is unavailable — use the master password"
+        case .invalidEnvelope: return "Invalid Touch ID storage — enter the passphrase"
+        case .unavailable: return "Secure Enclave is unavailable — use the passphrase"
         }
     }
 }

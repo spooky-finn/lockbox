@@ -124,7 +124,7 @@ fn wrong_password_changes_nothing() {
 
     assert_eq!(
         unlocked.error.as_deref(),
-        Some("Could not import: incorrect master password")
+        Some("Could not import: incorrect passphrase")
     );
     assert_eq!(unlocked.import.notice, None);
     assert_eq!(reopen(&unlocked).entries.len(), 1);

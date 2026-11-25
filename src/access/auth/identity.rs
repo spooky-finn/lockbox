@@ -16,7 +16,7 @@ impl Locked {
         };
         let unlocking = self.unlocking_identity() && !self.recovering;
         if self.password.is_empty() {
-            self.error = Some("Enter master password".into());
+            self.error = Some("Enter passphrase".into());
             return;
         }
         if !unlocking {

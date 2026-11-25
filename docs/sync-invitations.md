@@ -67,7 +67,7 @@ its descendants and reprovision remaining devices as needed.
 and participants** from an unlocked cloud profile. A new participant selects
 **Join a space** on the welcome screen, enters their username and independently
 provisioned credentials for the owner's Storj endpoint/bucket, chooses a local
-master password and saves their mnemonic. This creates fresh device keys in an
+passphrase and saves their mnemonic. This creates fresh device keys in an
 encrypted staging profile. Normal space sync waits until joining completes.
 The local profile is never copied or uploaded to admit another device.
 

@@ -82,7 +82,7 @@ bootstrap schema 6 instead of silently discarding recovery configuration/keys.
 Existing signed event/control formats are unchanged.
 
 Possession of the root secret plus accessible capsules grants recoverable content.
-Master-password/Storj-credential changes do not revoke a copied root secret.
+Passphrase or Storj credential changes do not revoke a copied root secret.
 Independent recovery-key rotation and root ownership succession are not implemented;
 a compromised root requires migration to a fresh identity/space for future data.
 Recovery is not protection against bucket deletion or loss of unsynced edits.

@@ -158,8 +158,8 @@ mod tests {
             "network timeout: 42"
         );
         assert_eq!(
-            Language::Russian.message("incorrect master password"),
-            "неверный мастер-пароль"
+            Language::Russian.message("incorrect passphrase"),
+            "неверная парольная фраза"
         );
     }
 

@@ -263,7 +263,7 @@ fn background_tick_clears_clipboard_and_locks_without_input() {
         runtime::tick();
     });
     let html = dioxus_ssr::render(&dom);
-    assert!(html.contains("Мастер-пароль"));
+    assert!(html.contains("Парольная фраза"));
     assert!(html.contains("долго не было действий"));
 }
 
@@ -283,7 +283,7 @@ fn first_input_after_sleep_locks_before_resetting_activity() {
         runtime::record_activity();
     });
     let html = dioxus_ssr::render(&dom);
-    assert!(html.contains("Мастер-пароль"));
+    assert!(html.contains("Парольная фраза"));
     assert!(!html.contains("id=\"entry-title\""));
 }
 

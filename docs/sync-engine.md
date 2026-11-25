@@ -225,7 +225,7 @@ events. `Storj` implements that contract; independent provider credentials can
 be supplied for each installation.
 
 `ProfileStore` supports alternate witness adapters. `restore_device` requires the
-root-capsule password (the master password for new desktop profiles) and an
+root-capsule password (the passphrase for new desktop profiles) and an
 independently authenticated descriptor/control anchor; it generates fresh
 certified device keys and waits for new admission.
 `Machine::join_at` pins this minimum head, and `space_anchor()` exports the current
