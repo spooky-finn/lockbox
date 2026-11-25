@@ -917,8 +917,8 @@ button.copy-value:focus-visible, button.identifier:focus-visible { outline: 2px 
 .space-tabs button:active:not(:disabled) { transform: none; }
 .space-tabs button:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -2px; }
 .space-tabs-drag { align-self: stretch; flex: 1; min-width: 16px; }
-.space-tab-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 4px; min-width: 0; max-width: 60%; }
-.space-tab-status { display: flex; flex: 0 0 auto; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 2px 8px; min-width: 0; max-width: min(60%, calc(100% - 72px)); line-height: 1.2; }
+.space-tab-actions { display: flex; flex: 0 1 auto; align-items: center; gap: 4px; min-width: 32px; max-width: 60%; }
+.space-tab-status { display: flex; flex: 0 1 auto; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 2px 8px; min-width: 0; line-height: 1.2; }
 .space-tab-status:empty { display: none; }
 .update-notice { padding: 6px 12px; background: var(--subtle); border-bottom: 1px solid var(--border); }
 .update-notice a { color: var(--accent-ink); }
