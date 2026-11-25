@@ -187,6 +187,7 @@ pub use metadata::ProfileSummary;
 mod cloud_recovery;
 mod history;
 pub(crate) mod identity;
+pub(crate) mod move_records;
 mod protection;
 mod records;
 mod recovery;

@@ -139,7 +139,7 @@ impl Replay {
         Ok(())
     }
 
-    pub(super) fn require_writer(&self) -> Result<()> {
+    pub(crate) fn require_writer(&self) -> Result<()> {
         self.require_ready()?;
         match self.role {
             Some(Role::Owner | Role::Editor) => Ok(()),

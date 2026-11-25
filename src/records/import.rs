@@ -7,18 +7,17 @@
 use crate::{
     desktop::workspace::Unlocked,
     platform::jobs::Worker,
-    records::{entry::Entry, folder::Folder, import_plan as import},
-    serialization::json_size,
-    sync::protocol as sync,
+    records::{
+        batches::{BATCH_MUTATIONS, entry_batches},
+        entry::Entry,
+        folder::Folder,
+        import_plan as import,
+    },
     vault::{Records, Vault},
 };
 use secrecy::SecretString;
 use std::path::PathBuf;
 use zeroize::Zeroizing;
-
-/// Stay well inside one shared transaction (mutation count and encoded size).
-const BATCH_MUTATIONS: usize = sync::MAX_MUTATIONS / 2;
-const BATCH_BYTES: usize = sync::MAX_TRANSACTION_BYTES / 2;
 
 #[derive(Default)]
 pub(crate) struct VaultImport {
@@ -176,28 +175,6 @@ impl Unlocked {
 
 fn partial(saved: usize, total: usize, error: &str) -> String {
     format!("Imported {saved} of {total} entries; repeat the import to continue: {error}")
-}
-
-/// Splits entries so that each shared transaction stays within its limits.
-fn entry_batches(entries: &[Entry]) -> impl Iterator<Item = &[Entry]> {
-    let mut sizes = entries
-        .iter()
-        .map(|entry| json_size(entry).unwrap_or(BATCH_BYTES))
-        .enumerate()
-        .peekable();
-    std::iter::from_fn(move || {
-        let (start, mut bytes) = sizes.next()?;
-        let mut end = start + 1;
-        while let Some(&(index, size)) = sizes.peek() {
-            if index - start == BATCH_MUTATIONS || bytes + size > BATCH_BYTES {
-                break;
-            }
-            let _ = sizes.next();
-            bytes += size;
-            end = index + 1;
-        }
-        Some(&entries[start..end])
-    })
 }
 
 fn same_file(a: &std::path::Path, b: &std::path::Path) -> bool {

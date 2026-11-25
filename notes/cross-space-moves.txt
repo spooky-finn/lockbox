@@ -1,0 +1,17 @@
+Cross-space moves
+
+- Desktop selects IDs and coordinates two unlocked tab sessions. Vault command
+  expands folder subtrees, deduplicates overlapping selection, validates source
+  and destination, and owns persistence.
+- Destination gets fresh entity IDs, remapped folder references, and current
+  record values including TOTP and attachments. Same-name root folders receive
+  numeric suffixes. Source history stays in source vault, including versions
+  accessible to existing shared-space members.
+- Commit every destination batch before removing source records. Shared writes
+  use signed transactions and existing outbox. Insert parents first. Remove
+  entries before folders, descendants before parents. Each vault commits
+  independently. Remote publication follows usual sync.
+- Failed destination write leaves source live. Failed source cleanup can leave
+  copies in both spaces. Open dialog keeps assigned IDs for safe retry.
+  Closing it drops retry state. Retry checks source and destination values
+  before cleanup. Shared conflicts require normal conflict resolution.

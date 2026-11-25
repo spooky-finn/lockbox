@@ -144,6 +144,7 @@ pub(crate) fn Sidebar() -> Element {
                     TreeContent {}
                 }
             }
+            crate::desktop::move_records::MoveRecordsButton {}
             div { class: "sidebar-footer",
                 IconButton { class: "quiet", icon: Icon::Trash, label: language.text(Text::Trash),
                     disabled: editing_folder, current: (page == Page::Trash).then_some("page"),

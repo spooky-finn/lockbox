@@ -36,7 +36,7 @@ impl Vault {
         })
     }
 
-    fn commit_edit(
+    pub(super) fn commit_edit(
         &mut self,
         shared: Option<Records>,
         undo_local: impl FnOnce(&mut Self),

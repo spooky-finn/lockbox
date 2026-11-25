@@ -1,6 +1,7 @@
 //! Record models, editing, imports, history and presentation.
 
 pub(crate) mod attachments;
+pub(crate) mod batches;
 pub(crate) mod dialogs;
 pub(crate) mod directories;
 pub(crate) mod editor;

@@ -5,6 +5,7 @@ pub(crate) mod context;
 mod draft_save;
 pub(crate) mod i18n;
 pub mod icons;
+pub(crate) mod move_records;
 pub(crate) mod profiles;
 mod root;
 pub(crate) mod runtime;
