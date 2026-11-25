@@ -17,17 +17,28 @@ vault’s sync objects and checks revocation with a disposable child grant. Only
 the restricted issuer is saved in the encrypted profile. The owner’s existing S3 credential must also allow GET and PUT on
 `spaces/<escaped space name>/invite-v1/` for the invitation mailbox.
 
-1. Create a one-day or seven-day invitation. Send the link to the guest and deliver
-   the verification code through a second trusted channel.
-2. The guest opens the link or pastes it into **Join a space**. A new guest sets
-   up their local identity, recovery words and password. The managed link supplies
-   the mailbox routes. The guest verifies the independent code and sends their request.
-3. The owner compares the guest's identity and device IDs through the second channel,
-   selects the role, and approves. The guest reviews the role and confirms.
+1. Choose the guest's role and an expiry of one or seven days. Send the invitation
+   to the intended person in a private conversation where you recognize each other.
+2. The guest opens the invitation or pastes it into **Join a space**. A new guest
+   first sets up their local identity, recovery words and password. They review
+   the vault and role, select **Join**, and return their device confirmation link
+   to the owner in the same conversation.
+3. The owner opens or pastes the confirmation received from the intended guest.
+   Lockbox shows the matching signed device request and the role from the invitation.
+   Selecting **Approve** admits that device once its signed consent arrives. The
+   guest's unlocked app signs automatically when the offer matches their Join
+   decision. Opening either link alone leaves the membership unchanged.
 4. After admission, the owner registers a separate restricted grant for that device,
    verifies the resulting credentials against the vault genesis, signs the storage
    details and encrypts them to the approved device. The guest's profile commits
    the credential together with the joined vault. Ordinary sync can then start.
+
+The private chat authenticates both people. Use the reply sent by the intended
+guest. A confirmation link identifies one ticket and one signed device request.
+If the request has yet to arrive, keep both profiles unlocked and retry. A
+forwarded invitation can produce a competing request, but the owner's confirmation
+selects the specific device to approve. Older invitations that ask for a separate
+verification code continue to use the original independent-channel checks.
 
 The signed `lockbox://pair/` link includes expiring bearer URLs for eight objects.
 Anyone holding it can use those mailbox routes until their expiry. The three guest
@@ -267,11 +278,11 @@ canonical wire bytes and an independently generated signature.
 
 Bootstrap schema **7** added the durable link ledger and exact encrypted delivery
 cache. Schema **8** additionally retains short-link publication and pending ticket
-resolution. Existing link sessions gain the same signed ticket's short delivery
-on their next exchange, without changing their verification code. Profiles
-upgrade on a link operation; older applications reject the new schema. The
-existing witness also protects link approvals, consumption and cancellation
-against local profile rollback. Membership wire artifacts remain unchanged.
+resolution. Schema **9** adds managed Storj links. Schema **10** records the guest's
+explicit Join decision for a trusted-chat ticket and binds the owner's approval
+to the selected request. Creating or joining a chat invitation upgrades the
+encrypted profile. Older applications reject profiles with an unsupported schema.
+The rollback witness protects approvals, consumption and cancellation.
 
 Bootstrap schema **4** stores issued invitations, exact responses, cancellation,
 reserved admissions and receipts inside the encrypted profile. Schema-3 profiles
