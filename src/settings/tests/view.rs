@@ -25,6 +25,9 @@ fn settings_is_a_page_and_returning_restores_the_selected_entry() {
     });
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("settings-page"));
+    assert!(html.contains("id=\"settings-vault-filename\""));
+    assert!(html.contains("id=\"settings-personal-vault-name\""));
+    assert!(!html.contains("id=\"settings-shared-vault-name\""));
     assert!(!html.contains("entry-detail"));
     assert!(!html.contains("private-test-password"));
     update(&mut dom, |state| {
@@ -115,6 +118,7 @@ fn appearance_language_and_security_preferences_persist_and_remain_after_lock() 
     update(&mut dom, |_| runtime::lock(None));
     let html = dioxus_ssr::render(&dom);
     assert!(html.contains("Master password"));
+    assert!(!html.contains("id=\"space-switch-trigger\""));
     assert!(!html.contains("locked-language"));
     assert!(!html.contains("Interface language"));
     assert!(html.contains("Unlock"));

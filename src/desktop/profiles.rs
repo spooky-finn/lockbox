@@ -6,7 +6,7 @@ use crate::{
     desktop::{
         context::{BiometricProvider, SecurityHandle, Session},
         i18n::Text,
-        runtime::{lock, publish_status},
+        runtime::publish_status,
         session::Screen,
     },
     settings::state::Settings,
@@ -174,38 +174,6 @@ pub(crate) fn rename_vault_for_me(name: &str) -> Result<(), String> {
     settings
         .write()
         .set_vault_alias(workspace.vault.path(), name)
-}
-
-pub(crate) fn create_from_switcher(joining: bool) {
-    if !consume_context::<Session>().peek().can_switch_profile() {
-        return;
-    }
-    let state = consume_context::<Session>();
-    let source = match &*state.peek() {
-        Screen::Unlocked(u) => u
-            .vault
-            .profile_summary()
-            .map(|_| u.vault.path().to_path_buf()),
-        Screen::Locked(f) => f.identity_source.clone(),
-    };
-    if try_consume_context::<Signal<crate::desktop::tabs::Tabs>>().is_some() {
-        crate::desktop::tabs::new_tab();
-    } else {
-        lock(None);
-    }
-    begin_creation(joining);
-    if let Some(source) = source {
-        let mut state = state;
-        let settings = consume_context::<Signal<Settings>>();
-        if let Screen::Locked(form) = &mut *state.write() {
-            let replacement = if joining {
-                Locked::begin_join()
-            } else {
-                Locked::begin_create()
-            };
-            **form = replacement.with_identity_path(settings.peek().identity_path(), Some(source));
-        }
-    }
 }
 
 pub(crate) fn begin_join() {

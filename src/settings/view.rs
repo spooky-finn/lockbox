@@ -6,6 +6,7 @@ use crate::{
     desktop::{
         context::{Session, edit_unlocked},
         i18n::use_language,
+        profiles,
         session::Screen,
         widgets::{
             symbol::{Icon, Symbol},
@@ -73,6 +74,7 @@ pub(crate) fn SettingsView() -> Element {
                     }
                 }
             }
+            VaultNames {}
             AppearanceSection {}
             section { class: "settings-section stack",
                 h2 { {language.text(Text::Security)} }
@@ -125,6 +127,98 @@ pub(crate) fn SettingsView() -> Element {
                 onclick: move |_| edit_unlocked(state, |u| u.page = Page::Vault),
                 Symbol { icon: Icon::ArrowLeft }
                 {language.text(Text::BackToVault)}
+            }
+        }
+    }
+}
+
+#[component]
+fn VaultNames() -> Element {
+    let language = use_language();
+    let state = use_context::<Session>();
+    let settings = use_context::<Signal<Settings>>();
+    let screen = state.read();
+    let Screen::Unlocked(workspace) = &*screen else {
+        return rsx! {};
+    };
+
+    let path = workspace.vault.path();
+    let alias = settings
+        .read()
+        .config
+        .vault_aliases
+        .get(path)
+        .cloned()
+        .unwrap_or_default();
+    let disabled = !screen.can_switch_profile();
+    rsx! {
+        section { class: "settings-section stack",
+            h2 { {language.text(Text::VaultSettings)} }
+            if let Some(profile) = workspace.vault.profile_summary() {
+                if workspace.vault.can_rename_shared() {
+                    VaultNameSetting { kind: VaultName::Shared, saved: profile.space_name.to_owned(), disabled }
+                }
+            } else {
+                VaultNameSetting {
+                    kind: VaultName::File,
+                    saved: path.file_name().unwrap_or_default().to_string_lossy().into_owned(),
+                    disabled,
+                }
+            }
+            VaultNameSetting { kind: VaultName::Personal, saved: alias, disabled }
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum VaultName {
+    File,
+    Shared,
+    Personal,
+}
+
+#[component]
+fn VaultNameSetting(kind: VaultName, saved: String, disabled: bool) -> Element {
+    let language = use_language();
+    let mut draft = use_signal(|| None::<String>);
+    let mut error = use_signal(|| None::<String>);
+    let name = draft().unwrap_or_else(|| saved.clone());
+    let personal = kind == VaultName::Personal;
+    let (id, label) = match kind {
+        VaultName::File => ("settings-vault-filename", Text::VaultFilename),
+        VaultName::Shared => ("settings-shared-vault-name", Text::SharedVaultName),
+        VaultName::Personal => ("settings-personal-vault-name", Text::PersonalVaultName),
+    };
+    let can_save = !disabled && name.trim() != saved && (personal || !name.trim().is_empty());
+    rsx! {
+        form { class: "stack",
+            onsubmit: move |event: FormEvent| {
+                event.prevent_default();
+                if can_save && let Some(name) = draft() {
+                    let result = match kind {
+                        VaultName::File => profiles::rename_local_vault(&name),
+                        VaultName::Shared => profiles::rename_shared_vault(&name),
+                        VaultName::Personal => profiles::rename_vault_for_me(&name),
+                    };
+                    match result {
+                        Ok(()) => { draft.set(None); error.set(None); }
+                        Err(message) => error.set(Some(message)),
+                    }
+                }
+            },
+            label { r#for: id, {language.text(label)} }
+            if personal {
+                p { id: "settings-personal-vault-name-help", class: "muted", {language.text(Text::PersonalVaultNameHelp)} }
+            }
+            div { class: "inline vault-name-field",
+                input { id, value: "{name}", disabled, autocomplete: "off",
+                    aria_describedby: personal.then_some("settings-personal-vault-name-help"),
+                    oninput: move |event| { draft.set(Some(event.value())); error.set(None); },
+                }
+                button { r#type: "submit", disabled: !can_save, {language.text(Text::Save)} }
+            }
+            if let Some(message) = error() {
+                p { class: "error", role: "alert", "{message}" }
             }
         }
     }

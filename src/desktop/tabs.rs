@@ -150,8 +150,7 @@ pub(crate) fn TabBar() -> Element {
     let settings = use_context::<Signal<Settings>>();
     let preferences = settings.read();
     let tabs = tabs.read();
-    let active_index = tabs.active;
-    let active = tabs.sessions[active_index].read();
+    let active = tabs.sessions[tabs.active].read();
     let busy = matches!(&*active, Screen::Locked(f) if f.busy())
         || matches!(&*active, Screen::Unlocked(u) if u.import.busy());
     rsx! {
@@ -202,7 +201,6 @@ pub(crate) fn TabBar() -> Element {
             if matches!(&*active, Screen::Unlocked(_)) {
                 div { class: "space-tab-actions",
                     HeaderStatus {}
-                    crate::desktop::space_switcher::SpaceSwitcher { key: "{active_index}" }
                     IconButton { class: "quiet", icon: Icon::Lock, label: language.text(Text::LockVault),
                         onclick: move |_| crate::desktop::runtime::lock(None),
                     }

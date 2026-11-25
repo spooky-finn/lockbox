@@ -200,7 +200,7 @@ pub(crate) fn MoveSidebar(mut controls: SidebarMove) -> Element {
             { let item = menu.item.clone();
               let style = menu.position.map(|(x, y)| format!("left:{x}px;top:{y}px"));
               rsx! {
-                button { class: "space-switch-backdrop", r#type: "button", tabindex: "-1",
+                button { class: "move-context-backdrop", r#type: "button", tabindex: "-1",
                     aria_label: language.text(Text::Cancel),
                     onclick: move |_| controls.menu.set(None),
                     oncontextmenu: move |event| {

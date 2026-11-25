@@ -196,8 +196,6 @@ h2 { font-size: 15px; font-weight: 600; letter-spacing: -.2px; }
     gap: 24px;
     padding: 64px clamp(16px, 3vw, 32px) 16px;
 }
-.base-unlock .locked-space-switcher .brand-icon { display: none; }
-.base-unlock .space-switch-trigger { padding-inline: 8px; }
 .base-unlock .unlock-content { animation: unlock-enter 320ms cubic-bezier(.2, .7, .3, 1); }
 .unlock-emblem {
     position: relative;
@@ -363,8 +361,6 @@ h2 { font-size: 15px; font-weight: 600; letter-spacing: -.2px; }
 
 /* Branding and preferences */
 .brand { display: flex; gap: 8px; align-items: center; min-width: 0; }
-.brand-icon { display: grid; place-items: center; width: 28px; height: 28px; flex: 0 0 28px; border-radius: 9px; color: var(--accent-ink); background: var(--control); border: 1px solid var(--glass-edge); box-shadow: var(--shadow); }
-.brand-icon .symbol { width: 17px; height: 17px; }
 .brand strong { display: block; font-size: 17px; font-weight: 650; letter-spacing: -.5px; line-height: 1.2; }
 .brand > div:last-child { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .vault-name { display: block; color: var(--muted); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -462,6 +458,7 @@ input.switch:disabled { opacity: .45; cursor: default; }
 .settings-page .preference-row + .preference-row { border-top: 1px solid var(--separator); }
 .preference-copy { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .preference-copy p { font-size: 11px; line-height: 1.35; }
+.vault-name-field input { flex: 1; min-width: 0; }
 .settings-page .preference-row > select { flex-shrink: 0; padding: 3px 7px; font-size: 12px; }
 .settings-page .preference-row > .switch { flex-shrink: 0; }
 .sharing-code { overflow-wrap: anywhere; user-select: text; font-size: 11px; line-height: 1.6; }
@@ -747,7 +744,6 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 99px; }
     .draft { padding: 16px; }
 }
 @media (max-width: 640px) {
-    .brand-icon { display: none; }
     .brand strong { font-size: 17px; }
     .brand > div:last-child { display: flex; }
     .vault-name { margin-top: 0; }
@@ -877,37 +873,8 @@ button.copy-value:disabled { opacity: 1; }
 .sharing-devices summary { cursor: pointer; }
 .sharing-device { border-top: 1px solid var(--border); margin-top: 12px; padding-top: 12px; }
 
-/* Space selection stays available both before and after unlocking. */
-.space-switcher { position: relative; min-width: 0; max-width: 100%; }
-.space-switch-trigger { position: relative; justify-content: flex-start; max-width: 100%; gap: 9px; padding: 4px 8px 4px 4px; border-color: transparent; background: transparent; box-shadow: none; text-align: left; }
-.space-trigger-label { display: flex; gap: 6px; min-width: 0; }
-.space-tab-actions > .space-switcher { min-width: 36px; max-width: 40vw; }
-.space-tabs .space-trigger-label small { display: none; }
-.space-tabs .space-switch-trigger { padding: 0 4px; gap: 6px; }
-.space-tabs .brand-icon { width: 22px; height: 22px; flex-basis: 22px; border: 0; border-radius: 5px; background: transparent; box-shadow: none; }
-.space-tabs .space-chevron .symbol { width: 12px; height: 12px; flex-basis: 12px; }
-.space-trigger-label strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
-.space-trigger-label small { font-size: 10px; color: var(--muted); }
-.space-chevron { flex-shrink: 0; transform: rotate(90deg); color: var(--muted); }
-.space-switch-backdrop { position: fixed; inset: 0; z-index: 20; width: 100%; height: 100%; border: 0; border-radius: 0; padding: 0; background: transparent; box-shadow: none; cursor: default; }
-.space-switch-backdrop:hover:not(:disabled), .space-switch-backdrop:active:not(:disabled) { background: transparent; box-shadow: none; transform: none; }
-.space-switch-panel { position: absolute; z-index: 21; top: calc(100% + 8px); left: 0; width: min(360px, calc(100vw - 40px)); max-height: min(600px, calc(100vh - 130px)); display: flex; flex-direction: column; overflow: auto; padding: 8px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); box-shadow: 0 12px 40px rgb(0 0 0 / 18%); text-align: left; }
-.space-tabs .space-switch-panel { left: auto; right: 0; width: min(360px, calc(100vw - 48px)); }
-.space-switch-heading { display: flex; align-items: center; justify-content: space-between; padding: 3px 5px; font-size: 13px; }
-.space-switch-hint { margin: 4px 6px 10px; color: var(--muted); font-size: 11px; line-height: 1.5; }
-.space-switch-list { overflow: auto; min-height: 0; }
-.space-option { width: 100%; padding: 9px; gap: 10px; justify-content: flex-start; text-align: left; border-color: transparent; background: transparent; box-shadow: none; margin-bottom: 3px; }
-.space-option.selected { background: var(--selected); color: var(--accent-ink); }
-.space-option-icon { align-self: flex-start; padding-top: 2px; color: var(--muted); }
-.space-option-label { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.space-option-label strong { font-size: 13px; overflow-wrap: anywhere; }
-.space-option-label small { font-size: 10px; }
-.space-option-path { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 10px; font-weight: 400; color: var(--muted); }
-.space-switch-actions { display: flex; flex-direction: column; flex-shrink: 0; gap: 2px; padding-top: 7px; margin-top: 7px; border-top: 1px solid var(--border); }
-.space-switch-actions > button { justify-content: flex-start; font-size: 12px; }
-.space-rename-form { display: grid; flex-shrink: 0; gap: 6px; padding-top: 7px; border-top: 1px solid var(--border); font-size: 12px; }
-.space-rename-actions { display: flex; justify-content: flex-end; gap: 6px; }
-.locked-space-switcher { position: absolute; top: 16px; left: 20px; max-width: calc(100% - 40px); z-index: 3; }
+.move-context-backdrop { position: fixed; inset: 0; z-index: 20; width: 100%; height: 100%; border: 0; border-radius: 0; padding: 0; background: transparent; box-shadow: none; cursor: default; }
+.move-context-backdrop:hover:not(:disabled), .move-context-backdrop:active:not(:disabled) { background: transparent; box-shadow: none; transform: none; }
 
 /* Record fields keep the same geometry in reading and editing modes. */
 button.copy-value.title-value { display: block; font: inherit; line-height: 1.2; letter-spacing: inherit; width: 100%; min-height: 26px; padding: 0; margin: 0; }

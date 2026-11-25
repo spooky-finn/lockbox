@@ -106,9 +106,6 @@ pub(crate) fn LockedView() -> Element {
     };
     rsx! {
         section { class: if base_unlock { "lock-screen base-unlock" } else if key_setup || identity_setup || cloud_password || recovering { "lock-screen recovery-screen" } else { "lock-screen" }, aria_label: language.text(if key_setup { Text::EncryptionKeySetup } else { Text::UnlockVault }),
-            if base_unlock {
-                div { class: "locked-space-switcher", crate::desktop::space_switcher::SpaceSwitcher {} }
-            }
             div { class: "unlock-content",
                 if base_unlock {
                     div { class: "unlock-emblem", aria_hidden: "true",

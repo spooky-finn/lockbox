@@ -9,7 +9,6 @@ function navigateVault(event) {
     // A pointer click can leave the WebView focused on the page background.
     const { target } = event;
     if (target !== document.body && target !== document.documentElement && !screen.contains(target)) return;
-    if (screen.querySelector("#space-switch-trigger[aria-expanded=true]")) return;
 
     const button = screen.querySelector(arrow);
     if (!button || button.disabled) return;

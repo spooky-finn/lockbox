@@ -37,7 +37,7 @@ fn mounted() -> VirtualDom {
 }
 
 #[test]
-fn header_places_space_selector_before_lock_button() {
+fn header_keeps_tab_controls_and_lock_without_space_menu() {
     use dioxus::{
         dioxus_core::{AttributeValue, Mutation},
         html::{EventData, SerializedHtmlEventConverter, SerializedMouseData},
@@ -60,9 +60,8 @@ fn header_places_space_selector_before_lock_button() {
         })
         .expect("lock button in the tab bar");
     let html = dioxus_ssr::render(&dom);
-    let selector = html.find("id=\"space-switch-trigger\"").unwrap();
-    let lock_button = html.find("aria-label=\"Lock vault\"").unwrap();
-    assert!(selector < lock_button);
+    assert!(html.contains("aria-label=\"New Tab\""));
+    assert!(!html.contains("id=\"space-switch-trigger\""));
 
     let click = Event::new(
         EventData::Mouse(SerializedMouseData::default()).into_any(),
@@ -78,7 +77,6 @@ fn header_places_space_selector_before_lock_button() {
     });
     let html = dioxus_ssr::render(&dom);
     assert!(!html.contains("aria-label=\"Lock vault\""));
-    assert!(!html.contains("id=\"space-switch-trigger\""));
 }
 
 #[test]
