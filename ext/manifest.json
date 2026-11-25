@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Lockbox · Browser companion",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Open Lockbox to unlock and approve a login, then fill it on the current website.",
   "permissions": ["activeTab", "scripting", "nativeMessaging", "idle", "tabs"],
   "optional_host_permissions": ["https://*/*"],
