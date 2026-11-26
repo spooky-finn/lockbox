@@ -77,3 +77,25 @@ fn a_new_copy_restarts_the_countdown() {
         Some(Duration::from_secs(15))
     );
 }
+
+thread_local! {
+    static WALL: std::cell::Cell<std::time::SystemTime> =
+        const { std::cell::Cell::new(std::time::SystemTime::UNIX_EPOCH) };
+}
+
+/// macOS sleep stops `Instant` but not the wall clock: a secret copied before
+/// sleep must be gone right after wake, not 20 awake seconds later.
+#[test]
+fn copied_secret_is_wiped_after_the_timeout_even_across_sleep() {
+    let board = FakeBoard::default();
+    let mut guard =
+        Guard::with_wall_clock(Box::new(board.clone()), || WALL.with(|wall| wall.get()));
+    let start = Instant::now();
+    guard.copy("s3cret", start).unwrap();
+
+    // An hour asleep: the monotonic clock moved one second, the wall an hour.
+    WALL.with(|wall| wall.set(wall.get() + Duration::from_secs(3600)));
+    guard.tick(start + Duration::from_secs(1));
+    assert_eq!(*board.0.borrow(), None);
+    assert_eq!(guard.remaining(start), None);
+}

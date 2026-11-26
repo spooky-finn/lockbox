@@ -1,6 +1,6 @@
 //! Copying secrets to the system clipboard and wiping them afterwards.
 
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use sha2::{Digest, Sha256};
 use zeroize::Zeroizing;
@@ -61,27 +61,40 @@ impl Board for SystemBoard {
 /// Remembers only a hash of what was copied, never the text itself.
 pub struct Guard {
     board: Box<dyn Board>,
-    pending: Option<([u8; 32], Instant)>,
+    /// Copied text's hash, and when to wipe it by the monotonic and wall clocks.
+    pending: Option<([u8; 32], Instant, SystemTime)>,
+    wall: fn() -> SystemTime,
 }
 
 impl Guard {
     pub fn new(board: Box<dyn Board>) -> Self {
+        Self::with_wall_clock(board, SystemTime::now)
+    }
+
+    /// `Instant` stops while macOS sleeps, so the wall clock also bounds how
+    /// long a secret survives on the clipboard across sleep.
+    pub(crate) fn with_wall_clock(board: Box<dyn Board>, wall: fn() -> SystemTime) -> Self {
         Self {
             board,
             pending: None,
+            wall,
         }
     }
 
     pub fn copy(&mut self, text: &str, now: Instant) -> Result<(), String> {
         self.board.set(text)?;
-        self.pending = Some((digest(text), now + CLEAR_AFTER));
+        self.pending = Some((digest(text), now + CLEAR_AFTER, (self.wall)() + CLEAR_AFTER));
         Ok(())
     }
 
     /// Time until the clipboard is wiped, if lockbox still owns it.
+    /// A passed wall-clock deadline (sleep) ends it at once.
     pub fn remaining(&self, now: Instant) -> Option<Duration> {
-        self.pending
-            .map(|(_, deadline)| deadline.saturating_duration_since(now))
+        let (_, deadline, wall_deadline) = self.pending?;
+        if (self.wall)() >= wall_deadline {
+            return Some(Duration::ZERO);
+        }
+        Some(deadline.saturating_duration_since(now))
     }
 
     pub fn tick(&mut self, now: Instant) {
@@ -92,7 +105,7 @@ impl Guard {
 
     /// Wipes the clipboard, unless the user has copied something else since.
     pub fn clear_now(&mut self) {
-        let Some((copied, _)) = self.pending.take() else {
+        let Some((copied, ..)) = self.pending.take() else {
             return;
         };
 
