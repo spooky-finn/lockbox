@@ -162,14 +162,16 @@ impl Batch<'_> {
                     continue;
                 }
                 Err(TransportError::Budget) => {
-                    self.invalid(hash, Error::ResourceBudgetExceeded);
+                    self.bad_copy(hash);
                     continue;
                 }
                 Err(error) => return Err(error),
             };
 
-            if bytes.len() > MAX_OBJECT_BYTES {
-                self.invalid(hash, Error::ResourceBudgetExceeded);
+            // Bytes that do not hash to their key are a bad copy, not evidence
+            // against the hash: anyone with bucket write can store junk there.
+            if bytes.len() > MAX_OBJECT_BYTES || Object::hash_bytes(&bytes) != hash {
+                self.bad_copy(hash);
                 continue;
             }
 
@@ -199,9 +201,18 @@ impl Batch<'_> {
         Ok(true)
     }
 
-    /// Bytes stored under this key can never verify. A required object stays
-    /// pending (the provider may still repair it); anything else is remembered
-    /// as rejected so one bad upload cannot abort every later pass.
+    /// The bucket holds something else under this key. A required object stays
+    /// pending; anything else is skipped this pass, neither rejected (honest
+    /// bytes may come back) nor blocking (junk must not stall publication).
+    fn bad_copy(&mut self, hash: Hash) {
+        if self.request.required.contains(&hash) {
+            self.missing.insert(hash);
+        }
+    }
+
+    /// These exact bytes hash to the key yet can never verify, so the hash
+    /// itself is invalid. A required object stays pending; anything else is
+    /// remembered as rejected so one bad upload cannot abort every later pass.
     fn invalid(&mut self, hash: Hash, error: Error) {
         if self.request.required.contains(&hash) {
             self.missing.insert(hash);

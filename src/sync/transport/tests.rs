@@ -203,24 +203,22 @@ fn discovering_a_head_fetches_its_unlisted_ancestry_in_the_same_pass() {
 }
 
 #[test]
-fn listed_objects_that_cannot_verify_are_rejected_without_failing_the_pass() {
+fn listed_objects_that_cannot_verify_are_skipped_or_rejected_without_failing_the_pass() {
     use crate::sync::protocol::{Error, MAX_OBJECT_BYTES};
     let (state, _) = fixture();
     let bytes = &state.objects[&state.genesis].0;
     let noncanonical = [b" ".as_slice(), bytes.as_slice()].concat();
     let oversized = vec![b' '; MAX_OBJECT_BYTES + 1];
+    // Only bytes that hash to their key can condemn it; other junk is a bad copy.
     for (hash, bytes, expected) in [
-        (Hash::default(), bytes.as_slice(), Error::HashMismatch),
+        (Hash::default(), bytes.as_slice(), None),
+        (Hash::default(), b"junk".as_slice(), None),
         (
             Hash::digest(b"lockbox.sync.object\0", &noncanonical),
             noncanonical.as_slice(),
-            Error::InvalidEncoding,
+            Some(Error::InvalidEncoding),
         ),
-        (
-            Hash::default(),
-            oversized.as_slice(),
-            Error::ResourceBudgetExceeded,
-        ),
+        (Hash::default(), oversized.as_slice(), None),
     ] {
         let mut provider = Memory {
             objects: BTreeMap::from([(hash, bytes.to_vec())]),
@@ -235,7 +233,10 @@ fn listed_objects_that_cannot_verify_are_rejected_without_failing_the_pass() {
         .unwrap();
         assert!(batch.objects.is_empty());
         assert!(!batch.incomplete);
-        assert_eq!(batch.rejected, vec![(hash, expected)]);
+        assert_eq!(
+            batch.rejected,
+            Vec::from_iter(expected.map(|error| (hash, error)))
+        );
         assert_eq!(provider.gets, 1);
     }
 }
@@ -495,4 +496,46 @@ fn publication_checks_unselected_outbox_items_after_readiness_guards() {
     replay.ready = true;
     replay.role = None;
     assert!(publication(&state, &replay).unwrap().is_empty());
+}
+
+/// Junk under a content address says nothing about the address itself. Once
+/// the honest bytes are back under that key, the replica must accept them.
+#[test]
+fn junk_under_a_listed_key_does_not_poison_its_hash() {
+    let (base, state, _, head) = history();
+    let honest = state.objects[&head].0.clone();
+    let mut provider = Memory {
+        objects: state
+            .objects
+            .iter()
+            .map(|(hash, bytes)| (*hash, bytes.0.clone()))
+            .collect(),
+        ..Memory::default()
+    };
+    let mut receiver = base;
+    let pass = |provider: &mut Memory, receiver: &mut SyncState| {
+        let batch = Discovery::for_state(receiver)
+            .unwrap()
+            .download(provider, &Cancellation::default())
+            .unwrap();
+        for (hash, error) in batch.rejected {
+            Machine::reject_download(receiver, hash, error);
+        }
+        for (hash, bytes) in batch.objects {
+            Machine::receive(receiver, hash, bytes).unwrap();
+        }
+    };
+
+    for junk in [b"junk".to_vec(), state.objects[&state.genesis].0.clone()] {
+        provider.objects.insert(head, junk);
+        pass(&mut provider, &mut receiver);
+        assert!(!receiver.rejected_candidates.contains_key(&head));
+    }
+
+    provider.objects.insert(head, honest);
+    pass(&mut provider, &mut receiver);
+    assert!(
+        receiver.objects.contains_key(&head) || receiver.candidates.contains_key(&head),
+        "restored honest bytes were refused"
+    );
 }

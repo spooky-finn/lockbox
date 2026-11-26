@@ -101,8 +101,8 @@ pub struct Download {
     /// unavailable, or a budget stopped the pass. References from unverified
     /// objects never set it: anyone with PUT could otherwise stall publication.
     pub incomplete: bool,
-    /// Listed objects that can never verify (bad encoding, hash or size). The
-    /// host remembers them so later passes skip them instead of failing.
+    /// Listed hashes whose own bytes can never verify. The host remembers them
+    /// so later passes skip them. Junk under a key is never reported here.
     pub rejected: Vec<(Hash, Error)>,
 }
 

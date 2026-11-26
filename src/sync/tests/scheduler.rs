@@ -635,8 +635,9 @@ fn undecodable_listed_object_is_skipped_without_failing_exchange() {
         "honest edit stuck behind junk object, status {:?}",
         session.status
     );
+    // Junk under a key is a bad copy; it must never condemn the hash itself.
     assert!(
-        vault
+        !vault
             .sync_state()
             .unwrap()
             .rejected_candidates

@@ -40,7 +40,7 @@ impl Object {
     }
 
     /// Return the complete-object address of these exact bytes.
-    pub(super) fn hash_bytes(bytes: &[u8]) -> Hash {
+    pub(crate) fn hash_bytes(bytes: &[u8]) -> Hash {
         Hash::digest(OBJECT_DOMAIN, bytes)
     }
 
