@@ -11,9 +11,9 @@ const MAX_BYTES: u64 = 8 * 1024 * 1024;
 
 fn directory() -> io::Result<PathBuf> {
     #[cfg(not(test))]
-    let root = dirs::home_dir()
-        .ok_or_else(|| io::Error::other("no home directory"))?
-        .join(".lockbox");
+    let root = crate::vault::paths::private_root(
+        &dirs::home_dir().ok_or_else(|| io::Error::other("no home directory"))?,
+    )?;
     #[cfg(test)]
     let root = {
         static ROOT: std::sync::LazyLock<tempfile::TempDir> =
