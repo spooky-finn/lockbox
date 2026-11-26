@@ -57,7 +57,11 @@ pub fn App() -> Element {
                     activity.set(Some(eval));
                     spawn(async move {
                         while let Ok(()) = eval.recv::<()>().await {
-                            runtime::record_activity();
+                            // macOS sends wheel and hover to background windows
+                            // too; only the focused window's motion is activity.
+                            if dioxus::desktop::window().is_focused() {
+                                runtime::record_activity();
+                            }
                         }
                     });
                 }
