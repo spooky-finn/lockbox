@@ -14,6 +14,9 @@ pub(crate) fn EntryIcon(
     slug: Option<String>,
     #[props(default)] url: String,
     #[props(default = false)] large: bool,
+    /// Overrides `url` for the opt-in website icon lookup only.
+    #[props(default)]
+    website: Option<String>,
 ) -> Element {
     let mut failed_favicon = use_signal(|| None::<String>);
     let enabled = try_use_context::<Signal<crate::settings::state::Settings>>()
@@ -27,7 +30,7 @@ pub(crate) fn EntryIcon(
     });
     let cache = cache();
     let website = (enabled && slug.is_none())
-        .then(|| icons::favicon_url(&url))
+        .then(|| icons::favicon_url(website.as_deref().unwrap_or(&url)))
         .flatten();
     let fetched = use_resource(use_reactive(
         (&website, &cache),

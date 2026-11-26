@@ -25,6 +25,7 @@ pub(crate) enum Control {
     ToggleIconPicker,
     CloseIconPicker,
     IconQuery(String),
+    RefreshWebsiteIcon,
 }
 
 pub(crate) struct Draft {
@@ -41,6 +42,9 @@ pub(crate) struct Draft {
     pub(crate) icon_query: String,
     /// Record data changed since editing began; shows the explicit save button.
     pub(crate) edited: bool,
+    /// URL the opt-in website icon follows. It is updated only when the URL
+    /// field loses focus, so typed prefixes never reach the network.
+    website_icon_url: Zeroizing<String>,
 }
 
 impl Draft {
@@ -53,11 +57,19 @@ impl Draft {
             Control::ToggleIconPicker => self.icon_picker_open = !self.icon_picker_open,
             Control::CloseIconPicker => self.icon_picker_open = false,
             Control::IconQuery(query) => self.icon_query = query,
+            Control::RefreshWebsiteIcon => {
+                replace_secret(&mut self.website_icon_url, &self.entry.url)
+            }
         }
+    }
+
+    pub(crate) fn website_icon_url(&self) -> &str {
+        &self.website_icon_url
     }
 
     pub(crate) fn new(entry: Entry, is_new: bool) -> Self {
         Self {
+            website_icon_url: Zeroizing::new(entry.url.clone()),
             entry,
             is_new,
             autosave_at: None,

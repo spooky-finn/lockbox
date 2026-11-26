@@ -64,7 +64,7 @@ pub(crate) fn DraftView() -> Element {
             },
             onsubmit: move |event| { event.prevent_default(); edit_workspace_ui(state, Unlocked::request_close_editor); },
             div { class: "detail-heading",
-                EntryIcon { title: entry.title.clone(), slug: entry.icon.clone(), url: entry.url.clone(), large: true }
+                EntryIcon { title: entry.title.clone(), slug: entry.icon.clone(), url: entry.url.clone(), website: draft.website_icon_url().to_owned(), large: true }
                 div { class: "detail-title",
                     input { onkeydown: move |event| finish_on_enter(state, event), id: "entry-title", class: "entry-title-input", placeholder: name_label, aria_label: name_label, required: true, onmounted: move |event| async move { if focus_field == Some(Field::Title) { let _ = event.data.set_focus(true).await; } },
                         value: "{entry.title}", oninput: move |e| set_field(state, Field::Title, e.value()) }
@@ -92,7 +92,7 @@ pub(crate) fn DraftView() -> Element {
                     }
                 }
                 div { class: "field-row",
-                    input { onkeydown: move |event| finish_on_enter(state, event), id: "entry-url", class: "field-value", placeholder: url_label, aria_label: url_label, onmounted: move |event| async move { if focus_field == Some(Field::Url) { let _ = event.data.set_focus(true).await; } }, value: "{entry.url}", oninput: move |e| set_field(state, Field::Url, e.value()) }
+                    input { onkeydown: move |event| finish_on_enter(state, event), id: "entry-url", class: "field-value", placeholder: url_label, aria_label: url_label, onmounted: move |event| async move { if focus_field == Some(Field::Url) { let _ = event.data.set_focus(true).await; } }, value: "{entry.url}", oninput: move |e| set_field(state, Field::Url, e.value()), onblur: move |_| draft_control(state, Control::RefreshWebsiteIcon) }
                 }
                 div { class: "field-row notes-row",
                     textarea { id: "entry-notes", spellcheck: "false", "autocorrect": "off", "autocapitalize": "off", class: "field-value", placeholder: note_label, aria_label: note_label,
@@ -110,7 +110,7 @@ pub(crate) fn DraftView() -> Element {
                 onchange: move |folder| edit_draft(state, |d| d.entry.folder_id = folder),
             }
             div { class: "input-actions icon-actions",
-                EntryIcon { title: entry.title.clone(), slug: entry.icon.clone(), url: entry.url.clone() }
+                EntryIcon { title: entry.title.clone(), slug: entry.icon.clone(), url: entry.url.clone(), website: draft.website_icon_url().to_owned() }
                 span { if automatic_favicon { {language.text(Text::Auto)} } else if let Some(icon) = icon { if entry.icon.is_none() { {language.text(Text::Auto)} } "{icon.title}" } else { {language.text(Text::AutoInitial)} } }
                 IconButton { icon: Icon::Image, label: language.text(Text::ChooseIcon), expanded: Some(draft.icon_picker_open),
                     onclick: move |_| draft_control(state, Control::ToggleIconPicker),

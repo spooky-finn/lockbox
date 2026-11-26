@@ -417,3 +417,57 @@ fn secret_fields_opt_out_of_spelling_and_autocorrection() {
         assert_eq!(attrs.get("autocapitalize"), Some("off"), "{id}");
     }
 }
+
+#[test]
+fn website_icon_lookup_waits_until_the_url_field_loses_focus() {
+    use dioxus::dioxus_core::{AttributeValue, Mutation};
+    use dioxus::html::{EventData, SerializedFocusData, SerializedHtmlEventConverter};
+    dioxus::html::set_event_converter(Box::new(SerializedHtmlEventConverter));
+    fn website(dom: &VirtualDom) -> String {
+        dom.in_scope(ScopeId::APP, || {
+            let state = consume_context::<Session>();
+            let screen = state.read();
+            let Screen::Unlocked(u) = &*screen else {
+                panic!("locked");
+            };
+            u.draft.as_ref().unwrap().website_icon_url().to_owned()
+        })
+    }
+    let mut dom = mounted();
+    dom.in_scope(ScopeId::APP, || {
+        let state = consume_context::<Session>();
+        edit_unlocked(state, |u| u.start_new());
+        set_field(state, Field::Url, "https://ba".into());
+    });
+    let changes = dom.render_immediate_to_vec();
+    // Every keystroke is a new prefix; none of them may reach the icon lookup.
+    assert_eq!(website(&dom), "");
+    let url_input = changes
+        .edits
+        .iter()
+        .find_map(|edit| match edit {
+            Mutation::SetAttribute {
+                name: "value",
+                value: AttributeValue::Text(value),
+                id,
+                ..
+            } if value == "https://ba" => Some(*id),
+            _ => None,
+        })
+        .expect("URL input is rendered");
+    update(&mut dom, |state| {
+        set_field(state, Field::Url, "https://bank.example".into())
+    });
+    assert_eq!(website(&dom), "");
+    let blur = changes.edits.iter().any(|edit| {
+        matches!(edit, Mutation::NewEventListener { name, id } if name == "blur" && *id == url_input)
+    });
+    assert!(blur, "URL input commits the website icon on blur");
+    let event = Event::new(
+        EventData::Focus(SerializedFocusData::default()).into_any(),
+        false,
+    );
+    dom.runtime().handle_event("blur", event, url_input);
+    dom.render_immediate_to_vec();
+    assert_eq!(website(&dom), "https://bank.example");
+}
