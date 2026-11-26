@@ -65,3 +65,28 @@ fn attachment_ids_require_canonical_hex_without_restricting_legacy_entry_ids() {
     entry.validate_attachments().unwrap();
     assert_eq!(entry.id, "legacy-local-id");
 }
+
+#[test]
+fn debug_output_never_contains_secrets() {
+    let mut entry = Entry::new();
+    entry.title = "Visible title".into();
+    entry.username = "fictional-login".into();
+    entry.password = "fictional-password".into();
+    entry.notes = "fictional-note".into();
+    entry.totp = Some(Totp {
+        secret: "JBSWY3DPEHPK3PXP".into(),
+        algorithm: TotpAlgorithm::Sha1,
+        digits: 6,
+        period: 30,
+    });
+    let shown = format!("{entry:?} {entry:#?}");
+    assert!(shown.contains("Visible title"));
+    for secret in [
+        "fictional-login",
+        "fictional-password",
+        "fictional-note",
+        "JBSWY3DPEHPK3PXP",
+    ] {
+        assert!(!shown.contains(secret), "Debug leaked {secret}");
+    }
+}

@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// One saved account. Every text field is wiped from memory when the entry is dropped.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
+#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 pub struct Entry {
     pub id: String,
     pub title: String,
@@ -32,7 +32,7 @@ impl Entry {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 pub struct Totp {
     /// Base32 shared secret, as shown by the service or in an otpauth:// link.
     pub secret: String,
@@ -64,6 +64,34 @@ pub struct Attachment {
     pub name: String,
     #[serde(with = "file_bytes")]
     pub data: Vec<u8>,
+}
+
+/// Debug output can reach logs, panics and test failures: secrets show as lengths.
+impl std::fmt::Debug for Entry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Entry")
+            .field("id", &self.id)
+            .field("title", &self.title)
+            .field("username_chars", &self.username.chars().count())
+            .field("password_chars", &self.password.chars().count())
+            .field("url", &self.url)
+            .field("notes_chars", &self.notes.chars().count())
+            .field("totp", &self.totp)
+            .field("icon", &self.icon)
+            .field("folder_id", &self.folder_id)
+            .field("attachments", &self.attachments)
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for Totp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Totp")
+            .field("algorithm", &self.algorithm)
+            .field("digits", &self.digits)
+            .field("period", &self.period)
+            .finish_non_exhaustive()
+    }
 }
 
 impl std::fmt::Debug for Attachment {
