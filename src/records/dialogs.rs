@@ -113,7 +113,7 @@ pub(crate) fn export_attachment(id: &str) {
 
     spawn(async move {
         if let Some(path) = rfd::AsyncFileDialog::new()
-            .set_file_name(&name)
+            .set_file_name(crate::records::attachments::export_file_name(&name))
             .save_file()
             .await
         {
