@@ -596,3 +596,22 @@ fn a_local_vault_cannot_be_open_twice() {
     drop(vault);
     assert!(Vault::open(&path, &password("master")).is_ok());
 }
+
+/// Creation never replaces whatever occupies the path by the time it writes.
+/// A dangling symlink passes the early existence check, like a file that
+/// appears during key derivation, and must still be left untouched.
+#[cfg(unix)]
+#[test]
+fn creating_a_vault_never_replaces_what_appeared_at_its_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("vault.lbx");
+    let target = dir.path().join("elsewhere.lbx");
+    std::os::unix::fs::symlink(&target, &path).unwrap();
+
+    assert!(matches!(
+        Vault::create(&path, &password("master"), FAST),
+        Err(VaultError::AlreadyExists(_))
+    ));
+    assert_eq!(fs::read_link(&path).unwrap(), target);
+    assert!(!target.exists());
+}

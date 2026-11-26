@@ -285,7 +285,9 @@ impl Vault {
             witnesses: witness::system(),
             protection: None,
         };
-        vault.save()?;
+        // Exclusive create: a file that appeared at this path during the key
+        // derivation above (a sync client, say) must never be replaced.
+        vault.save_inner(true)?;
         Ok(vault)
     }
 
