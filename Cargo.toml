@@ -41,7 +41,6 @@ percent-encoding = "2"
 flate2 = "1"
 kuchikiki = "=0.8.8-speedreader"
 zeroize = { version = "1.8", features = ["derive", "serde"] }
-rmcp = { version = "3.8.0", features = ["server"] }
 rand_core = { version = "0.9", features = ["os_rng"] }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
 serde_jcs = "0.2"
