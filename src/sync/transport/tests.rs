@@ -612,3 +612,46 @@ fn skipped_keys_are_not_fetched_unless_required() {
     assert_eq!(batch.objects.len(), 1);
     assert!(batch.bad_copies.is_empty());
 }
+
+/// A profile poisoned by an older version heals on load: rejections that only a
+/// bad download could cause are dropped, authority rejections are kept, and the
+/// honest object is received on the next pass.
+#[test]
+fn loading_a_poisoned_profile_forgets_download_rejections_only() {
+    use crate::sync::protocol::Error;
+    let (base, state, device, head) = history();
+    let mut poisoned = base;
+    let unauthorized = Hash([7; 32]);
+    Machine::reject_download(&mut poisoned, head, Error::InvalidEncoding);
+    Machine::reject_download(&mut poisoned, Hash([5; 32]), Error::HashMismatch);
+    Machine::reject_download(&mut poisoned, Hash([6; 32]), Error::ResourceBudgetExceeded);
+    Machine::reject_download(&mut poisoned, unauthorized, Error::UnauthorizedDevice);
+
+    let saved = serde_json::to_vec(&poisoned).unwrap();
+    let mut loaded: SyncState = serde_json::from_slice(&saved).unwrap();
+    assert_eq!(
+        loaded.rejected_candidates,
+        BTreeMap::from([(unauthorized, Error::UnauthorizedDevice)])
+    );
+    assert!(Machine::replay(&loaded, &device).unwrap().ready);
+
+    let mut provider = Memory {
+        objects: state
+            .objects
+            .iter()
+            .map(|(hash, bytes)| (*hash, bytes.0.clone()))
+            .collect(),
+        ..Memory::default()
+    };
+    let batch = Discovery::for_state(&loaded)
+        .unwrap()
+        .download(&mut provider, &Cancellation::default())
+        .unwrap();
+    for (hash, bytes) in batch.objects {
+        Machine::receive(&mut loaded, hash, bytes).unwrap();
+    }
+    assert!(loaded.objects.contains_key(&head));
+    let replay = Machine::replay(&loaded, &device).unwrap();
+    assert!(replay.ready);
+    assert_eq!(replay.projection.entries()[0].title, "Third");
+}

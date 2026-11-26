@@ -65,7 +65,11 @@ pub struct SyncState {
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub candidates: BTreeMap<Hash, Blob>,
     /// Bounded diagnostics retain no rejected object bytes or authority.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    #[serde(
+        default,
+        skip_serializing_if = "BTreeMap::is_empty",
+        deserialize_with = "forget_bad_copies"
+    )]
     pub rejected_candidates: BTreeMap<Hash, Error>,
     /// Locally committed objects awaiting provider acknowledgement.
     pub outbox: BTreeSet<Hash>,
@@ -75,6 +79,23 @@ pub struct SyncState {
     pub fault: Option<Error>,
     /// Last successful exchange time for display, never an ordering or trust input.
     pub last_exchange: Option<u64>,
+}
+
+/// Older versions also rejected a hash when the bucket held junk under its key.
+/// Those entries say nothing about the hash, so drop them on load and let the
+/// honest object be fetched again. A hash whose own bytes are invalid is simply
+/// rejected again after one more download. Keeps the profile format unchanged.
+fn forget_bad_copies<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> std::result::Result<BTreeMap<Hash, Error>, D::Error> {
+    let mut rejected = BTreeMap::<Hash, Error>::deserialize(deserializer)?;
+    rejected.retain(|_, error| {
+        !matches!(
+            error,
+            Error::InvalidEncoding | Error::HashMismatch | Error::ResourceBudgetExceeded
+        )
+    });
+    Ok(rejected)
 }
 
 /// Public join metadata. Authenticate the complete value independently before use;
