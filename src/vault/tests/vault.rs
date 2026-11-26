@@ -132,6 +132,38 @@ fn vaults_written_before_folders_open_without_migration() {
 }
 
 #[test]
+fn saved_bytes_match_the_plain_serde_json_encoding() {
+    let dir = tempfile::tempdir().unwrap();
+    let (path, mut vault) = new_vault(&dir);
+    vault.entries[0].notes = "fictional note 雪🗝\n\"\\ ".repeat(512);
+    vault.save().unwrap();
+    let data = fs::read(&path).unwrap();
+    let (header, ciphertext) = data.split_at(Header::parse(&data).unwrap().len());
+    let contents = decrypt(&data, &vault.key).unwrap();
+    let plaintext = Zeroizing::new(
+        serde_json::to_vec(&ContentsRef {
+            entries: &contents.entries,
+            history: [&contents.history, &[]],
+            folders: &contents.folders,
+            local_icon: contents.local_icon.as_ref(),
+            profile: contents.profile.as_ref(),
+            generation: contents.generation,
+        })
+        .unwrap(),
+    );
+    let expected = cipher(&vault.key)
+        .encrypt(
+            XNonce::from_slice(&header[66..HEADER_LEN]),
+            Payload {
+                msg: &plaintext,
+                aad: header,
+            },
+        )
+        .unwrap();
+    assert_eq!(ciphertext, expected);
+}
+
+#[test]
 fn wrong_password_is_reported_as_such() {
     let dir = tempfile::tempdir().unwrap();
     let (path, _) = new_vault(&dir);

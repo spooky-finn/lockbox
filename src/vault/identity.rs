@@ -202,7 +202,7 @@ impl Identity {
         header.extend_from_slice(&slots.password);
         header.extend_from_slice(&slots.phrase);
         let plaintext =
-            Zeroizing::new(serde_json::to_vec(self).expect("identity always serializes"));
+            crate::serialization::json_zeroizing(self).expect("identity always serializes");
         let ciphertext = format::cipher(&key)
             .encrypt(
                 XNonce::from_slice(&nonce),

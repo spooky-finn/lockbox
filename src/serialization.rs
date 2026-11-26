@@ -9,6 +9,16 @@ pub(crate) fn json_size(value: &impl Serialize) -> serde_json::Result<usize> {
     Ok(counter.bytes)
 }
 
+/// Same bytes as `serde_json::to_vec`, in a wiped buffer sized up front so that
+/// growth never frees an unwiped plaintext prefix.
+pub(crate) fn json_zeroizing(
+    value: &impl Serialize,
+) -> serde_json::Result<zeroize::Zeroizing<Vec<u8>>> {
+    let mut bytes = zeroize::Zeroizing::new(Vec::with_capacity(json_size(value)?));
+    serde_json::to_writer(&mut *bytes, value)?;
+    Ok(bytes)
+}
+
 pub(crate) fn canonical_size(value: &impl Serialize) -> serde_json::Result<usize> {
     let mut counter = ByteCount::default();
     serde_jcs::to_writer(&mut counter, value)?;
@@ -119,6 +129,21 @@ mod tests {
         let error = canonical_matches(&FailsAfterElement, b"wrong prefix").unwrap_err();
         assert!(error.to_string().contains("late serializer error"));
         assert!(canonical_matches(&f64::NAN, b"null").is_err());
+    }
+
+    #[test]
+    fn zeroizing_json_matches_serde_bytes_without_growing_the_buffer() {
+        let note = "fictional note 雪🗝\n\"\\ ".repeat(4096);
+        for value in [
+            serde_json::json!({}),
+            serde_json::json!({"z": "雪\n\"\\", "a": 0.000001}),
+            serde_json::json!({"entries": [{"password": "fictional-secret", "notes": note}]}),
+        ] {
+            let bytes = json_zeroizing(&value).unwrap();
+            assert_eq!(bytes.as_slice(), serde_json::to_vec(&value).unwrap());
+            // Growth would free earlier plaintext buffers without wiping them.
+            assert_eq!(bytes.capacity(), bytes.len());
+        }
     }
 
     #[test]

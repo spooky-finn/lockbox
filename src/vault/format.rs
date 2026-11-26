@@ -289,7 +289,7 @@ pub(super) fn encrypt(
     nonce: &[u8; NONCE_LEN],
 ) -> Vec<u8> {
     let plaintext =
-        Zeroizing::new(serde_json::to_vec(&contents).expect("vault entries always serialize"));
+        crate::serialization::json_zeroizing(&contents).expect("vault entries always serialize");
     cipher(key)
         .encrypt(
             XNonce::from_slice(nonce),
