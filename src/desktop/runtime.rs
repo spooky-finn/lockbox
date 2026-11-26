@@ -357,6 +357,21 @@ pub(crate) fn copy(field: CopyField) -> bool {
     copied
 }
 
+/// A selection copied with the native Copy item, routed through the guard.
+pub(crate) fn copy_text(text: &str) {
+    let mut state = consume_context::<Session>();
+    let error = consume_context::<SecurityHandle>()
+        .borrow_mut()
+        .copy_text(text)
+        .err();
+    if error.is_some()
+        && let Screen::Unlocked(u) = &mut *state.write()
+    {
+        u.error = error;
+    }
+    publish_status();
+}
+
 #[cfg(test)]
 #[path = "tests/runtime.rs"]
 mod tests;

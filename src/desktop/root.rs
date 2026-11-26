@@ -10,6 +10,7 @@ const CSS: &str = include_str!("../../assets/app.css");
 pub fn App() -> Element {
     let state = runtime::use_runtime();
     crate::desktop::window::use_interface_zoom();
+    crate::desktop::window::use_guarded_copy();
     dioxus_core::use_hook_with_cleanup(
         || document::eval(include_str!("../../assets/unlock-navigation.js")),
         |navigation| {

@@ -47,3 +47,21 @@ fn totp_copy_keeps_pending_clipboard_for_missing_or_invalid_settings() {
     security.clipboard.clear_now();
     assert_eq!(*board.0.borrow(), None);
 }
+
+#[test]
+fn text_copied_with_the_shortcut_is_wiped_like_a_copied_field() {
+    let board = FakeBoard::default();
+    let mut security = Security {
+        clipboard: Guard::new(Box::new(board.clone())),
+        auto_lock: AutoLock::new(5, Instant::now(), SystemTime::now()),
+        screen_watch: ScreenWatch::default(),
+    };
+
+    security.copy_text("fictional-s3cret").unwrap();
+    assert_eq!(board.0.borrow().as_deref(), Some("fictional-s3cret"));
+    assert!(security.status().clipboard_active);
+    security
+        .clipboard
+        .tick(Instant::now() + crate::platform::clipboard::CLEAR_AFTER);
+    assert_eq!(*board.0.borrow(), None);
+}

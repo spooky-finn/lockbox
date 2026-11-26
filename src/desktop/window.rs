@@ -144,6 +144,25 @@ pub(crate) fn use_interface_zoom() {
     });
 }
 
+/// Cmd+C and Edit → Copy reach the clipboard only through its guard.
+pub(crate) fn use_guarded_copy() {
+    let copies = dioxus_core::use_hook_with_cleanup(
+        || document::eval(include_str!("../../assets/guarded-copy.js")),
+        |copies| {
+            let _ = copies.send(());
+        },
+    );
+    use_future(move || {
+        let mut copies = copies;
+        async move {
+            while let Ok(text) = copies.recv::<String>().await {
+                let text = zeroize::Zeroizing::new(text);
+                crate::desktop::runtime::copy_text(&text);
+            }
+        }
+    });
+}
+
 /// Opens a separate locked window.
 pub(crate) fn open() {
     let pending = dioxus::desktop::window().new_window(VirtualDom::new(App), config(false));

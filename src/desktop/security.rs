@@ -86,6 +86,11 @@ impl Security {
             },
         };
 
+        self.copy_text(text)
+    }
+
+    /// Any copied text, e.g. a selection copied with Cmd+C, through the guard.
+    pub fn copy_text(&mut self, text: &str) -> Result<(), String> {
         self.clipboard
             .copy(text, Instant::now())
             .map_err(|error| format!("Could not copy: {error}"))
