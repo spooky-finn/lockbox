@@ -49,6 +49,7 @@ fn add(vault: &mut Vault, title: &str) {
 }
 fn delivery(vault: &Vault) -> Download {
     Download {
+        bad_copies: Vec::new(),
         rejected: Vec::new(),
         incomplete: false,
         objects: vault

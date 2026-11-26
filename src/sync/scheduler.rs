@@ -66,6 +66,8 @@ pub(crate) struct SpaceSync {
     /// publication still proceeds: signed outbox objects never depend on what
     /// the provider withholds, and junk from any writer must not stall it.
     incomplete: bool,
+    /// Keys that recently held junk in this space's bucket.
+    bad_copies: sync::BadCopies,
 }
 
 impl Default for SpaceSync {
@@ -85,6 +87,7 @@ impl SpaceSync {
             status: Status::Saved,
             stopped: false,
             incomplete: false,
+            bad_copies: sync::BadCopies::default(),
         }
     }
 
@@ -137,6 +140,7 @@ impl SpaceSync {
                 self.worker = None;
                 self.stopped = false;
                 self.status = Status::Saved;
+                self.bad_copies = sync::BadCopies::default();
             }
 
             self.scope = Some(scope);
@@ -197,6 +201,7 @@ impl SpaceSync {
 
     fn downloaded(&mut self, vault: &mut Vault, batch: Download) -> VaultResult<()> {
         let incomplete = batch.incomplete;
+        self.bad_copies.record(&batch);
         vault.receive_sync(batch)?;
         let replay = vault
             .sync_replay_state()?
@@ -302,7 +307,7 @@ impl SpaceSync {
         let state = vault
             .sync_state()
             .ok_or(crate::sync::protocol::Error::UnauthorizedDevice)?;
-        let request = sync::Discovery::for_state(state)?;
+        let request = sync::Discovery::for_state(state)?.skipping(self.bad_copies.skipped());
         self.start_exchange(vault, move |storage, cancel| {
             request.download(storage, cancel).map(Reply::Downloaded)
         })

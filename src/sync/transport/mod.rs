@@ -77,7 +77,7 @@ pub trait StorageFactory: Send + Sync {
 
 mod discovery;
 
-pub use discovery::Discovery;
+pub use discovery::{BadCopies, Discovery};
 
 #[derive(Clone, Default)]
 pub struct Cancellation(Arc<AtomicBool>);
@@ -104,6 +104,9 @@ pub struct Download {
     /// Listed hashes whose own bytes can never verify. The host remembers them
     /// so later passes skip them. Junk under a key is never reported here.
     pub rejected: Vec<(Hash, Error)>,
+    /// Keys whose bucket bytes did not hash to the key. Says nothing about the
+    /// hash; the host may back off from re-downloading them for a few passes.
+    pub bad_copies: Vec<Hash>,
 }
 
 /// Full bounded scan, deliberately independent of Storj's listing order. Known

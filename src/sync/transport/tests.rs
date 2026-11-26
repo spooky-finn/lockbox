@@ -539,3 +539,76 @@ fn junk_under_a_listed_key_does_not_poison_its_hash() {
         "restored honest bytes were refused"
     );
 }
+
+fn pass_result(objects: &[Hash], bad_copies: &[Hash]) -> Download {
+    Download {
+        objects: objects.iter().map(|hash| (*hash, Vec::new())).collect(),
+        incomplete: false,
+        rejected: Vec::new(),
+        bad_copies: bad_copies.to_vec(),
+    }
+}
+
+/// Junk under a key waits 2, 4, 8 … passes, is retried in between and forgotten
+/// as soon as honest bytes arrive. The map stays bounded under a flood.
+#[test]
+fn bad_copies_back_off_exponentially_and_clear_on_honest_bytes() {
+    let junk = Hash([9; 32]);
+    let mut backoff = BadCopies::default();
+    let mut fetched_at = Vec::new();
+    for pass in 0..40u64 {
+        let skipped = backoff.skipped().any(|hash| hash == junk);
+        let bad: &[Hash] = if skipped { &[] } else { &[junk] };
+        if !skipped {
+            fetched_at.push(pass);
+        }
+        backoff.record(&pass_result(&[], bad));
+    }
+    assert_eq!(fetched_at, vec![0, 3, 8, 17, 34]);
+
+    backoff.record(&pass_result(&[junk], &[]));
+    assert_eq!(backoff.skipped().count(), 0, "honest bytes must clear it");
+
+    for _ in 0..2000u32 {
+        backoff.record(&pass_result(&[], &[junk]));
+    }
+    assert!(backoff.skipped().any(|hash| hash == junk));
+    let mut flood = BadCopies::default();
+    let keys: Vec<_> = (0..3000u32)
+        .map(|index| {
+            let mut key = [0xB0; 32];
+            key[..4].copy_from_slice(&index.to_be_bytes());
+            Hash(key)
+        })
+        .collect();
+    flood.record(&pass_result(&[], &keys));
+    assert!(flood.skipped().count() <= 1024);
+}
+
+/// A skipped key costs no GET, but a required object is fetched regardless.
+#[test]
+fn skipped_keys_are_not_fetched_unless_required() {
+    let (state, _) = fixture();
+    let join = Machine::join(
+        state.space,
+        state.namespace,
+        state.genesis,
+        state.owner_root,
+    );
+    let junk = Hash([9; 32]);
+    let mut provider = Memory {
+        objects: BTreeMap::from([
+            (junk, b"junk".to_vec()),
+            (state.genesis, state.objects[&state.genesis].0.clone()),
+        ]),
+        ..Memory::default()
+    };
+    let batch = Discovery::for_state(&join)
+        .unwrap()
+        .skipping([junk, state.genesis])
+        .download(&mut provider, &Cancellation::default())
+        .unwrap();
+    assert_eq!(provider.gets, 1);
+    assert_eq!(batch.objects.len(), 1);
+    assert!(batch.bad_copies.is_empty());
+}

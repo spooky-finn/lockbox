@@ -219,6 +219,7 @@ fn downloaded_history_waits_until_the_active_draft_is_finished() {
     );
     Machine::complete_intent(&mut remote, &device).unwrap();
     let batch = Download {
+        bad_copies: Vec::new(),
         rejected: Vec::new(),
         objects: remote.objects.into_iter().map(|(h, b)| (h, b.0)).collect(),
         incomplete: true,
@@ -383,6 +384,7 @@ fn unadmitted_device_waits_for_the_owner_without_reporting_removal() {
     let mut guest = vault(&guest_dir);
     guest.join_space(owner.space_descriptor().unwrap()).unwrap();
     let batch = Download {
+        bad_copies: Vec::new(),
         rejected: Vec::new(),
         incomplete: false,
         objects: owner
@@ -472,6 +474,7 @@ fn a_pending_receive_commit_cancels_old_work_and_resumes_after_storage_recovers(
     assert!(
         vault
             .receive_sync(Download {
+                bad_copies: Vec::new(),
                 rejected: Vec::new(),
                 objects: vec![(hash, remote.objects[&hash].0.clone())],
                 incomplete: false

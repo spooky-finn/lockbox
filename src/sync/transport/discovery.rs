@@ -11,7 +11,7 @@ use crate::sync::{
     protocol::{Error, Hash, MAX_OBJECT_BYTES, MAX_OBJECTS, Object, SyncState, decode},
     transport::{Cancellation, Download, MAX_BATCH_BYTES, Result, Storage, TransportError},
 };
-use std::collections::{BTreeSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 const MAX_DOWNLOADS: usize = 128;
 const MAX_FETCHES: usize = 256;
@@ -27,6 +27,8 @@ pub struct Discovery {
     required: BTreeSet<Hash>,
     /// Dependencies of unverified candidates: fetched, never required.
     hints: BTreeSet<Hash>,
+    /// Keys recently seen holding junk. Skipped without a GET unless required.
+    skipped: BTreeSet<Hash>,
 }
 
 impl Discovery {
@@ -36,7 +38,14 @@ impl Discovery {
             known,
             required: BTreeSet::new(),
             hints: BTreeSet::new(),
+            skipped: BTreeSet::new(),
         }
+    }
+
+    /// Skip keys that recently held junk. Required objects are always fetched.
+    pub fn skipping(mut self, keys: impl IntoIterator<Item = Hash>) -> Self {
+        self.skipped.extend(keys);
+        self
     }
 
     /// Derive outstanding references from the durable local ciphertext journal.
@@ -91,6 +100,7 @@ impl Discovery {
                 .collect(),
             objects: Vec::new(),
             rejected: Vec::new(),
+            bad_copies: Vec::new(),
             bytes: 0,
         };
 
@@ -137,6 +147,7 @@ struct Batch<'a> {
     queue: VecDeque<Hash>,
     objects: Vec<(Hash, Vec<u8>)>,
     rejected: Vec<(Hash, Error)>,
+    bad_copies: Vec<Hash>,
     bytes: usize,
 }
 
@@ -146,7 +157,10 @@ impl Batch<'_> {
         while let Some(hash) = self.queue.pop_front() {
             cancel.check()?;
 
-            if self.request.known.contains(&hash) || self.attempted.contains(&hash) {
+            if self.request.known.contains(&hash)
+                || self.attempted.contains(&hash)
+                || (self.request.skipped.contains(&hash) && !self.request.required.contains(&hash))
+            {
                 continue;
             }
 
@@ -207,6 +221,8 @@ impl Batch<'_> {
     fn bad_copy(&mut self, hash: Hash) {
         if self.request.required.contains(&hash) {
             self.missing.insert(hash);
+        } else {
+            self.bad_copies.push(hash);
         }
     }
 
@@ -230,6 +246,60 @@ impl Batch<'_> {
             objects: self.objects,
             incomplete: limited || blocking,
             rejected: self.rejected,
+            bad_copies: self.bad_copies,
+        }
+    }
+}
+
+/// In-memory back-off for keys whose bucket bytes were junk, so one bad upload
+/// is not re-downloaded on every pass. Never persisted: it describes the bucket
+/// right now, not the hash. Honest bytes restored under a key are picked up
+/// within at most [`BadCopies::MAX_WAIT`] passes.
+#[derive(Default)]
+pub struct BadCopies {
+    pass: u64,
+    /// Key -> (consecutive bad copies, first pass allowed to fetch it again).
+    keys: BTreeMap<Hash, (u32, u64)>,
+}
+
+impl BadCopies {
+    pub const MAX_WAIT: u64 = 64;
+    const LIMIT: usize = 1024;
+
+    /// Keys the next pass should skip.
+    pub fn skipped(&self) -> impl Iterator<Item = Hash> + '_ {
+        self.keys
+            .iter()
+            .filter(|(_, (_, retry))| *retry > self.pass)
+            .map(|(hash, _)| *hash)
+    }
+
+    /// Learn from a finished pass: received keys are cleared, junk keys wait
+    /// 2, 4, 8 … passes, capped at [`BadCopies::MAX_WAIT`].
+    pub fn record(&mut self, download: &Download) {
+        self.pass += 1;
+        for (hash, _) in &download.objects {
+            self.keys.remove(hash);
+        }
+        for hash in &download.bad_copies {
+            let strikes = self.keys.get(hash).map_or(0, |(strikes, _)| *strikes) + 1;
+            let wait = 1u64
+                .checked_shl(strikes)
+                .unwrap_or(u64::MAX)
+                .min(Self::MAX_WAIT);
+            self.keys.insert(*hash, (strikes, self.pass + wait));
+        }
+        // Bounded: forget the keys due soonest; at worst they are fetched again.
+        while self.keys.len() > Self::LIMIT {
+            let Some(soonest) = self
+                .keys
+                .iter()
+                .min_by_key(|(_, (_, retry))| *retry)
+                .map(|(hash, _)| *hash)
+            else {
+                break;
+            };
+            self.keys.remove(&soonest);
         }
     }
 }
