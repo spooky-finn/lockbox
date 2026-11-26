@@ -432,6 +432,7 @@ fn Members(blocked: bool) -> Element {
                                 if can_manage && Some(certificate.body.device) != controller {
                                     if u.sharing.confirm_remove == Some(certificate.body.device) {
                                         p { class: "notice", {language.text(Text::SharingRemovalHint)} }
+                                        p { class: "notice", {language.text(Text::SharingRevokeStorageKeyHint)} }
                                         button { class: "danger", disabled: blocked, onclick: { let device = certificate.body.device; move |_| act(Action::Remove(device)) }, {language.text(Text::SharingConfirmRemoval)} }
                                         button { class: "quiet", onclick: move |_| edit_unlocked(state, |u| u.sharing.confirm_remove = None), {language.text(Text::Cancel)} }
                                     } else {

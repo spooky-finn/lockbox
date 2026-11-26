@@ -657,3 +657,40 @@ fn admin_reviews_the_signed_name_and_exact_ids_before_approval() {
     assert!(!primary.contains(&ticket.verification_code().unwrap().to_string()));
     assert!(!primary.contains("Save sharing file"));
 }
+
+#[test]
+fn removal_confirmation_tells_the_admin_to_revoke_shared_storage_keys() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut owner = vault(&directory, "owner");
+    let mut guest = vault(&directory, "guest");
+    let certificate = guest.device_certificate().unwrap();
+    let device = certificate.body.device;
+    let offer = owner
+        .issue_invitation(certificate, Role::Editor, None)
+        .unwrap();
+    let response = guest
+        .accept_invitation(offer.clone(), offer.descriptor())
+        .unwrap();
+    owner.admit_invitation(response, 0).unwrap();
+    let mut dom = mounted();
+    update(&mut dom, |state| {
+        actions::set_language(crate::settings::language::Language::English);
+        edit_unlocked(state, |u| {
+            u.vault = owner;
+            u.open_sharing();
+        });
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(!html.contains("storage provider"));
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| u.sharing.confirm_remove = Some(device));
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("Rejoining requires fresh keys"));
+    assert!(html.contains("revoke or rotate it with your storage provider"));
+    update(&mut dom, |_| {
+        actions::set_language(crate::settings::language::Language::Russian);
+    });
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("отзовите или смените его у провайдера"));
+}
