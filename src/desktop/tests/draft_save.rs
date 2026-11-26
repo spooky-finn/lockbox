@@ -165,3 +165,28 @@ fn escape_leaves_edit_mode_first_and_closes_the_record_next() {
     workspace.complete_background_save();
     assert!(workspace.selected.is_none());
 }
+
+#[test]
+fn escape_returns_from_every_page_to_the_vault_before_closing_the_record() {
+    use crate::desktop::workspace::Page;
+    let dir = tempfile::tempdir().unwrap();
+    let mut workspace = unlocked(&dir);
+    let id = add(&mut workspace, "Kept", "user", "https://example.invalid");
+
+    for (page, name) in [
+        (Page::Trash, "trash"),
+        (Page::Settings, "settings"),
+        (Page::Sharing, "participants"),
+        (Page::History, "history"),
+    ] {
+        workspace.page = page;
+        workspace.escape();
+        workspace.complete_background_save();
+        assert!(workspace.page == Page::Vault, "Escape stayed on {name}");
+        assert_eq!(workspace.selected.as_deref(), Some(id.as_str()));
+    }
+
+    workspace.escape();
+    workspace.complete_background_save();
+    assert!(workspace.selected.is_none());
+}

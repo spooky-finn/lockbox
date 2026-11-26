@@ -1,7 +1,7 @@
 //! The writer borrows ownership of the live vault for one draft commit at a time.
 
 use crate::{
-    desktop::workspace::{Destination, Unlocked},
+    desktop::workspace::{Destination, Page, Unlocked},
     records::entry::Entry,
     vault::Vault,
 };
@@ -145,10 +145,13 @@ impl Unlocked {
         self.request_after(AfterSave::CloseEditor);
     }
 
-    /// Escape climbs one level: editing → the saved record → no record.
+    /// Escape climbs one level: editing → the saved record → no record. Any
+    /// other page (trash, history, participants, settings) returns to the vault.
     pub(crate) fn escape(&mut self) {
         if self.draft.is_some() {
             self.request_close_editor();
+        } else if self.page != Page::Vault {
+            self.page = Page::Vault;
         } else if self.selected.is_some() {
             self.request_navigation(Destination::Close);
         }

@@ -48,7 +48,7 @@ Run the test suites locally from the repository root:
 cargo test --locked --all-targets
 cargo test --locked --doc
 npm --prefix ext run check
-node --test tests/tree-navigation.test.mjs
+node --test tests/tree-navigation.test.mjs tests/escape-navigation.test.mjs
 python3 -B -m unittest discover -s .github/scripts/tests -v
 ```
 

@@ -41,6 +41,14 @@ pub(crate) fn UnlockedView() -> Element {
             .is_some_and(|started| started.elapsed() < UNLOCK_SPELL_DURATION),
         Screen::Locked(_) => false,
     });
+    // Escape outside the record sidebar: settings, trash, history, participants.
+    let escape = use_hook(|| std::rc::Rc::new(std::cell::Cell::new(None::<document::Eval>)));
+    let escape_cleanup = escape.clone();
+    use_drop(move || {
+        if let Some(eval) = escape_cleanup.take() {
+            let _ = eval.send(());
+        }
+    });
     let layout = use_unlocked_selector(|u| WorkspaceLayout {
         page: u.page,
         selected: u.selected.clone(),
@@ -75,6 +83,19 @@ pub(crate) fn UnlockedView() -> Element {
         }
         div { class: if has_detail { "workspace has-detail" } else { "workspace" },
             onkeydown: move |event| handle_record_shortcut(state, event),
+            onmounted: move |_| {
+                let mut eval = document::eval(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/escape-navigation.js")));
+                // A remount must not leave a second listener behind.
+                if let Some(previous) = escape.replace(Some(eval)) {
+                    let _ = previous.send(());
+                }
+                spawn(async move {
+                    while eval.recv::<String>().await.is_ok() {
+                        crate::desktop::runtime::record_activity();
+                        edit_workspace_ui(state, |u| u.escape());
+                    }
+                });
+            },
             if settings_open { crate::settings::view::SettingsSidebar { section: settings_section } } else { Sidebar {} }
             section { class: "detail",
                 if !records_open && (settings_open || sharing_open || (!editing && has_detail)) {
