@@ -315,7 +315,7 @@ fn RequestCard(session: Hash, request: Hash, blocked: bool) -> Element {
     let role = existing_role.unwrap_or(*selected.read());
     rsx! {
         section { class: "sharing-request stack",
-            h3 { "{contact.body.username}" }
+            h3 { {crate::sync::protocol::pairing::display_name(&contact.body.username)} }
             p { class: "muted", {language.text(Text::SharingUserId)} }
             code { class: "sharing-code", "{certificate.user}" }
             p { class: "muted", {language.text(Text::SharingDeviceId)} }
@@ -369,7 +369,7 @@ fn JoinLink(blocked: bool) -> Element {
                 button { class: "quiet", disabled: blocked, onclick: move |_| act(Command::Retry), {language.text(Text::LinkRetry)} }
                 button { class: "quiet", disabled: blocked, onclick: move |_| { if let Some(session) = session { act(Command::Dismiss(session)); } }, {language.text(Text::LinkEdit)} }
             } else if let Some(link) = u.vault.joining_link() {
-                p { "{link.ticket.body.space_name}" }
+                p { {crate::sync::protocol::pairing::display_name(&link.ticket.body.space_name)} }
                 if link.managed.is_some() && link.consented && link.closed.is_none() {
                     details {
                         summary { {language.text(Text::ExpiredMailbox)} }

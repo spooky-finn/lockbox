@@ -50,8 +50,8 @@ pub(super) fn ConfirmationReview(blocked: bool) -> Element {
         match review {
             Some(Ok((reference, link, contact))) => rsx! {
                 section { class: "sharing-request stack",
-                    h3 { "{contact.body.username}" }
-                    p { "{link.ticket.body.space_name}" }
+                    h3 { {crate::sync::protocol::pairing::display_name(&contact.body.username)} }
+                    p { {crate::sync::protocol::pairing::display_name(&link.ticket.body.space_name)} }
                     if let Some(role) = link.ticket.body.chat_role {
                         p { {language.text(role_text(role))} }
                     }

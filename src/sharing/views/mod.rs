@@ -399,7 +399,7 @@ fn Members(blocked: bool) -> Element {
             for (user, (role, devices)) in users {
                 div { class: "sharing-member stack", key: "{user}",
                     div { class: "sharing-member-heading",
-                        h3 { {u.vault.participant_name(user).unwrap_or_else(|| language.text(Text::SharingUnnamedUser)).to_owned()} }
+                        h3 { {crate::sync::protocol::pairing::display_name(u.vault.participant_name(user).unwrap_or_else(|| language.text(Text::SharingUnnamedUser)))} }
                         span { class: "sharing-role", {language.text(role_text(role))} }
                     }
                     if devices.iter().any(|c| Some(c.body.device) == controller) {
@@ -470,7 +470,7 @@ fn Invitations(blocked: bool) -> Element {
             for invitation in u.vault.iter_issued_invitations(now) {
                 div { class: "sharing-member stack", key: "{invitation.id}",
                     if let Some(name) = u.vault.participant_name(invitation.user) {
-                        h3 { "{name}" }
+                        h3 { {crate::sync::protocol::pairing::display_name(name)} }
                     }
                     code { class: "sharing-code", "{invitation.id}" }
                     code { class: "sharing-code muted", "{invitation.device}" }

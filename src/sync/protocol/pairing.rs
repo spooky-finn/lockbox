@@ -274,6 +274,27 @@ pub(crate) fn valid_name(name: &str) -> bool {
     !name.trim().is_empty() && name.len() <= 256 && !name.chars().any(char::is_control)
 }
 
+/// A name from another member, safe to show. Bidi overrides and invisible
+/// separators can make "alice" render as someone else, so they are dropped and
+/// line separators become spaces. Joiners stay: emoji and scripts need them.
+/// Display only; signed names are never rewritten or rejected.
+pub(crate) fn display_name(name: &str) -> String {
+    name.chars()
+        .filter_map(|c| match c {
+            '\u{2028}' | '\u{2029}' => Some(' '),
+            '\u{061C}'
+            | '\u{200B}'
+            | '\u{200E}'
+            | '\u{200F}'
+            | '\u{202A}'..='\u{202E}'
+            | '\u{2060}'..='\u{2064}'
+            | '\u{2066}'..='\u{206F}'
+            | '\u{FEFF}' => None,
+            c => Some(c),
+        })
+        .collect()
+}
+
 pub(crate) fn proof_hash(bytes: &[u8]) -> Hash {
     Hash::digest(b"lockbox.pairing.proof\0", bytes)
 }
@@ -500,5 +521,20 @@ impl Joined {
             return Err(Error::InvalidInvitation);
         }
         crypto::verify(self, &request.body.certificate.body.signing_key, ACK_DOMAIN)
+    }
+}
+
+#[cfg(test)]
+mod display_tests {
+    use super::display_name;
+
+    #[test]
+    fn display_names_drop_bidi_and_invisible_characters_but_keep_joiners() {
+        assert_eq!(display_name("ali\u{202E}ecila"), "aliecila");
+        assert_eq!(display_name("\u{2066}bob\u{2069}\u{200B}\u{FEFF}"), "bob");
+        assert_eq!(display_name("line\u{2028}break"), "line break");
+        let family = "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}";
+        assert_eq!(display_name(family), family);
+        assert_eq!(display_name("Алиса"), "Алиса");
     }
 }

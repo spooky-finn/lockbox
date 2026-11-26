@@ -95,7 +95,7 @@ pub(crate) fn RecordsView() -> Element {
                                     if let Ok(actor) = change.actor.parse() {
                                         {language.format(Text::HistoryAuthor, &[String::new()])}
                                         if let Some(name) = u.vault.participant_name(actor) {
-                                            strong { "{name}" }
+                                            strong { {crate::sync::protocol::pairing::display_name(name)} }
                                         }
                                         Identifier { value: change.actor.clone() }
                                     } else {
