@@ -7,3 +7,9 @@ updates:
     groups:
       github-actions:
         patterns: ['*']
+  # Security updates for the Rust app. The extension has no npm dependencies.
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
