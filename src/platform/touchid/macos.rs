@@ -3,7 +3,6 @@
 use std::sync::mpsc;
 
 use block2::RcBlock;
-use core_foundation::{base::TCFType, string::CFString};
 use objc2::runtime::Bool;
 use objc2_foundation::{NSError, NSString};
 use objc2_local_authentication::{LAContext, LAPolicy};
@@ -11,7 +10,7 @@ use security_framework::passwords::{
     PasswordOptions, delete_generic_password_options, generic_password,
     set_generic_password_options,
 };
-use security_framework_sys::{base::errSecItemNotFound, item::kSecAttrAccount};
+use security_framework_sys::base::errSecItemNotFound;
 use zeroize::Zeroizing;
 
 use crate::platform::touchid::Biometrics;
@@ -79,7 +78,7 @@ impl Biometrics for MacBiometrics {
     }
 
     fn load(&self, account: &str, reason: &str) -> Result<Option<Zeroizing<Vec<u8>>>, String> {
-        purge_legacy()?;
+        purge_legacy(account);
         let envelope = match generic_password(envelope_options(account)) {
             Ok(bytes) => bytes,
             Err(error) if error.code() == errSecItemNotFound => return Ok(None),
@@ -95,23 +94,25 @@ impl Biometrics for MacBiometrics {
     }
 
     fn store(&self, account: &str, data: &[u8]) -> Result<(), String> {
-        purge_legacy()?;
+        purge_legacy(account);
         let envelope = secure_enclave::seal(data, account).map_err(|error| error.to_string())?;
         // Never pass the plaintext record to Keychain, even in unsigned builds.
         set_generic_password_options(&envelope, envelope_options(account)).map_err(keychain_error)
     }
 
     fn delete(&self, account: &str) {
-        let _ = purge_legacy();
+        purge_legacy(account);
         let _ = delete_if_present(envelope_options(account));
     }
 }
 
 impl MacBiometrics {
-    pub(super) fn new() -> Self {
-        // Retire *all* old unlock keys, including vaults not opened this run.
-        // Load/store retry cleanup and surface failures before touching keys.
-        let _ = purge_legacy();
+    pub(super) fn new(touch_id_vaults: &[String]) -> Self {
+        // Retire old unlock keys of every Touch ID vault, opened this run or not.
+        // Load/store/delete repeat this for the vault they touch.
+        for account in touch_id_vaults {
+            purge_legacy(account);
+        }
         Self
     }
 }
@@ -124,29 +125,28 @@ fn envelope_options(account: &str) -> PasswordOptions {
     options
 }
 
-fn legacy_options() -> PasswordOptions {
-    service_options(LEGACY_SERVICE)
-}
-
-#[allow(deprecated)] // PasswordOptions has no service-only deletion builder.
-fn service_options(service: &str) -> PasswordOptions {
-    let mut options = PasswordOptions::new_generic_password(service, "");
-    let account = unsafe { CFString::wrap_under_get_rule(kSecAttrAccount) };
-    options.query.retain(|(key, _)| key != &account);
-    options
-}
-
-fn purge_legacy() -> Result<(), String> {
-    delete_if_present(legacy_options())
-        .map_err(|error| format!("Could not remove legacy Touch ID keys: {error}"))?;
-    // Remove obsolete protected items when the running build can access them.
-    // Unsigned builds cannot address this access group, so -34018 is expected.
-    let mut retired = service_options(RETIRED_SERVICE);
+/// The obsolete items lockbox itself created for this vault: never the current
+/// envelope, and never items of other vaults or other apps.
+fn legacy_options(account: &str) -> [PasswordOptions; 2] {
+    // Obsolete protected items go when the running build can access them;
+    // unsigned builds cannot address this access group (-34018).
+    let mut retired = PasswordOptions::new_generic_password(RETIRED_SERVICE, account);
     retired.use_protected_keychain();
-    match delete_generic_password_options(retired) {
-        Ok(()) => Ok(()),
-        Err(error) if error.code() == errSecItemNotFound || error.code() == -34018 => Ok(()),
-        Err(error) => Err(keychain_error(error)),
+    [
+        PasswordOptions::new_generic_password(LEGACY_SERVICE, account),
+        retired,
+    ]
+}
+
+/// Best effort: a failed cleanup never blocks the current envelope, so Touch
+/// ID keeps working, and the passphrase never depends on the Keychain.
+fn purge_legacy(account: &str) {
+    if account.is_empty() {
+        return;
+    }
+
+    for options in legacy_options(account) {
+        let _ = delete_generic_password_options(options);
     }
 }
 
@@ -166,21 +166,36 @@ fn keychain_error(error: security_framework::base::Error) -> String {
 #[allow(deprecated)] // Inspect the dictionaries passed to Security.framework.
 mod tests {
     use super::*;
-    use core_foundation::boolean::CFBoolean;
+    use core_foundation::{base::TCFType, boolean::CFBoolean, string::CFString};
     use security_framework_sys::item::{
-        kSecAttrService, kSecAttrSynchronizable, kSecUseDataProtectionKeychain,
+        kSecAttrAccount, kSecAttrService, kSecAttrSynchronizable, kSecUseDataProtectionKeychain,
     };
 
     #[test]
-    fn legacy_cleanup_covers_all_accounts_in_only_the_old_service() {
-        let options = legacy_options();
+    fn legacy_cleanup_targets_only_one_vault_in_only_the_old_services() {
         let service = unsafe { CFString::wrap_under_get_rule(kSecAttrService) };
         let account = unsafe { CFString::wrap_under_get_rule(kSecAttrAccount) };
-        assert!(options.query.iter().any(|(key, value)| {
-            key == &service && value == &CFString::from(LEGACY_SERVICE).into_CFType()
-        }));
-        assert!(!options.query.iter().any(|(key, _)| key == &account));
-        assert_ne!(LEGACY_SERVICE, SERVICE);
+        let value = |options: &PasswordOptions, wanted: &CFString| {
+            options
+                .query
+                .iter()
+                .find(|(key, _)| key == wanted)
+                .map(|(_, value)| value.clone())
+        };
+        let options = legacy_options("vault-a");
+
+        for (options, old) in options.iter().zip([LEGACY_SERVICE, RETIRED_SERVICE]) {
+            assert_eq!(
+                value(options, &service),
+                Some(CFString::from(old).into_CFType())
+            );
+            // Without an account the query would match every item of the service.
+            assert_eq!(
+                value(options, &account),
+                Some(CFString::from("vault-a").into_CFType())
+            );
+            assert_ne!(old, SERVICE);
+        }
     }
 
     #[test]

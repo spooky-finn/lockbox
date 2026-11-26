@@ -157,13 +157,15 @@ fn save(
 }
 
 /// Touch ID of this computer, or a stand-in that reports it as unavailable.
-pub fn system() -> Arc<dyn Biometrics> {
+/// `touch_id_vaults` are the vaults whose obsolete Keychain items to retire.
+pub fn system(touch_id_vaults: &[String]) -> Arc<dyn Biometrics> {
     #[cfg(target_os = "macos")]
     {
-        Arc::new(mac::MacBiometrics::new())
+        Arc::new(mac::MacBiometrics::new(touch_id_vaults))
     }
     #[cfg(not(target_os = "macos"))]
     {
+        let _ = touch_id_vaults;
         Arc::new(Unsupported)
     }
 }

@@ -21,7 +21,8 @@ use std::{
 
 pub(crate) fn use_runtime() -> Session {
     let settings = use_signal(Settings::load);
-    let hardware = use_hook(|| BiometricProvider(touchid::system()));
+    let hardware =
+        use_hook(|| BiometricProvider(touchid::system(&settings.peek().config.touch_id)));
     let native = use_hook(|| {
         Rc::new(RefCell::new(Security::new(
             settings.peek().config.auto_lock_minutes,

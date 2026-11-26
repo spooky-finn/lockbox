@@ -38,13 +38,16 @@ retains its independent password encryption.
 
 ## Migration
 
-Startup, reads, and writes delete all legacy generic-password items with service
-`lockbox`, without reading their secrets. Cleanup failure stops reads and writes.
+Startup deletes the legacy generic-password items with service `lockbox` whose
+account is a vault with Touch ID turned on; reads, writes, and disabling do the
+same for their vault. Secrets are never read, and other accounts of that service
+are left alone. Cleanup is best effort: a failure never blocks the current
+`lockbox.touch-id.v3` envelope, which cleanup never deletes.
 The separate `lockbox.profile-witness.v1` service is unaffected.
 
-Obsolete `lockbox.touch-id.v2` data protection Keychain items are also deleted
-when the running build has access. Unsigned builds ignore the missing-entitlement
-error for deleting those already protected items; they never read them.
+Obsolete `lockbox.touch-id.v2` data protection Keychain items of the same vaults
+are also deleted when the running build has access. Unsigned builds cannot delete
+those already protected items; they never read them.
 After upgrading, unlock each vault with its passphrase to create a new
 encrypted envelope if Touch ID was enabled. Migration cannot revoke keys an
 attacker copied from older unprotected storage.
