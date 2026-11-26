@@ -39,7 +39,7 @@ pub(crate) enum Icon {
 #[component]
 pub(crate) fn Symbol(icon: Icon) -> Element {
     let path = match icon {
-        Icon::Cloud => "M6 18a5 5 0 0 1-1-9.9 7 7 0 0 1 13.5-1A5.5 5.5 0 0 1 18.5 18H6Z",
+        Icon::Cloud => "M6 19.8a5 5 0 0 1-1-9.9 7 7 0 0 1 13.5-1A5.5 5.5 0 0 1 18.5 19.8H6Z",
         Icon::Lock => {
             "M7 10V7a5 5 0 0 1 10 0v3M6 10h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2Zm6 5v3"
         }
@@ -89,7 +89,7 @@ pub(crate) fn Symbol(icon: Icon) -> Element {
         Icon::Sparkles => {
             "m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5L12 3Zm7-1v4m-2-2h4"
         }
-        Icon::Check => "m5 12 4 4L19 6",
+        Icon::Check => "m5 13 4 4L19 7",
         Icon::Image => {
             "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm-2 14 5-5 4 4 4-4 5 5M8 7h.01"
         }

@@ -951,11 +951,12 @@ button.copy-value:focus-visible, button.identifier:focus-visible { outline: 2px 
 .sync-compact .sync-control { display: inline-flex; align-items: center; gap: 4px; min-width: 26px; height: 26px; padding: 4px; color: var(--muted); }
 .sync-control.is-syncing > .symbol {
     color: var(--accent-ink);
-    animation: sync-cloud-pulse 900ms ease-in-out infinite;
+    animation: sync-cloud-pulse 1200ms ease-in-out infinite;
 }
+/* Breathe in place so the cloud never leaves the lock button's baseline. */
 @keyframes sync-cloud-pulse {
-    0%, 100% { transform: translateY(0) scale(1); }
-    45% { transform: translateY(-2px) scale(1.22); }
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: .5; transform: scale(1.08); }
 }
 .sync-count { font-size: 10px; font-variant-numeric: tabular-nums; }
 .settings-page > p, .settings-section > p { max-width: 70ch; }
