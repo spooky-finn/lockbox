@@ -6,6 +6,10 @@
 //! hint: it is fetched when available, but its absence never marks the pass
 //! incomplete. Otherwise one unsigned object pointing at a hash that will never
 //! exist would stop every replica from publishing.
+//!
+//! Hints are fetched only after LIST, under their own small budget. Anyone with
+//! bucket write can plant candidates that name hashes which will never exist;
+//! they must never use up the budget that finds other members' new heads.
 
 use crate::sync::{
     protocol::{Error, Hash, MAX_OBJECT_BYTES, MAX_OBJECTS, Object, SyncState, decode},
@@ -15,6 +19,8 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 const MAX_DOWNLOADS: usize = 128;
 const MAX_FETCHES: usize = 256;
+/// GET attempts for hints, separate from [`MAX_FETCHES`] and spent after LIST.
+const MAX_HINT_FETCHES: usize = 64;
 
 /// A ciphertext-only discovery request that can safely move to a worker.
 ///
@@ -92,12 +98,11 @@ impl Discovery {
             attempted: BTreeSet::new(),
             missing: BTreeSet::new(),
             listed: BTreeSet::new(),
-            queue: self
-                .required
-                .iter()
-                .chain(self.hints.iter())
-                .copied()
-                .collect(),
+            queue: self.required.iter().copied().collect(),
+            pinned: self.required.clone(),
+            deferred: self.hints.iter().copied().collect(),
+            fetches: 0,
+            hint_fetches: 0,
             objects: Vec::new(),
             rejected: Vec::new(),
             bad_copies: Vec::new(),
@@ -129,14 +134,25 @@ impl Discovery {
                     cursor = Some(next);
                 }
                 Some(_) => return Err(TransportError::InvalidResponse),
-                None => return Ok(batch.finish(false)),
+                None => break,
             }
 
             if cursors.len() > 64 {
                 return Err(TransportError::Budget);
             }
         }
+
+        // Hints never mark the pass incomplete, even when their budget runs out.
+        batch.fetch_hints(storage, cancel)?;
+        Ok(batch.finish(false))
     }
+}
+
+enum Fetched {
+    Nothing,
+    Object(Vec<Hash>),
+    /// The batch byte budget is full; persist before downloading more.
+    Full,
 }
 
 struct Batch<'a> {
@@ -144,7 +160,14 @@ struct Batch<'a> {
     attempted: BTreeSet<Hash>,
     missing: BTreeSet<Hash>,
     listed: BTreeSet<Hash>,
+    /// Required objects, their ancestry, then listed keys.
     queue: VecDeque<Hash>,
+    /// Required objects and their ancestry, which keep the main budget.
+    pinned: BTreeSet<Hash>,
+    /// Hints and dependencies of unverified downloads, fetched after LIST.
+    deferred: VecDeque<Hash>,
+    fetches: usize,
+    hint_fetches: usize,
     objects: Vec<(Hash, Vec<u8>)>,
     rejected: Vec<(Hash, Error)>,
     bad_copies: Vec<Hash>,
@@ -157,62 +180,105 @@ impl Batch<'_> {
         while let Some(hash) = self.queue.pop_front() {
             cancel.check()?;
 
-            if self.request.known.contains(&hash)
-                || self.attempted.contains(&hash)
-                || (self.request.skipped.contains(&hash) && !self.request.required.contains(&hash))
-            {
+            if self.skips(&hash) {
                 continue;
             }
 
-            if self.objects.len() == MAX_DOWNLOADS || self.attempted.len() == MAX_FETCHES {
+            if self.objects.len() == MAX_DOWNLOADS || self.fetches == MAX_FETCHES {
                 return Ok(false);
             }
 
-            self.attempted.insert(hash);
-            let bytes = match storage.get(self.request.namespace, hash) {
-                Ok(bytes) => bytes,
-                Err(TransportError::NotFound) => {
-                    self.missing.insert(hash);
-                    continue;
+            self.fetches += 1;
+            match self.get(storage, hash)? {
+                Fetched::Nothing => {}
+                Fetched::Full => return Ok(false),
+                Fetched::Object(dependencies) if self.pinned.contains(&hash) => {
+                    for dependency in dependencies {
+                        self.pinned.insert(dependency);
+                        self.queue.push_back(dependency);
+                    }
                 }
-                Err(TransportError::Budget) => {
-                    self.bad_copy(hash);
-                    continue;
-                }
-                Err(error) => return Err(error),
-            };
-
-            // Bytes that do not hash to their key are a bad copy, not evidence
-            // against the hash: anyone with bucket write can store junk there.
-            if bytes.len() > MAX_OBJECT_BYTES || Object::hash_bytes(&bytes) != hash {
-                self.bad_copy(hash);
-                continue;
+                Fetched::Object(dependencies) => self.deferred.extend(dependencies),
             }
-
-            if self.bytes + bytes.len() > MAX_BATCH_BYTES {
-                return Ok(false);
-            }
-
-            let object = match Object::decode(&bytes, hash) {
-                Ok(object) => object,
-                Err(error) => {
-                    self.invalid(hash, error);
-                    continue;
-                }
-            };
-
-            if self.request.known.len() + self.objects.len()
-                >= MAX_OBJECTS + 2 * crate::sync::protocol::MAX_CANDIDATES
-            {
-                return Err(TransportError::Budget);
-            }
-
-            self.queue.extend(object.dependencies());
-            self.bytes += bytes.len();
-            self.objects.push((hash, bytes));
         }
 
         Ok(true)
+    }
+
+    /// Spend the separate hint budget; running out is never an incomplete pass.
+    fn fetch_hints(&mut self, storage: &mut dyn Storage, cancel: &Cancellation) -> Result<()> {
+        while let Some(hash) = self.deferred.pop_front() {
+            cancel.check()?;
+
+            if self.skips(&hash) {
+                continue;
+            }
+
+            if self.objects.len() == MAX_DOWNLOADS || self.hint_fetches == MAX_HINT_FETCHES {
+                return Ok(());
+            }
+
+            self.hint_fetches += 1;
+            match self.get(storage, hash)? {
+                Fetched::Nothing => {}
+                Fetched::Full => return Ok(()),
+                Fetched::Object(dependencies) => self.deferred.extend(dependencies),
+            }
+        }
+
+        Ok(())
+    }
+
+    fn skips(&self, hash: &Hash) -> bool {
+        self.request.known.contains(hash)
+            || self.attempted.contains(hash)
+            || (self.request.skipped.contains(hash) && !self.request.required.contains(hash))
+    }
+
+    fn get(&mut self, storage: &mut dyn Storage, hash: Hash) -> Result<Fetched> {
+        self.attempted.insert(hash);
+        let bytes = match storage.get(self.request.namespace, hash) {
+            Ok(bytes) => bytes,
+            Err(TransportError::NotFound) => {
+                self.missing.insert(hash);
+                return Ok(Fetched::Nothing);
+            }
+            Err(TransportError::Budget) => {
+                self.bad_copy(hash);
+                return Ok(Fetched::Nothing);
+            }
+            Err(error) => return Err(error),
+        };
+
+        // Bytes that do not hash to their key are a bad copy, not evidence
+        // against the hash: anyone with bucket write can store junk there.
+        if bytes.len() > MAX_OBJECT_BYTES || Object::hash_bytes(&bytes) != hash {
+            self.bad_copy(hash);
+            return Ok(Fetched::Nothing);
+        }
+
+        if self.bytes + bytes.len() > MAX_BATCH_BYTES {
+            return Ok(Fetched::Full);
+        }
+
+        let object = match Object::decode(&bytes, hash) {
+            Ok(object) => object,
+            Err(error) => {
+                self.invalid(hash, error);
+                return Ok(Fetched::Nothing);
+            }
+        };
+
+        if self.request.known.len() + self.objects.len()
+            >= MAX_OBJECTS + 2 * crate::sync::protocol::MAX_CANDIDATES
+        {
+            return Err(TransportError::Budget);
+        }
+
+        let dependencies = object.dependencies().collect();
+        self.bytes += bytes.len();
+        self.objects.push((hash, bytes));
+        Ok(Fetched::Object(dependencies))
     }
 
     /// The bucket holds something else under this key. A required object stays

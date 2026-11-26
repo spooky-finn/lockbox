@@ -655,3 +655,62 @@ fn loading_a_poisoned_profile_forgets_download_rejections_only() {
     assert!(replay.ready);
     assert_eq!(replay.projection.entries()[0].title, "Third");
 }
+
+/// A canonical, correctly hashed change that names an unknown membership and
+/// `MAX_PARENTS` invented parents. It stays a candidate forever.
+fn junk_candidate(template: &[u8], seed: u8) -> (Hash, Vec<u8>) {
+    use crate::sync::protocol::MAX_PARENTS;
+    let fake = |index: usize| {
+        let mut bytes = [seed; 32];
+        bytes[..8].copy_from_slice(&(index as u64).to_be_bytes());
+        Hash(bytes).to_string()
+    };
+    let mut value: serde_json::Value = serde_json::from_slice(template).unwrap();
+    let header = &mut value["object"]["body"]["header"];
+    header["membership"] = fake(usize::MAX).into();
+    header["previous"] = fake(usize::MAX - 1).into();
+    let mut parents: Vec<_> = (0..MAX_PARENTS).map(fake).collect();
+    parents.sort();
+    header["parents"] = parents.into();
+    let bytes = crate::sync::protocol::canonical(&value).unwrap();
+    let hash = Hash::digest(b"lockbox.sync.object\0", &bytes);
+    crate::sync::protocol::Object::decode(&bytes, hash).unwrap();
+    (hash, bytes)
+}
+
+/// Attack: a bucket writer plants a few junk candidates whose invented
+/// dependencies used to exhaust the pass budget before LIST. Listing must still
+/// run, so the replica keeps seeing new heads from other members.
+#[test]
+fn junk_candidate_hints_cannot_starve_the_listing() {
+    let (base, state, _, head) = history();
+    let mut receiver = base;
+    let template = &state.objects[&head].0;
+    for seed in 1..=4u8 {
+        let (hash, bytes) = junk_candidate(template, seed);
+        receiver
+            .candidates
+            .insert(hash, crate::sync::protocol::Blob(bytes));
+    }
+    let mut provider = Memory {
+        objects: state
+            .objects
+            .iter()
+            .map(|(hash, bytes)| (*hash, bytes.0.clone()))
+            .collect(),
+        ..Memory::default()
+    };
+
+    let batch = Discovery::for_state(&receiver)
+        .unwrap()
+        .download(&mut provider, &Cancellation::default())
+        .unwrap();
+    assert!(
+        batch.objects.iter().any(|(hash, _)| *hash == head),
+        "the listed head was never downloaded"
+    );
+    assert!(
+        !batch.incomplete,
+        "unresolvable hints must not stall the pass"
+    );
+}
