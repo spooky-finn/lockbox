@@ -24,11 +24,15 @@ struct Hello {
 }
 
 #[cfg(any(unix, test))]
-fn token_valid(token: &str) -> bool {
-    token.len() == 64
-        && token
+fn lower_hex(value: &str, length: usize) -> bool {
+    value.len() == length
+        && value
             .bytes()
             .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
+}
+#[cfg(any(unix, test))]
+fn token_valid(token: &str) -> bool {
+    lower_hex(token, 64)
 }
 
 #[cfg(unix)]
@@ -90,6 +94,51 @@ impl Drop for SocketFile {
     }
 }
 
+/// A relay killed before its guard ran leaves a socket nobody listens on.
+#[cfg(unix)]
+fn remove_stale_sockets(directory: &std::path::Path) {
+    use std::os::unix::fs::{FileTypeExt, MetadataExt};
+    let Ok(entries) = std::fs::read_dir(directory) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        // Only our own socket names, never symlinks or other files. Every live request
+        // binds less than TIMEOUT ago, and a just-bound socket may not be listening yet.
+        let ours = entry
+            .file_name()
+            .to_str()
+            .is_some_and(|name| lower_hex(name, 32))
+            && std::fs::symlink_metadata(&path).is_ok_and(|metadata| {
+                metadata.file_type().is_socket()
+                    && metadata.uid() == unsafe { libc::geteuid() }
+                    && metadata
+                        .modified()
+                        .is_ok_and(|at| at.elapsed().is_ok_and(|age| age > TIMEOUT))
+            });
+        if ours
+            && std::os::unix::net::UnixStream::connect(&path)
+                .is_err_and(|e| e.kind() == io::ErrorKind::ConnectionRefused)
+        {
+            let _ = std::fs::remove_file(&path);
+        }
+    }
+}
+
+/// Reads the token on its own short deadline, matching the desktop's wait for Hello.
+#[cfg(unix)]
+fn handshake(
+    mut stream: std::os::unix::net::UnixStream,
+    token: &str,
+) -> io::Result<Option<std::os::unix::net::UnixStream>> {
+    stream.set_nonblocking(false)?;
+    stream.set_read_timeout(Some(Duration::from_secs(1)))?;
+    stream.set_write_timeout(Some(Duration::from_secs(1)))?;
+    let received: String = read_frame(&mut stream)?;
+    use subtle::ConstantTimeEq;
+    Ok(bool::from(received.as_bytes().ct_eq(token.as_bytes())).then_some(stream))
+}
+
 #[cfg(unix)]
 pub fn request(origin: &str) -> io::Result<Credential> {
     request_with(origin, |link| {
@@ -118,7 +167,7 @@ fn request_with(
     origin: &str,
     launch: impl FnOnce(&str) -> io::Result<()>,
 ) -> io::Result<Credential> {
-    use std::os::unix::net::UnixListener;
+    use std::os::unix::net::{UnixListener, UnixStream};
     let origin = super::origin(origin)
         .map_err(io::Error::other)?
         .ascii_serialization();
@@ -126,37 +175,46 @@ fn request_with(
     getrandom::fill(&mut random).map_err(io::Error::other)?;
     let token: String = random.iter().map(|b| format!("{b:02x}")).collect();
     let path = socket_path(&token)?;
+    if let Some(directory) = path.parent() {
+        remove_stale_sockets(directory);
+    }
     let listener = UnixListener::bind(&path)?;
-    let _file = SocketFile(path);
+    let file = SocketFile(path);
     listener.set_nonblocking(true)?;
     launch(&format!("lockbox://browser/fill?request={token}"))?;
     let deadline = Instant::now() + TIMEOUT;
+    let (authenticated, handshakes) = std::sync::mpsc::channel::<UnixStream>();
     loop {
         if Instant::now() >= deadline {
             return Err(io::Error::new(io::ErrorKind::TimedOut, "consent expired"));
         }
+        if let Ok(mut stream) = handshakes.try_recv() {
+            // The process may exit during consent without running this thread's guards.
+            drop(file);
+            write_frame(
+                &mut stream,
+                &Hello {
+                    origin: origin.clone(),
+                },
+            )?;
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            stream.set_read_timeout(Some(remaining))?;
+            let reply: Option<Credential> = read_frame(&mut stream)?;
+            return reply
+                .filter(|c| c.username.len() <= 4096 && c.password.len() <= 4096)
+                .ok_or_else(|| io::Error::other("cancelled or oversized credential"));
+        }
         match listener.accept() {
-            Ok((mut stream, _)) => {
-                stream.set_nonblocking(false)?;
-                let remaining = deadline.saturating_duration_since(Instant::now());
-                stream.set_read_timeout(Some(remaining))?;
-                stream.set_write_timeout(Some(Duration::from_secs(1)))?;
+            Ok((stream, _)) => {
+                // A silent or malformed local client must not hold up the desktop's connection.
                 // Authenticate before disclosing even the website origin.
-                let received: String = read_frame(&mut stream)?;
-                use subtle::ConstantTimeEq;
-                if !bool::from(received.as_bytes().ct_eq(token.as_bytes())) {
-                    continue;
-                }
-                write_frame(
-                    &mut stream,
-                    &Hello {
-                        origin: origin.clone(),
-                    },
-                )?;
-                let reply: Option<Credential> = read_frame(&mut stream)?;
-                return reply
-                    .filter(|c| c.username.len() <= 4096 && c.password.len() <= 4096)
-                    .ok_or_else(|| io::Error::other("cancelled or oversized credential"));
+                let authenticated = authenticated.clone();
+                let token = token.clone();
+                let _ = std::thread::Builder::new().spawn(move || {
+                    if let Ok(Some(stream)) = handshake(stream, &token) {
+                        let _ = authenticated.send(stream);
+                    }
+                });
             }
             Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
                 std::thread::sleep(Duration::from_millis(25))
@@ -282,6 +340,103 @@ mod tests {
                 assert_eq!(&*reply.password, "fictional-password");
             }
         }
+    }
+    #[cfg(unix)]
+    #[test]
+    fn silent_or_malformed_local_client_does_not_block_desktop() {
+        use std::os::unix::net::UnixStream;
+        let mut desktop = None;
+        let result = request_with("https://accounts.example/login", |link| {
+            let token = link.rsplit('=').next().unwrap();
+            let path = socket_path(token).unwrap();
+            // Both connect before the desktop: one never speaks, one sends an invalid frame.
+            let silent = UnixStream::connect(&path).unwrap();
+            let mut malformed = UnixStream::connect(&path).unwrap();
+            malformed.write_all(&0u32.to_ne_bytes()).unwrap();
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_secs(3));
+                drop((silent, malformed));
+            });
+            let link = link.to_owned();
+            desktop = Some(std::thread::spawn(move || {
+                DesktopRequest::connect(&link)?.respond(Some(Credential {
+                    username: Zeroizing::new("fictional-user".into()),
+                    password: Zeroizing::new("fictional-password".into()),
+                }))
+            }));
+            Ok(())
+        });
+        let desktop = desktop.unwrap().join().unwrap();
+        assert!(desktop.is_ok(), "desktop error: {:?}", desktop.err());
+        assert_eq!(
+            &*result.expect("relay should serve the desktop").password,
+            "fictional-password"
+        );
+    }
+    #[cfg(unix)]
+    #[test]
+    fn relay_removes_socket_files_it_no_longer_needs() {
+        use std::os::unix::{ffi::OsStrExt, net::UnixListener};
+        fn backdate(path: &std::path::Path) {
+            let path = std::ffi::CString::new(path.as_os_str().as_bytes()).unwrap();
+            let old = libc::timespec {
+                tv_sec: 1_000_000_000,
+                tv_nsec: 0,
+            };
+            let times = [old, old];
+            let status = unsafe {
+                libc::utimensat(
+                    libc::AT_FDCWD,
+                    path.as_ptr(),
+                    times.as_ptr(),
+                    libc::AT_SYMLINK_NOFOLLOW,
+                )
+            };
+            assert_eq!(status, 0);
+        }
+        let directory = socket_path(&"0".repeat(64)).unwrap();
+        let directory = directory.parent().unwrap();
+        let elsewhere = tempfile::tempdir().unwrap();
+        // A relay that exited without cleanup leaves a socket nobody listens on.
+        let stale = directory.join("5ca1e".repeat(6) + "00");
+        drop(UnixListener::bind(&stale).unwrap());
+        backdate(&stale);
+        let regular = directory.join("f11e".repeat(8));
+        std::fs::write(&regular, b"not a socket").unwrap();
+        backdate(&regular);
+        let target = elsewhere.path().join("s");
+        drop(UnixListener::bind(&target).unwrap());
+        backdate(&target);
+        let link = directory.join("1111".repeat(8));
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        backdate(&link);
+        // Too young to tell apart from a relay that has bound but not yet listened.
+        let fresh = directory.join("2222".repeat(8));
+        drop(UnixListener::bind(&fresh).unwrap());
+        let mut desktop = None;
+        let _ = request_with("https://accounts.example/login", |link| {
+            let token = link.rsplit('=').next().unwrap();
+            let path = socket_path(token).unwrap();
+            let link = link.to_owned();
+            desktop = Some(std::thread::spawn(move || {
+                let request = DesktopRequest::connect(&link).unwrap();
+                // Wait for the relay to finish the handshake on its side.
+                std::thread::sleep(Duration::from_millis(200));
+                let unlinked = !path.exists();
+                request.respond(None).unwrap();
+                unlinked
+            }));
+            Ok(())
+        });
+        assert!(
+            desktop.unwrap().join().unwrap(),
+            "socket file stays only until the desktop connects"
+        );
+        assert!(!stale.exists(), "stale socket is removed");
+        for kept in [&regular, &fresh, &target] {
+            assert!(kept.exists(), "{kept:?} must be kept");
+        }
+        assert!(std::fs::symlink_metadata(&link).is_ok(), "symlink is kept");
     }
     #[cfg(unix)]
     #[test]
