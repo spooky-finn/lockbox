@@ -47,7 +47,7 @@ fn website_icon_downloads_default_off_and_disabling_discards_session_cache() {
         let settings = consume_context::<Signal<Settings>>();
         assert!(!settings.read().config.website_icons);
         let previous = match &*state.read() {
-            Screen::Unlocked(u) => u.favicon_cache.clone(),
+            Screen::Unlocked(u) => u.favicon_cache.handle(),
             _ => panic!(),
         };
         actions::set_website_icons(true);
@@ -58,7 +58,7 @@ fn website_icon_downloads_default_off_and_disabling_discards_session_cache() {
         let Screen::Unlocked(u) = &*screen else {
             panic!()
         };
-        assert!(previous != u.favicon_cache);
+        assert!(previous != u.favicon_cache.handle());
     });
 }
 

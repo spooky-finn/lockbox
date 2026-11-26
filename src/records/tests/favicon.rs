@@ -217,3 +217,28 @@ fn invalid_websites_never_reach_disk_or_download() {
     }
     assert!(!directory.exists());
 }
+
+/// Locking or turning website icons off drops the session's cache. A fetch that
+/// is still running must neither download afterwards nor write the site to disk.
+#[test]
+fn downloads_stop_and_never_reach_disk_once_the_session_cache_is_gone() {
+    let root = tempfile::tempdir().unwrap();
+    let directory = root.path().join("favicons");
+    let session = SessionCache(Cache::new(Some(directory.clone())));
+    let handle = session.handle();
+    let during = session.handle();
+    let mut session = Some(session);
+
+    // Opted out while the request was on the wire.
+    let image_after_opt_out = during.cached_fetch(WEBSITE, 100, || {
+        session.take();
+        image()
+    });
+    assert_eq!(image_after_opt_out, None);
+    assert!(!directory.join(CACHE_FILE).exists());
+
+    // Any later fetch from a stale handle never reaches the network.
+    let fetched = handle.cached_fetch(WEBSITE, 101, || panic!("downloaded after lock"));
+    assert_eq!(fetched, None);
+    assert!(!directory.join(CACHE_FILE).exists());
+}

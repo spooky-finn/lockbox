@@ -21,7 +21,7 @@ pub(crate) fn EntryIcon(
     let session = try_use_context::<Session>();
     let cache = use_memo(move || {
         session.and_then(|state| match &*state.read() {
-            Screen::Unlocked(workspace) => Some(workspace.favicon_cache.clone()),
+            Screen::Unlocked(workspace) => Some(workspace.favicon_cache.handle()),
             _ => None,
         })
     });

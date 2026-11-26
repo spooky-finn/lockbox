@@ -41,11 +41,33 @@ type CacheSlot = Arc<Mutex<Option<CachedIcon>>>;
 pub(crate) struct Cache {
     memory: Arc<Mutex<HashMap<String, CacheSlot>>>,
     directory: Option<PathBuf>,
+    /// False once the owning session locked or turned website icons off.
+    active: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Default for Cache {
     fn default() -> Self {
         Self::new(dirs::cache_dir().map(|root| root.join("lockbox/favicons/v1")))
+    }
+}
+
+/// The session's cache. Dropping or replacing it (lock, opting out of website
+/// icons) stops downloads still in flight from fetching or writing to disk.
+#[derive(Default)]
+pub(crate) struct SessionCache(Cache);
+
+impl SessionCache {
+    /// A clone for one background fetch; it stays bound to this session.
+    pub(crate) fn handle(&self) -> Cache {
+        self.0.clone()
+    }
+}
+
+impl Drop for SessionCache {
+    fn drop(&mut self) {
+        self.0
+            .active
+            .store(false, std::sync::atomic::Ordering::SeqCst);
     }
 }
 
@@ -60,6 +82,7 @@ impl Cache {
         Self {
             memory: Default::default(),
             directory,
+            active: Arc::new(true.into()),
         }
     }
 
@@ -101,7 +124,15 @@ impl Cache {
             *cached = Some(entry);
             return image;
         }
+        let active = || self.active.load(std::sync::atomic::Ordering::SeqCst);
+        if !active() {
+            return None;
+        }
         let image = download();
+        // Opted out or locked while downloading: keep nothing, write nothing.
+        if !active() {
+            return None;
+        }
         let entry = CachedIcon {
             image: image.clone(),
             fetched_at: now,

@@ -30,7 +30,7 @@ pub(crate) enum Destination {
 }
 
 pub(crate) struct Unlocked {
-    pub(crate) favicon_cache: crate::records::favicon::Cache,
+    pub(crate) favicon_cache: crate::records::favicon::SessionCache,
     pub(crate) page: Page,
     pub(crate) sync: crate::sync::scheduler::SpaceSync,
     pub(crate) sharing: crate::sharing::actions::Sharing,
