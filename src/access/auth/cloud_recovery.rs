@@ -150,7 +150,10 @@ impl Locked {
             }
         };
         let provider = self.cloud_provider();
-        let password = SecretString::from(std::mem::take(&mut *self.password));
+        let password = SecretString::from(std::mem::replace(
+            &mut *self.password,
+            String::with_capacity(super::SECRET_CAPACITY),
+        ));
         self.repeat.zeroize();
         self.error = None;
         self.pending = Some(Worker::spawn(move |cancel| {

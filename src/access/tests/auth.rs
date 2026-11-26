@@ -419,6 +419,23 @@ fn recovery_mode_clears_secrets_and_validates_before_starting_worker() {
     assert!(form.recovery_words.is_empty());
 }
 
+#[test]
+fn identity_submit_keeps_a_presized_password_buffer_for_the_next_attempt() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut form = Locked::begin_join().with_identity_path(
+        Some(directory.path().join("identity.key")),
+        Some(directory.path().join("missing.lbx")),
+    );
+    assert!(form.creation_step == CreationStep::Identity);
+    form.password.push_str("fictional passphrase");
+    form.submit();
+    assert!(form.password.is_empty());
+    // A retyped passphrase must not grow by reallocation, which would free unwiped prefixes.
+    assert!(form.password.capacity() >= super::SECRET_CAPACITY);
+    wait_for_identity(&mut form);
+    assert!(form.error.is_some());
+}
+
 fn wait_for_identity(form: &mut Locked) {
     use std::{
         sync::Arc,

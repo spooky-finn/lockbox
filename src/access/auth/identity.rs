@@ -41,7 +41,10 @@ impl Locked {
         };
         let source = self.identity_source.clone();
         let recovering = self.recovering;
-        let password = SecretString::from(std::mem::take(&mut *self.password));
+        let password = SecretString::from(std::mem::replace(
+            &mut *self.password,
+            String::with_capacity(super::SECRET_CAPACITY),
+        ));
         self.repeat.zeroize();
         self.error = None;
         self.pending_identity = Some(Worker::spawn(move |_| {
