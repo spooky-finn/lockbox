@@ -390,3 +390,30 @@ fn editing_an_entry_keeps_sidebar_navigation_available() {
     );
     assert!(document.select_first(".draft > .entry-close").is_err());
 }
+
+/// Revealed secrets turn into plain text inputs; macOS text services must never
+/// check, correct or capitalize them.
+#[test]
+fn secret_fields_opt_out_of_spelling_and_autocorrection() {
+    use kuchikiki::traits::TendrilSink;
+    let mut dom = mounted();
+    update(&mut dom, |state| {
+        edit_unlocked(state, |u| u.start_edit());
+        edit_draft(state, |draft| draft.show_password = true);
+    });
+    let document = kuchikiki::parse_html()
+        .one(dioxus_ssr::render(&dom))
+        .document_node;
+    for id in [
+        "entry-username",
+        "entry-password",
+        "totp-secret",
+        "entry-notes",
+    ] {
+        let field = document.select_first(&format!(".draft #{id}")).unwrap();
+        let attrs = field.attributes.borrow();
+        assert_eq!(attrs.get("spellcheck"), Some("false"), "{id}");
+        assert_eq!(attrs.get("autocorrect"), Some("off"), "{id}");
+        assert_eq!(attrs.get("autocapitalize"), Some("off"), "{id}");
+    }
+}

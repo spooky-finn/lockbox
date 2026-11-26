@@ -78,10 +78,10 @@ pub(crate) fn DraftView() -> Element {
             }
             div { class: "fields",
                 div { class: "field-row",
-                    input { onkeydown: move |event| finish_on_enter(state, event), id: "entry-username", class: "field-value", placeholder: username_label, aria_label: username_label, onmounted: move |event| async move { if focus_field == Some(Field::Username) { let _ = event.data.set_focus(true).await; } }, autocomplete: "off", value: "{entry.username}", oninput: move |e| set_field(state, Field::Username, e.value()) }
+                    input { onkeydown: move |event| finish_on_enter(state, event), id: "entry-username", spellcheck: "false", "autocorrect": "off", "autocapitalize": "off", class: "field-value", placeholder: username_label, aria_label: username_label, onmounted: move |event| async move { if focus_field == Some(Field::Username) { let _ = event.data.set_focus(true).await; } }, autocomplete: "off", value: "{entry.username}", oninput: move |e| set_field(state, Field::Username, e.value()) }
                 }
                 div { class: "field-row",
-                    input { onkeydown: move |event| finish_on_enter(state, event), id: "entry-password", class: "field-value password-value", placeholder: password_label, aria_label: password_label, onmounted: move |event| async move { if focus_field == Some(Field::Password) { let _ = event.data.set_focus(true).await; } }, r#type: if draft.show_password { "text" } else { "password" }, autocomplete: "off", size: "{password_size}",
+                    input { onkeydown: move |event| finish_on_enter(state, event), id: "entry-password", spellcheck: "false", "autocorrect": "off", "autocapitalize": "off", class: "field-value password-value", placeholder: password_label, aria_label: password_label, onmounted: move |event| async move { if focus_field == Some(Field::Password) { let _ = event.data.set_focus(true).await; } }, r#type: if draft.show_password { "text" } else { "password" }, autocomplete: "off", size: "{password_size}",
                         value: "{entry.password}", oninput: move |e| set_field(state, Field::Password, e.value()) }
                     IconButton { icon: if draft.show_password { Icon::EyeOff } else { Icon::Eye },
                         label: if draft.show_password { language.text(Text::HidePassword) } else { language.text(Text::ShowPassword) }, pressed: Some(draft.show_password),
@@ -95,7 +95,7 @@ pub(crate) fn DraftView() -> Element {
                     input { onkeydown: move |event| finish_on_enter(state, event), id: "entry-url", class: "field-value", placeholder: url_label, aria_label: url_label, onmounted: move |event| async move { if focus_field == Some(Field::Url) { let _ = event.data.set_focus(true).await; } }, value: "{entry.url}", oninput: move |e| set_field(state, Field::Url, e.value()) }
                 }
                 div { class: "field-row notes-row",
-                    textarea { id: "entry-notes", class: "field-value", placeholder: note_label, aria_label: note_label,
+                    textarea { id: "entry-notes", spellcheck: "false", "autocorrect": "off", "autocapitalize": "off", class: "field-value", placeholder: note_label, aria_label: note_label,
                         rows: entry.notes.lines().take(8).count().max(1),
                         onmounted: move |event| async move { if focus_field == Some(Field::Notes) { let _ = event.data.set_focus(true).await; } },
                         oninput: move |e| set_field(state, Field::Notes, e.value()),
