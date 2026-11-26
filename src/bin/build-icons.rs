@@ -1,10 +1,14 @@
-//! Builds `assets/icons.jsonl` from an unpacked simple-icons npm package.
+//! Builds `assets/icons.jsonl` from the simple-icons npm package tarball.
 //!
 //! ```sh
 //! curl -fsSO https://registry.npmjs.org/simple-icons/-/simple-icons-<version>.tgz
-//! tar -xzf simple-icons-<version>.tgz          # unpacks into ./package
-//! cargo run --bin build-icons -- package
+//! cargo run --bin build-icons -- simple-icons-<version>.tgz
 //! ```
+//!
+//! Only the pinned release is accepted: the tarball must match
+//! `PINNED_INTEGRITY` before it is unpacked. To upgrade, set `PINNED_VERSION`
+//! and `PINNED_INTEGRITY` to the new version and the output of
+//! `npm view simple-icons@<version> dist.integrity`.
 //!
 //! Every icon becomes one JSON line: slug, title, brand colour, SVG path and
 //! the domains it is shown for. Domains come from the icon's `source` URL when
@@ -15,12 +19,19 @@
 use std::{
     collections::HashMap,
     fs,
+    io::Write,
     path::{Path, PathBuf},
-    process,
+    process::{self, Command, Stdio},
 };
 
+use base64::{Engine, prelude::BASE64_STANDARD};
 use lockbox::icons::{host, normalized, registrable};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha512};
+
+/// The npm `dist.integrity` of the only simple-icons release this tool accepts.
+const PINNED_VERSION: &str = "16.36.0";
+const PINNED_INTEGRITY: &str = "sha512-+VNPPkqSOLidFeSgBKUWX4n50WPpDC09hav+BgS26anIF1oQOlGBb8LvwGR+6fYRjo+B6CiKzNBceMPkSVXANQ==";
 
 const SVG_START: &str =
     r#"<svg role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><title>"#;
@@ -102,19 +113,71 @@ fn manual_domains(assets: &Path) -> Vec<(String, Vec<String>)> {
     table
 }
 
+/// Accepts the tarball only if its SHA-512 is the `sha512-<base64>` pin.
+fn verify_tarball(bytes: &[u8], integrity: &str) -> Result<(), String> {
+    let expected = integrity
+        .strip_prefix("sha512-")
+        .and_then(|digest| BASE64_STANDARD.decode(digest).ok())
+        .filter(|digest| digest.len() == 64)
+        .ok_or_else(|| format!("not a sha512 integrity: {integrity:?}"))?;
+
+    if Sha512::digest(bytes).as_slice() == expected {
+        Ok(())
+    } else {
+        Err(format!("tarball does not match the pinned {integrity}"))
+    }
+}
+
+/// Unpacks the verified bytes, not the file that could change after the check.
+fn unpack(bytes: &[u8], into: &Path) -> PathBuf {
+    let _ = fs::remove_dir_all(into);
+    fs::create_dir_all(into).unwrap_or_else(|error| fail(format!("{}: {error}", into.display())));
+    let mut tar = Command::new("tar")
+        .arg("-xzf")
+        .arg("-")
+        .arg("-C")
+        .arg(into)
+        .stdin(Stdio::piped())
+        .spawn()
+        .unwrap_or_else(|error| fail(format!("tar: {error}")));
+    let written = tar.stdin.take().expect("stdin is piped").write_all(bytes);
+    let status = tar.wait();
+
+    if written.is_err() || !status.is_ok_and(|status| status.success()) {
+        fail("tar could not unpack the tarball");
+    }
+    into.join("package")
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let [_, package] = args.as_slice() else {
-        fail("usage: cargo run --bin build-icons -- <unpacked simple-icons package>");
+    let [_, tarball] = args.as_slice() else {
+        fail(format!(
+            "usage: cargo run --bin build-icons -- simple-icons-{PINNED_VERSION}.tgz"
+        ));
     };
 
-    let package = PathBuf::from(package);
-    let assets = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let assets = root.join("assets");
+    let bytes = fs::read(tarball).unwrap_or_else(|error| fail(format!("{tarball}: {error}")));
+    verify_tarball(&bytes, PINNED_INTEGRITY).unwrap_or_else(|error| fail(error));
+    let package = unpack(
+        &bytes,
+        &root
+            .join("target")
+            .join(format!("simple-icons-{PINNED_VERSION}")),
+    );
 
     let version = serde_json::from_str::<serde_json::Value>(&read(&package.join("package.json")))
         .ok()
         .and_then(|meta| meta["version"].as_str().map(str::to_owned))
         .unwrap_or_else(|| fail("package.json has no version"));
+
+    if version != PINNED_VERSION {
+        fail(format!(
+            "package.json is {version}, the pin is {PINNED_VERSION}"
+        ));
+    }
     let mut icons: Vec<Source> =
         serde_json::from_str(&read(&package.join("data").join("simple-icons.json")))
             .unwrap_or_else(|error| fail(format!("simple-icons.json: {error}")));
@@ -206,4 +269,42 @@ fn main() {
         lines.len(),
         owner.len()
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const BYTES: &[u8] = b"fictional tarball bytes";
+    const INTEGRITY: &str = "sha512-nNHcLWTwOXrFC18Ik91M0AFYoprr7i8FgUsd21Fx4FhVAzp7J9nQ3Hwa46HsfEwajlhRqYUVDK7wWE2VuBNnsg==";
+
+    #[test]
+    fn tarball_matching_the_pinned_integrity_is_accepted() {
+        assert_eq!(verify_tarball(BYTES, INTEGRITY), Ok(()));
+    }
+
+    #[test]
+    fn tampered_or_unpinned_tarballs_are_refused() {
+        let mut tampered = BYTES.to_vec();
+        tampered[0] ^= 1;
+        assert!(verify_tarball(&tampered, INTEGRITY).is_err());
+        assert!(verify_tarball(b"", INTEGRITY).is_err());
+
+        for pin in [
+            "",
+            "sha512-",
+            "sha512-not base64!",
+            &INTEGRITY.replace("sha512-", "sha256-"),
+            &INTEGRITY.replace("sha512-", "SHA512-"),
+        ] {
+            assert!(verify_tarball(BYTES, pin).is_err(), "{pin}");
+        }
+    }
+
+    #[test]
+    fn the_pin_names_the_recorded_simple_icons_version() {
+        let recorded = include_str!("../../assets/SIMPLE_ICONS_VERSION");
+        assert_eq!(recorded.trim(), PINNED_VERSION);
+        assert!(PINNED_INTEGRITY.starts_with("sha512-"));
+    }
 }

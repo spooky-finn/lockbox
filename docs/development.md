@@ -269,11 +269,13 @@ of logs and fixtures.
 
 Icons are bundled in the binary. Update domain mappings in
 `assets/icon_domains.txt` rather than editing the large generated catalog manually.
-With an unpacked `simple-icons` npm package available locally, regenerate it using:
+Regenerate it from the `simple-icons` npm tarball:
 
 ```sh
-cargo run --locked --bin build-icons -- /path/to/unpacked/simple-icons/package
+cargo run --locked --bin build-icons -- /path/to/simple-icons-<version>.tgz
 ```
 
+The tool refuses any tarball that does not match its pinned version and npm
+`dist.integrity`; upgrading means updating both pins in `src/bin/build-icons.rs`.
 Review the generated asset diff and retain upstream license/attribution assets.
 The tool's module documentation describes the source archive layout.
