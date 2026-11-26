@@ -105,22 +105,49 @@ impl Config {
             .unwrap_or_default()
     }
 
+    /// Writes a private sibling and renames it over the config. A crash or full
+    /// disk mid-write never leaves a truncated file, which would load as empty
+    /// and forget every remembered vault.
     pub fn save(&self, path: &Path) -> io::Result<()> {
         if let Some(dir) = path.parent() {
             create_private_dir(dir)?;
         }
+        let dir = path
+            .parent()
+            .filter(|dir| !dir.as_os_str().is_empty())
+            .unwrap_or(Path::new("."));
+        let name = path
+            .file_name()
+            .ok_or_else(|| io::Error::other("config path has no file name"))?;
+        let mut suffix = [0u8; 8];
+        getrandom::fill(&mut suffix).map_err(io::Error::other)?;
+        let temporary = dir.join(format!(
+            ".{}.{:016x}.tmp",
+            name.to_string_lossy(),
+            u64::from_be_bytes(suffix)
+        ));
 
-        let mut options = OpenOptions::new();
-        options.write(true).create(true).truncate(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            options.mode(0o600);
+        let written = (|| {
+            let mut options = OpenOptions::new();
+            options.write(true).create_new(true);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                options.mode(0o600);
+            }
+
+            let mut file = options.open(&temporary)?;
+            file.write_all(&serde_json::to_vec_pretty(self).expect("config always serializes"))?;
+            file.sync_all()?;
+            fs::rename(&temporary, path)?;
+            #[cfg(unix)]
+            fs::File::open(dir)?.sync_all()?;
+            Ok(())
+        })();
+        if written.is_err() {
+            let _ = fs::remove_file(&temporary);
         }
-
-        let mut file = options.open(path)?;
-        file.write_all(&serde_json::to_vec_pretty(self).expect("config always serializes"))?;
-        file.sync_all()
+        written
     }
 }
 

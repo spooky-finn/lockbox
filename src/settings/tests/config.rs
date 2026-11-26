@@ -77,6 +77,28 @@ fn config_file_is_private_to_the_owner() {
 }
 
 #[test]
+fn saving_replaces_the_config_whole_and_leaves_no_temporary_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.json");
+    let config = Config {
+        recent_vaults: (0..20)
+            .map(|index| dir.path().join(format!("vault-{index}.lbx")))
+            .collect(),
+        ..Config::default()
+    };
+    config.save(&path).unwrap();
+    Config::default().save(&path).unwrap();
+    config.save(&path).unwrap();
+
+    assert_eq!(Config::load(&path), config);
+    let names: Vec<_> = fs::read_dir(dir.path())
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    assert_eq!(names, vec![std::ffi::OsString::from("config.json")]);
+}
+
+#[test]
 fn language_defaults_to_english_and_preserves_explicit_russian() {
     use crate::settings::language::Language;
 
