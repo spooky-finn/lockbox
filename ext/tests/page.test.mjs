@@ -5,7 +5,7 @@ import { inspectPage, fillPage } from "../src/page.js";
 // DOM boundary fixtures deliberately exercise the serialized functions without
 // adding a content script, real credentials, or an external test dependency.
 function fixture({ type = "submit", method = "get", associated = true, disabled = false, action } = {}) {
-  const previous = new Map(["window", "location", "innerHeight", "innerWidth", "getComputedStyle", "HTMLInputElement", "document", "__lockboxFill"].map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
+  const previous = new Map(["window", "location", "innerHeight", "innerWidth", "getComputedStyle", "HTMLInputElement", "HTMLFormElement", "document", "__lockboxFill"].map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
   class Input {
     constructor(type, name) {
       Object.assign(this, { type, name, id: name, autocomplete: "", isConnected: true, disabled: false, readOnly: false, parentElement: null, maxLength: -1 });
@@ -18,7 +18,12 @@ function fixture({ type = "submit", method = "get", associated = true, disabled 
     getClientRects() { return [this.getBoundingClientRect()]; }
     dispatchEvent() { return true; }
   }
-  const form = { method: "post", action: "https://accounts.example/login" };
+  // Like the DOM, the real values live behind prototype getters.
+  class Form {
+    get method() { return "post"; }
+    get action() { return "https://accounts.example/login"; }
+  }
+  const form = new Form();
   const username = new Input("text", "username");
   const password = new Input("password", "password");
   username.form = password.form = form;
@@ -32,9 +37,10 @@ function fixture({ type = "submit", method = "get", associated = true, disabled 
   globalThis.innerHeight = 800; globalThis.innerWidth = 1200;
   globalThis.getComputedStyle = () => ({ opacity: "1", contentVisibility: "visible", visibility: "visible", display: "block" });
   globalThis.HTMLInputElement = Input;
+  globalThis.HTMLFormElement = Form;
   globalThis.document = { activeElement: password, querySelectorAll: (selector) =>
     selector.startsWith("button") ? [control] : selector.includes("password") ? [password] : [username, password] };
-  return { control, username, password, restore() {
+  return { control, form, username, password, restore() {
     for (const [key, descriptor] of previous) {
       if (descriptor) Object.defineProperty(globalThis, key, descriptor);
       else delete globalThis[key];
@@ -78,6 +84,24 @@ for (const options of [{ method: "post" }, { associated: false }, { disabled: tr
       assert.ok(token);
       assert.equal(fillPage(location.origin, token, "fictional-user", "fictional-password", "login").filled, true);
       assert.equal(f.password.value, "fictional-password");
+    } finally { f.restore(); }
+  });
+}
+
+// <input name="action"> and <input name="method"> shadow the form's properties.
+for (const [name, value] of [["action", "https://attacker.test/collect"], ["method", "post"]]) {
+  test(`a control named ${name} cannot change where the form submits`, () => {
+    const f = fixture({ method: "post" });
+    try {
+      // Like an <input>, it stringifies to "[object …]", a same-origin path.
+      const clobbered = { name, value: "post", toLowerCase: () => "post" };
+      Object.defineProperty(f.form, name, { value: clobbered });
+      Object.defineProperty(HTMLFormElement.prototype, name, {
+        configurable: true,
+        get: name === "action" ? () => value : () => "get",
+      });
+      assert.ok(inspectPage(location.origin, "login").error);
+      assert.equal(f.password.value, "");
     } finally { f.restore(); }
   });
 }

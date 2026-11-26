@@ -41,19 +41,27 @@ export function inspectPage(expectedOrigin, mode) {
     if (passwords.length !== 1) return fail("Choose an unambiguous current-password field.");
   }
   if (!passwords.length || passwords.length > 2) return fail("Could not identify new-password fields safely.");
+  // A control named "action" or "method" shadows the form's own properties
+  // (DOM clobbering), so read them through the prototype, never the form.
+  const formProperty = (name) => {
+    const getter = Object.getOwnPropertyDescriptor(globalThis.HTMLFormElement?.prototype ?? {}, name)?.get;
+    const value = getter ? getter.call(form) : form[name];
+    return typeof value === "string" ? value : null;
+  };
   const safeForm = () => {
     if (!form) return true;
     // GET forms can put secrets into URLs. External submit overrides are refused too.
-    if (form.method.toLowerCase() !== "post") return false;
+    if (formProperty("method")?.toLowerCase() !== "post") return false;
     const controls = [...document.querySelectorAll('button, input[type="submit"], input[type="image"]')]
       .filter((control) => control.form === form && !control.disabled && !["button", "reset"].includes(control.type));
     for (const control of controls) {
       if (control.hasAttribute("formmethod") && control.formMethod.toLowerCase() !== "post") return false;
     }
-    const actions = [form.action, ...controls
+    const actions = [formProperty("action"), ...controls
       .filter((element) => element.hasAttribute("formaction"))
       .map((element) => element.formAction)];
     return actions.every((action) => {
+      if (typeof action !== "string") return false;
       const url = new URL(action, location.href);
       return url.origin === expectedOrigin && url.protocol === "https:" && !url.username && !url.password;
     });
