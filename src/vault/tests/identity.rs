@@ -184,6 +184,31 @@ fn recovering_identity_changes_password_and_keeps_the_private_key() {
 }
 
 #[test]
+fn recovering_identity_removes_the_copy_sealed_under_the_old_password() {
+    use crate::vault::file::sibling;
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("identity.key");
+    let password = SecretString::from("old identity password".to_owned());
+    let replacement = SecretString::from("replacement identity password".to_owned());
+    let phrase = RecoveryPhrase::generate().unwrap();
+    let identity = Identity::from_phrase(&phrase);
+    identity.save_new(&path, &password, kdf()).unwrap();
+    // A copy left by an interrupted earlier backup holds the old file too.
+    std::fs::copy(&path, sibling(&path, "bak.tmp")).unwrap();
+    Identity::recover(&path, &phrase, &replacement).unwrap();
+    for suffix in ["bak", "bak.tmp", "tmp"] {
+        assert!(!sibling(&path, suffix).exists(), "{suffix} left behind");
+    }
+    assert_eq!(
+        Identity::open(&path, &replacement)
+            .unwrap()
+            .signing_key()
+            .to_bytes(),
+        identity.signing_key().to_bytes()
+    );
+}
+
+#[test]
 fn adopted_identity_accepts_its_original_words_without_changing_root() {
     let directory = tempfile::tempdir().unwrap();
     let password = SecretString::from("master password".to_owned());

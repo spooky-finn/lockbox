@@ -77,6 +77,24 @@ impl Identity {
         let (header, ciphertext) = identity.encrypt(password, KdfParams::default())?;
         file::replace(path, &header, &ciphertext)?;
         file::sync_dir(path)?;
+        // The backup still opens with the old password, which recovery is meant
+        // to retire. Drop it only once the durable new file reads back intact;
+        // otherwise keep it as the last readable copy. The header, including
+        // the new password slot, is authenticated data, so a phrase unlock
+        // proves those bytes without another slow password derivation.
+        if Self::open_using(path, None, Some(phrase))
+            .is_ok_and(|saved| saved.root == identity.root && saved.words == identity.words)
+        {
+            let backup = file::sibling(path, "bak");
+            let removed = [file::sibling(&backup, "tmp"), backup]
+                .iter()
+                .fold(false, |removed, stale| {
+                    fs::remove_file(stale).is_ok() | removed
+                });
+            if removed {
+                let _ = file::sync_dir(path);
+            }
+        }
         Ok(identity)
     }
 
