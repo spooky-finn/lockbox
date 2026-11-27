@@ -1104,7 +1104,7 @@ impl Text {
             Self::VaultIconSparkles => ("Искры", "Sparkles"),
             Self::AutoLock => ("Автоблокировка", "Auto-lock"),
             Self::WebsiteIcons => ("Загружать значки сайтов", "Download website icons"),
-            Self::WebsiteIconsDescription => ("Обращаться к сайту выбранной записи и сохранять значки в кэше на этом устройстве. По умолчанию используются встроенные значки.", "Contact the selected record’s website and cache icons on this device. Bundled icons are used by default."),
+            Self::WebsiteIconsDescription => ("Обращаться к сайтам записей, в том числе добавленных другими участниками общих пространств, и сохранять значки в кэше на этом устройстве. Эти сайты увидят ваш IP-адрес. По умолчанию используются встроенные значки.", "Contact records’ websites, including ones other members added to shared spaces, and cache icons on this device. Those websites see your IP address. Bundled icons are used by default."),
             Self::AutoLockTimeout => ("Время автоблокировки", "Auto-lock timeout"),
             Self::LockVault => ("Заблокировать", "Lock vault"),
             Self::SecretOrOtpauthURL => ("2FA (TOTP): секрет или otpauth://", "2FA (TOTP): secret or otpauth://"),

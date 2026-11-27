@@ -207,7 +207,30 @@ fn same_origin_https(url: &url::Url, origin: &url::Url) -> bool {
         && url.host().is_some()
         && url.username().is_empty()
         && url.password().is_none()
+        && public_hostname(url)
         && url.origin() == origin.origin()
+}
+
+/// Entry URLs may come from other shared-space members. Contact only named
+/// public sites on the default HTTPS port, so a member cannot aim others'
+/// devices at chosen ports, raw IP addresses or local-network names.
+fn public_hostname(url: &url::Url) -> bool {
+    if url.port().is_some() {
+        return false;
+    }
+    let Some(url::Host::Domain(domain)) = url.host() else {
+        return false;
+    };
+    let domain = domain.strip_suffix('.').unwrap_or(domain);
+    domain.contains('.')
+        && !["localhost", "local", "home.arpa", "internal"]
+            .iter()
+            .any(|local| {
+                domain == *local
+                    || domain
+                        .strip_suffix(local)
+                        .is_some_and(|rest| rest.ends_with('.'))
+            })
 }
 
 #[cfg(test)]

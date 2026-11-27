@@ -292,3 +292,39 @@ fn downloads_stop_and_never_reach_disk_once_the_session_cache_is_gone() {
     assert_eq!(fetched, None);
     assert!(!cache_file(&directory).exists());
 }
+
+#[test]
+fn icons_are_fetched_only_from_public_hostnames_on_the_default_https_port() {
+    let cache = Cache::new(None);
+    // A shared-space member chooses these; none may be contacted.
+    for website in [
+        "https://tracker.example:8443/favicon.ico",
+        "https://tracker.example:80/favicon.ico",
+        "https://93.184.216.34/favicon.ico",
+        "https://2130706433/favicon.ico",
+        "https://[2606:4700:4700::1111]/favicon.ico",
+        "https://localhost/favicon.ico",
+        "https://printer.localhost/favicon.ico",
+        "https://nas.local./favicon.ico",
+        "https://router.home.arpa/favicon.ico",
+        "https://intranet/favicon.ico",
+    ] {
+        assert_eq!(
+            cache.cached_fetch(website, 100, || panic!("{website} must not be fetched")),
+            None,
+            "{website}"
+        );
+        assert!(download::download(website).is_none(), "{website}");
+    }
+    for website in [
+        "https://example.com/favicon.ico",
+        "https://example.com:443/favicon.ico",
+        "https://www.example.org./favicon.ico",
+    ] {
+        assert_eq!(
+            cache.cached_fetch(website, 100, image),
+            image(),
+            "{website}"
+        );
+    }
+}
