@@ -15,6 +15,21 @@ passwords. The native local-file picker also preserves the chosen recovery key.
 The passphrase remains the everyday unlock credential. No additional
 BIP39 passphrase is used, so the 12 words alone reproduce the recovery keys.
 
+The setup screen also offers two explicit exports of all 12 words. **Copy**
+puts them on the clipboard through the same guard as copied passwords: kept
+on this Mac (no Universal Clipboard), marked for clipboard-history tools to
+skip, kept out of Windows and Linux clipboard history where supported, and
+cleared after 20 seconds if the clipboard still holds them. **Download** saves
+them as an **unencrypted** text file, one word per line, named
+`lockbox-recovery-words.txt` by default. The file is owner-only (`0600`),
+never overwrites an existing file, is marked as downloaded on macOS and is
+removed if the write fails. Its contents are still plaintext: a folder synced
+to iCloud or another cloud drive, a Time Machine or other backup, or anyone
+who can read files as your OS user gets the words. The words give full owner
+authority: the root key, every recovery slot and capsule, and the controller
+recovery transition of owned spaces. Prefer writing them down; if you download
+the file, move it offline and delete the copy.
+
 The local `identity.key` beside the preferences file holds the root key and, when
 available, its words. It uses Argon2id, a separate HKDF encryption domain, and
 XChaCha20-Poly1305 with authenticated headers and independent password/recovery
@@ -64,7 +79,8 @@ device signing key from the words.
 `access::mnemonic::RecoveryPhrase` validates exactly 12 English words and their
 checksum. The pinned `bip39` dependency enables zeroization. Mnemonics, entropy,
 seeds, and derived keys are wiped on drop in Rust. Recovery errors do not include
-the input words. The UI uses no automatic clipboard export.
+the input words. The words leave the app only through the explicit Copy and
+Download buttons described above; nothing is copied or saved automatically.
 
 ## File format v8
 

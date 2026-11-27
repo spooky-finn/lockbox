@@ -132,14 +132,60 @@ fn download_words(state: Session) {
         else {
             return;
         };
-        use std::io::Write;
-        let result =
-            crate::platform::files::create_new_private(file.path()).and_then(|mut output| {
-                output.write_all(words.as_bytes())?;
-                output.sync_all()
-            });
-        edit_locked(state, |locked| {
-            locked.error = result.err().map(|error| error.to_string())
-        });
+        let result = save_words(file.path(), &words);
+        edit_locked(state, |locked| locked.error = result.err());
     });
+}
+
+/// Plaintext words: owner-only, never overwriting, quarantined and removed on
+/// a failed write, exactly like an attachment export.
+fn save_words(path: &std::path::Path, words: &str) -> Result<(), String> {
+    crate::records::attachments::export(path, words.as_bytes())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{column_words, save_words};
+
+    #[test]
+    fn saved_words_are_private_and_never_overwrite() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("lockbox-recovery-words.txt");
+        let words = column_words("abandon ability able");
+        save_words(&path, &words).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "abandon\nability\nable"
+        );
+        assert!(save_words(&path, "replacement").is_err());
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&path).unwrap().permissions().mode();
+            assert_eq!(mode & 0o777, 0o600);
+        }
+    }
+
+    /// Same treatment as attachment exports: the file is marked as downloaded.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn saved_words_are_quarantined() {
+        use std::os::unix::ffi::OsStrExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("lockbox-recovery-words.txt");
+        save_words(&path, "abandon").unwrap();
+        let name = std::ffi::CString::new(path.as_os_str().as_bytes()).unwrap();
+        // A null buffer asks only for the attribute's size.
+        let len = unsafe {
+            libc::getxattr(
+                name.as_ptr(),
+                c"com.apple.quarantine".as_ptr(),
+                std::ptr::null_mut(),
+                0,
+                0,
+                0,
+            )
+        };
+        assert!(len > 0, "no quarantine attribute");
+    }
 }
