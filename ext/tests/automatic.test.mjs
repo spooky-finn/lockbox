@@ -26,17 +26,21 @@ function fixture(options = {}) {
   }, () => options.pending ?? false);
   return { api, tab, window, badges, popups, lookups, check, stop: () => api.runtime.onSuspend.fire() };
 }
-test("matching login opens once per document and never requests credentials", async () => {
+test("matching login only sets the badge and never opens the popup by itself", async () => {
+  // A popup opened on its own steals focus, which the page sees as blur/visibilitychange.
   const f = fixture();
   try {
     await settle(); await f.check();
     assert.deepEqual(f.lookups, ["https://accounts.example", "https://accounts.example"]);
-    assert.equal(f.popups.length, 1);
+    assert.equal(f.popups.length, 0);
     assert.deepEqual(f.badges.at(-1), { tabId: 7, text: "1" });
     f.api.tabs.onUpdated.fire(7, { status: "loading" });
     f.api.tabs.onUpdated.fire(7, { status: "complete" });
-    await settle();
-    assert.equal(f.popups.length, 2);
+    f.api.tabs.onActivated.fire({ tabId: 7 });
+    f.api.windows.onFocusChanged.fire(1);
+    await settle(); await f.check();
+    assert.equal(f.popups.length, 0);
+    assert.deepEqual(f.badges.at(-1), { tabId: 7, text: "1" });
   } finally { f.stop(); }
 });
 test("no matching login clears badge without opening", async () => {
@@ -58,13 +62,6 @@ test("navigation during match lookup prevents popup for previous website", async
   try {
     await settle(); f.tab.url = "https://other.example"; release(true); await settle();
     assert.equal(f.popups.length, 0); assert.equal(f.badges.length, 0);
-  } finally { f.stop(); }
-});
-test("restricted openPopup keeps badge and does not repeatedly retry", async () => {
-  const f = fixture({ blocked: true });
-  try {
-    await settle(); await f.check();
-    assert.equal(f.popups.length, 1); assert.equal(f.badges.at(-1).text, "1");
   } finally { f.stop(); }
 });
 test("desktop unavailable produces no popup", async () => {

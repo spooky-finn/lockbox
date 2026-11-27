@@ -68,13 +68,13 @@ The native relay supports Unix sockets. The supplied deep-link installer is macO
 only; Linux requires separate desktop URL-handler registration. Windows support
 is not implemented for this bridge.
 
-## Automatic popup
+## Saved-login badge
 
 The extension checks the active HTTPS origin against a local site index, even
 when Lockbox is closed or its vaults are locked. The relay returns only a
 boolean; account names and passwords are not returned. Checks do not launch or
-foreground the app. A match offers to open Lockbox; unlocking and explicit account
-selection are still required before filling.
+foreground the app. A match shows a **1** badge on the toolbar button; unlocking
+and explicit account selection are still required before filling.
 
 The index lives in `~/.lockbox/browser-sites/`, with one `.sites` file per vault.
 Files contain only keyed digests (HMAC-SHA256) of deduplicated HTTPS origins
@@ -98,16 +98,15 @@ index. To clear the index, quit Lockbox and delete `~/.lockbox/browser-sites/`;
 the next check creates a new key and opening a vault recreates its file. Index
 write errors are logged and do not prevent saving the encrypted vault.
 
-A match opens the popup once per loaded page. Firefox 149+ supports automatic
-popup opening; older Firefox versions keep a **1** badge for manual opening.
-The browser must be focused. Checks run on page load, tab/window activation and
-every five seconds. No account index is persisted in the extension.
+A match never opens the popup by itself: that would take focus from the page,
+and the website could tell from its blur or visibility events that a login for
+it is saved. Click the toolbar button to open Lockbox. The browser must be
+focused. Checks run on page load, tab/window activation and every five seconds. No account index is persisted in the extension.
 
 The extension uses the `tabs` permission to read the active website URL and sends
 only its HTTPS origin to the local relay. Clicking **Open Lockbox** requests
-optional access to that website for form filling, since an automatically opened
-popup does not itself grant `activeTab`. Password filling still requires desktop
-account selection and explicit consent.
+optional access to that website for form filling. Password filling still
+requires desktop account selection and explicit consent.
 
 ## What to expect
 
