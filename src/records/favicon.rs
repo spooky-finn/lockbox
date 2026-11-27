@@ -15,6 +15,46 @@ const MAX_URL_BYTES: usize = 4096;
 const MAX_IMAGE_BYTES: usize = 1024 * 1024;
 const IMAGE_TTL: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 const FAILURE_TTL: Duration = Duration::from_secs(5 * 60);
+/// Unkeyed cache of older versions, named by plain SHA-256 of each site.
+const LEGACY: &str = "v1";
+const CURRENT: &str = "v2";
+
+#[cfg(not(test))]
+fn root() -> Option<PathBuf> {
+    dirs::cache_dir().map(|root| root.join("lockbox/favicons"))
+}
+
+/// Unit tests never touch the real cache directory.
+#[cfg(test)]
+pub(crate) fn root() -> Option<PathBuf> {
+    static ROOT: std::sync::LazyLock<tempfile::TempDir> =
+        std::sync::LazyLock::new(|| tempfile::tempdir().unwrap());
+    Some(ROOT.path().join("favicons"))
+}
+
+/// `remove_dir_all` removes a symlink itself and never follows it.
+fn remove_tree(path: &std::path::Path) {
+    if let Err(error) = std::fs::remove_dir_all(path)
+        && error.kind() != std::io::ErrorKind::NotFound
+    {
+        eprintln!("Could not remove website icon cache: {error}");
+    }
+}
+
+fn remove_legacy(root: &std::path::Path) {
+    remove_tree(&root.join(LEGACY));
+}
+
+fn clear(root: &std::path::Path) {
+    remove_tree(root);
+}
+
+/// Opting out of website icons must not leave the cached sites on disk.
+pub(crate) fn clear_disk() {
+    if let Some(root) = root() {
+        clear(&root);
+    }
+}
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -47,7 +87,11 @@ pub(crate) struct Cache {
 
 impl Default for Cache {
     fn default() -> Self {
-        Self::new(dirs::cache_dir().map(|root| root.join("lockbox/favicons/v1")))
+        let root = root();
+        if let Some(root) = &root {
+            remove_legacy(root);
+        }
+        Self::new(root.map(|root| root.join(CURRENT)))
     }
 }
 

@@ -44,7 +44,7 @@ fn settings_is_a_page_and_returning_restores_the_selected_entry() {
 }
 
 #[test]
-fn website_icon_downloads_default_off_and_disabling_discards_session_cache() {
+fn website_icon_downloads_default_off_and_disabling_discards_session_and_disk_cache() {
     let mut dom = mounted();
     update(&mut dom, |state| {
         edit_unlocked(state, |u| u.open_settings())
@@ -58,8 +58,12 @@ fn website_icon_downloads_default_off_and_disabling_discards_session_cache() {
         };
         actions::set_website_icons(true);
         assert!(settings.read().config.website_icons);
+        let cached = crate::records::favicon::root().unwrap().join("v2");
+        std::fs::create_dir_all(&cached).unwrap();
+        std::fs::write(cached.join("entry.json"), "{}").unwrap();
         actions::set_website_icons(false);
         assert!(!settings.read().config.website_icons);
+        assert!(!cached.exists());
         let screen = state.read();
         let Screen::Unlocked(u) = &*screen else {
             panic!()

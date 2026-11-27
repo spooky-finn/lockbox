@@ -61,17 +61,25 @@ pub(crate) fn adopt_shared() {
     if icons != shared.website_icons {
         settings.write().config.website_icons = shared.website_icons;
         if !shared.website_icons {
-            // Tabs include the active session; tests may mount without tabs.
-            match try_consume_context::<Signal<crate::desktop::tabs::Tabs>>() {
-                Some(tabs) => tabs
-                    .peek()
-                    .sessions
-                    .iter()
-                    .copied()
-                    .for_each(forget_favicons),
-                None => forget_favicons(consume_context::<Session>()),
-            }
+            forget_all_favicons();
+            // Downloads this window had in flight may have written meanwhile.
+            crate::records::favicon::clear_disk();
         }
+    }
+}
+
+/// Drops the icon cache of every tab in this window, so no download still in
+/// flight in a background tab writes to disk after icons are turned off.
+fn forget_all_favicons() {
+    // Tabs include the active session; tests may mount without tabs.
+    match try_consume_context::<Signal<crate::desktop::tabs::Tabs>>() {
+        Some(tabs) => tabs
+            .peek()
+            .sessions
+            .iter()
+            .copied()
+            .for_each(forget_favicons),
+        None => forget_favicons(consume_context::<Session>()),
     }
 }
 
@@ -128,7 +136,9 @@ pub(crate) fn set_website_icons(enabled: bool) {
     update_preferences(|config| config.website_icons = enabled);
     share(&consume_context::<Signal<Settings>>().peek());
     if !enabled {
-        forget_favicons(consume_context::<Session>());
+        forget_all_favicons();
+        // After the session caches are gone, so their downloads no longer write.
+        crate::records::favicon::clear_disk();
     }
 }
 
