@@ -403,22 +403,34 @@ impl Vault {
         unlock: Unlock<'_>,
         witnesses: Arc<dyn WitnessStore>,
     ) -> Result<Self> {
-        let path = path.to_path_buf();
-        let header = Header::parse(&file::read_header(&path)?)?;
-        let canonical_path = matches!(header.version, 3 | 5 | PROFILE_VERSION | RECOVERY_VERSION);
-        let path = if canonical_path {
-            path.canonicalize()?
-        } else {
-            path
+        let canonical =
+            |header: &Header| matches!(header.version, 3 | 5 | PROFILE_VERSION | RECOVERY_VERSION);
+        let mut canonical_path = canonical(&Header::parse(&file::read_header(path)?)?);
+        #[cfg(test)]
+        run_before_lock();
+        // The unlocked peek only guesses; the locked header decides. If the file
+        // changed format in between, retry once with the locked decision.
+        let mut retried = false;
+        let (path, profile_lock, data, header) = loop {
+            let path = if canonical_path {
+                path.canonicalize()?
+            } else {
+                path.to_path_buf()
+            };
+            let profile_lock = lock_profile(&path)?;
+            // Read under the lease so a concurrent rename cannot leave an opener
+            // with an old snapshot and permission to write to the vacated path.
+            let data = file::read_bounded(&path, file::MAX_VAULT_BYTES)?;
+            let header = Header::parse(&data)?;
+            if canonical(&header) == canonical_path {
+                break (path, Some(profile_lock), data, header);
+            }
+            if retried {
+                return Err(VaultError::Corrupted);
+            }
+            retried = true;
+            canonical_path = !canonical_path;
         };
-        let profile_lock = Some(lock_profile(&path)?);
-        // Read under the lease so a concurrent rename cannot leave an opener
-        // with an old snapshot and permission to write to the vacated path.
-        let data = file::read_bounded(&path, file::MAX_VAULT_BYTES)?;
-        let header = Header::parse(&data)?;
-        if canonical_path && !matches!(header.version, 3 | 5 | PROFILE_VERSION | RECOVERY_VERSION) {
-            return Err(VaultError::Corrupted);
-        }
         let (key, failed_decryption) = match unlock {
             Unlock::Password(password) => (header.password_key(password)?, VaultError::Corrupted),
             Unlock::Recovery(phrase) => (
@@ -770,6 +782,24 @@ impl Header {
 
 fn random(buffer: &mut [u8]) {
     getrandom::fill(buffer).expect("operating system random generator");
+}
+
+#[cfg(test)]
+thread_local! {
+    static BEFORE_LOCK: RefCell<Option<Box<dyn FnOnce()>>> = RefCell::new(None);
+}
+
+/// Lets a test change the file between the unlocked peek and the lock.
+#[cfg(test)]
+pub(crate) fn set_before_lock(hook: impl FnOnce() + 'static) {
+    BEFORE_LOCK.with(|slot| *slot.borrow_mut() = Some(Box::new(hook)));
+}
+
+#[cfg(test)]
+fn run_before_lock() {
+    if let Some(hook) = BEFORE_LOCK.with(|slot| slot.borrow_mut().take()) {
+        hook();
+    }
 }
 
 #[cfg(test)]

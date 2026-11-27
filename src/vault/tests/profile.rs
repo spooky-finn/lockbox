@@ -118,3 +118,29 @@ fn creating_profile_never_replaces_existing_file() {
     ));
     assert_eq!(std::fs::read(&path).unwrap(), b"original");
 }
+
+/// The format peeked before the lock may be swapped before the locked read.
+/// A shared profile must still end up at its canonical path, never at the
+/// symlink a local vault was reached through.
+#[cfg(unix)]
+#[test]
+fn profile_swapped_in_before_the_lock_still_opens_canonically() {
+    use crate::vault::Vault;
+    let dir = tempfile::tempdir().unwrap();
+    let local = dir.path().join("local.lbx");
+    let shared = dir.path().join("shared.lbx");
+    let alias = dir.path().join("alias.lbx");
+    let master = SecretString::from("master".to_owned());
+    drop(Vault::create(&local, &master, FAST).unwrap());
+    drop(Vault::create_profile(&shared, &master, FAST, profile()).unwrap());
+    std::os::unix::fs::symlink(&local, &alias).unwrap();
+
+    let (link, target) = (alias.clone(), shared.clone());
+    crate::vault::set_before_lock(move || {
+        std::fs::remove_file(&link).unwrap();
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+    });
+    let vault = Vault::open(&alias, &master).unwrap();
+    assert!(vault.profile.as_ref().is_some());
+    assert_eq!(vault.path, shared.canonicalize().unwrap());
+}
