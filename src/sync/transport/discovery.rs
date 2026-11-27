@@ -15,7 +15,10 @@ use crate::sync::{
     protocol::{Error, Hash, MAX_OBJECT_BYTES, MAX_OBJECTS, Object, SyncState, decode},
     transport::{Cancellation, Download, MAX_BATCH_BYTES, Result, Storage, TransportError},
 };
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::{
+    collections::{BTreeMap, BTreeSet, VecDeque},
+    time::{Duration, Instant},
+};
 
 const MAX_DOWNLOADS: usize = 128;
 const MAX_FETCHES: usize = 256;
@@ -23,6 +26,9 @@ const MAX_FETCHES: usize = 256;
 const MAX_HINT_FETCHES: usize = 64;
 /// LIST pages per pass. A longer listing resumes on the next pass.
 const MAX_PAGES: usize = 64;
+/// Wall-clock limit per pass. Generous, so a slow link still finishes a batch;
+/// a pass that hits it keeps its progress like any other budget.
+const PASS_TIME_LIMIT: Duration = Duration::from_secs(10 * 60);
 
 /// A ciphertext-only discovery request that can safely move to a worker.
 ///
@@ -39,6 +45,8 @@ pub struct Discovery {
     skipped: BTreeSet<Hash>,
     /// Where the previous pass stopped listing; `None` starts a new sweep.
     resume: Option<String>,
+    /// Counted from the start of [`Discovery::download`].
+    time_limit: Duration,
 }
 
 impl Discovery {
@@ -50,7 +58,14 @@ impl Discovery {
             hints: BTreeSet::new(),
             skipped: BTreeSet::new(),
             resume: None,
+            time_limit: PASS_TIME_LIMIT,
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn within(mut self, limit: Duration) -> Self {
+        self.time_limit = limit;
+        self
     }
 
     /// Continue listing at [`Download::resume`] of the previous pass. Every
@@ -102,10 +117,12 @@ impl Discovery {
         Ok(request)
     }
 
-    /// Each pass bounds GET attempts, object count, bytes, pages and cursor size.
-    /// Saved candidates make the next pass progress without trusting list order.
+    /// Each pass bounds GET attempts, object count, bytes, pages, cursor size
+    /// and time. Saved candidates make the next pass progress without trusting
+    /// list order.
     pub fn download(self, storage: &mut dyn Storage, cancel: &Cancellation) -> Result<Download> {
         let mut batch = Batch {
+            deadline: Instant::now().checked_add(self.time_limit),
             request: &self,
             attempted: BTreeSet::new(),
             missing: BTreeSet::new(),
@@ -130,6 +147,11 @@ impl Discovery {
         let mut cursors: BTreeSet<_> = cursor.iter().cloned().collect();
         for pages in 1.. {
             cancel.check()?;
+            // Every page before this cursor has been fully processed.
+            if batch.expired() {
+                batch.resume = cursor;
+                return Ok(batch.finish(true));
+            }
             // A body too large even for small pages (see the Storj adapter)
             // ends the pass with what came before it. The next sweep starts
             // over, so heads listed before it keep arriving.
@@ -216,6 +238,8 @@ struct Batch<'a> {
     bad_copies: Vec<Hash>,
     bytes: usize,
     resume: Option<String>,
+    /// `None` only if the limit overflows the clock: no deadline then.
+    deadline: Option<Instant>,
 }
 
 impl Batch<'_> {
@@ -228,7 +252,8 @@ impl Batch<'_> {
                 continue;
             }
 
-            if self.objects.len() == MAX_DOWNLOADS || self.fetches == MAX_FETCHES {
+            if self.objects.len() == MAX_DOWNLOADS || self.fetches == MAX_FETCHES || self.expired()
+            {
                 return Ok(false);
             }
 
@@ -258,7 +283,10 @@ impl Batch<'_> {
                 continue;
             }
 
-            if self.objects.len() == MAX_DOWNLOADS || self.hint_fetches == MAX_HINT_FETCHES {
+            if self.objects.len() == MAX_DOWNLOADS
+                || self.hint_fetches == MAX_HINT_FETCHES
+                || self.expired()
+            {
                 return Ok(());
             }
 
@@ -271,6 +299,12 @@ impl Batch<'_> {
         }
 
         Ok(())
+    }
+
+    /// Checked between requests only; one in flight keeps its own timeout.
+    fn expired(&self) -> bool {
+        self.deadline
+            .is_some_and(|deadline| Instant::now() >= deadline)
     }
 
     fn skips(&self, hash: &Hash) -> bool {

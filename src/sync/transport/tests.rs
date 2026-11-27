@@ -1004,3 +1004,72 @@ fn a_page_of_rejected_junk_backs_off_so_the_listing_moves_on() {
         "the junk page was fetched again on every pass"
     );
 }
+
+/// Every GET is slow but within its own timeout, as on a poor link.
+struct Slow(Memory, std::time::Duration);
+
+impl Storage for Slow {
+    fn list(&mut self, namespace: Hash, cursor: Option<&str>) -> Result<Page> {
+        self.0.list(namespace, cursor)
+    }
+    fn get(&mut self, namespace: Hash, hash: Hash) -> Result<Vec<u8>> {
+        std::thread::sleep(self.1);
+        self.0.get(namespace, hash)
+    }
+    fn put(&mut self, namespace: Hash, hash: Hash, bytes: &[u8]) -> Result<()> {
+        self.0.put(namespace, hash, bytes)
+    }
+}
+
+/// A pass past its time limit stops between requests and ends incomplete with
+/// what it downloaded, instead of running for hours or failing; the next pass
+/// continues from there.
+#[test]
+fn a_pass_past_its_time_limit_keeps_its_progress() {
+    let (_, state, device, _) = history();
+    let mut join = Machine::join(
+        state.space,
+        state.namespace,
+        state.genesis,
+        state.owner_root,
+    );
+    let limit = std::time::Duration::from_millis(200);
+    let mut provider = Slow(
+        Memory {
+            objects: state
+                .objects
+                .iter()
+                .map(|(h, b)| (*h, b.0.clone()))
+                .collect(),
+            ..Memory::default()
+        },
+        limit + std::time::Duration::from_millis(50),
+    );
+
+    let first = Discovery::for_state(&join)
+        .unwrap()
+        .within(limit)
+        .download(&mut provider, &Cancellation::default())
+        .unwrap();
+    assert!(first.incomplete, "the time limit stopped the pass");
+    // A stalled test thread may cross the limit before the first GET.
+    assert!(provider.0.gets <= 1, "no request starts after the limit");
+    assert_eq!(first.objects.len(), provider.0.gets);
+    if let Some((hash, _)) = first.objects.first() {
+        assert_eq!(*hash, state.genesis, "required objects go first");
+    }
+    for (hash, bytes) in first.objects {
+        Machine::receive(&mut join, hash, bytes).unwrap();
+    }
+
+    provider.1 = std::time::Duration::ZERO;
+    let second = Discovery::for_state(&join)
+        .unwrap()
+        .download(&mut provider, &Cancellation::default())
+        .unwrap();
+    assert!(!second.incomplete);
+    for (hash, bytes) in second.objects {
+        Machine::receive(&mut join, hash, bytes).unwrap();
+    }
+    assert!(Machine::replay(&join, &device).unwrap().ready);
+}

@@ -98,8 +98,9 @@ impl Cancellation {
 pub struct Download {
     pub objects: Vec<(Hash, Vec<u8>)>,
     /// True only when listed or authenticated-required objects are still
-    /// unavailable, or a budget stopped the pass. References from unverified
-    /// objects never set it: anyone with PUT could otherwise stall publication.
+    /// unavailable, or a budget or the time limit stopped the pass. References
+    /// from unverified objects never set it: anyone with PUT could otherwise
+    /// stall publication.
     pub incomplete: bool,
     /// Listed hashes whose own bytes can never verify. The host remembers them
     /// so later passes skip them. Junk under a key is never reported here.
