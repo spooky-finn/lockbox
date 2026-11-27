@@ -902,3 +902,105 @@ fn an_oversized_listing_page_keeps_what_was_listed_before_it() {
     assert!(batch.objects.iter().any(|(hash, _)| *hash == head));
     assert_eq!(batch.resume, None, "the next sweep starts over");
 }
+
+/// Lists `order` in pages of 1000 keys, as Storj does.
+struct Flood {
+    objects: BTreeMap<Hash, Vec<u8>>,
+    order: Vec<Hash>,
+}
+
+impl Storage for Flood {
+    fn list(&mut self, _: Hash, cursor: Option<&str>) -> Result<Page> {
+        let start = cursor.map_or(0, |cursor| cursor[1..].parse().unwrap());
+        let end = (start + 1000).min(self.order.len());
+        Ok(Page {
+            objects: self.order[start..end].to_vec(),
+            next: (end < self.order.len()).then(|| format!("p{end}")),
+        })
+    }
+    fn get(&mut self, _: Hash, hash: Hash) -> Result<Vec<u8>> {
+        self.objects
+            .get(&hash)
+            .cloned()
+            .ok_or(TransportError::NotFound)
+    }
+    fn put(&mut self, _: Hash, _: Hash, _: &[u8]) -> Result<()> {
+        Err(TransportError::AccessDenied)
+    }
+}
+
+/// Attack: a bucket writer plants `count` undecodable objects under their own
+/// hashes, listed before every honest key (grinding or the bucket operator
+/// picks the order). Runs passes as the scheduler does, with or without the
+/// in-memory back-off, and returns the pass in which the honest head arrived.
+fn flood_passes(count: u32, mut backoff: Option<BadCopies>) -> Option<usize> {
+    let (base, state, _, head) = history();
+    let junk: Vec<_> = (0..count)
+        .map(|index| {
+            let bytes = format!("junk {index}").into_bytes();
+            (Hash::digest(b"lockbox.sync.object\0", &bytes), bytes)
+        })
+        .collect();
+    let mut provider = Flood {
+        order: junk
+            .iter()
+            .map(|(hash, _)| *hash)
+            .chain(state.objects.keys().copied())
+            .collect(),
+        objects: junk
+            .into_iter()
+            .chain(
+                state
+                    .objects
+                    .iter()
+                    .map(|(hash, bytes)| (*hash, bytes.0.clone())),
+            )
+            .collect(),
+    };
+
+    let mut receiver = base;
+    let mut resume = None;
+    (0..64).find(|_| {
+        let skipped: Vec<_> = backoff.iter().flat_map(BadCopies::skipped).collect();
+        let batch = Discovery::for_state(&receiver)
+            .unwrap()
+            .skipping(skipped)
+            .resuming(resume.take())
+            .download(&mut provider, &Cancellation::default())
+            .unwrap();
+        if let Some(backoff) = &mut backoff {
+            backoff.record(&batch);
+        }
+        resume = batch.resume;
+        for (hash, error) in batch.rejected {
+            Machine::reject_download(&mut receiver, hash, error);
+        }
+        for (hash, bytes) in batch.objects {
+            Machine::receive(&mut receiver, hash, bytes).unwrap();
+        }
+        receiver.objects.contains_key(&head) || receiver.candidates.contains_key(&head)
+    })
+}
+
+/// More junk on one page than a pass may fetch plus the 128 rejections a
+/// profile keeps. Even with no back-off (a fresh start), the unpredictable
+/// fetch order lets the honest head through: listing order alone would spend
+/// every pass on the same junk prefix.
+#[test]
+fn a_junk_flood_listed_first_cannot_starve_honest_heads() {
+    assert!(
+        flood_passes(900, None).is_some(),
+        "the junk flood starved the honest head"
+    );
+}
+
+/// A flood longer than a listing page: the page of junk must finish, or the
+/// pass resumes on it forever and never reaches the honest head behind it.
+/// The persisted rejections cannot cover a page, the in-memory back-off can.
+#[test]
+fn a_page_of_rejected_junk_backs_off_so_the_listing_moves_on() {
+    assert!(
+        flood_passes(1500, Some(BadCopies::default())).is_some(),
+        "the junk page was fetched again on every pass"
+    );
+}

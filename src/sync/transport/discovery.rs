@@ -146,7 +146,7 @@ impl Discovery {
                 return Err(TransportError::InvalidResponse);
             }
             batch.listed.extend(page.objects.iter().copied());
-            batch.queue.extend(page.objects);
+            batch.queue.extend(unpredictable(page.objects));
 
             // Re-list this page next pass: its remaining keys are still queued.
             batch.resume = cursor.clone();
@@ -175,6 +175,20 @@ impl Discovery {
         batch.fetch_hints(storage, cancel)?;
         Ok(batch.finish(false))
     }
+}
+
+/// Listed keys in an order no bucket writer can predict. Junk keys listed
+/// first would otherwise use up every pass's budget before honest heads.
+/// Required objects are queued before any listed key and keep their place.
+fn unpredictable(mut keys: Vec<Hash>) -> Vec<Hash> {
+    let mut seed = [0; 32];
+    // Listing order still makes bounded progress if the OS cannot help.
+    if getrandom::fill(&mut seed).is_ok() {
+        keys.sort_by_cached_key(|key| {
+            Hash::digest(b"lockbox.sync.fetch-order\0", &[seed, key.0].concat())
+        });
+    }
+    keys
 }
 
 enum Fetched {
@@ -357,6 +371,10 @@ impl Batch<'_> {
 /// is not re-downloaded on every pass. Never persisted: it describes the bucket
 /// right now, not the hash. Honest bytes restored under a key are picked up
 /// within at most [`BadCopies::MAX_WAIT`] passes.
+///
+/// Rejected hashes wait too: the persisted rejection cache keeps only
+/// `MAX_CANDIDATES` of them, fewer than a listing page may hold, so a flood
+/// would otherwise be fetched again on every pass and never let it finish.
 #[derive(Default)]
 pub struct BadCopies {
     pass: u64,
@@ -383,7 +401,8 @@ impl BadCopies {
         for (hash, _) in &download.objects {
             self.keys.remove(hash);
         }
-        for hash in &download.bad_copies {
+        let rejected = download.rejected.iter().map(|(hash, _)| hash);
+        for hash in download.bad_copies.iter().chain(rejected) {
             let strikes = self.keys.get(hash).map_or(0, |(strikes, _)| *strikes) + 1;
             let wait = 1u64
                 .checked_shl(strikes)
