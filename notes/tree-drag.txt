@@ -1,8 +1,0 @@
-Vault tree moves
-
-- WebView captures pointer and owns drag state. No OS drag or pasteboard data.
-  Completed drop sends source kind, source ID, destination folder ID or root.
-- Rust rechecks current session, editor and vault writability before save.
-  Existing vault commands validate hierarchy and roll back failed writes.
-- Entry moves change folder ID. Folder moves change parent ID. Descendants
-  retain IDs and links. Existing history, sync and storage contracts apply.

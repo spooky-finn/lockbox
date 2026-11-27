@@ -1,8 +1,0 @@
-Folders collapsed on unlock
-
-- New session: all existing folders collapsed, nested folders included.
-- Password/key unlock share initialization. Reopening resets expanded folders.
-- Manual expansion, selection reveal, search keep existing behavior.
-- Regression: key unlock, manual expansion, password reopen.
-- cargo check --lib, format/diff checks pass.
-- cargo test directories --lib: 8 pass.

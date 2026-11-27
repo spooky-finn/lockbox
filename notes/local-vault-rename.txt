@@ -1,7 +1,0 @@
-Local vault rename
-
-- Open local vault owns rename. Authenticated contents determine vault type.
-- Vault keeps source lease through move. Acquires destination lease before move. Case-only rename can keep same lease.
-- Encrypted file and backup move within same directory. Existing destinations stay protected. Failed vault move restores backup where possible.
-- Open reads ciphertext under lease. Stale pre-rename snapshot cannot reopen vacated path.
-- Desktop updates remembered path after move. Vault ID, key slots, and Touch ID binding stay stable.

@@ -1,7 +1,0 @@
-Unlock page
-
-- Center mark 96px to 64px; lock/Touch ID badge scaled with mark.
-- Bottom-right action list: Open vault, Create vault, Join a space, Recover from Storj. Icons plus visible localized text.
-- Actions stay below content in normal flow; short windows scroll. Busy state disables all four actions.
-- Existing unlock/recovery tests: 8 pass. Format, diff checks pass.
-- Chromium CSS fixture checked: 1000x800, 375x667, 800x420. Mark 64px; actions clear content; no horizontal overflow. Native app not visually checked.

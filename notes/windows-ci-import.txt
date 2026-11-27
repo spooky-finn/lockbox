@@ -1,3 +1,0 @@
-- Windows CI failed strict Clippy: sibling import unused outside Unix.
-- Moved sibling import inside Unix-only sidecar test. Test retained; Windows excludes import.
-- Validation: cargo fmt --all -- --check; cargo clippy --locked --all-targets -- -D warnings; 18 vault protection tests pass on macOS. Windows rerun pending CI.

@@ -1,9 +1,0 @@
-Tab close waits for shared journal
-
-- Workspace owns deferred close. Tab switches move request with workspace.
-- Runtime checks after sync ticks. Pending exchange, signing intent, or
-  unacknowledged outbox keeps vault open. Durable receipts drain outbox.
-- Closing triggers existing sync scheduler. Offline retry keeps backoff.
-  Local vaults need no remote receipt. Recovery backup stays separate.
-- Lock can still drop workspace and cancel deferred close. Persisted
-  journal carries pending changes across unlock.
