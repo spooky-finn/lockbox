@@ -412,7 +412,10 @@ impl Vault {
         // changed format in between, retry once with the locked decision.
         let mut retried = false;
         let (path, profile_lock, data, header) = loop {
-            let path = if canonical_path {
+            // Saves rename over this path, which would replace a symlink with a
+            // regular file and detach it from the lock taken on its target.
+            let symlink = std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink());
+            let path = if canonical_path || symlink {
                 path.canonicalize()?
             } else {
                 path.to_path_buf()

@@ -629,6 +629,33 @@ fn a_local_vault_cannot_be_open_twice() {
     assert!(Vault::open(&path, &password("master")).is_ok());
 }
 
+/// Saving through a symlink must update its target and keep the link, or the
+/// lock detaches from the file and a second window can open it too.
+#[cfg(unix)]
+#[test]
+fn saving_a_symlinked_vault_keeps_the_link_and_the_lock() {
+    let dir = tempfile::tempdir().unwrap();
+    let (target, vault) = new_vault(&dir);
+    drop(vault);
+    let link = dir.path().join("link.lbx");
+    std::os::unix::fs::symlink(&target, &link).unwrap();
+
+    let mut vault = Vault::open(&link, &password("master")).unwrap();
+    let mut entry = sample_entry();
+    entry.title = "Saved through the link".into();
+    vault.entries.push(entry.clone());
+    vault.save().unwrap();
+
+    assert_eq!(fs::read_link(&link).unwrap(), target);
+    assert!(matches!(
+        Vault::open(&link, &password("master")),
+        Err(VaultError::ProfileInUse)
+    ));
+    drop(vault);
+    let reopened = Vault::open(&target, &password("master")).unwrap();
+    assert!(reopened.entries().iter().any(|e| e.title == entry.title));
+}
+
 /// Creation never replaces whatever occupies the path by the time it writes.
 /// A dangling symlink passes the early existence check, like a file that
 /// appears during key derivation, and must still be left untouched.
