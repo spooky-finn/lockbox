@@ -243,7 +243,12 @@ impl Batch<'_> {
                 self.missing.insert(hash);
                 return Ok(Fetched::Nothing);
             }
-            Err(TransportError::Budget) => {
+            // An oversized body, or a response the gateway sends for this key
+            // alone (unreadable header, odd 4xx): what a bucket writer stored
+            // under it, not a provider fault, so it must not abort the pass.
+            // Unavailable, AccessDenied and Cancelled concern the provider
+            // as a whole and still do.
+            Err(TransportError::Budget | TransportError::InvalidResponse) => {
                 self.bad_copy(hash);
                 return Ok(Fetched::Nothing);
             }

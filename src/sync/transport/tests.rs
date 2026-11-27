@@ -12,6 +12,8 @@ struct Memory {
     repeated_cursor: bool,
     missing: bool,
     hidden: BTreeSet<Hash>,
+    /// Per-key GET failures, such as a header the transport cannot read.
+    errors: BTreeMap<Hash, TransportError>,
     gets: usize,
 }
 
@@ -33,6 +35,10 @@ impl Storage for Memory {
 
         if self.missing {
             return Err(TransportError::NotFound);
+        }
+
+        if let Some(error) = self.errors.get(&hash) {
+            return Err(*error);
         }
 
         self.objects
@@ -654,6 +660,71 @@ fn loading_a_poisoned_profile_forgets_download_rejections_only() {
     let replay = Machine::replay(&loaded, &device).unwrap();
     assert!(replay.ready);
     assert_eq!(replay.projection.entries()[0].title, "Third");
+}
+
+/// Attack: a bucket writer stores one object the gateway answers with an
+/// unreadable header or an odd 4xx. That key alone is unavailable this pass:
+/// honest heads still arrive and the pass stays complete. A required object
+/// stays pending, and provider-wide failures still abort the pass.
+#[test]
+fn one_unreadable_object_does_not_abort_discovery() {
+    let (base, state, _, head) = history();
+    let junk = Hash([9; 32]);
+    let honest = || Memory {
+        objects: state
+            .objects
+            .iter()
+            .map(|(hash, bytes)| (*hash, bytes.0.clone()))
+            .chain([(junk, b"junk".to_vec())])
+            .collect(),
+        errors: BTreeMap::from([(junk, TransportError::InvalidResponse)]),
+        ..Memory::default()
+    };
+
+    let mut provider = honest();
+    let batch = Discovery::for_state(&base)
+        .unwrap()
+        .download(&mut provider, &Cancellation::default())
+        .unwrap();
+    assert!(batch.objects.iter().any(|(hash, _)| *hash == head));
+    assert!(
+        !batch.incomplete,
+        "an unreadable listed key stalled the pass"
+    );
+    assert!(
+        batch.rejected.is_empty(),
+        "the hash itself was never judged"
+    );
+    assert_eq!(batch.bad_copies, vec![junk]);
+
+    let join = Machine::join(
+        state.space,
+        state.namespace,
+        state.genesis,
+        state.owner_root,
+    );
+    let mut provider = honest();
+    provider
+        .errors
+        .insert(state.genesis, TransportError::InvalidResponse);
+    let batch = Discovery::for_state(&join)
+        .unwrap()
+        .download(&mut provider, &Cancellation::default())
+        .unwrap();
+    assert!(batch.incomplete, "a required object must stay pending");
+    assert!(!batch.bad_copies.contains(&state.genesis));
+
+    for error in [TransportError::Unavailable, TransportError::AccessDenied] {
+        let mut provider = honest();
+        provider.errors.insert(junk, error);
+        assert_eq!(
+            Discovery::for_state(&base)
+                .unwrap()
+                .download(&mut provider, &Cancellation::default())
+                .err(),
+            Some(error)
+        );
+    }
 }
 
 /// A canonical, correctly hashed change that names an unknown membership and
