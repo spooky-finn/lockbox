@@ -41,6 +41,7 @@ impl ProfileStore {
     /// Bounded discovery across all owned spaces in this bucket. Neither LIST
     /// order nor timestamps select a winner. Missing predecessors are fetched
     /// directly; competing authenticated capsule heads require explicit repair.
+    /// Junk any bucket writer can plant is skipped, so it cannot block recovery.
     pub fn discover_cloud_spaces(
         root: &SigningKey,
         storage: &mut dyn Storage,
@@ -56,8 +57,9 @@ impl ProfileStore {
                 Err(TransportError::NotFound) => return Err(VaultError::CloudRecoveryMissing),
                 result => result?,
             };
-            if page.objects.len() > 1000 || queue.len() + page.objects.len() > protocol::MAX_OBJECTS
-            {
+            // Anyone with bucket write can add keys here, so the key count is
+            // bounded by the page limits below, not by the capsule budget.
+            if page.objects.len() > 1000 {
                 return Err(Error::ResourceBudgetExceeded.into());
             }
             queue.extend(page.objects);
@@ -79,17 +81,22 @@ impl ProfileStore {
             if !attempted.insert(hash) {
                 continue;
             }
-            if attempted.len() > protocol::MAX_OBJECTS {
-                return Err(Error::ResourceBudgetExceeded.into());
-            }
-            let bytes = storage.get_recovery(directory, hash)?;
-            bytes_read = bytes_read.saturating_add(bytes.len());
-            if bytes.len() > protocol::MAX_OBJECT_BYTES || bytes_read > protocol::MAX_CACHE_BYTES {
-                return Err(Error::ResourceBudgetExceeded.into());
-            }
+            // A vanished key is the same as one never listed, and no honest
+            // capsule is ever larger than an object (prepare and put cap it).
+            // Provider failures stay fatal: they could hide the newest capsule.
+            let bytes = match storage.get_recovery(directory, hash) {
+                Ok(bytes) if bytes.len() <= protocol::MAX_OBJECT_BYTES => bytes,
+                Ok(_) | Err(TransportError::NotFound | TransportError::Budget) => continue,
+                Err(error) => return Err(error.into()),
+            };
             // A provider can add arbitrary bytes; only root-decryptable capsules
             // signed by their verified controller participate in selection.
+            // Only they are kept, so only they count toward the budgets.
             if let Ok(space) = capsule::open(root, hash, &bytes) {
+                bytes_read = bytes_read.saturating_add(bytes.len());
+                if found.len() >= protocol::MAX_OBJECTS || bytes_read > protocol::MAX_CACHE_BYTES {
+                    return Err(Error::ResourceBudgetExceeded.into());
+                }
                 if let Some(previous) = space.previous() {
                     queue.push(previous);
                 }
@@ -99,7 +106,11 @@ impl ProfileStore {
         let mut parents = BTreeSet::new();
         for space in found.values() {
             if let Some(previous) = space.previous() {
-                let parent = found.get(&previous).ok_or(Error::MissingDependency)?;
+                // A missing predecessor is older than this capsule, so it can
+                // never be a head. Present ones must still link honestly.
+                let Some(parent) = found.get(&previous) else {
+                    continue;
+                };
                 if !space.follows(parent)? {
                     return Err(Error::InvalidSignature.into());
                 }

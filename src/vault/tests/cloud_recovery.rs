@@ -26,10 +26,12 @@ fn provider() -> ProviderConfiguration {
 fn store() -> ProfileStore {
     ProfileStore::new(Arc::new(MemoryWitness::default()))
 }
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct Memory {
     objects: BTreeMap<(Hash, Hash), Vec<u8>>,
     backups: BTreeMap<(Hash, Hash), Vec<u8>>,
+    /// Listed recovery keys whose GET fails, as a hostile bucket can arrange.
+    recovery_errors: BTreeMap<Hash, TransportError>,
     fail_backup: bool,
     hide_objects: bool,
 }
@@ -59,19 +61,26 @@ impl Storage for Memory {
         self.objects.insert((namespace, hash), bytes.to_vec());
         Ok(())
     }
-    fn list_recovery(&mut self, directory: Hash, _: Option<&str>) -> TransportResult<Page> {
+    fn list_recovery(&mut self, directory: Hash, cursor: Option<&str>) -> TransportResult<Page> {
+        // Pages of at most 1,000 keys, as the trait requires.
+        let start = cursor.map_or(0, |cursor| cursor.parse().unwrap());
+        let keys: Vec<_> = self
+            .backups
+            .keys()
+            .filter(|(d, _)| *d == directory)
+            .map(|(_, h)| *h)
+            .rev()
+            .collect();
+        let end = keys.len().min(start + 1000);
         Ok(Page {
-            objects: self
-                .backups
-                .keys()
-                .filter(|(d, _)| *d == directory)
-                .map(|(_, h)| *h)
-                .rev()
-                .collect(),
-            next: None,
+            objects: keys[start..end].to_vec(),
+            next: (end < keys.len()).then(|| end.to_string()),
         })
     }
     fn get_recovery(&mut self, directory: Hash, hash: Hash) -> TransportResult<Vec<u8>> {
+        if let Some(error) = self.recovery_errors.get(&hash) {
+            return Err(*error);
+        }
         self.backups
             .get(&(directory, hash))
             .cloned()
@@ -457,4 +466,114 @@ fn cancelled_restore_and_failed_local_backup_commit_publish_no_new_recovery_obje
     owner.synchronize(&mut storage).unwrap();
     assert_eq!(storage.backups.len(), 2);
     assert!(storage.backups.values().any(|uploaded| uploaded == &bytes));
+}
+
+/// Honest capsule chain, oldest first: one capsule per published change.
+fn capsule_chain(dir: &Path, phrase: &RecoveryPhrase, storage: &mut Memory) -> (Hash, Vec<Hash>) {
+    let mut owner = create(&dir.join("owner.lbx"), phrase, "Space");
+    let mut chain = Vec::new();
+    for title in ["First", "Second", "Third"] {
+        add(&mut owner, title);
+        owner.synchronize(storage).unwrap();
+        let backup = owner
+            .profile
+            .as_ref()
+            .unwrap()
+            .cloud_backup
+            .as_ref()
+            .unwrap();
+        chain.push(backup.upload.as_ref().unwrap().hash);
+    }
+    assert_eq!(storage.backups.len(), chain.len());
+    (capsule::directory(&phrase.signing_key()), chain)
+}
+
+fn head(root: &SigningKey, storage: &mut Memory) -> Result<Hash> {
+    let mut spaces = ProfileStore::discover_cloud_spaces(root, storage, &Cancellation::default())?;
+    assert_eq!(spaces.len(), 1);
+    Ok(spaces.remove(0).hash)
+}
+
+#[test]
+fn junk_in_the_recovery_directory_is_skipped_and_never_changes_the_head() {
+    let dir = tempfile::tempdir().unwrap();
+    let phrase = RecoveryPhrase::generate().unwrap();
+    let root = phrase.signing_key();
+    let mut honest = Memory::default();
+    let (directory, chain) = capsule_chain(dir.path(), &phrase, &mut honest);
+    let newest = *chain.last().unwrap();
+    assert_eq!(head(&root, &mut honest).unwrap(), newest);
+    let junk = |seed: usize| Hash::digest(b"junk\0", &seed.to_le_bytes());
+    let max = crate::sync::protocol::MAX_OBJECT_BYTES;
+
+    // Valid-size junk whose total exceeds the cache budget.
+    let mut flood = honest.clone();
+    for seed in 0..17 {
+        flood
+            .backups
+            .insert((directory, junk(seed)), vec![b'x'; max]);
+    }
+    // Junk keys alone exceed the authenticated object budget.
+    let mut keys = honest.clone();
+    for seed in 0..=crate::sync::protocol::MAX_OBJECTS {
+        keys.backups.insert((directory, junk(seed)), Vec::new());
+    }
+    // An object no honest capsule can be, and listed keys whose GET fails.
+    let mut oversized = honest.clone();
+    oversized
+        .backups
+        .insert((directory, junk(0)), vec![b'x'; max + 1]);
+    let mut failing = honest.clone();
+    for (seed, error) in [(0, TransportError::NotFound), (1, TransportError::Budget)] {
+        failing.backups.insert((directory, junk(seed)), Vec::new());
+        failing.recovery_errors.insert(junk(seed), error);
+    }
+    for mut storage in [flood, keys, oversized, failing] {
+        assert_eq!(head(&root, &mut storage).unwrap(), newest);
+    }
+}
+
+#[test]
+fn missing_or_junk_predecessors_are_skipped_without_selecting_an_older_head() {
+    let dir = tempfile::tempdir().unwrap();
+    let phrase = RecoveryPhrase::generate().unwrap();
+    let root = phrase.signing_key();
+    let mut honest = Memory::default();
+    let (directory, chain) = capsule_chain(dir.path(), &phrase, &mut honest);
+    let [oldest, middle, newest] = chain[..] else {
+        unreachable!()
+    };
+
+    // The dangling link ends the chain; the newer capsules still verify.
+    let mut gone = honest.clone();
+    gone.backups.remove(&(directory, oldest));
+    assert_eq!(head(&root, &mut gone).unwrap(), newest);
+    let mut replaced = honest.clone();
+    replaced
+        .backups
+        .insert((directory, oldest), b"junk".to_vec());
+    assert_eq!(head(&root, &mut replaced).unwrap(), newest);
+    let mut vanished = honest.clone();
+    vanished
+        .recovery_errors
+        .insert(oldest, TransportError::NotFound);
+    assert_eq!(head(&root, &mut vanished).unwrap(), newest);
+
+    // A gap leaves two unordered capsules: no automatic winner, never the older.
+    let mut gap = honest.clone();
+    gap.backups.remove(&(directory, middle));
+    assert!(matches!(
+        head(&root, &mut gap),
+        Err(VaultError::CloudRecoveryConflict)
+    ));
+    // A provider failure is not junk: it must not hide the newest capsule.
+    for error in [
+        TransportError::Unavailable,
+        TransportError::AccessDenied,
+        TransportError::InvalidResponse,
+    ] {
+        let mut flaky = honest.clone();
+        flaky.recovery_errors.insert(newest, error);
+        assert!(head(&root, &mut flaky).is_err());
+    }
 }
