@@ -1,7 +1,7 @@
 use crate::settings::actions;
 use crate::{
     desktop::{
-        context::edit_unlocked,
+        context::{Session, edit_unlocked},
         runtime,
         session::Screen,
         view_test_support::{mounted, update},
@@ -65,6 +65,46 @@ fn website_icon_downloads_default_off_and_disabling_discards_session_cache() {
             panic!()
         };
         assert!(previous != u.favicon_cache.handle());
+    });
+}
+
+#[test]
+fn auto_lock_and_website_icons_changed_in_one_window_reach_other_windows() {
+    use crate::{desktop::context::SecurityHandle, platform::autolock::State};
+    use std::time::{Duration, Instant, SystemTime};
+
+    // Every native window has its own VirtualDom on the same thread.
+    let mut first = mounted();
+    let mut second = mounted();
+    let cache = |state: Session| match &*state.peek() {
+        Screen::Unlocked(u) => u.favicon_cache.handle(),
+        Screen::Locked(_) => panic!("locked"),
+    };
+    let previous = second.in_scope(ScopeId::APP, || cache(consume_context::<Session>()));
+    update(&mut first, |_| {
+        actions::set_auto_lock(1);
+        actions::set_website_icons(true);
+    });
+    update(&mut second, |_| runtime::tick());
+    second.in_scope(ScopeId::APP, || {
+        let settings = consume_context::<Signal<Settings>>();
+        assert_eq!(settings.peek().config.auto_lock_minutes, 1);
+        assert!(settings.peek().config.website_icons);
+        let later = Instant::now() + Duration::from_secs(61);
+        assert_eq!(
+            consume_context::<SecurityHandle>()
+                .borrow()
+                .auto_lock
+                .check(later, SystemTime::now()),
+            State::Lock
+        );
+    });
+    update(&mut first, |_| actions::set_website_icons(false));
+    update(&mut second, |_| runtime::tick());
+    second.in_scope(ScopeId::APP, || {
+        let settings = consume_context::<Signal<Settings>>();
+        assert!(!settings.peek().config.website_icons);
+        assert!(previous != cache(consume_context::<Session>()));
     });
 }
 

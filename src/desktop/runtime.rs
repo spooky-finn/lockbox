@@ -92,6 +92,7 @@ pub(crate) fn use_runtime() -> Session {
 
 pub(crate) fn tick() {
     let mut clock = consume_context::<Clock>().0;
+    crate::settings::actions::adopt_shared();
     check_lock();
     consume_context::<SecurityHandle>()
         .borrow_mut()

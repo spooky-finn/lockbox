@@ -14,7 +14,72 @@ use crate::{
     },
 };
 use dioxus::prelude::*;
-use std::time::{Instant, SystemTime};
+use std::{
+    cell::Cell,
+    time::{Instant, SystemTime},
+};
+
+/// Auto-lock and website-icon choices made in any window. Each window keeps
+/// its own Settings copy and timer, so the others adopt these on their next
+/// tick. All windows run on the main thread.
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct Shared {
+    auto_lock_minutes: u32,
+    website_icons: bool,
+}
+
+thread_local! {
+    static SHARED: Cell<Option<Shared>> = const { Cell::new(None) };
+}
+
+fn share(settings: &Settings) {
+    SHARED.set(Some(Shared {
+        auto_lock_minutes: settings.config.auto_lock_minutes,
+        website_icons: settings.config.website_icons,
+    }));
+}
+
+/// Applies a choice made in another window to this one. Kept in memory only:
+/// the window that made the change already saved it.
+pub(crate) fn adopt_shared() {
+    let Some(shared) = SHARED.get() else {
+        return;
+    };
+    let mut settings = consume_context::<Signal<Settings>>();
+    let (minutes, icons) = {
+        let current = &settings.peek().config;
+        (current.auto_lock_minutes, current.website_icons)
+    };
+
+    if minutes != shared.auto_lock_minutes {
+        settings.write().config.auto_lock_minutes = shared.auto_lock_minutes;
+        consume_context::<SecurityHandle>()
+            .borrow_mut()
+            .auto_lock
+            .set_minutes(shared.auto_lock_minutes, Instant::now(), SystemTime::now());
+    }
+    if icons != shared.website_icons {
+        settings.write().config.website_icons = shared.website_icons;
+        if !shared.website_icons {
+            // Tabs include the active session; tests may mount without tabs.
+            match try_consume_context::<Signal<crate::desktop::tabs::Tabs>>() {
+                Some(tabs) => tabs
+                    .peek()
+                    .sessions
+                    .iter()
+                    .copied()
+                    .for_each(forget_favicons),
+                None => forget_favicons(consume_context::<Session>()),
+            }
+        }
+    }
+}
+
+fn forget_favicons(mut state: Session) {
+    if let Screen::Unlocked(workspace) = &mut *state.write() {
+        workspace.favicon_cache = Default::default();
+    }
+}
 
 pub(crate) fn set_touch_id(wanted: bool) {
     let mut state = consume_context::<Session>();
@@ -47,6 +112,7 @@ pub(crate) fn set_auto_lock(minutes: u32) {
         .borrow_mut()
         .auto_lock
         .set_minutes(minutes, Instant::now(), SystemTime::now());
+    share(&settings.peek());
 
     if let Screen::Unlocked(workspace) = &mut *state.write() {
         workspace.error = saved.err();
@@ -60,11 +126,9 @@ pub(crate) fn set_language(language: crate::settings::language::Language) {
 
 pub(crate) fn set_website_icons(enabled: bool) {
     update_preferences(|config| config.website_icons = enabled);
+    share(&consume_context::<Signal<Settings>>().peek());
     if !enabled {
-        let mut state = consume_context::<Session>();
-        if let Screen::Unlocked(workspace) = &mut *state.write() {
-            workspace.favicon_cache = Default::default();
-        }
+        forget_favicons(consume_context::<Session>());
     }
 }
 
