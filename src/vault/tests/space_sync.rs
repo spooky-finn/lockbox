@@ -139,6 +139,7 @@ fn entry(title: &str) -> Entry {
 
 fn delivery(from: &Vault) -> Download {
     Download {
+        resume: None,
         bad_copies: Vec::new(),
         rejected: Vec::new(),
         objects: from
@@ -445,6 +446,7 @@ fn automatic_frontier_folding_uses_durable_intents_before_the_requested_edit() {
     }
     vault
         .receive_sync(Download {
+            resume: None,
             bad_copies: Vec::new(),
             rejected: Vec::new(),
             objects,
@@ -594,6 +596,7 @@ fn verified_fork_is_persistently_frozen_but_last_readable_data_survives() {
     assert!(
         vault
             .receive_sync(Download {
+                resume: None,
                 bad_copies: Vec::new(),
                 rejected: Vec::new(),
                 objects: fork.objects.into_iter().map(|(h, b)| (h, b.0)).collect(),
@@ -713,6 +716,7 @@ fn incomplete_change_commit_failure_rolls_back_the_candidate_journal() {
     let file = std::fs::read(&path).unwrap();
     std::fs::create_dir(sibling(&path, "tmp")).unwrap();
     let partial = || Download {
+        resume: None,
         bad_copies: Vec::new(),
         rejected: Vec::new(),
         objects: vec![(child, remote.objects[&child].0.clone())],
@@ -731,6 +735,7 @@ fn incomplete_change_commit_failure_rolls_back_the_candidate_journal() {
     assert_eq!(vault.entries[0].title, "Readable baseline");
     vault
         .receive_sync(Download {
+            resume: None,
             bad_copies: Vec::new(),
             rejected: Vec::new(),
             objects: remote
@@ -766,6 +771,7 @@ fn missing_genesis_commit_failure_restores_the_empty_join_journal() {
     assert!(
         member
             .receive_sync(Download {
+                resume: None,
                 bad_copies: Vec::new(),
                 rejected: Vec::new(),
                 objects: vec![successor],

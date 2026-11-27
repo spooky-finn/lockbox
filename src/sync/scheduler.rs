@@ -68,6 +68,9 @@ pub(crate) struct SpaceSync {
     incomplete: bool,
     /// Keys that recently held junk in this space's bucket.
     bad_copies: sync::BadCopies,
+    /// Where the last pass stopped listing a bucket too long for one pass.
+    /// Memory only: a failed pass or a restart begins a new sweep.
+    listing: Option<String>,
 }
 
 impl Default for SpaceSync {
@@ -88,6 +91,7 @@ impl SpaceSync {
             stopped: false,
             incomplete: false,
             bad_copies: sync::BadCopies::default(),
+            listing: None,
         }
     }
 
@@ -141,6 +145,7 @@ impl SpaceSync {
                 self.stopped = false;
                 self.status = Status::Saved;
                 self.bad_copies = sync::BadCopies::default();
+                self.listing = None;
             }
 
             self.scope = Some(scope);
@@ -202,7 +207,10 @@ impl SpaceSync {
     fn downloaded(&mut self, vault: &mut Vault, batch: Download) -> VaultResult<()> {
         let incomplete = batch.incomplete;
         self.bad_copies.record(&batch);
+        let resume = batch.resume.clone();
         vault.receive_sync(batch)?;
+        // Only once the listed objects are saved may the next pass skip them.
+        self.listing = resume;
         let replay = vault
             .sync_replay_state()?
             .ok_or(crate::sync::protocol::Error::UnauthorizedDevice)?;
@@ -307,7 +315,10 @@ impl SpaceSync {
         let state = vault
             .sync_state()
             .ok_or(crate::sync::protocol::Error::UnauthorizedDevice)?;
-        let request = sync::Discovery::for_state(state)?.skipping(self.bad_copies.skipped());
+        // Taken, not copied: if this pass fails, the next one starts a new sweep.
+        let request = sync::Discovery::for_state(state)?
+            .skipping(self.bad_copies.skipped())
+            .resuming(self.listing.take());
         self.start_exchange(vault, move |storage, cancel| {
             request.download(storage, cancel).map(Reply::Downloaded)
         })

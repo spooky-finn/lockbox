@@ -21,6 +21,8 @@ const MAX_DOWNLOADS: usize = 128;
 const MAX_FETCHES: usize = 256;
 /// GET attempts for hints, separate from [`MAX_FETCHES`] and spent after LIST.
 const MAX_HINT_FETCHES: usize = 64;
+/// LIST pages per pass. A longer listing resumes on the next pass.
+const MAX_PAGES: usize = 64;
 
 /// A ciphertext-only discovery request that can safely move to a worker.
 ///
@@ -35,6 +37,8 @@ pub struct Discovery {
     hints: BTreeSet<Hash>,
     /// Keys recently seen holding junk. Skipped without a GET unless required.
     skipped: BTreeSet<Hash>,
+    /// Where the previous pass stopped listing; `None` starts a new sweep.
+    resume: Option<String>,
 }
 
 impl Discovery {
@@ -45,7 +49,15 @@ impl Discovery {
             required: BTreeSet::new(),
             hints: BTreeSet::new(),
             skipped: BTreeSet::new(),
+            resume: None,
         }
+    }
+
+    /// Continue listing at [`Download::resume`] of the previous pass. Every
+    /// page before it was fully processed by the passes since the sweep began.
+    pub fn resuming(mut self, cursor: Option<String>) -> Self {
+        self.resume = cursor;
+        self
     }
 
     /// Skip keys that recently held junk. Required objects are always fetched.
@@ -107,17 +119,28 @@ impl Discovery {
             rejected: Vec::new(),
             bad_copies: Vec::new(),
             bytes: 0,
+            resume: self.resume.clone(),
         };
 
         if !batch.fetch(storage, cancel)? {
             return Ok(batch.finish(true));
         }
 
-        let mut cursor = None;
-        let mut cursors = BTreeSet::new();
-        loop {
+        let mut cursor = self.resume.clone();
+        let mut cursors: BTreeSet<_> = cursor.iter().cloned().collect();
+        for pages in 1.. {
             cancel.check()?;
-            let page = storage.list(self.namespace, cursor.as_deref())?;
+            // A body too large even for small pages (see the Storj adapter)
+            // ends the pass with what came before it. The next sweep starts
+            // over, so heads listed before it keep arriving.
+            let page = match storage.list(self.namespace, cursor.as_deref()) {
+                Ok(page) => page,
+                Err(TransportError::Budget) => {
+                    batch.resume = None;
+                    return Ok(batch.finish(true));
+                }
+                Err(error) => return Err(error),
+            };
 
             if page.objects.len() > 1000 {
                 return Err(TransportError::InvalidResponse);
@@ -125,6 +148,8 @@ impl Discovery {
             batch.listed.extend(page.objects.iter().copied());
             batch.queue.extend(page.objects);
 
+            // Re-list this page next pass: its remaining keys are still queued.
+            batch.resume = cursor.clone();
             if !batch.fetch(storage, cancel)? {
                 return Ok(batch.finish(true));
             }
@@ -137,10 +162,14 @@ impl Discovery {
                 None => break,
             }
 
-            if cursors.len() > 64 {
-                return Err(TransportError::Budget);
+            // Junk keys may make the listing longer than one pass may read.
+            // Keep the progress and continue there next pass instead of failing.
+            if pages == MAX_PAGES {
+                batch.resume = cursor;
+                return Ok(batch.finish(true));
             }
         }
+        batch.resume = None;
 
         // Hints never mark the pass incomplete, even when their budget runs out.
         batch.fetch_hints(storage, cancel)?;
@@ -172,6 +201,7 @@ struct Batch<'a> {
     rejected: Vec<(Hash, Error)>,
     bad_copies: Vec<Hash>,
     bytes: usize,
+    resume: Option<String>,
 }
 
 impl Batch<'_> {
@@ -318,6 +348,7 @@ impl Batch<'_> {
             incomplete: limited || blocking,
             rejected: self.rejected,
             bad_copies: self.bad_copies,
+            resume: self.resume,
         }
     }
 }

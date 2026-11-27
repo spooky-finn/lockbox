@@ -219,6 +219,7 @@ fn downloaded_history_waits_until_the_active_draft_is_finished() {
     );
     Machine::complete_intent(&mut remote, &device).unwrap();
     let batch = Download {
+        resume: None,
         bad_copies: Vec::new(),
         rejected: Vec::new(),
         objects: remote.objects.into_iter().map(|(h, b)| (h, b.0)).collect(),
@@ -245,6 +246,80 @@ fn downloaded_history_waits_until_the_active_draft_is_finished() {
         }
         std::thread::yield_now();
     }
+}
+
+/// Attack: a bucket writer plants more junk keys than one pass may list. Sync
+/// keeps going instead of failing every pass, and the remote change listed
+/// behind the junk still arrives on a later pass.
+#[test]
+fn a_listing_too_long_for_one_pass_still_delivers_remote_history() {
+    struct Padded(Arc<Mutex<BTreeMap<Hash, Vec<u8>>>>);
+    impl sync::Storage for Padded {
+        fn list(&mut self, _: Hash, cursor: Option<&str>) -> sync::Result<sync::Page> {
+            // 100 pages of keys that are not object hashes, then the objects.
+            let page: usize = cursor.map_or(0, |cursor| cursor.parse().unwrap());
+            Ok(sync::Page {
+                objects: if page == 100 {
+                    self.0.lock().unwrap().keys().copied().collect()
+                } else {
+                    Vec::new()
+                },
+                next: (page < 100).then(|| (page + 1).to_string()),
+            })
+        }
+        fn get(&mut self, _: Hash, hash: Hash) -> sync::Result<Vec<u8>> {
+            self.0
+                .lock()
+                .unwrap()
+                .get(&hash)
+                .cloned()
+                .ok_or(TransportError::NotFound)
+        }
+        fn put(&mut self, _: Hash, hash: Hash, bytes: &[u8]) -> sync::Result<()> {
+            self.0.lock().unwrap().insert(hash, bytes.to_vec());
+            Ok(())
+        }
+    }
+    struct PaddedFactory(Arc<Mutex<BTreeMap<Hash, Vec<u8>>>>);
+    impl StorageFactory for PaddedFactory {
+        fn connect(&self) -> sync::Result<Box<dyn sync::Storage + Send>> {
+            Ok(Box::new(Padded(self.0.clone())))
+        }
+    }
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut vault = vault(&dir);
+    let profile = vault.test_profile().unwrap();
+    let device = profile.sync_secret();
+    let mut remote = profile.sync.as_ref().unwrap().clone();
+    let mut entry = Entry::new();
+    entry.title = "Remote".into();
+    remote.intent = Some(
+        Machine::prepare(
+            &remote,
+            &device,
+            Transaction::diff(
+                &Machine::replay(&remote, &device).unwrap().projection,
+                &[entry],
+                &[],
+            )
+            .unwrap(),
+        )
+        .unwrap(),
+    );
+    Machine::complete_intent(&mut remote, &device).unwrap();
+    let bucket = Arc::new(Mutex::new(
+        remote
+            .objects
+            .into_iter()
+            .map(|(hash, bytes)| (hash, bytes.0))
+            .collect(),
+    ));
+    let mut session = SpaceSync::new(Some(Arc::new(PaddedFactory(bucket))));
+    assert!(drive_until(&mut session, &mut vault, |_, vault| {
+        vault.entries().iter().any(|entry| entry.title == "Remote")
+    }));
+    assert_ne!(session.status, Status::Offline);
 }
 
 #[test]
@@ -384,6 +459,7 @@ fn unadmitted_device_waits_for_the_owner_without_reporting_removal() {
     let mut guest = vault(&guest_dir);
     guest.join_space(owner.space_descriptor().unwrap()).unwrap();
     let batch = Download {
+        resume: None,
         bad_copies: Vec::new(),
         rejected: Vec::new(),
         incomplete: false,
@@ -474,6 +550,7 @@ fn a_pending_receive_commit_cancels_old_work_and_resumes_after_storage_recovers(
     assert!(
         vault
             .receive_sync(Download {
+                resume: None,
                 bad_copies: Vec::new(),
                 rejected: Vec::new(),
                 objects: vec![(hash, remote.objects[&hash].0.clone())],

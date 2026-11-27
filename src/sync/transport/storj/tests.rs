@@ -300,3 +300,76 @@ fn sdk_preserves_denial_redirect_and_response_budget_errors() {
         server.join().unwrap();
     }
 }
+
+/// Long keys (a long space name, or junk a bucket writer planted) can push a
+/// full page over the listing limit. The same page is asked for again with
+/// fewer keys, keeping the cursor, instead of failing the pass.
+#[test]
+fn an_oversized_listing_page_is_retried_with_fewer_keys() {
+    use std::{
+        io::{BufRead, BufReader, Write},
+        net::TcpListener,
+    };
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let hash = Hash([7; 32]);
+    let server = std::thread::spawn(move || {
+        for max_keys in ["1000", "100"] {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut target = String::new();
+            reader.read_line(&mut target).unwrap();
+            loop {
+                let mut line = String::new();
+                reader.read_line(&mut line).unwrap();
+                assert!(!line.is_empty());
+
+                if line == "\r\n" {
+                    break;
+                }
+            }
+            let target = target.split_whitespace().nth(1).unwrap();
+            let url = url::Url::parse(&format!("http://localhost{target}")).unwrap();
+            let query: std::collections::HashMap<_, _> = url.query_pairs().into_owned().collect();
+            assert_eq!(query["max-keys"], max_keys);
+            assert_eq!(query["continuation-token"], "cursor");
+
+            if max_keys == "1000" {
+                write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    1024 * 1024 + 1
+                )
+                .unwrap();
+            } else {
+                let body = format!(
+                    "<ListBucketResult><IsTruncated>true</IsTruncated><NextContinuationToken>next</NextContinuationToken><Contents><Key>spaces/Team/objects/{hash}.json</Key></Contents></ListBucketResult>"
+                );
+                write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                )
+                .unwrap();
+            }
+        }
+    });
+    let mut storage = Storj::connect(
+        &format!("http://{address}"),
+        "bucket",
+        "Team",
+        "access",
+        "secret",
+        "us-east-1",
+        false,
+    )
+    .unwrap();
+    let page = storage.list(Hash([1; 32]), Some("cursor")).unwrap();
+    assert_eq!(page.objects, vec![hash]);
+    assert_eq!(page.next.as_deref(), Some("next"));
+    server.join().unwrap();
+}

@@ -61,6 +61,7 @@ fn device(vault: &Vault) -> Hash {
 
 fn delivery(vault: &Vault) -> Download {
     Download {
+        resume: None,
         bad_copies: Vec::new(),
         rejected: Vec::new(),
         objects: vault

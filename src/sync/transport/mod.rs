@@ -107,6 +107,9 @@ pub struct Download {
     /// Keys whose bucket bytes did not hash to the key. Says nothing about the
     /// hash; the host may back off from re-downloading them for a few passes.
     pub bad_copies: Vec<Hash>,
+    /// Where listing stopped in an incomplete pass, for
+    /// [`Discovery::resuming`]. Opaque provider cursor; kept in memory only.
+    pub resume: Option<String>,
 }
 
 /// Full bounded scan, deliberately independent of Storj's listing order. Known

@@ -176,6 +176,16 @@ impl Storj {
 
 impl Storj {
     fn list_prefix(&mut self, prefix: &str, cursor: Option<&str>) -> Result<Page> {
+        // A long space name, or junk keys from any bucket writer, can push 1000
+        // entries past the 1 MiB listing limit. 100 entries of the longest key
+        // (1024 bytes, at most 6 bytes each once XML-escaped) always fit.
+        match self.list_page(prefix, cursor, 1000) {
+            Err(TransportError::Budget) => self.list_page(prefix, cursor, 100),
+            result => result,
+        }
+    }
+
+    fn list_page(&mut self, prefix: &str, cursor: Option<&str>, max_keys: i32) -> Result<Page> {
         let listing = self
             .runtime
             .block_on(
@@ -183,7 +193,7 @@ impl Storj {
                     .list_objects_v2()
                     .bucket(&self.bucket)
                     .prefix(prefix)
-                    .max_keys(1000)
+                    .max_keys(max_keys)
                     .set_continuation_token(cursor.map(str::to_owned))
                     .send(),
             )

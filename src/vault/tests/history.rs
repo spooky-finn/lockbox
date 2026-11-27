@@ -19,6 +19,7 @@ fn entry(id: &str, title: &str) -> Entry {
 
 fn deliver(from: &Vault, to: &mut Vault) {
     to.receive_sync(Download {
+        resume: None,
         bad_copies: Vec::new(),
         rejected: Vec::new(),
         objects: from

@@ -552,6 +552,7 @@ fn pass_result(objects: &[Hash], bad_copies: &[Hash]) -> Download {
         incomplete: false,
         rejected: Vec::new(),
         bad_copies: bad_copies.to_vec(),
+        resume: None,
     }
 }
 
@@ -784,4 +785,120 @@ fn junk_candidate_hints_cannot_starve_the_listing() {
         !batch.incomplete,
         "unresolvable hints must not stall the pass"
     );
+}
+
+/// Lists `objects` on page `at` of `pages`; the other pages hold only keys that
+/// are not object hashes, so they reach discovery empty. `oversized` pages fail
+/// as a body over the listing limit.
+#[derive(Default)]
+struct Paged {
+    objects: BTreeMap<Hash, Vec<u8>>,
+    pages: usize,
+    at: usize,
+    oversized: BTreeSet<usize>,
+    lists: Vec<Option<String>>,
+}
+
+impl Storage for Paged {
+    fn list(&mut self, _: Hash, cursor: Option<&str>) -> Result<Page> {
+        self.lists.push(cursor.map(str::to_owned));
+        let page = cursor.map_or(0, |cursor| cursor[1..].parse().unwrap());
+        if self.oversized.contains(&page) {
+            return Err(TransportError::Budget);
+        }
+        Ok(Page {
+            objects: if page == self.at {
+                self.objects.keys().copied().collect()
+            } else {
+                Vec::new()
+            },
+            next: (page + 1 < self.pages).then(|| format!("p{}", page + 1)),
+        })
+    }
+    fn get(&mut self, _: Hash, hash: Hash) -> Result<Vec<u8>> {
+        self.objects
+            .get(&hash)
+            .cloned()
+            .ok_or(TransportError::NotFound)
+    }
+    fn put(&mut self, _: Hash, _: Hash, _: &[u8]) -> Result<()> {
+        Err(TransportError::AccessDenied)
+    }
+}
+
+/// Attack: a bucket writer plants about 100,000 junk keys, more than one pass
+/// may list. The pass keeps what it found and ends incomplete instead of
+/// failing; the next pass continues where listing stopped, so the honest head
+/// behind the junk still arrives and the sweep ends complete.
+#[test]
+fn a_listing_past_the_page_cap_resumes_on_the_next_pass() {
+    let (base, state, _, head) = history();
+    let mut provider = Paged {
+        objects: state
+            .objects
+            .iter()
+            .map(|(hash, bytes)| (*hash, bytes.0.clone()))
+            .collect(),
+        pages: 101,
+        at: 100,
+        ..Paged::default()
+    };
+
+    let first = Discovery::for_state(&base)
+        .unwrap()
+        .download(&mut provider, &Cancellation::default())
+        .unwrap();
+    assert!(first.incomplete, "the listing is not finished yet");
+    assert!(first.objects.is_empty());
+    assert_eq!(first.resume.as_deref(), Some("p64"));
+
+    let second = Discovery::for_state(&base)
+        .unwrap()
+        .resuming(first.resume)
+        .download(&mut provider, &Cancellation::default())
+        .unwrap();
+    assert!(second.objects.iter().any(|(hash, _)| *hash == head));
+    assert!(!second.incomplete, "the sweep has listed every page");
+    assert_eq!(second.resume, None);
+    assert_eq!(provider.lists.len(), 101, "no page is listed twice");
+
+    // Required objects stay required on a resumed pass, which never lists them.
+    let join = Machine::join(
+        state.space,
+        state.namespace,
+        state.genesis,
+        state.owner_root,
+    );
+    provider.objects.remove(&state.genesis);
+    let pending = Discovery::for_state(&join)
+        .unwrap()
+        .resuming(Some("p64".into()))
+        .download(&mut provider, &Cancellation::default())
+        .unwrap();
+    assert!(pending.incomplete);
+}
+
+/// A listing page whose body is over the limit even at the smallest page
+/// size ends the pass incomplete with everything listed before it.
+#[test]
+fn an_oversized_listing_page_keeps_what_was_listed_before_it() {
+    let (base, state, _, head) = history();
+    let mut provider = Paged {
+        objects: state
+            .objects
+            .iter()
+            .map(|(hash, bytes)| (*hash, bytes.0.clone()))
+            .collect(),
+        pages: 3,
+        oversized: BTreeSet::from([1]),
+        ..Paged::default()
+    };
+
+    let batch = Discovery::for_state(&base)
+        .unwrap()
+        .download(&mut provider, &Cancellation::default())
+        .unwrap();
+    assert!(batch.incomplete);
+    assert!(batch.objects.iter().any(|(hash, _)| *hash == head));
+    assert_eq!(batch.resume, None, "the next sweep starts over");
 }
