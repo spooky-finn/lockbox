@@ -2,7 +2,10 @@
 
 Status: expanded architecture draft. Date: 31 October 2026.
 Protocol version: 1 proposed. Local profile format: `.lbx` v3 proposed.
-Implementation status: local vault exists; shared protocol remains unimplemented.
+Implementation status: local vault exists. Shared spaces run an experimental,
+unversioned wire profile that differs from this proposal; see
+[deployed wire profile](#deployed-wire-profile). Proposal v1 itself remains
+unimplemented.
 
 Lockbox gains independent spaces, verified users and devices, encrypted sharing,
 and asynchronous sync through third-party storage. Clients enforce access.
@@ -121,6 +124,109 @@ Local mode remains usable without cloud. Migration and cloud publication are
 separate actions. Feature modules own their models, workflows, views and tests;
 protocol rules remain independent of persistence, providers and presentation.
 
+### Deployed wire profile
+
+This subsection describes what the code puts on the wire today. Where sections
+7-13 below disagree with it, the code and this subsection are authoritative for
+existing spaces; the later sections describe the proposal only. Changing any
+value here changes signed bytes and object hashes, so existing spaces would
+stop verifying.
+
+Envelope and objects:
+
+- Signed objects use `Signed<T> { body, signature }`: one Ed25519 signature,
+  no `signatures[]` array, no `signer_type` or `purpose` labels. The signer key
+  and domain are fixed by the verifying code path, not by the envelope
+  ([crypto.rs](../src/sync/protocol/crypto.rs) `Signed`, `sign`, `verify`).
+- `signing_bytes = domain || JCS(body)`, verified with `verify_strict` after
+  rejecting weak keys ([crypto.rs](../src/sync/protocol/crypto.rs)
+  `signing_bytes`, `verify`).
+- A wire object is `{"kind": "control" | "change", "object": Signed<...>}`
+  ([wire.rs](../src/sync/protocol/wire.rs) `Object`). Its address is
+  `SHA256("lockbox.sync.object\0" || JCS(tagged object))`, where the JCS
+  covers the whole tagged object, `kind` included.
+- Bodies carry no `protocol`, `kind` or `suite` field. `Control`, `Change`
+  and `ChangeHeader` contain only the fields in
+  [machine/protocol.rs](../src/sync/protocol/machine/protocol.rs). The profile
+  version is implied by the domain strings below; a future version must change
+  them or add an explicit version tag before any wire change.
+
+Encodings ([wire/scalars.rs](../src/sync/protocol/wire/scalars.rs)): hashes and
+IDs are 64-character lowercase hex; counters (`epoch.number`, `sequence`) are
+canonical decimal strings; signatures, nonces, HPKE `enc` and ciphertext are
+unpadded base64url. Fixed 32-byte public keys (`root_key`, `signing_key`,
+`hpke_key`, descriptor `owner_root`) are JSON arrays of 32 integers, not
+base64url ([identity.rs](../src/sync/identity.rs) `Key = [u8; 32]`). Decoding
+re-encodes the typed value and requires byte-identical JCS output
+([wire.rs](../src/sync/protocol/wire.rs) `decode_bounded`).
+
+JCS comes from `serde_jcs` 0.2, which writes integers as plain JSON integers
+rather than RFC 8785 ES6 doubles. Output matches RFC 8785 only for integers up
+to 2^53. Every JSON integer in signed or hashed bytes stays below that bound:
+key bytes, TOTP `digits`/`period`, revision `index`, and `authored_at`,
+which is capped at 253402300799
+([model.rs](../src/sync/protocol/model.rs) `authored_at` check).
+
+Device certificate ([crypto.rs](../src/sync/protocol/crypto.rs) `Certificate`):
+
+- Body is exactly `{user, root_key, device, signing_key, hpke_key}`. There is
+  no `protocol`, `kind`, `suite` or random `serial`.
+- `user = SHA256("lockbox.user\0" || root_key)` and
+  `device = SHA256("lockbox.device\0" || signing_key)`, without `.v1`.
+- Root signs it with domain `lockbox.sync.certificate\0`. Certificate hash is
+  `SHA256("lockbox.sync.certificate-object\0" || JCS(Signed<Certificate>))`.
+- Ed25519 signatures are deterministic, so re-certifying the same device keys
+  produces a byte-identical certificate and hash. New devices always get fresh
+  signing and HPKE keys (`DeviceSecret::generate`), so distinct devices still
+  have distinct certificates.
+
+Signature domains:
+
+| Signed object | Exact prefix | Code |
+|---|---|---|
+| Device certificate (root) | `lockbox.sync.certificate\0` | [crypto.rs](../src/sync/protocol/crypto.rs) `CERT_DOMAIN` |
+| Normal or transfer control (previous controller) | `lockbox.sync.control\0` | [crypto.rs](../src/sync/protocol/crypto.rs) `CONTROL_DOMAIN` |
+| Recovery control (new controller device) | `lockbox.sync.control-recovery-device\0` | [authority.rs](../src/sync/protocol/machine/authority.rs) `RECOVERY_DEVICE_DOMAIN` |
+| Recovery approval (owner root) | `lockbox.sync.control-recovery-root\0` | [authority.rs](../src/sync/protocol/machine/authority.rs) `RECOVERY_DOMAIN` |
+| Transfer approval (incoming controller) | `lockbox.sync.control-transfer-approval\0` | [authority.rs](../src/sync/protocol/machine/authority.rs) `TRANSFER_DOMAIN` |
+| Transfer offer | `lockbox.sync.control-transfer-offer\0` | [transfer.rs](../src/sync/protocol/machine/authority/transfer.rs) `OFFER_DOMAIN` |
+| Change (author device) | `lockbox.sync.change\0` | [crypto.rs](../src/sync/protocol/crypto.rs) `CHANGE_DOMAIN` |
+| Invite offer | `lockbox.sync.invite\0` | [invitation.rs](../src/sync/protocol/invitation.rs) `OFFER_DOMAIN` |
+| Join request | `lockbox.sync.join\0` | [invitation.rs](../src/sync/protocol/invitation.rs) `JOIN_DOMAIN` |
+| Admission receipt | `lockbox.sync.admission-receipt\0` | [invitation.rs](../src/sync/protocol/invitation.rs) `RECEIPT_DOMAIN` |
+
+Transfer and recovery controls carry their approval as a detached
+`Signed<ControlApproval>` in the `approval` field; the final control signature
+covers it. Pairing (`lockbox.pairing.*\0`, [pairing.rs](../src/sync/protocol/pairing.rs),
+[managed.rs](../src/sync/protocol/pairing/managed.rs)) and cloud recovery
+(`lockbox.cloud-recovery.*.v1\0`,
+[cloud_recovery.rs](../src/sync/protocol/machine/cloud_recovery.rs)) use their
+own domains.
+
+Hash domains (SHA-256 over prefix and JCS bytes): `lockbox.sync.object\0`,
+`lockbox.sync.certificate-object\0`, `lockbox.sync.control-statement\0`
+(control without `approval`), `lockbox.sync.invite-object\0`,
+`lockbox.sync.acceptance-object\0`, `lockbox.sync.invitation-verification\0`
+and `lockbox.sync.projection\0`.
+
+Key derivation and encryption:
+
+- `K_changes` and `K_checkpoint` use HKDF-SHA256 with `salt = space_id` and
+  `info = "lockbox.changes\0" || epoch_context` or
+  `"lockbox.checkpoint\0" || epoch_context`, without `.v1`
+  ([crypto.rs](../src/sync/protocol/crypto.rs) `content_key`).
+- Epoch key grant: HPKE Base mode, X25519/HKDF-SHA256/ChaCha20-Poly1305, with
+  `aad = JCS([epoch, certificate_hash])` and
+  `info = "lockbox.sync.grant\0" || aad`. Plaintext is the raw 32-byte epoch
+  key ([crypto.rs](../src/sync/protocol/crypto.rs) `seal_grant`,
+  [membership.rs](../src/sync/protocol/machine/membership.rs) `grant_aad`).
+- Checkpoint: XChaCha20-Poly1305 inline in the control (`checkpoint_nonce`,
+  `checkpoint`), `aad = JCS(epoch)`
+  ([membership.rs](../src/sync/protocol/machine/membership.rs)
+  `EpochEncryption::checkpoint`).
+- Change: XChaCha20-Poly1305 with `aad = JCS(header)`
+  ([commands.rs](../src/sync/protocol/machine/commands.rs)).
+
 ## 3 Terms and version boundaries
 
 | Term | Meaning |
@@ -235,6 +341,10 @@ signature; one membership transition must obey single control predecessor.
 
 ## 7 Cryptographic profile
 
+Proposal only. The deployed profile uses no suite field and unversioned HKDF
+info strings `lockbox.changes\0` and `lockbox.checkpoint\0`; see
+[deployed wire profile](#deployed-wire-profile).
+
 Proposed suite `LBX1` fixes these algorithms. Suite negotiation through untrusted
 provider is forbidden. Unsupported suite stops processing before secret use.
 
@@ -292,6 +402,10 @@ post-compromise recovery: attacker receives next key too. Revoke compromised
 device, create fresh device keys, then rotate affected spaces.
 
 ## 8 Canonical encoding and object identity
+
+Proposal only. The deployed profile uses a single `signature` field, no version
+constants, `lockbox.sync.*\0` domains and 32-integer arrays for public keys; see
+[deployed wire profile](#deployed-wire-profile).
 
 ### Primitive wire types
 
@@ -381,6 +495,10 @@ domain. Encrypted grants and checkpoints gain authority through exact hashes
 inside signed control record, not through HPKE sender authentication.
 
 ## 9 Users and device certificates
+
+Proposal only. The deployed profile uses `lockbox.user\0`/`lockbox.device\0`
+fingerprints and a five-field certificate without `serial`; see
+[deployed wire profile](#deployed-wire-profile).
 
 ### Root identity
 
