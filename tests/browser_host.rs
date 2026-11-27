@@ -4,34 +4,16 @@ use std::{
     process::{Command, Stdio},
 };
 
-#[test]
-fn match_reads_plaintext_index_with_no_desktop_or_unlocked_vault() {
-    let home = tempfile::tempdir().unwrap();
-    let directory = home.path().join(".lockbox/browser-sites");
-    std::fs::create_dir_all(&directory).unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o700)).unwrap();
-    }
-    std::fs::write(
-        directory.join("fixture.json"),
-        br#"["https://saved.example"]"#,
-    )
-    .unwrap();
+fn ask(home: &std::path::Path, origins: &[&str]) -> Vec<bool> {
     let mut host = Command::new(env!("CARGO_BIN_EXE_lockbox-browser-host"))
-        .env("HOME", home.path())
+        .env("HOME", home)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
         .unwrap();
     let mut input = host.stdin.take().unwrap();
-    for (id, origin) in [
-        (1, "https://saved.example/login"),
-        (2, "https://unknown.example"),
-        (3, "https://saved.example:444"),
-    ] {
+    for (id, origin) in origins.iter().enumerate() {
         let bytes = serde_json::to_vec(
             &serde_json::json!({"id":id,"request":{"action":"match","origin":origin}}),
         )
@@ -46,16 +28,64 @@ fn match_reads_plaintext_index_with_no_desktop_or_unlocked_vault() {
     assert!(output.status.success());
     assert!(output.stderr.is_empty());
     let mut frames = output.stdout.as_slice();
-    for (id, matched) in [(1, true), (2, false), (3, false)] {
+    let mut matches = Vec::new();
+    for id in 0..origins.len() {
         let length = u32::from_ne_bytes(frames[..4].try_into().unwrap()) as usize;
         let reply: serde_json::Value = serde_json::from_slice(&frames[4..4 + length]).unwrap();
-        assert_eq!(
-            reply,
-            serde_json::json!({"id":id,"status":"ok","data":{"matched":matched}})
-        );
+        assert_eq!(reply["id"], id);
+        assert_eq!(reply["status"], "ok");
+        matches.push(reply["data"]["matched"].as_bool().unwrap());
         frames = &frames[4 + length..];
     }
     assert!(frames.is_empty());
+    matches
+}
+
+#[test]
+fn match_reads_hashed_index_with_no_desktop_or_unlocked_vault() {
+    use hmac::{Hmac, Mac};
+    let home = tempfile::tempdir().unwrap();
+    let directory = home.path().join(".lockbox/browser-sites");
+    std::fs::create_dir_all(&directory).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    // Plaintext lists from older versions are never consulted.
+    std::fs::write(
+        directory.join("fixture.json"),
+        br#"["https://saved.example"]"#,
+    )
+    .unwrap();
+    assert_eq!(ask(home.path(), &["https://saved.example"]), [false]);
+
+    // The first check created the device key; index the site the way the app does.
+    let key = std::fs::read(directory.join("key")).unwrap();
+    let mut mac = Hmac::<sha2::Sha256>::new_from_slice(&key).unwrap();
+    mac.update(b"origin\0https://saved.example");
+    let digest: String = mac
+        .finalize()
+        .into_bytes()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    std::fs::write(
+        directory.join("fixture.sites"),
+        serde_json::to_vec(&[digest]).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        ask(
+            home.path(),
+            &[
+                "https://saved.example/login",
+                "https://unknown.example",
+                "https://saved.example:444",
+            ]
+        ),
+        [true, false, false]
+    );
 }
 #[test]
 fn legacy_unlock_is_rejected() {

@@ -287,7 +287,7 @@ impl DesktopRequest {
     }
 }
 
-// Availability reads only the local plaintext site index, even with the app closed.
+// Availability reads only the local hashed site index, even with the app closed.
 pub fn has_match(origin: &str) -> bool {
     super::index::has_match(origin)
 }

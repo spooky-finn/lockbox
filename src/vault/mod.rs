@@ -692,6 +692,7 @@ impl Vault {
             }
         }
         std::fs::remove_file(&self.path)?;
+        crate::browser::index::forget(&self.id());
         Ok(sync_dir(&self.path).err())
     }
 

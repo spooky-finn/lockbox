@@ -70,25 +70,32 @@ is not implemented for this bridge.
 
 ## Automatic popup
 
-The extension checks the active HTTPS origin against a local plaintext index,
-even when Lockbox is closed or its vaults are locked. The relay returns only a
+The extension checks the active HTTPS origin against a local site index, even
+when Lockbox is closed or its vaults are locked. The relay returns only a
 boolean; account names and passwords are not returned. Checks do not launch or
 foreground the app. A match offers to open Lockbox; unlocking and explicit account
 selection are still required before filling.
 
-The index lives in `~/.lockbox/browser-sites/`, with one JSON file per vault.
-Files contain only deduplicated HTTPS origins (scheme, hostname, effective port),
-without paths, query strings, usernames or passwords. The directory is owner-only
-(`0700`), files are `0600` on Unix. **The index is not encrypted: it reveals which
-sites have saved passwords to anyone who can read these files.** It is local to
-this device and is not synced or stored by the extension.
+The index lives in `~/.lockbox/browser-sites/`, with one `.sites` file per vault.
+Files contain only keyed digests (HMAC-SHA256) of deduplicated HTTPS origins
+(scheme, hostname, effective port), never the origins themselves, paths, query
+strings, usernames or passwords. The digest key is the `key` file next to them;
+the relay creates it on its first check, and Lockbox writes no index until then,
+so a device that never used the extension keeps no site list. The directory is
+owner-only (`0700`), files are `0600` on Unix. **The key must stay readable while
+Lockbox is closed, so anyone who can read both files can still test guessed sites
+against them.** The index is local to this device and is not synced or stored by
+the extension.
 
-Unlock each existing vault once after updating to create its index. Successful
-vault opens and saves refresh the index, including account deletion, URL changes
-and synced changes saved locally. Locking or quitting preserves it. Vaults edited
-elsewhere remain at their last indexed state until reopened locally. Removing a
-vault file externally does not remove its index. To clear the index, quit Lockbox
-and delete `~/.lockbox/browser-sites/`; opening a vault recreates its file. Index
+After installing the extension, or after updating from a version that wrote
+plaintext `.json` lists, unlock each vault once to create its index. Any vault
+open or save removes those older plaintext lists. Successful vault opens and saves
+refresh the index, including account deletion, URL changes and synced changes
+saved locally. Locking or quitting preserves it; deleting a vault in Lockbox
+removes its index. Vaults edited elsewhere remain at their last indexed state
+until reopened locally. Removing a vault file externally does not remove its
+index. To clear the index, quit Lockbox and delete `~/.lockbox/browser-sites/`;
+the next check creates a new key and opening a vault recreates its file. Index
 write errors are logged and do not prevent saving the encrypted vault.
 
 A match opens the popup once per loaded page. Firefox 149+ supports automatic
