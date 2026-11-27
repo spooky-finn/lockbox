@@ -356,6 +356,106 @@ fn cancellation_and_expiry_block_admission_but_reserved_admission_finishes() {
     );
 }
 
+fn approved_link(
+    store: &ProfileStore,
+    directory: &std::path::Path,
+    messages: &mut Messages,
+) -> (Vault, Vault, Hash, Hash) {
+    let mut owner = profile(store, &directory.join("owner.lbx"), "Owner");
+    let mut guest = profile(store, &directory.join("guest.lbx"), "Guest");
+    let session = owner.create_link(0, 1).unwrap();
+    let ticket = ticket(&owner, session);
+    guest
+        .request_link(
+            &ticket.link().unwrap(),
+            &ticket.verification_code().unwrap().to_string(),
+            0,
+        )
+        .unwrap();
+    pump(&mut owner, &mut guest, messages, 0);
+    let request = guest
+        .joining_link()
+        .unwrap()
+        .request
+        .as_ref()
+        .unwrap()
+        .hash()
+        .unwrap();
+    owner
+        .approve_link_request(session, request, Role::Reader, true, 0)
+        .unwrap();
+    let invitation = owner
+        .issued_links()
+        .next()
+        .unwrap()
+        .approval
+        .as_ref()
+        .unwrap()
+        .invitation
+        .unwrap();
+    (owner, guest, session, invitation)
+}
+
+fn closed_reason(owner: &Vault, session: Hash) -> Option<ClosedReason> {
+    owner
+        .issued_links()
+        .find(|link| link.ticket.body.id == session)
+        .unwrap()
+        .closed
+        .as_ref()
+        .map(|closure| closure.body.reason)
+}
+
+#[test]
+fn cancelling_a_link_invitation_before_delivery_closes_the_link_and_withholds_the_offer() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = ProfileStore::new(Arc::new(MemoryWitness::default()));
+    let mut messages = Messages::new();
+    let (mut owner, mut guest, session, invitation) =
+        approved_link(&store, directory.path(), &mut messages);
+    // The offer is queued by the approval but not yet published.
+    owner.cancel_invitation(invitation).unwrap();
+    pump(&mut owner, &mut guest, &mut messages, 1);
+    assert!(
+        !messages
+            .keys()
+            .any(|(_, _, slot)| matches!(slot, Slot::Offer(_)))
+    );
+    assert_eq!(
+        closed_reason(&owner, session),
+        Some(ClosedReason::Cancelled)
+    );
+    let joining = guest.joining_link().unwrap();
+    assert!(joining.offer.is_none());
+    assert_eq!(joining.closed, Some(ClosedReason::Cancelled));
+}
+
+#[test]
+fn cancelling_a_delivered_link_invitation_closes_the_link_instead_of_failing_every_tick() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = ProfileStore::new(Arc::new(MemoryWitness::default()));
+    let mut messages = Messages::new();
+    let (mut owner, mut guest, session, invitation) =
+        approved_link(&store, directory.path(), &mut messages);
+    pump(&mut owner, &mut guest, &mut messages, 1);
+    assert!(guest.joining_link().unwrap().offer.is_some());
+    owner.cancel_invitation(invitation).unwrap();
+    // A peer that already saw the offer may still consent; it must not be admitted
+    // and the owner's rounds (which unwrap every receive) must not keep failing.
+    guest.consent_link(session, 1).unwrap();
+    pump(&mut owner, &mut guest, &mut messages, 2);
+    pump(&mut owner, &mut guest, &mut messages, 3);
+    assert_eq!(owner.space_members().unwrap().len(), 1);
+    assert_eq!(
+        closed_reason(&owner, session),
+        Some(ClosedReason::Cancelled)
+    );
+    assert_eq!(
+        guest.joining_link().unwrap().closed,
+        Some(ClosedReason::Cancelled)
+    );
+}
+
 #[test]
 fn malformed_links_storage_substitution_and_unsigned_metadata_never_create_requests() {
     let directory = tempfile::tempdir().unwrap();

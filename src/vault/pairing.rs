@@ -731,17 +731,23 @@ impl Vault {
             if link.closed.is_some() {
                 continue;
             }
-            let reserved = link
+            let status = link
                 .approval
                 .as_ref()
                 .and_then(|approval| approval.invitation)
-                .and_then(|id| self.invitation_status(id, now).ok())
-                .is_some_and(|status| {
-                    matches!(
-                        status,
-                        InvitationStatus::Admitting | InvitationStatus::Admitted
-                    )
-                });
+                .and_then(|id| self.invitation_status(id, now).ok());
+            // A link offer cancelled from the invitation list ends its link, so the
+            // offer is never published and no consent is polled for it.
+            if status == Some(InvitationStatus::Cancelled) {
+                self.close_link(link.ticket.body.id, ClosedReason::Cancelled)?;
+                continue;
+            }
+            let reserved = status.is_some_and(|status| {
+                matches!(
+                    status,
+                    InvitationStatus::Admitting | InvitationStatus::Admitted
+                )
+            });
             if now >= link.ticket.body.expires_at.0 && !reserved {
                 self.close_link(link.ticket.body.id, ClosedReason::Expired)?;
                 continue;
