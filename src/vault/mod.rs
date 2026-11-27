@@ -530,12 +530,24 @@ impl Vault {
     /// Encrypts with a fresh nonce and replaces the file atomically,
     /// keeping the previous version next to it as `<name>.bak`.
     pub fn save(&self) -> Result<()> {
+        self.save_checked()?
+    }
+
+    /// Like `save`, with errors after the rename kept apart; see `write_file`.
+    pub(super) fn save_checked(&self) -> Result<Result<()>> {
         self.ensure_profile_writable()?;
         self.ensure_sync_projection()?;
-        self.save_inner(false)
+        self.write_file(false)
     }
 
     fn save_inner(&self, create_new: bool) -> Result<()> {
+        self.write_file(create_new)?
+    }
+
+    /// The outer error means the file was not replaced, so callers may roll
+    /// back. The inner one comes after the rename: memory already matches the
+    /// disk and must be kept, or the next save would silently revert it.
+    pub(super) fn write_file(&self, create_new: bool) -> Result<Result<()>> {
         self.ensure_not_display_snapshot()?;
         for entry in &self.entries {
             entry
@@ -619,14 +631,15 @@ impl Vault {
         }
         self.history.borrow_mut().extend(pending_history);
         *self.saved_entries.borrow_mut() = self.entries.clone();
-        sync_dir(&self.path)?;
-
-        if let Some(protection) = protection.as_mut() {
-            protection.ensure_ready(&self.path)?;
-        }
+        let confirmed = sync_dir(&self.path)
+            .map_err(VaultError::from)
+            .and_then(|()| match protection.as_mut() {
+                Some(protection) => Ok(protection.ensure_ready(&self.path)?),
+                None => Ok(()),
+            });
 
         crate::browser::index::refresh(self);
-        Ok(())
+        Ok(confirmed)
     }
 
     /// Cached reason this shared profile cannot sign or exchange. Readable data

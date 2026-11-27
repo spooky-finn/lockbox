@@ -379,3 +379,25 @@ fn deleting_legacy_duplicate_ids_preserves_survivors_and_restores_failed_positio
     let reopened = Vault::open(&path, &password).unwrap();
     assert_eq!(reopened.entries(), survivors);
 }
+
+#[cfg(unix)]
+#[test]
+fn an_error_after_the_rename_keeps_the_written_username() {
+    use std::os::unix::fs::PermissionsExt;
+    let directory = tempfile::tempdir().unwrap();
+    let store = ProfileStore::new(Arc::new(MemoryWitness::default()));
+    let path = directory.path().join("profile.lbx");
+    let mut vault = sharing_tests::create(&store, &path);
+    // Without read access the rename succeeds but the directory sync fails.
+    fs::set_permissions(directory.path(), fs::Permissions::from_mode(0o300)).unwrap();
+    let result = vault.set_username("Renamed user");
+    fs::set_permissions(directory.path(), fs::Permissions::from_mode(0o700)).unwrap();
+    assert!(matches!(result, Err(VaultError::Io(_))));
+    assert_eq!(vault.test_profile().unwrap().username, "Renamed user");
+    vault.save().unwrap();
+    drop(vault);
+    let reopened = store
+        .open(&path, &SecretString::from("test master".to_owned()))
+        .unwrap();
+    assert_eq!(reopened.test_profile().unwrap().username, "Renamed user");
+}

@@ -647,3 +647,27 @@ fn creating_a_vault_never_replaces_what_appeared_at_its_path() {
     assert_eq!(fs::read_link(&path).unwrap(), target);
     assert!(!target.exists());
 }
+
+#[cfg(unix)]
+#[test]
+fn an_error_after_the_rename_keeps_the_written_edit_for_later_saves() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let (path, mut vault) = new_vault(&dir);
+    let mut first = sample_entry();
+    first.title = "Written before directory sync".into();
+    // Without read access the rename succeeds but the directory sync fails.
+    fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o300)).unwrap();
+    let result = vault.upsert_entry(first.clone());
+    fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o700)).unwrap();
+    assert!(matches!(result, Err(VaultError::Io(_))));
+    assert!(vault.entries().contains(&first));
+    let mut second = sample_entry();
+    second.title = "Saved afterwards".into();
+    vault.upsert_entry(second.clone()).unwrap();
+    drop(vault);
+    let opened = Vault::open(&path, &password("master")).unwrap();
+    assert_eq!(opened.entries.len(), 3);
+    assert!(opened.entries.contains(&first));
+    assert!(opened.entries.contains(&second));
+}

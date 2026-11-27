@@ -122,11 +122,14 @@ impl Vault {
             return Ok(());
         }
         let previous = std::mem::replace(&mut self.local_icon, icon);
-        if let Err(error) = self.save() {
-            self.local_icon = previous;
-            return Err(error);
+        // Once the file is replaced it holds the new icon, so memory keeps it.
+        match self.save_checked() {
+            Ok(confirmed) => confirmed,
+            Err(error) => {
+                self.local_icon = previous;
+                Err(error)
+            }
         }
-        Ok(())
     }
 
     /// Changes the personal name used by this profile for future exchanges.
@@ -141,11 +144,13 @@ impl Vault {
             return Ok(());
         }
         let previous = std::mem::replace(&mut profile.username, name.to_owned());
-        if let Err(error) = self.save() {
-            self.profile.as_mut().unwrap().username = previous;
-            return Err(error);
+        match self.save_checked() {
+            Ok(confirmed) => confirmed,
+            Err(error) => {
+                self.profile.as_mut().unwrap().username = previous;
+                Err(error)
+            }
         }
-        Ok(())
     }
 
     pub fn participant_alias(&self, user: Hash) -> Option<&str> {
@@ -183,16 +188,18 @@ impl Vault {
         } else {
             profile.participant_names.insert(user, name.to_owned())
         };
-        if let Err(error) = self.save() {
-            let profile = self.profile.as_mut().expect("profile retained during save");
-            if let Some(previous) = previous {
-                profile.participant_names.insert(user, previous);
-            } else {
-                profile.participant_names.remove(&user);
+        match self.save_checked() {
+            Ok(confirmed) => confirmed,
+            Err(error) => {
+                let profile = self.profile.as_mut().expect("profile retained during save");
+                if let Some(previous) = previous {
+                    profile.participant_names.insert(user, previous);
+                } else {
+                    profile.participant_names.remove(&user);
+                }
+                Err(error)
             }
-            return Err(error);
         }
-        Ok(())
     }
 }
 

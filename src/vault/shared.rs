@@ -484,17 +484,20 @@ impl Vault {
         profile.space.space_id = descriptor.space.0;
         profile.space.namespace = descriptor.namespace.0;
 
-        if let Err(error) = self.save_inner(false) {
-            let profile = self.profile.as_mut().unwrap();
-            profile.sync = previous;
-            profile.space.space_id = old_space;
-            profile.space.namespace = old_namespace;
-            profile.shared_name = old_name;
-            profile.shared_icon = old_icon;
-            return Err(error);
+        // A replaced file already holds the join; reverting memory would let
+        // the next save silently discard it.
+        match self.write_file(false) {
+            Ok(confirmed) => confirmed,
+            Err(error) => {
+                let profile = self.profile.as_mut().unwrap();
+                profile.sync = previous;
+                profile.space.space_id = old_space;
+                profile.space.namespace = old_namespace;
+                profile.shared_name = old_name;
+                profile.shared_icon = old_icon;
+                Err(error)
+            }
         }
-
-        Ok(())
     }
 
     /// Commit the exact reserved body before signing, then finish that same body.

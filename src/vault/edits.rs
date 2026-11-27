@@ -42,16 +42,26 @@ impl Vault {
         undo_local: impl FnOnce(&mut Self),
     ) -> Result<()> {
         self.records_changed();
-        let result = self.save_changes();
-        if result.is_err() {
-            if let Some(previous) = shared {
-                self.entries = previous.entries;
-                self.folders = previous.folders;
-            } else {
-                undo_local(self);
+        // A local file that was already replaced keeps the edit in memory;
+        // shared views are rebuilt from the retained journal instead.
+        let result = match &shared {
+            Some(_) => self.save_changes().map(Ok),
+            None => self
+                .ensure_exchange_committed()
+                .and_then(|()| self.save_checked()),
+        };
+        match result {
+            Ok(confirmed) => confirmed,
+            Err(error) => {
+                if let Some(previous) = shared {
+                    self.entries = previous.entries;
+                    self.folders = previous.folders;
+                } else {
+                    undo_local(self);
+                }
+                Err(error)
             }
         }
-        result
     }
 
     /// Inserts or replaces a record, preserving its position on update.

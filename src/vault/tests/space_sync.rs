@@ -1012,3 +1012,26 @@ fn shared_history_attributes_signer_and_restores_deleted_record() {
     assert_eq!(vault.record_history().unwrap()[3].action, "Restore");
     assert!(vault.trash().unwrap().is_empty());
 }
+
+#[cfg(unix)]
+#[test]
+fn an_error_after_the_rename_keeps_the_written_join() {
+    use std::os::unix::fs::PermissionsExt;
+    let directory = tempfile::tempdir().unwrap();
+    let mut owner = profile_vault(&directory.path().join("owner.lbx"), "Alice");
+    let path = directory.path().join("member.lbx");
+    let mut member = profile_vault(&path, "Bob");
+    admit(&mut owner, &mut member, Role::Editor);
+    let descriptor = owner.space_descriptor().unwrap();
+    // Without read access the rename succeeds but the directory sync fails.
+    std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o300)).unwrap();
+    let result = member.join_space(descriptor.clone());
+    std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+    assert!(matches!(result, Err(VaultError::Io(_))));
+    assert!(member.space_descriptor() == Some(descriptor.clone()));
+    member.receive_sync(delivery(&owner)).unwrap();
+    drop(member);
+    let reopened = Vault::open(&path, &SecretString::from("master".to_owned())).unwrap();
+    assert!(reopened.space_descriptor() == Some(descriptor));
+    assert!(reopened.sync_replay().unwrap().unwrap().ready);
+}
