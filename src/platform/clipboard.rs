@@ -15,8 +15,8 @@ pub trait Board {
     fn clear(&mut self);
 }
 
-/// The real clipboard. On macOS copies are marked as concealed, so clipboard
-/// history tools that honour `org.nspasteboard.ConcealedType` skip them.
+/// The real clipboard. Copies stay off other devices and out of clipboard
+/// history where the platform allows: the 20 s wipe only reaches this one.
 pub struct SystemBoard(Option<arboard::Clipboard>);
 
 impl SystemBoard {
@@ -42,13 +42,15 @@ impl Board for SystemBoard {
             .as_mut()
             .ok_or_else(|| "clipboard is unavailable".to_owned())?;
         #[cfg(target_os = "macos")]
-        let result = {
-            use arboard::SetExtApple;
-            clipboard.set().exclude_from_history().text(text)
-        };
+        {
+            // arboard clears the pasteboard itself, which would drop the
+            // current-host-only option. A live arboard handle means the
+            // general pasteboard exists.
+            let _ = clipboard;
+            write_secret(&objc2_app_kit::NSPasteboard::generalPasteboard(), text)
+        }
         #[cfg(not(target_os = "macos"))]
-        let result = clipboard.set_text(text);
-        result.map_err(|error| error.to_string())
+        set_excluded(clipboard, text).map_err(|error| error.to_string())
     }
 
     fn clear(&mut self) {
@@ -56,6 +58,58 @@ impl Board for SystemBoard {
             let _ = clipboard.clear();
         }
     }
+}
+
+/// Keeps copies out of Windows clipboard history, cloud clipboard and
+/// clipboard monitors.
+#[cfg(windows)]
+fn set_excluded(clipboard: &mut arboard::Clipboard, text: &str) -> Result<(), arboard::Error> {
+    use arboard::SetExtWindows;
+    clipboard
+        .set()
+        .exclude_from_history()
+        .exclude_from_cloud()
+        .exclude_from_monitoring()
+        .text(text)
+}
+
+/// Adds the password-manager hint that KDE and GNOME clipboard managers skip.
+#[cfg(not(any(target_os = "macos", windows)))]
+fn set_excluded(clipboard: &mut arboard::Clipboard, text: &str) -> Result<(), arboard::Error> {
+    use arboard::SetExtLinux;
+    clipboard.set().exclude_from_history().text(text)
+}
+
+/// nspasteboard.org markers: clipboard history tools skip concealed and
+/// transient items.
+#[cfg(target_os = "macos")]
+const SECRET_MARKERS: [&str; 2] = [
+    "org.nspasteboard.ConcealedType",
+    "org.nspasteboard.TransientType",
+];
+
+/// Writes `text` so it stays on this Mac: Universal Clipboard (Handoff) would
+/// hand it to nearby devices, where the wipe cannot reach.
+#[cfg(target_os = "macos")]
+fn write_secret(pasteboard: &objc2_app_kit::NSPasteboard, text: &str) -> Result<(), String> {
+    use objc2::{runtime::NSObjectProtocol, sel};
+    use objc2_app_kit::{NSPasteboardContentsOptions, NSPasteboardTypeString};
+    use objc2_foundation::{NSString, ns_string};
+
+    // Both calls clear the old contents; only the first keeps them local.
+    if pasteboard.respondsToSelector(sel!(prepareForNewContentsWithOptions:)) {
+        pasteboard.prepareForNewContentsWithOptions(NSPasteboardContentsOptions::CurrentHostOnly);
+    } else {
+        pasteboard.clearContents();
+    }
+    let text = NSString::from_str(text);
+    if !pasteboard.setString_forType(&text, unsafe { NSPasteboardTypeString }) {
+        return Err("NSPasteboard setString:forType: returned false".to_owned());
+    }
+    for marker in SECRET_MARKERS {
+        pasteboard.setString_forType(ns_string!(""), &NSString::from_str(marker));
+    }
+    Ok(())
 }
 
 /// Remembers only a hash of what was copied, never the text itself.

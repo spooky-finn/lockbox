@@ -78,6 +78,38 @@ fn a_new_copy_restarts_the_countdown() {
     );
 }
 
+/// Copies must stay on this Mac (no Universal Clipboard, where the wipe cannot
+/// reach) and carry the nspasteboard.org markers that clipboard history tools
+/// honour. A private pasteboard keeps the user's real clipboard untouched.
+#[cfg(target_os = "macos")]
+#[test]
+fn secrets_are_written_local_only_concealed_and_transient() {
+    use objc2_app_kit::{NSPasteboard, NSPasteboardTypeString};
+
+    let pasteboard = NSPasteboard::pasteboardWithUniqueName();
+    let written = write_secret(&pasteboard, "s3cret");
+    let text = pasteboard
+        .stringForType(unsafe { NSPasteboardTypeString })
+        .map(|text| text.to_string());
+    let types: Vec<String> = pasteboard
+        .types()
+        .map(|types| types.iter().map(|kind| kind.to_string()).collect())
+        .unwrap_or_default();
+    let _: () = unsafe { objc2::msg_send![&*pasteboard, releaseGlobally] };
+
+    assert_eq!(written, Ok(()));
+    assert_eq!(text.as_deref(), Some("s3cret"));
+    for marker in [
+        "org.nspasteboard.ConcealedType",
+        "org.nspasteboard.TransientType",
+    ] {
+        assert!(
+            types.iter().any(|kind| kind == marker),
+            "{marker} in {types:?}"
+        );
+    }
+}
+
 thread_local! {
     static WALL: std::cell::Cell<std::time::SystemTime> =
         const { std::cell::Cell::new(std::time::SystemTime::UNIX_EPOCH) };
