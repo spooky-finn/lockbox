@@ -25,7 +25,7 @@ fn folder(id: &str, name: &str, parent: Option<&str>) -> Folder {
 #[test]
 fn imported_entries_get_new_ids_and_keep_their_contents() {
     let source = vec![entry("GitLab", None), entry("Почта", None)];
-    let plan = plan(&[], &[], &[], &source);
+    let plan = plan(&[], &[], &[], &source, false);
 
     assert_eq!(plan.entries.len(), 2);
     assert_eq!(plan.skipped, 0);
@@ -50,7 +50,7 @@ fn folders_merge_by_name_and_keep_the_hierarchy() {
         entry("router", Some("s-home")),
         entry("jira", Some("s-work")),
     ];
-    let plan = plan(&existing, &[], &source_folders, &source);
+    let plan = plan(&existing, &[], &source_folders, &source, false);
 
     assert_eq!(plan.folders.len(), 2);
     let servers = plan.folders.iter().find(|f| f.name == "Servers").unwrap();
@@ -99,7 +99,7 @@ fn sibling_merging_keeps_parents_first_matches_and_new_folder_aliases() {
         entry("Second database", Some("s-db-alias")),
     ];
     let before = existing.clone();
-    let imported = plan(&existing, &[], &source_folders, &source_entries);
+    let imported = plan(&existing, &[], &source_folders, &source_entries, false);
 
     assert_eq!(imported.folders.len(), 1);
     assert_eq!(imported.folders[0].name, "Databases");
@@ -149,6 +149,7 @@ fn children_beyond_existing_depth_limit_merge_at_root() {
         &[],
         &source_folders,
         &[entry("Beyond limit", Some("s-extra"))],
+        false,
     );
 
     assert!(imported.folders.is_empty());
@@ -161,11 +162,17 @@ fn children_beyond_existing_depth_limit_merge_at_root() {
 fn identical_entries_are_skipped_so_a_repeated_import_adds_nothing() {
     let source_folders = vec![folder("s-work", "Work", None)];
     let source = vec![entry("ssh", Some("s-work")), entry("ssh", Some("s-work"))];
-    let first = plan(&[], &[], &source_folders, &source);
+    let first = plan(&[], &[], &source_folders, &source, false);
     assert_eq!(first.entries.len(), 1);
     assert_eq!(first.skipped, 1);
 
-    let second = plan(&first.folders, &first.entries, &source_folders, &source);
+    let second = plan(
+        &first.folders,
+        &first.entries,
+        &source_folders,
+        &source,
+        false,
+    );
     assert!(second.folders.is_empty());
     assert!(second.entries.is_empty());
     assert_eq!(second.skipped, 2);
@@ -176,7 +183,7 @@ fn same_title_with_different_contents_is_imported() {
     let existing = vec![entry("ssh", None)];
     let mut changed = entry("ssh", None);
     changed.password = "rotated".into();
-    let plan = plan(&[], &existing, &[], &[changed]);
+    let plan = plan(&[], &existing, &[], &[changed], false);
     assert_eq!(plan.entries.len(), 1);
     assert_eq!(plan.skipped, 0);
 }
@@ -195,7 +202,7 @@ fn invalid_source_hierarchy_keeps_every_record_reachable() {
         entry("in-orphan", Some("orphan")),
         entry("dangling", Some("nowhere")),
     ];
-    let plan = plan(&[], &[], &source_folders, &source);
+    let plan = plan(&[], &[], &source_folders, &source, false);
 
     assert_eq!(plan.entries.len(), 4);
     folder::validate(&plan.folders, &plan.entries).unwrap();
@@ -213,7 +220,7 @@ fn deep_source_nesting_is_capped() {
             folder(&format!("f{i}"), &format!("Level {i}"), parent.as_deref())
         })
         .collect();
-    let plan = plan(&[], &[], &source_folders, &[]);
+    let plan = plan(&[], &[], &source_folders, &[], false);
     folder::validate(&plan.folders, &[]).unwrap();
 }
 
@@ -226,11 +233,58 @@ fn totp_secrets_are_normalized() {
         digits: 6,
         period: 30,
     });
-    let plan = plan(&[], &[], &[], &[source]);
+    let plan = plan(&[], &[], &[], &[source], false);
     assert_eq!(
         plan.entries[0].totp.as_ref().unwrap().secret,
         "JBSWY3DPEHPK3PXP"
     );
+}
+
+#[test]
+fn entries_the_target_cannot_save_are_counted_and_left_out() {
+    let totp = |digits, period| {
+        Some(Totp {
+            secret: "jbsw y3dp ehpk 3pxp".into(),
+            algorithm: TotpAlgorithm::Sha1,
+            digits,
+            period,
+        })
+    };
+    let mut bad_digits = entry("digits", None);
+    bad_digits.totp = totp(255, 30);
+    let mut bad_period = entry("period", None);
+    bad_period.totp = totp(6, 0);
+    let blank = entry(" \t", None);
+    let long_title = entry(&"t".repeat(1025), None);
+    let mut long_notes = entry("notes", None);
+    long_notes.notes = "n".repeat(1024 * 1024 + 1);
+    let mut long_icon = entry("icon", None);
+    long_icon.icon = Some("i".repeat(257));
+    let mut good = entry("good", None);
+    good.totp = totp(6, 30);
+    let source = [
+        bad_digits,
+        good.clone(),
+        bad_period,
+        blank,
+        long_title,
+        long_notes,
+        long_icon,
+    ];
+
+    let shared = plan(&[], &[], &[], &source, true);
+    let titles: Vec<_> = shared.entries.iter().map(|e| e.title.as_str()).collect();
+    assert_eq!(titles, ["good"]);
+    assert_eq!((shared.invalid, shared.skipped), (6, 0));
+
+    // A local vault takes every entry, as before; its editor can fix them.
+    let local = plan(&[], &[], &[], &source, false);
+    assert_eq!(local.entries.len(), source.len());
+    assert_eq!(local.invalid, 0);
+
+    // Identical honest entries are still duplicates, not invalid.
+    let repeated = plan(&[], &shared.entries, &[], &[good], true);
+    assert_eq!((repeated.skipped, repeated.invalid), (1, 0));
 }
 
 #[test]
@@ -255,12 +309,18 @@ fn duplicate_checks_use_mapped_folders_and_normalized_totp_without_changing_sour
     let source_entries = [source.clone(), source];
     let before = source_entries.clone();
 
-    let repeated = plan(&folders, &[known.clone()], &source_folders, &source_entries);
+    let repeated = plan(
+        &folders,
+        &[known.clone()],
+        &source_folders,
+        &source_entries,
+        false,
+    );
     assert!(repeated.entries.is_empty());
     assert!(repeated.folders.is_empty());
     assert_eq!(repeated.skipped, 2);
 
-    let first = plan(&folders, &[], &source_folders, &source_entries);
+    let first = plan(&folders, &[], &source_folders, &source_entries, false);
     assert_eq!(first.entries.len(), 1);
     assert_eq!(first.skipped, 1);
     assert_eq!(first.entries[0].totp, known.totp);
@@ -282,7 +342,7 @@ fn attachment_name_bytes_and_order_distinguish_imported_records() {
     reordered.attachments.swap(0, 1);
 
     for source in [renamed, changed, reordered] {
-        let imported = plan(&[], std::slice::from_ref(&known), &[], &[source]);
+        let imported = plan(&[], std::slice::from_ref(&known), &[], &[source], false);
         assert_eq!(imported.entries.len(), 1);
         assert_eq!(imported.skipped, 0);
     }
@@ -403,10 +463,11 @@ fn deduplication_matches_legacy_content_folder_and_source_order_rules() {
             for length in [0, 1, source_entries.len()] {
                 let source = &source_entries[..length];
                 let mut expected = legacy_plan(&folders, existing, &source_folders, source);
-                let mut actual = plan(&folders, existing, &source_folders, source);
+                let mut actual = plan(&folders, existing, &source_folders, source, false);
                 assert!(expected.folders.is_empty());
                 assert_eq!(actual.folders, expected.folders);
                 assert_eq!(actual.skipped, expected.skipped);
+                assert_eq!(actual.invalid, expected.invalid);
                 if length == source_entries.len() {
                     assert!(!actual.entries.is_empty());
                     assert!(actual.skipped > 0);

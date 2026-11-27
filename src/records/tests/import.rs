@@ -1,6 +1,9 @@
 use crate::{
     desktop::test_support::{add, reopen, unlocked},
-    records::{entry::Entry, import::*},
+    records::{
+        entry::{Entry, Totp, TotpAlgorithm},
+        import::*,
+    },
     vault::{
         KdfParams, ProfileStore, ProviderConfiguration, SharedProfile, witness::MemoryWitness,
     },
@@ -204,4 +207,72 @@ fn failed_batch_is_rolled_back_and_retry_completes() {
     let summary = unlocked.import_records(&records).unwrap();
     assert_eq!(summary.entries, 2);
     assert_eq!(reopen(&unlocked).entries.len(), 2);
+}
+
+/// The source vault from `source` plus one entry no shared space accepts.
+fn source_with_malformed_entry(dir: &tempfile::TempDir) -> PathBuf {
+    let path = source(dir);
+    let mut vault = Vault::open(&path, &SecretString::from("old-pass".to_owned())).unwrap();
+    let mut broken = Entry::new();
+    broken.title = "broken".into();
+    broken.totp = Some(Totp {
+        secret: "JBSWY3DPEHPK3PXP".into(),
+        algorithm: TotpAlgorithm::Sha1,
+        digits: 255,
+        period: 0,
+    });
+    vault.test_entries_mut().insert(1, broken);
+    vault.save().unwrap();
+    path
+}
+
+#[test]
+fn shared_import_skips_a_malformed_entry_and_saves_the_rest() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = source_with_malformed_entry(&dir);
+    let mut unlocked = shared(&dir);
+
+    run_import(&mut unlocked, &path, "old-pass");
+
+    assert_eq!(unlocked.error, None);
+    let mut titles: Vec<_> = unlocked
+        .vault
+        .entries()
+        .iter()
+        .map(|entry| entry.title.clone())
+        .collect();
+    titles.sort();
+    assert_eq!(titles, ["ssh", "Почта"]);
+    assert_eq!(
+        unlocked.import.notice.as_deref(),
+        Some("Imported 2 entries and 1 folders; 0 duplicates skipped. Invalid entries skipped: 1")
+    );
+    assert_eq!(
+        crate::settings::language::Language::Russian
+            .message(unlocked.import.notice.as_deref().unwrap()),
+        "Импортировано записей: 2, папок: 1; пропущено дубликатов: 0. \
+         Пропущено некорректных записей: 1"
+    );
+    assert!(unlocked.vault.sync_state().unwrap().intent.is_none());
+
+    run_import(&mut unlocked, &path, "old-pass");
+    assert_eq!(unlocked.error, None);
+    assert_eq!(
+        unlocked.import.notice.as_deref(),
+        Some("Nothing new to import; 2 duplicates skipped. Invalid entries skipped: 1")
+    );
+}
+
+#[test]
+fn local_import_keeps_entries_the_editor_can_fix() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = source_with_malformed_entry(&dir);
+    let mut unlocked = unlocked(&dir);
+
+    run_import(&mut unlocked, &path, "old-pass");
+
+    assert_eq!(unlocked.error, None);
+    let saved = reopen(&unlocked);
+    assert_eq!(saved.entries.len(), 3);
+    assert!(saved.entries.iter().any(|entry| entry.title == "broken"));
 }

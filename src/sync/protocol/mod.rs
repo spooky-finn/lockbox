@@ -52,6 +52,7 @@ pub use machine::{
     ControlApproval, ControlTransfer, ControlTransition, ExcludedEdit, Machine, PreparedChange,
     RecoveryAnchor, Replay, SpaceDescriptor, SyncState,
 };
+pub(crate) use model::valid_entry_fields;
 pub use model::{
     Action, Entity, EntityKind, Mutation, Projection, Record, Revision, Role, Transaction, Value,
     Version,

@@ -649,6 +649,7 @@ pub(crate) enum Text {
     ImportNothingNew,
     ImportDone,
     ImportPartial,
+    ImportInvalidSkipped,
 }
 
 impl Text {
@@ -1301,6 +1302,7 @@ impl Text {
             Self::ImportNothingNew => ("Нового для импорта нет; пропущено дубликатов: {skipped}", "Nothing new to import; {skipped} duplicates skipped"),
             Self::ImportDone => ("Импортировано записей: {entries}, папок: {folders}; пропущено дубликатов: {skipped}", "Imported {entries} entries and {folders} folders; {skipped} duplicates skipped"),
             Self::ImportPartial => ("Импортировано {saved} из {total} записей; повторите импорт, чтобы продолжить: {error}", "Imported {saved} of {total} entries; repeat the import to continue: {error}"),
+            Self::ImportInvalidSkipped => ("{notice}. Пропущено некорректных записей: {invalid}", "{notice}. Invalid entries skipped: {invalid}"),
         }
     }
 }
@@ -1949,4 +1951,5 @@ pub(super) const CATALOG: &[Text] = &[
     Text::ImportNothingNew,
     Text::ImportDone,
     Text::ImportPartial,
+    Text::ImportInvalidSkipped,
 ];

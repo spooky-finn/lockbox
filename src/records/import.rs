@@ -50,17 +50,23 @@ pub(crate) struct Summary {
     pub entries: usize,
     pub folders: usize,
     pub skipped: usize,
+    pub invalid: usize,
 }
 
 impl Summary {
     fn notice(&self) -> String {
-        if self.entries == 0 && self.folders == 0 {
+        let notice = if self.entries == 0 && self.folders == 0 {
             format!("Nothing new to import; {} duplicates skipped", self.skipped)
         } else {
             format!(
                 "Imported {} entries and {} folders; {} duplicates skipped",
                 self.entries, self.folders, self.skipped
             )
+        };
+        if self.invalid == 0 {
+            notice
+        } else {
+            format!("{notice}. Invalid entries skipped: {}", self.invalid)
         }
     }
 }
@@ -139,6 +145,7 @@ impl Unlocked {
             self.vault.entries(),
             &records.folders,
             &records.entries,
+            self.vault.sync_state().is_some(),
         );
         let total = plan.entries.len();
         let mut saved = 0;
@@ -163,6 +170,7 @@ impl Unlocked {
             entries: total,
             folders: plan.folders.len(),
             skipped: plan.skipped,
+            invalid: plan.invalid,
         })
     }
 

@@ -19,6 +19,8 @@ pub struct Plan {
     pub entries: Vec<Entry>,
     /// Source entries identical to an existing entry in the same folder.
     pub skipped: usize,
+    /// Source entries a shared space would refuse to save; left out.
+    pub invalid: usize,
 }
 
 // Planned positions stay valid as the output grows, without borrowing its Vec.
@@ -33,11 +35,16 @@ enum KnownEntry<'a> {
 /// (ignoring case and surrounding spaces). Source folders with an invalid name
 /// are dropped and their records move to the parent. Cycles, missing parents
 /// and excessive nesting are attached to the root, so every record stays reachable.
+///
+/// Entries a shared space would refuse are counted in `invalid` instead: it
+/// rejects a whole batch for one of them, so a repeated import would fail on it
+/// forever. A local vault takes every entry as before; its editor can fix them.
 pub fn plan(
     folders: &[Folder],
     entries: &[Entry],
     source_folders: &[Folder],
     source_entries: &[Entry],
+    shared: bool,
 ) -> Plan {
     let mut plan = Plan::default();
     let mapping = map_folders(folders, source_folders, &mut plan.folders);
@@ -89,6 +96,10 @@ pub fn plan(
         entry.id = crate::records::id::new();
         entry.folder_id = folder_id.map(str::to_owned);
         entry.totp = totp;
+        if shared && !crate::sync::protocol::valid_entry_fields(&entry) {
+            plan.invalid += 1;
+            continue;
+        }
         let index = plan.entries.len();
         plan.entries.push(entry);
         by_title

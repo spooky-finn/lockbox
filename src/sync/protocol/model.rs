@@ -90,29 +90,7 @@ impl Value {
     fn validate(&self) -> Result<()> {
         match self {
             Self::Entry(entry) => {
-                entry
-                    .validate_attachments()
-                    .map_err(|_| Error::InvalidTransaction)?;
-
-                if trim_whitespace(&entry.title).is_empty()
-                    || entry.title.len() > 1024
-                    || entry.username.len() > 4096
-                    || entry.password.len() > 65536
-                    || entry.url.len() > 8192
-                    || entry.notes.len() > 1024 * 1024
-                    || entry.icon.as_ref().is_some_and(|icon| icon.len() > 256)
-                {
-                    return Err(Error::InvalidTransaction);
-                }
-
-                if let Some(totp) = &entry.totp
-                    && (totp.secret.len() > 4096
-                        || !totp
-                            .secret
-                            .bytes()
-                            .all(|b| b.is_ascii_uppercase() || (b'2'..=b'7').contains(&b))
-                        || totp::validate(totp).is_err())
-                {
+                if !valid_entry_fields(entry) {
                     return Err(Error::InvalidTransaction);
                 }
 
@@ -349,6 +327,27 @@ impl Projection {
     pub fn digest(&self) -> Result<Hash> {
         Hash::digest_canonical(b"lockbox.sync.projection\0", self)
     }
+}
+
+/// Entry limits every shared space enforces, apart from its folder reference.
+/// Import checks these up front so one bad source entry cannot fail a batch.
+pub(crate) fn valid_entry_fields(entry: &Entry) -> bool {
+    entry.validate_attachments().is_ok()
+        && !trim_whitespace(&entry.title).is_empty()
+        && entry.title.len() <= 1024
+        && entry.username.len() <= 4096
+        && entry.password.len() <= 65536
+        && entry.url.len() <= 8192
+        && entry.notes.len() <= 1024 * 1024
+        && entry.icon.as_ref().is_none_or(|icon| icon.len() <= 256)
+        && entry.totp.as_ref().is_none_or(|totp| {
+            totp.secret.len() <= 4096
+                && totp
+                    .secret
+                    .bytes()
+                    .all(|b| b.is_ascii_uppercase() || (b'2'..=b'7').contains(&b))
+                && totp::validate(totp).is_ok()
+        })
 }
 
 fn validate_entity(entity: &Entity) -> Result<()> {
