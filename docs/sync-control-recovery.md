@@ -148,10 +148,15 @@ explicitly separate from the proposal's signature-envelope encoding.
 | Recovered-device final author | `lockbox.sync.control-recovery-device\0` |
 
 Root authority comes from the verified predecessor's owner certificate, never
-from an untrusted recovery claim. Transfer requires the exact already admitted
-owner device's approval. Recovery permits up to 512 closed heads, bounded by the
-roster limit, so a surviving reader need not forge a writer merge. Other
-transitions retain the 64-head folding path and all object/cache budgets apply.
+from an untrusted recovery claim. For peers, replay requires only the owner-root
+approval, the new controller's signature and the old controller's removal; the
+anchor and readable-content checks above guard the local API. A holder of the
+owner's root secret with write access to the storage can therefore replace the
+controller of every space the owner created. Transfer requires the exact already
+admitted owner device's approval. Recovery permits up to 512 closed heads,
+bounded by the roster limit, so a surviving reader need not forge a writer
+merge. Other transitions retain the 64-head folding path and all object/cache
+budgets apply.
 
 ## Evidence and remaining work
 

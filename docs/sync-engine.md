@@ -105,7 +105,17 @@ delivers the key with RFC 9180 HPKE Base mode (X25519/HKDF-SHA256/
 ChaCha20-Poly1305), and encrypts the full baseline with a separately derived
 checkpoint key. Signed control bytes bind the roster, grants, baseline,
 predecessor and closed frontier. Admission, removal, role changes and rotation
-all use this transition. Owner and control-device transfer are disabled.
+all use this transition. The owner identity is fixed: every control must name
+the descriptor's owner root, so root ownership cannot move to another user.
+Control can move between that owner's devices. Replay accepts a `Transfer`
+transition (previous controller signature plus the incoming, already admitted
+owner device's approval) and a `Recovery` transition (owner root approval plus
+the new controller's signature, with the old controller removed). Recovery needs
+no signature from the old controller, and replay does not check the
+`RecoveryAnchor`, which only guards the local recovery API. Whoever holds the
+owner's root secret (the 12 words, or `identity.key` with its password) and can
+write to a space's storage can therefore take control of every space that owner
+created, not only read it. See [controller transfer and recovery](sync-control-recovery.md).
 
 An old epoch contributes only the ancestry of the successor's signed closing
 frontier. Late events outside that closure remain encrypted local drafts. The

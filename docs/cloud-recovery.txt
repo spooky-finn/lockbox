@@ -82,6 +82,9 @@ bootstrap schema 6 instead of silently discarding recovery configuration/keys.
 Existing signed event/control formats are unchanged.
 
 Possession of the root secret plus accessible capsules grants recoverable content.
+With storage write access it also lets the holder replace the controller of every
+owned space through a recovery transition; peers do not require the old
+controller's signature for it.
 Passphrase or Storj credential changes do not revoke a copied root secret.
 Independent recovery-key rotation and root ownership succession are not implemented;
 a compromised root requires migration to a fresh identity/space for future data.
