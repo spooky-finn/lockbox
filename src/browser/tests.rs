@@ -30,6 +30,17 @@ fn origin_requires_https_and_exact_port() {
     }
 }
 #[test]
+fn nested_blob_origins_are_opaque_without_recursive_resolution() {
+    // RUSTSEC-2026-0592: url <= 2.5.8 overflowed a thread's stack here.
+    let nested = format!("{}https://example.com/", "blob:".repeat(10_000));
+    assert!(matches!(
+        Url::parse(&nested).unwrap().origin(),
+        Origin::Opaque(_)
+    ));
+    assert!(origin(&nested).is_err());
+    assert!(origin("blob:https://example.com/").is_err());
+}
+#[test]
 fn frames_are_bounded_and_truncation_is_rejected() {
     assert!(read_message(&mut Cursor::new(vec![])).unwrap().is_none());
     for bytes in [

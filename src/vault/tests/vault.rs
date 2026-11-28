@@ -19,6 +19,33 @@ fn password(value: &str) -> SecretString {
     SecretString::from(value.to_owned())
 }
 
+#[test]
+fn password_keys_match_argon2_0_5_3_before_dependency_upgrade() {
+    // Captured with argon2 0.5.3 + HKDF-SHA256 before upgrading. A same-version
+    // save/open round trip alone cannot catch an incompatible KDF change.
+    for (lanes, expected_key, expected_check) in [
+        (
+            1,
+            "333be2141ae47c1844ec9c9cffcf8f10fd0874b0a30660ba0b3e85a946606926",
+            "078971b25401890d289ff77e3ebcac23b93f2a56fc3feae1d15c1b236ea22195",
+        ),
+        (
+            2,
+            "46adf9df318404d83f10e27c592914c93c30ea92fb75191087334e0b661a77cf",
+            "1daddb1dec5820ca916153c35cf70d06f81d72d118e121e25e627090349d5199",
+        ),
+    ] {
+        let (key, check) = format::derive(
+            &password("legacy password"),
+            &[0x42; 16],
+            KdfParams { lanes, ..FAST },
+        )
+        .unwrap();
+        assert_eq!(crate::sync::identity::hex(key.as_ref()), expected_key);
+        assert_eq!(crate::sync::identity::hex(&check), expected_check);
+    }
+}
+
 fn sample_entry() -> Entry {
     let mut entry = Entry::new();
     entry.title = "GitLab".into();

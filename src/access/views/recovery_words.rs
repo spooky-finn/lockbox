@@ -25,9 +25,7 @@ fn suggestions(prefix: &str) -> Vec<&'static str> {
         return Vec::new();
     }
     Language::English
-        .words_by_prefix(prefix)
-        .iter()
-        .copied()
+        .words_by_prefix_iter(prefix)
         .take(6)
         .collect()
 }
